@@ -23,6 +23,24 @@ export class Collection {
   @Prop()
   coverImage?: string;
 
+  @Prop({ type: [{ id: String, name: String, watermarkId: String, createdAt: Date }], default: [] })
+  sets: { id: string; name: string; watermarkId?: string; createdAt: Date }[];
+
+  @Prop({ type: [String], default: [] })
+  tags: string[];
+
+  @Prop()
+  watermarkId?: string;
+
+  @Prop()
+  expiresAt?: Date;
+
+  @Prop({ type: Object, default: {} })
+  design: Record<string, unknown>;
+
+  @Prop({ type: Object, default: {} })
+  settings: Record<string, unknown>;
+
   @Prop({ default: 0 })
   imageCount: number;
 

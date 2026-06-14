@@ -11,6 +11,9 @@ export class CollectionImage {
   @Prop({ required: true, index: true })
   collectionId: string;
 
+  @Prop({ index: true })
+  setId?: string;
+
   @Prop({ required: true })
   url: string;
 

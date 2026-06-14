@@ -20,12 +20,12 @@ export class MinioService implements OnModuleInit {
   }); */
 
   async onModuleInit() {
-        const minioUrl = this.configService.get<string>('MINIO_URL') as string;
-    const accessKeyId = this.configService.get<string>('MINIO_ACCESS_KEY') as string;
-    const secretAccessKey = this.configService.get<string>('MINIO_SECRET_KEY') as string;
+    const minioUrl = this.configService.get<string>('MINIO_URL')?.trim() as string;
+    const accessKeyId = this.configService.get<string>('MINIO_ACCESS_KEY')?.trim() as string;
+    const secretAccessKey = this.configService.get<string>('MINIO_SECRET_KEY')?.trim() as string;
 
     if (!minioUrl || !accessKeyId || !secretAccessKey) {
-      this.logger.warn('MinIO env missing; upload route will return local upload URLs');
+      this.logger.error('MinIO env missing; uploads will fail until MINIO_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY are set');
       return;
     }
   
@@ -93,7 +93,7 @@ export class MinioService implements OnModuleInit {
   async uploadFile( filePath:  Express.Multer.File) {
     try {
       if (!this.s3) {
-        return `/uploads/${filePath.filename}`;
+        throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
       }
     
       const fileContent = createReadStream(filePath.path);

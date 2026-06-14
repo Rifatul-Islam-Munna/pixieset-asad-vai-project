@@ -5,11 +5,12 @@ import { unlink } from 'fs/promises';
 import { Model } from 'mongoose';
 import { join } from 'path';
 import { cwd } from 'process';
-import sharp from 'sharp';
+import sharp, { type Metadata } from 'sharp';
 import * as exifr from 'exifr';
 import { MinioService } from 'src/lib/minio.service';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
+import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { Collection, CollectionDocument } from './entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from './entities/collection-image.entity';
 
@@ -43,6 +44,7 @@ export class CollectionsService {
       slug: this.slugify(dto.name),
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
       presetId: dto.presetId,
+      sets: [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],
       imageCount: 0,
     });
 
@@ -80,29 +82,150 @@ export class CollectionsService {
     return { ...collection, images };
   }
 
-  async uploadImages(userId: string, collectionId: string, files: Express.Multer.File[]) {
+  async findAllImages(userId: string) {
+    const images = await this.imageModel
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .lean();
+    const collectionIds = [...new Set(images.map((image) => image.collectionId))];
+    const collections = await this.collectionModel
+      .find({ userId, _id: { $in: collectionIds } })
+      .select('_id name sets')
+      .lean();
+    const collectionMap = new Map(
+      collections.map((collection) => [collection._id.toString(), collection]),
+    );
+
+    return images.map((image) => {
+      const collection = collectionMap.get(image.collectionId);
+      const set = collection?.sets?.find((item) => item.id === image.setId);
+
+      return {
+        ...image,
+        collectionName: collection?.name ?? 'Collection',
+        setName: set?.name ?? 'Highlights',
+      };
+    });
+  }
+
+  async update(userId: string, id: string, dto: UpdateCollectionDto) {
+    const collection = await this.collectionModel.findOne({ _id: id, userId });
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    if (dto.name !== undefined) {
+      collection.name = dto.name;
+      collection.slug = this.slugify(dto.name);
+    }
+    if (dto.eventDate !== undefined) collection.eventDate = new Date(dto.eventDate);
+    if (dto.presetId !== undefined) collection.presetId = dto.presetId || undefined;
+    if (dto.coverImage !== undefined) collection.coverImage = dto.coverImage || undefined;
+    if (dto.sets !== undefined) {
+      const nextSets = dto.sets.map((set) => ({
+        id: set.id,
+        name: set.name,
+        watermarkId: set.watermarkId || undefined,
+        createdAt: set.createdAt ? new Date(set.createdAt) : new Date(),
+      }));
+      const nextSetIds = nextSets.map((set) => set.id);
+      const fallbackSetId = nextSetIds[0] ?? 'highlights';
+      await this.imageModel.updateMany(
+        { userId, collectionId: id, setId: { $nin: nextSetIds } },
+        { $set: { setId: fallbackSetId } },
+      );
+      collection.sets = nextSets.length ? nextSets : [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }];
+    }
+    if (dto.tags !== undefined) collection.tags = dto.tags;
+    if (dto.watermarkId !== undefined) collection.watermarkId = dto.watermarkId || undefined;
+    if (dto.expiresAt !== undefined) collection.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : undefined;
+    if (dto.design !== undefined) collection.design = dto.design;
+    if (dto.settings !== undefined) collection.settings = dto.settings;
+
+    await collection.save();
+    return collection.toObject();
+  }
+
+  async addSet(userId: string, collectionId: string, name: string) {
+    const trimmed = name?.trim();
+    if (!trimmed) throw new BadRequestException('Set name is required');
+
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId });
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const set = {
+      id: `set-${Date.now()}`,
+      name: trimmed,
+      createdAt: new Date(),
+    };
+    collection.sets = [...(collection.sets ?? []), set];
+    await collection.save();
+    return set;
+  }
+
+  async uploadImages(userId: string, collectionId: string, files: Express.Multer.File[], setId?: string, uploadWatermarkId?: string) {
     if (!files?.length) throw new BadRequestException('Files are required');
 
     const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
     if (!collection) throw new NotFoundException('Collection not found');
+    const resolvedSetId = setId || collection.sets?.[0]?.id || 'highlights';
 
-    const watermark = collection.presetId
-      ? await this.resolveWatermark(userId, collection.presetId)
-      : null;
+    const activeSet = collection.sets?.find((set) => set.id === resolvedSetId);
+    const watermark = uploadWatermarkId
+      ? await this.resolveWatermarkById(userId, uploadWatermarkId)
+      : activeSet?.watermarkId
+        ? await this.resolveWatermarkById(userId, activeSet.watermarkId)
+        : collection.watermarkId
+          ? await this.resolveWatermarkById(userId, collection.watermarkId)
+          : collection.presetId
+            ? await this.resolveWatermark(userId, collection.presetId)
+            : null;
 
     const uploaded = await Promise.all(
-      files.map((file) => this.processAndSaveImage(userId, collectionId, file, watermark)),
+      files.map((file) => this.processAndSaveImage(userId, collectionId, file, watermark, resolvedSetId)),
     );
 
     await this.collectionModel.updateOne(
       { _id: collectionId, userId },
       {
         $inc: { imageCount: uploaded.length },
-        $set: { coverImage: uploaded[0]?.url ?? collection.coverImage },
+        $set: { coverImage: collection.coverImage ?? uploaded[0]?.url },
       },
     );
 
     return uploaded;
+  }
+
+  async removeImage(userId: string, collectionId: string, imageId: string) {
+    const image = await this.imageModel.findOne({ _id: imageId, userId, collectionId });
+    if (!image) throw new NotFoundException('Image not found');
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+
+    await this.imageModel.deleteOne({ _id: imageId, userId, collectionId });
+    const nextImage = await this.imageModel
+      .findOne({ userId, collectionId })
+      .sort({ createdAt: -1 })
+      .lean();
+    const update: Record<string, unknown> = { $inc: { imageCount: -1 } };
+    if (collection?.coverImage === image.url) {
+      if (nextImage?.url) update.$set = { coverImage: nextImage.url };
+      else update.$unset = { coverImage: '' };
+    }
+    await this.collectionModel.updateOne({ _id: collectionId, userId }, update);
+
+    const filename = image.filename || image.url?.split('/').pop();
+    if (filename) await this.minioService.deleteService(filename).catch(() => false);
+    return image.toObject();
+  }
+
+  async starImage(userId: string, collectionId: string, imageId: string, starred: boolean) {
+    const image = await this.imageModel.findOne({ _id: imageId, userId, collectionId });
+    if (!image) throw new NotFoundException('Image not found');
+
+    image.metadata = {
+      ...(image.metadata ?? {}),
+      starred: Boolean(starred),
+    };
+    await image.save();
+    return image.toObject();
   }
 
   private async processAndSaveImage(
@@ -110,6 +233,7 @@ export class CollectionsService {
     collectionId: string,
     file: Express.Multer.File,
     watermark: WatermarkData | null,
+    setId?: string,
   ) {
     const metadata = await this.extractMetadata(file);
     const isImage = file.mimetype?.startsWith('image/');
@@ -126,16 +250,18 @@ export class CollectionsService {
       }
     }
 
-    const url = await this.minioService.uploadFile(uploadFile);
-    const keepPath = url.startsWith('/uploads/')
-      ? join(cwd(), url.replace(/^\/+/, ''))
-      : '';
-    await this.safeUnlinkUnlessKept(file.path, keepPath);
-    if (processedPath) await this.safeUnlinkUnlessKept(processedPath, keepPath);
+    let url = '';
+    try {
+      url = await this.minioService.uploadFile(uploadFile);
+    } finally {
+      await this.safeUnlink(file.path);
+      if (processedPath) await this.safeUnlink(processedPath);
+    }
 
     const image = await this.imageModel.create({
       userId,
       collectionId,
+      setId,
       url,
       originalName: file.originalname,
       filename: uploadFile.filename,
@@ -148,7 +274,7 @@ export class CollectionsService {
   }
 
   private async extractMetadata(file: Express.Multer.File) {
-    const sharpMeta = await sharp(file.path).metadata().catch(() => ({}));
+    const sharpMeta: Partial<Metadata> = await sharp(file.path).metadata().catch(() => ({}));
     const exif = await exifr
       .parse(file.path, { exif: true, iptc: true, xmp: true })
       .catch(() => null);
@@ -160,19 +286,34 @@ export class CollectionsService {
       width: sharpMeta.width,
       height: sharpMeta.height,
       format: sharpMeta.format,
-      camera: exif?.Make,
+      camera: [exif?.Make, exif?.Model].filter(Boolean).join(' ') || exif?.Make,
+      make: exif?.Make,
+      model: exif?.Model,
       lens: exif?.LensModel,
       focalLength: exif?.FocalLength,
+      focalLength35mm: exif?.FocalLengthIn35mmFormat,
       shutterSpeed: exif?.ExposureTime,
       aperture: exif?.FNumber,
       iso: exif?.ISO,
       flash: exif?.Flash,
+      meteringMode: exif?.MeteringMode,
+      exposureMode: exif?.ExposureMode,
+      exposureProgram: exif?.ExposureProgram,
+      whiteBalance: exif?.WhiteBalance,
+      dateTaken: exif?.DateTimeOriginal ?? exif?.CreateDate,
+      software: exif?.Software,
+      artist: exif?.Artist,
+      copyright: exif?.Copyright,
+      gps: exif?.latitude && exif?.longitude
+        ? { latitude: exif.latitude, longitude: exif.longitude, altitude: exif?.GPSAltitude }
+        : undefined,
       title: exif?.title ?? '',
       caption: exif?.description ?? '',
       headline: exif?.Headline ?? '',
       keyword: exif?.keywords ?? exif?.Keywords ?? [],
       rating: exif?.Rating,
       colorLabel: exif?.Label,
+      raw: this.compactMetadata(exif),
       starred: false,
     };
   }
@@ -203,12 +344,29 @@ export class CollectionsService {
     return (watermark?.data as WatermarkData) ?? null;
   }
 
+  private async resolveWatermarkById(userId: string, watermarkId: string) {
+    const watermark = await this.settingModel
+      .findOne({
+        userId,
+        type: DashboardSettingType.WATERMARK,
+        $or: [
+          { localId: watermarkId },
+          { name: watermarkId },
+          { 'data.id': watermarkId },
+          { 'data.name': watermarkId },
+        ],
+      })
+      .lean();
+
+    return (watermark?.data as WatermarkData) ?? null;
+  }
+
   private async applyWatermark(file: Express.Multer.File, watermark: WatermarkData) {
     const image = sharp(file.path).rotate();
     const meta = await image.metadata();
     const width = meta.width ?? 1200;
     const height = meta.height ?? 800;
-    const position = watermark.position ?? { x: 15, y: 85 };
+    const rawPosition = watermark.position ?? { x: 15, y: 85 };
     const opacity = (watermark.opacity ?? 90) / 100;
     const outputPath = join(cwd(), 'uploads', `wm-${file.filename}`);
     const outputFilename = `wm-${file.filename}`;
@@ -216,6 +374,13 @@ export class CollectionsService {
     if (watermark.type === 'text') {
       const text = this.escapeSvg(watermark.text || 'Watermark');
       const fontSize = Math.max(24, (watermark.scale ?? 42) * 1.7);
+      const estimatedTextWidth = (watermark.text || 'Watermark').length * fontSize * 0.55;
+      const padX = Math.min(45, Math.max(5, (estimatedTextWidth / width) * 50));
+      const padY = Math.min(45, Math.max(5, (fontSize / height) * 60));
+      const position = {
+        x: this.clampPercent(rawPosition.x, padX, 100 - padX),
+        y: this.clampPercent(rawPosition.y, padY, 100 - padY),
+      };
       const svg = Buffer.from(`
         <svg width="${width}" height="${height}">
           <text x="${position.x}%" y="${position.y}%"
@@ -240,8 +405,13 @@ export class CollectionsService {
       .ensureAlpha(opacity)
       .toBuffer();
     const overlayMeta = await sharp(overlayBuffer).metadata();
+    const overlayHeight = overlayMeta.height ?? overlayWidth;
+    const position = {
+      x: this.clampPercent(rawPosition.x, ((overlayMeta.width ?? overlayWidth) / width) * 50, 100 - ((overlayMeta.width ?? overlayWidth) / width) * 50),
+      y: this.clampPercent(rawPosition.y, (overlayHeight / height) * 50, 100 - (overlayHeight / height) * 50),
+    };
     const left = Math.round((position.x / 100) * width - (overlayMeta.width ?? overlayWidth) / 2);
-    const top = Math.round((position.y / 100) * height - (overlayMeta.height ?? overlayWidth) / 2);
+    const top = Math.round((position.y / 100) * height - overlayHeight / 2);
 
     await image.composite([{ input: overlayBuffer, left, top }]).toFile(outputPath);
     return { path: outputPath, filename: outputFilename };
@@ -269,11 +439,6 @@ export class CollectionsService {
     }
   }
 
-  private async safeUnlinkUnlessKept(path: string, keepPath: string) {
-    if (keepPath && path === keepPath) return;
-    await this.safeUnlink(path);
-  }
-
   private slugify(value: string) {
     return value
       .toLowerCase()
@@ -288,5 +453,22 @@ export class CollectionsService {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  private clampPercent(value: number, min = 5, max = 95) {
+    if (min > max) return 50;
+    return Math.max(min, Math.min(max, Number.isFinite(value) ? value : 50));
+  }
+
+  private compactMetadata(value: unknown) {
+    if (!value || typeof value !== 'object') return {};
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, item]) => item !== undefined && item !== null && item !== '')
+        .map(([key, item]) => [
+          key,
+          item instanceof Date ? item.toISOString() : item,
+        ]),
+    );
   }
 }

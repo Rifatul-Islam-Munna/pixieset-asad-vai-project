@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Patch,
   Post,
   Req,
   UploadedFiles,
@@ -18,6 +20,7 @@ import { cwd } from 'process';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { CollectionsService } from './collections.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
+import { UpdateCollectionDto } from './dto/update-collection.dto';
 
 const uploadDir = join(cwd(), 'uploads');
 
@@ -52,10 +55,36 @@ export class CollectionsController {
     return { data };
   }
 
+  @Get('images')
+  async findAllImages(@Req() req: ExpressRequest) {
+    const data = await this.collectionsService.findAllImages(req.user.id);
+    return { data };
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string, @Req() req: ExpressRequest) {
     const data = await this.collectionsService.findOne(req.user.id, id);
     return { data };
+  }
+
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateCollectionDto,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.update(req.user.id, id, dto);
+    return { message: 'Collection updated', data };
+  }
+
+  @Post(':id/sets')
+  async addSet(
+    @Param('id') id: string,
+    @Body('name') name: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.addSet(req.user.id, id, name);
+    return { message: 'Set saved', data };
   }
 
   @Post(':id/images')
@@ -63,10 +92,33 @@ export class CollectionsController {
   @UseInterceptors(FilesInterceptor('files', 100, uploadOptions))
   async uploadImages(
     @Param('id') id: string,
+    @Body('setId') setId: string | undefined,
+    @Body('watermarkId') watermarkId: string | undefined,
     @UploadedFiles() files: Express.Multer.File[],
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.uploadImages(req.user.id, id, files);
+    const data = await this.collectionsService.uploadImages(req.user.id, id, files, setId, watermarkId);
     return { message: 'Images uploaded', data };
+  }
+
+  @Delete(':id/images/:imageId')
+  async removeImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.removeImage(req.user.id, id, imageId);
+    return { message: 'Image deleted', data };
+  }
+
+  @Patch(':id/images/:imageId/star')
+  async starImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Body('starred') starred: boolean,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.starImage(req.user.id, id, imageId, starred);
+    return { message: 'Image updated', data };
   }
 }

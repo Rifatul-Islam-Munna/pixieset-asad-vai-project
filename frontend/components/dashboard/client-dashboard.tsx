@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import {
   ArrowLeft,
@@ -17,6 +18,7 @@ import {
   Copy,
   Database,
   Download,
+  Eye,
   Heart,
   Images,
   Info,
@@ -56,6 +58,14 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -76,16 +86,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCollectionDetail,
+  useCollectionImages,
   useCollections,
+  useImageActions,
   type CollectionImageRecord,
+  type CollectionRecord,
 } from "@/api-hooks/use-collections";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
-import { useDashboardStore } from "@/lib/dashboard-store";
+import {
+  useDashboardStore,
+  type PresetDesignSettings,
+  type PresetDownloadSettings,
+  type PresetGeneralSettings,
+} from "@/lib/dashboard-store";
 import { cn } from "@/lib/utils";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
 export type DashboardPage =
   | "collections"
+  | "collection-new"
   | "library"
   | "starred"
   | "homepage"
@@ -229,11 +248,13 @@ export function ClientDashboard({
   page,
   marketingPage = "email-campaigns",
   settingsPage = "watermark",
+  collectionId,
 }: {
   section: DashboardSection;
   page: DashboardPage;
   marketingPage?: MarketingPage;
   settingsPage?: SettingsPage;
+  collectionId?: string;
 }) {
   const active = dashboardCopy[section];
   const activeSwitcher = switcherItems.find((item) => item.key === section);
@@ -251,10 +272,11 @@ export function ClientDashboard({
     (page === "marketing" ? "Marketing" : "Storage");
   const isCollectionIndex =
     page === "collections" || (section === "store-gallery" && page === "products");
+  const isCollectionDetail = page === "collections" && Boolean(collectionId);
 
   return (
     <main className="min-h-screen bg-white text-[#151515]">
-      {!campaignBuilderOpen && <aside
+      {!campaignBuilderOpen && !isCollectionDetail && <aside
         className={cn(
           "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
           collapsed ? "w-[76px]" : "w-[292px]"
@@ -401,8 +423,8 @@ export function ClientDashboard({
         </nav>
       </aside>}
 
-      <section className={cn("min-h-screen transition-all", campaignBuilderOpen ? "" : collapsed ? "md:pl-[76px]" : "md:pl-[292px]")}>
-        {!campaignBuilderOpen && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
+      <section className={cn("min-h-screen transition-all", campaignBuilderOpen || isCollectionDetail ? "" : collapsed ? "md:pl-[76px]" : "md:pl-[292px]")}>
+        {!campaignBuilderOpen && !isCollectionDetail && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 text-sm font-bold outline-none">
@@ -426,7 +448,7 @@ export function ClientDashboard({
           </Avatar>
         </div>}
 
-        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : "max-w-[1220px] px-5 py-16 md:py-20")}>
+        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail ? "max-w-none px-0 py-0" : "max-w-[1220px] px-5 py-16 md:py-20")}>
           {campaignBuilderOpen ? (
             <CampaignBuilder onClose={closeCampaignBuilder} />
           ) : wizardOpen ? (
@@ -441,6 +463,10 @@ export function ClientDashboard({
             <HomepageSettings />
           ) : page === "marketing" ? (
             <MarketingPanel marketingPage={marketingPage} />
+          ) : page === "collection-new" ? (
+            <CollectionNewPanel section={section} />
+          ) : page === "collections" && collectionId ? (
+            <CollectionDetailView section={section} collectionId={collectionId} />
           ) : isCollectionIndex ? (
             <CollectionsPanel section={section} />
           ) : (
@@ -449,7 +475,7 @@ export function ClientDashboard({
         </div>
       </section>
 
-      {!campaignBuilderOpen && <button
+      {!campaignBuilderOpen && !isCollectionDetail && <button
         className="fixed bottom-6 right-6 flex size-12 items-center justify-center rounded-full bg-[#2b2b2b] text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)]"
         onClick={() => setActiveNav("Support")}
         aria-label="Support"
@@ -1010,8 +1036,14 @@ function ContactGrid() {
 }
 
 function StarredPanel() {
-  const starredCollections = libraryPhotos.slice(0, 4);
-  const starredPhotos = libraryPhotos.slice(4);
+  const { collectionsQuery } = useCollections();
+  const imagesQuery = useCollectionImages();
+  const starredCollections = (collectionsQuery.data?.data ?? []).filter(
+    (collection) => collection.status === "starred" || collection.settings?.starred,
+  );
+  const starredPhotos = (imagesQuery.data?.data ?? []).filter(
+    (image) => image.metadata?.starred === true,
+  );
 
   return (
     <div>
@@ -1059,7 +1091,7 @@ function StarredGrid({
   emptyText,
   emptySubtext,
 }: {
-  items: typeof libraryPhotos;
+  items: (CollectionRecord | CollectionImageRecord)[];
   kind: "collection" | "photo";
   emptyText: string;
   emptySubtext: string;
@@ -1080,47 +1112,136 @@ function StarredGrid({
 
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {items.map((item) => (
-        <button key={`${kind}-${item.src}`} className="group text-left">
+      {items.map((item) => {
+        const isCollection = kind === "collection";
+        const collection = item as CollectionRecord;
+        const image = item as CollectionImageRecord;
+        const src = isCollection ? collection.coverImage : image.url;
+        const title = isCollection
+          ? collection.name
+          : image.originalName ?? image.metadata?.filename ?? "Image";
+        const subtitle = isCollection
+          ? `${collection.imageCount ?? 0} images`
+          : `${image.collectionName ?? "Collection"} / ${image.setName ?? "Highlights"}`;
+
+        return (
+        <button key={`${kind}-${item._id}`} className="group text-left">
           <span className="relative block overflow-hidden bg-[#f3f3f3]">
-            <img
-              src={item.src}
-              alt={item.title}
-              className={cn(
-                "w-full object-cover transition-transform group-hover:scale-105",
-                kind === "collection" ? "aspect-[1.35]" : "aspect-square"
-              )}
-            />
+            {src ? (
+              <img
+                src={imageSrc(src)}
+                alt={title}
+                className={cn(
+                  "w-full object-cover transition-transform group-hover:scale-105",
+                  isCollection ? "aspect-[1.35]" : "aspect-square",
+                )}
+              />
+            ) : (
+              <span className={cn("flex items-center justify-center bg-[#f3f3f3]", isCollection ? "aspect-[1.35]" : "aspect-square")}>
+                <Images className="size-8 text-[#bbb]" />
+              </span>
+            )}
             <Star className="absolute right-3 top-3 size-5 fill-white text-white drop-shadow" />
           </span>
           <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
-            {item.title}
+            {title}
           </span>
           <span className="mt-1 block text-xs text-[#777]">
-            {kind === "collection" ? "Sample collection" : "Sample photo"}
+            {subtitle}
           </span>
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
   const { libraryQuery, setLibraryQuery } = useDashboardStore();
-  const normalizedQuery = libraryQuery.trim().toLowerCase();
-  const visiblePhotos = normalizedQuery
-    ? libraryPhotos.filter((photo) =>
-        `${photo.title} ${photo.tags}`.toLowerCase().includes(normalizedQuery)
-      )
-    : libraryPhotos;
+  const router = useRouter();
+  const imagesQuery = useCollectionImages();
+  const { starImage } = useImageActions();
+  const images = imagesQuery.data?.data ?? [];
+  const [debouncedQuery, setDebouncedQuery] = useState(libraryQuery);
+  const [collectionFilter, setCollectionFilter] = useState("all");
+  const [previewImage, setPreviewImage] = useState<CollectionImageRecord | null>(null);
+  const [libraryPage, setLibraryPage] = useState(1);
+  const collections = Array.from(
+    new Map(
+      images.map((image) => [
+        image.collectionId,
+        image.collectionName ?? "Collection",
+      ]),
+    ),
+  );
+  const normalizedQuery = debouncedQuery.trim().toLowerCase();
+  const visiblePhotos = images.filter((image) => {
+    const matchesCollection =
+      collectionFilter === "all" || image.collectionId === collectionFilter;
+    const text = [
+      image.originalName,
+      image.collectionName,
+      image.setName,
+      image.metadata?.filename,
+      image.metadata?.title,
+      image.metadata?.caption,
+      image.metadata?.keyword,
+      image.metadata?.camera,
+      image.metadata?.lens,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return matchesCollection && (!normalizedQuery || text.includes(normalizedQuery));
+  });
+  const libraryPageSize = 48;
+  const totalLibraryPages = Math.max(1, Math.ceil(visiblePhotos.length / libraryPageSize));
+  const paginatedPhotos = visiblePhotos.slice(
+    (libraryPage - 1) * libraryPageSize,
+    libraryPage * libraryPageSize,
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(libraryQuery), 300);
+    return () => window.clearTimeout(timer);
+  }, [libraryQuery]);
+
+  useEffect(() => {
+    setLibraryPage(1);
+  }, [debouncedQuery, collectionFilter]);
+
+  useEffect(() => {
+    if (libraryPage > totalLibraryPages) setLibraryPage(totalLibraryPages);
+  }, [libraryPage, totalLibraryPages]);
 
   return (
     <div className="mx-auto max-w-[1220px]">
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(160px,max-content)_minmax(340px,480px)_1fr]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(160px,max-content)_minmax(340px,480px)_240px_1fr]">
         <h1 className="whitespace-nowrap text-[28px] font-medium leading-none tracking-normal">
           Photo Library
         </h1>
-        <SearchBox query={libraryQuery} onQueryChange={setLibraryQuery} />
+        <div className="flex h-10 items-center bg-[#fafafa]">
+          <Search className="ml-4 size-5 text-[#333]" />
+          <Input
+            value={libraryQuery}
+            onChange={(event) => setLibraryQuery(event.target.value)}
+            placeholder="Search images"
+            className="h-10 rounded-none border-0 bg-transparent focus-visible:ring-0"
+          />
+        </div>
+        <select
+          value={collectionFilter}
+          onChange={(event) => setCollectionFilter(event.target.value)}
+          className="h-10 border bg-white px-3 text-sm outline-none"
+        >
+          <option value="all">All collections</option>
+          {collections.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+        </select>
         <div className="hidden justify-end lg:flex">
           <Button
             className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
@@ -1131,36 +1252,132 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
         </div>
       </div>
 
-      <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {visiblePhotos.map((photo) => (
-          <button
-            key={photo.src}
+      {imagesQuery.isLoading ? (
+        <p className="mt-10 text-sm text-[#666]">Loading images...</p>
+      ) : (
+      <div className="mt-10 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
+        {paginatedPhotos.map((photo) => (
+          <div
+            key={photo._id}
             className="group text-left"
-            onClick={() => setLibraryQuery(photo.title)}
           >
-            <span className="block overflow-hidden bg-[#f3f3f3]">
+            <span className="relative block bg-[#f3f3f3]">
+              <span className="block overflow-hidden">
               <img
-                src={photo.src}
-                alt={photo.title}
+                src={imageSrc(photo.url)}
+                alt={photo.originalName ?? ""}
                 className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
               />
+              </span>
+              <span className="absolute right-2 top-2 hidden gap-1 group-hover:flex">
+                <button
+                  className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                  onClick={() =>
+                    starImage.mutate({
+                      collectionId: photo.collectionId,
+                      imageId: photo._id,
+                      starred: photo.metadata?.starred !== true,
+                    })
+                  }
+                  aria-label="Star image"
+                >
+                  <Star className={cn("size-4", photo.metadata?.starred === true && "fill-[#00a997] text-[#00a997]")} />
+                </button>
+                <button
+                  className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                  onClick={() => setPreviewImage(photo)}
+                  aria-label="View image"
+                >
+                  <Eye className="size-4" />
+                </button>
+                <a
+                  className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                  href={imageSrc(photo.url)}
+                  download={photo.originalName ?? "image"}
+                  aria-label="Download image"
+                >
+                  <Download className="size-4" />
+                </a>
+                <button
+                  className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                  onClick={() => router.push(`/dashboard/client-gallery/collections/${photo.collectionId}`)}
+                  aria-label="View in collection"
+                >
+                  <Images className="size-4" />
+                </button>
+              </span>
             </span>
-            <span className="mt-2 block truncate text-sm font-medium text-[#222]">
-              {photo.title}
-            </span>
-          </button>
+          </div>
         ))}
       </div>
+      )}
 
-      {!visiblePhotos.length && (
+      {!imagesQuery.isLoading && visiblePhotos.length > libraryPageSize && (
+        <div className="mt-6 flex items-center justify-end gap-3 text-sm">
+          <Button
+            variant="outline"
+            className="h-9 rounded-none"
+            disabled={libraryPage <= 1}
+            onClick={() => setLibraryPage((page) => Math.max(1, page - 1))}
+          >
+            <ArrowLeft data-icon="inline-start" />
+            Prev
+          </Button>
+          <span className="text-[#666]">
+            {libraryPage} / {totalLibraryPages}
+          </span>
+          <Button
+            variant="outline"
+            className="h-9 rounded-none"
+            disabled={libraryPage >= totalLibraryPages}
+            onClick={() => setLibraryPage((page) => Math.min(totalLibraryPages, page + 1))}
+          >
+            Next
+            <ArrowRight data-icon="inline-end" />
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogContent className="max-h-[92dvh] overflow-y-auto rounded-none sm:max-w-[92vw]">
+          <DialogHeader>
+            <DialogTitle>View Image</DialogTitle>
+            <DialogDescription>
+              Preview the selected library image.
+            </DialogDescription>
+          </DialogHeader>
+          {previewImage && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-4 text-sm text-[#666]">
+                <span className="truncate">{previewImage.originalName ?? "Image"}</span>
+                <span>
+                  {formatMetaValue(previewImage.metadata?.width)} x {formatMetaValue(previewImage.metadata?.height)}
+                </span>
+              </div>
+              <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
+                <img
+                  src={imageSrc(previewImage.url)}
+                  alt={previewImage.originalName ?? ""}
+                  className="max-h-[76dvh] max-w-full object-contain"
+                />
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {!imagesQuery.isLoading && !visiblePhotos.length && (
         <div className="mx-auto mt-24 max-w-[360px] text-center">
           <p className="text-lg font-bold">No matching photos</p>
           <p className="mt-4 text-sm leading-6 text-[#555]">
-            Try Camera, Lens, Starred, Keyword, or Title.
+            Try filename, collection, set, camera, lens, keyword, or title.
           </p>
           <Button
             className="mt-6 h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
-            onClick={() => setLibraryQuery("")}
+            onClick={() => {
+              setLibraryQuery("");
+              setCollectionFilter("all");
+            }}
           >
             Show All Photos
           </Button>
@@ -1870,11 +2087,12 @@ function PresetGeneralPanel({
         </Field>
         <Field>
           <FieldLabel className="font-bold">Photo Sets</FieldLabel>
-          <div className="flex h-12 items-center border px-5" role="button">
-            <span className="rounded-full bg-[#f4f4f4] px-4 py-2 text-sm">
-              {general.photoSets}
-            </span>
-          </div>
+          <Input
+            value={general.photoSets}
+            onChange={(event) => onChange({ photoSets: event.target.value })}
+            placeholder="Highlights, Reception, Getting Ready"
+            className="h-12 rounded-none bg-white px-5"
+          />
           <p className="text-sm leading-6 text-[#666]">
             Separate photo sets by comma. e.g. Highlights, Reception, Getting Ready
           </p>
@@ -1888,7 +2106,7 @@ function PresetGeneralPanel({
           >
             <option>No watermark</option>
             {watermarkItems.map((watermark) => (
-              <option key={watermark.id}>{watermark.name}</option>
+              <option key={watermark.id} value={watermark.id}>{watermark.name}</option>
             ))}
           </select>
           <p className="text-sm leading-6 text-[#666]">
@@ -2536,7 +2754,20 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
   } = useDashboardStore();
   const { saveSetting } = useDashboardSettings("watermark");
 
-  const clamp = (value: number) => Math.max(5, Math.min(95, value));
+  const clamp = (value: number, min = 5, max = 95) =>
+    Math.max(min, Math.min(max, value));
+  const safePosition = () => {
+    const textPad =
+      watermarkType === "text"
+        ? Math.min(45, Math.max(5, ((watermarkText || "Watermark").length * Math.max(14, watermarkScale / 2)) / 12))
+        : Math.min(45, Math.max(5, watermarkScale / 6));
+    const yPad = Math.min(45, Math.max(5, watermarkScale / 10));
+
+    return {
+      x: clamp(watermarkPosition.x, textPad, 100 - textPad),
+      y: clamp(watermarkPosition.y, yPad, 100 - yPad),
+    };
+  };
   const moveWatermark = (clientX: number, clientY: number) => {
     const rect = previewRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -2559,6 +2790,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
     window.addEventListener("pointerup", onUp);
   };
   const saveWatermarkToDb = () => {
+    const position = safePosition();
     const watermark = {
       id: activeWatermarkId,
       name:
@@ -2571,11 +2803,12 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
       color: watermarkColor,
       scale: watermarkScale,
       opacity: watermarkOpacity,
-      position: watermarkPosition,
+      position,
       image: watermarkImage,
       applyDownloads: watermarkApplyDownloads,
     };
 
+    setWatermarkPosition(position);
     saveWatermarkSettings();
     saveSetting.mutate({
       localId: activeWatermarkId,
@@ -3070,46 +3303,95 @@ function SearchBox({
 
 function CollectionsPanel({ section }: { section: DashboardSection }) {
   const { collectionsQuery, createCollection } = useCollections();
+  const router = useRouter();
+  const collections = collectionsQuery.data?.data ?? [];
+
+  return (
+    <div>
+      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-[28px] font-medium leading-none tracking-normal">
+            {section === "client-gallery" ? "Collections" : "Products"}
+          </h1>
+          <p className="mt-3 max-w-[600px] text-sm leading-6 text-[#666]">
+            Manage your collections — create, view, and organize your photos.
+          </p>
+        </div>
+        <Button
+          className="h-10 w-fit rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
+          onClick={() => router.push(`/dashboard/${section}/collection-new`)}
+        >
+          <PlusCircle className="mr-2 size-4" />
+          Create Collection
+        </Button>
+      </div>
+
+      {collectionsQuery.isLoading ? (
+        <p className="mt-10 py-8 text-sm text-[#666]">Loading collections...</p>
+      ) : !collections.length ? (
+        <div className="mt-10 flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+          <Images className="size-10 text-[#999]" />
+          <p className="mt-5 font-bold">No collections yet</p>
+          <p className="mt-2 text-sm leading-6 text-[#666]">
+            Create your first collection to get started.
+          </p>
+          <Button
+            className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={() => router.push(`/dashboard/${section}/collection-new`)}
+          >
+            Create Collection
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {collections.map((collection) => (
+            <button
+              key={collection._id}
+              className="group overflow-hidden border border-[#e6e6e6] bg-white text-left transition-shadow hover:shadow-lg"
+              onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
+            >
+              <span className="block aspect-[4/3] overflow-hidden bg-[#f2f2f2]">
+                {collection.coverImage ? (
+                  <img
+                    src={imageSrc(collection.coverImage)}
+                    alt=""
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <span className="flex h-full items-center justify-center">
+                    <Images className="size-10 text-[#ccc]" />
+                  </span>
+                )}
+              </span>
+              <span className="block border-t border-[#e6e6e6] p-4">
+                <span className="block truncate text-base font-bold text-[#222]">
+                  {collection.name}
+                </span>
+                <span className="mt-1 block text-sm text-[#666]">
+                  {collection.imageCount ?? 0} images
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CollectionNewPanel({ section }: { section: DashboardSection }) {
+  const router = useRouter();
   const presetSettings = useDashboardSettings("preset").query;
   const { hydrateDashboardSettings, presetItems } = useDashboardStore();
-  const collections = collectionsQuery.data?.data ?? [];
-  const [activeCollectionId, setActiveCollectionId] = useState("");
-  const [activeImageId, setActiveImageId] = useState("");
-  const [showNewForm, setShowNewForm] = useState(false);
+  const { createCollection } = useCollections();
   const [form, setForm] = useState({ name: "", eventDate: "", presetId: "" });
-  const { collectionQuery, uploadImages } = useCollectionDetail(activeCollectionId);
-  const activeCollection = collections.find((item) => item._id === activeCollectionId);
-  const detail = collectionQuery.data?.data;
-  const images = detail?.images ?? [];
-  const activeImage =
-    images.find((image) => image._id === activeImageId) ?? images[0];
 
   useEffect(() => {
     const settings = presetSettings.data?.data ?? [];
     if (settings.length) hydrateDashboardSettings(settings);
   }, [hydrateDashboardSettings, presetSettings.data]);
 
-  useEffect(() => {
-    if (!collections.length) {
-      setActiveCollectionId("");
-      return;
-    }
-    if (!activeCollectionId || !collections.some((item) => item._id === activeCollectionId)) {
-      setActiveCollectionId(collections[0]._id);
-    }
-  }, [activeCollectionId, collections]);
-
-  useEffect(() => {
-    if (!images.length) {
-      setActiveImageId("");
-      return;
-    }
-    if (!activeImageId || !images.some((image) => image._id === activeImageId)) {
-      setActiveImageId(images[0]._id);
-    }
-  }, [activeImageId, images]);
-
-  const createNewCollection = () => {
+  const handleCreate = () => {
     const name = form.name.trim();
     if (!name) return;
 
@@ -3120,222 +3402,832 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
         presetId: form.presetId || undefined,
       },
       {
-        onSuccess: (response) => {
-          const id = response?.data?._id;
-          if (id) setActiveCollectionId(id);
-          setForm({ name: "", eventDate: "", presetId: "" });
-          setShowNewForm(false);
+        onSuccess: () => {
+          router.push(`/dashboard/${section}`);
         },
       },
     );
   };
 
-  const presetName = (id?: string) =>
-    presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
-
   return (
-    <div>
-      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-[28px] font-medium leading-none tracking-normal">
-            {section === "client-gallery" ? "Collections" : "Products"}
-          </h1>
-          <p className="mt-3 max-w-[600px] text-sm leading-6 text-[#666]">
-            Collections save to DB. Uploaded images save as linked image records with metadata.
-          </p>
-        </div>
+    <div className="mx-auto max-w-[686px]">
+      <button
+        className="mb-8 inline-flex items-center gap-2 text-sm text-[#666] hover:text-[#222]"
+        onClick={() => router.push(`/dashboard/${section}`)}
+      >
+        <ArrowLeft className="size-4" />
+        Back to Collections
+      </button>
+      <h1 className="text-[28px] font-medium leading-none tracking-normal">
+        Create Collection
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-[#666]">
+        Set up a new collection with a name, date, and optional preset.
+      </p>
+      <div className="mt-8 bg-[#fafafa] p-8">
+        <FieldGroup className="gap-8">
+          <Field>
+            <FieldLabel htmlFor="new-collection-name" className="font-bold">
+              Collection Name
+            </FieldLabel>
+            <Input
+              id="new-collection-name"
+              value={form.name}
+              onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
+              placeholder="e.g. Jessie & Ryan"
+              className="mt-2 h-12 rounded-none bg-white px-5"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="new-event-date" className="font-bold">
+              Event Date
+            </FieldLabel>
+            <Input
+              id="new-event-date"
+              type="date"
+              value={form.eventDate}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, eventDate: event.target.value }))
+              }
+              className="mt-2 h-12 rounded-none bg-white px-5"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="new-preset" className="font-bold">
+              Preset
+            </FieldLabel>
+            <select
+              id="new-preset"
+              value={form.presetId}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, presetId: event.target.value }))
+              }
+              className="mt-2 h-12 w-full border bg-white px-3 text-sm outline-none"
+            >
+              <option value="">No preset</option>
+              {presetItems.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </FieldGroup>
+      </div>
+      <div className="mt-6 flex gap-3">
         <Button
-          className="h-10 w-fit rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
-          onClick={() => setShowNewForm((value) => !value)}
+          variant="outline"
+          className="h-12 rounded-none px-8"
+          onClick={() => router.push(`/dashboard/${section}`)}
         >
-          <PlusCircle className="mr-2 size-4" />
-          New Collection
+          Cancel
+        </Button>
+        <Button
+          className="h-12 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+          disabled={createCollection.isPending || !form.name.trim()}
+          onClick={handleCreate}
+        >
+          {createCollection.isPending ? "Creating..." : "Create Collection"}
         </Button>
       </div>
+    </div>
+  );
+}
 
-      {showNewForm && (
-        <div className="mt-8 grid gap-4 border bg-[#fafafa] p-5 md:grid-cols-[1.4fr_220px_240px_auto]">
-          <Input
-            value={form.name}
-            onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
-            placeholder="Collection name"
-            className="h-11 rounded-none bg-white"
-          />
-          <Input
-            type="date"
-            value={form.eventDate}
-            onChange={(event) =>
-              setForm((value) => ({ ...value, eventDate: event.target.value }))
-            }
-            className="h-11 rounded-none bg-white"
-          />
-          <select
-            value={form.presetId}
-            onChange={(event) =>
-              setForm((value) => ({ ...value, presetId: event.target.value }))
-            }
-            className="h-11 border bg-white px-3 text-sm outline-none"
-          >
-            <option value="">No preset</option>
-            {presetItems.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {preset.name}
-              </option>
-            ))}
-          </select>
-          <Button
-            className="h-11 rounded-none bg-[#222] px-7 text-sm font-bold text-white hover:bg-[#111]"
-            disabled={createCollection.isPending || !form.name.trim()}
-            onClick={createNewCollection}
-          >
-            Create
-          </Button>
+function CollectionDetailView({
+  section,
+  collectionId,
+}: {
+  section: DashboardSection;
+  collectionId: string;
+}) {
+  const router = useRouter();
+  const presetSettings = useDashboardSettings("preset").query;
+  const watermarkSettings = useDashboardSettings("watermark").query;
+  const { hydrateDashboardSettings, presetItems, watermarkItems } = useDashboardStore();
+  const { starImage } = useImageActions();
+  const { collectionsQuery } = useCollections();
+  const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage } = useCollectionDetail(collectionId);
+  const collections = collectionsQuery.data?.data ?? [];
+  const collection = collectionQuery.data?.data ?? collections.find((item) => item._id === collectionId);
+  const detail = collectionQuery.data?.data;
+  const images = detail?.images ?? [];
+  const sets = detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }];
+  const [activeImageId, setActiveImageId] = useState("");
+  const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings">("photos");
+  const [activeSetId, setActiveSetId] = useState("highlights");
+  const [detailCollapsed, setDetailCollapsed] = useState(false);
+  const [addSetOpen, setAddSetOpen] = useState(false);
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [imagePage, setImagePage] = useState(1);
+  const [newSetName, setNewSetName] = useState("");
+  const [editingSetId, setEditingSetId] = useState("");
+  const [editingSetName, setEditingSetName] = useState("");
+  const [form, setForm] = useState(() => collectionForm(collection));
+  const activeImage =
+    images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
+  const activeSetImages = images.filter((image) => (image.setId || "highlights") === activeSetId);
+  const imagePageSize = 24;
+  const totalImagePages = Math.max(1, Math.ceil(activeSetImages.length / imagePageSize));
+  const visibleSetImages = activeSetImages.slice(
+    (imagePage - 1) * imagePageSize,
+    imagePage * imagePageSize,
+  );
+  const activeSet = form.sets.find((set) => set.id === activeSetId) ?? form.sets[0];
+  const uploadWatermarkId =
+    activeSet?.watermarkId ||
+    (form.general.defaultWatermark === "No watermark" ? undefined : form.general.defaultWatermark);
+  const activeWatermark = watermarkItems.find(
+    (watermark) =>
+      watermark.id === uploadWatermarkId ||
+      watermark.name === uploadWatermarkId,
+  );
+  const publicLink = `/collection/${collection?.slug ?? collectionId}`;
+
+  useEffect(() => {
+    const settings = [
+      ...(presetSettings.data?.data ?? []),
+      ...(watermarkSettings.data?.data ?? []),
+    ];
+    if (settings.length) hydrateDashboardSettings(settings);
+  }, [hydrateDashboardSettings, presetSettings.data, watermarkSettings.data]);
+
+  useEffect(() => {
+    if (collection) setForm(collectionForm(collection));
+  }, [collection]);
+
+  useEffect(() => {
+    if (!sets.some((set) => set.id === activeSetId)) {
+      setActiveSetId(sets[0]?.id ?? "highlights");
+    }
+  }, [activeSetId, sets]);
+
+  useEffect(() => {
+    if (!activeSetImages.length) {
+      setActiveImageId("");
+      return;
+    }
+    if (!activeImageId || !activeSetImages.some((image) => image._id === activeImageId)) {
+      setActiveImageId(activeSetImages[0]._id);
+    }
+  }, [activeImageId, activeSetImages]);
+
+  useEffect(() => {
+    setImagePage(1);
+  }, [activeSetId]);
+
+  useEffect(() => {
+    if (imagePage > totalImagePages) setImagePage(totalImagePages);
+  }, [imagePage, totalImagePages]);
+
+  const presetName = (id?: string) =>
+    presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
+  const saveCollection = () => {
+    updateCollection.mutate({
+      name: form.name.trim() || collection?.name,
+      presetId: form.presetId || undefined,
+      coverImage: form.coverImage || undefined,
+      sets: syncSetsFromPhotoSets(form.sets, form.general.photoSets),
+      tags: form.general.collectionTags.split(",").map((tag) => tag.trim()).filter(Boolean),
+      watermarkId: form.general.defaultWatermark === "No watermark" ? undefined : form.general.defaultWatermark,
+      expiresAt: form.expiresAt || undefined,
+      design: form.design,
+      settings: {
+        general: form.general,
+        download: form.download,
+      },
+    });
+  };
+  const createSet = () => {
+    const name = newSetName.trim();
+    if (!name) return;
+    addSet.mutate(name, {
+      onSuccess: (response) => {
+        const nextSet = response?.data;
+        if (nextSet) {
+          setForm((value) => ({
+            ...value,
+            sets: [...value.sets, nextSet],
+            general: {
+              ...value.general,
+              photoSets: [...value.sets.map((set) => set.name), nextSet.name].join(", "),
+            },
+          }));
+          setActiveSetId(nextSet.id);
+        }
+        setNewSetName("");
+        setAddSetOpen(false);
+      },
+    });
+  };
+  const deleteSet = (setId: string) => {
+    if (form.sets.length <= 1) return;
+    const nextSets = form.sets.filter((set) => set.id !== setId);
+    setForm((value) => ({
+      ...value,
+      sets: nextSets,
+      general: {
+        ...value.general,
+        photoSets: nextSets.map((set) => set.name).join(", "),
+      },
+    }));
+    if (activeSetId === setId) setActiveSetId(nextSets[0]?.id ?? "highlights");
+    updateCollection.mutate({ sets: nextSets });
+  };
+  const renameSet = () => {
+    const name = editingSetName.trim();
+    if (!editingSetId || !name) return;
+    const nextSets = form.sets.map((set) =>
+      set.id === editingSetId ? { ...set, name } : set,
+    );
+    setForm((value) => ({
+      ...value,
+      sets: nextSets,
+      general: {
+        ...value.general,
+        photoSets: nextSets.map((set) => set.name).join(", "),
+      },
+    }));
+    updateCollection.mutate({ sets: nextSets });
+    setEditingSetId("");
+    setEditingSetName("");
+  };
+  if (!collection) {
+    return (
+      <div className="flex min-h-[420px] items-center justify-center text-sm text-[#666]">
+        Loading collection...
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-[100dvh] min-w-0 flex-col overflow-hidden px-4 py-5 md:px-6">
+      <button
+        className="mb-4 inline-flex w-fit items-center gap-2 text-sm text-[#666] hover:text-[#222]"
+        onClick={() => router.push(`/dashboard/${section}`)}
+      >
+        <ArrowLeft className="size-4" />
+        Back to Collections
+      </button>
+
+      <div className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-[28px] font-medium leading-none tracking-normal">
+            {collection.name}
+          </h1>
+          <p className="mt-2 text-sm text-[#666]">
+            {formatDate(collection.eventDate)} &middot; {presetName(collection.presetId)} &middot; {images.length} images
+          </p>
+          <p className="mt-2 break-all text-xs text-[#00a997]">{publicLink}</p>
         </div>
+        <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white">
+          <Upload className="size-4" />
+          Add Media
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              const files = event.target.files;
+              if (files?.length) {
+                const selectedFiles = Array.from(files);
+                uploadImages.mutate({
+                  files: selectedFiles,
+                  setId: activeSetId,
+                  watermarkId: uploadWatermarkId,
+                });
+              }
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>
+
+      {uploadImages.isPending && (
+        <p className="mt-4 text-sm font-semibold text-[#00a997]">
+          Uploading and applying watermark...
+        </p>
+      )}
+      {uploadImages.error && (
+        <p className="mt-4 text-sm font-semibold text-red-600">
+          {uploadImages.error.message}
+        </p>
       )}
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[360px_1fr]">
-        <div className="border-t">
-          {collectionsQuery.isLoading ? (
-            <p className="py-8 text-sm text-[#666]">Loading collections...</p>
-          ) : !collections.length ? (
-            <div className="flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
-              <Images className="size-10 text-[#999]" />
-              <p className="mt-5 font-bold">No collections yet</p>
-              <p className="mt-2 text-sm leading-6 text-[#666]">
-                Create collection, then upload single or batch images.
-              </p>
-              <Button
-                className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
-                onClick={() => setShowNewForm(true)}
-              >
-                New Collection
-              </Button>
-            </div>
-          ) : (
-            collections.map((collection) => (
-              <button
-                key={collection._id}
-                className={cn(
-                  "grid w-full grid-cols-[78px_1fr] gap-4 border-b py-4 text-left",
-                  activeCollectionId === collection._id && "bg-[#f7fbfa]",
-                )}
-                onClick={() => setActiveCollectionId(collection._id)}
-              >
-                <span className="block aspect-square overflow-hidden bg-[#f2f2f2]">
-                  {collection.coverImage ? (
-                    <img
-                      src={imageSrc(collection.coverImage)}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Images className="mx-auto mt-6 size-6 text-[#aaa]" />
-                  )}
-                </span>
-                <span className="min-w-0 py-1">
-                  <span className="block truncate text-sm font-bold text-[#222]">
-                    {collection.name}
-                  </span>
-                  <span className="mt-2 block text-xs text-[#666]">
-                    {collection.imageCount ?? 0} images
-                  </span>
-                  <span className="mt-1 block truncate text-xs text-[#888]">
-                    {presetName(collection.presetId)}
-                  </span>
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-
-        <section className="min-w-0">
-          {activeCollection ? (
-            <>
-              <div className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">{activeCollection.name}</h2>
-                  <p className="mt-2 text-sm text-[#666]">
-                    {formatDate(activeCollection.eventDate)} - {presetName(activeCollection.presetId)}
-                  </p>
-                </div>
-                <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white">
-                  <Upload className="size-4" />
-                  Upload Images
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(event) => {
-                      const files = event.target.files;
-                      if (files?.length) uploadImages.mutate(files);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
+      <div className={cn("mt-6 grid min-h-0 flex-1 overflow-hidden border", detailCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[250px_minmax(0,1fr)]")}>
+        <aside className="flex flex-col border-r bg-[#fafafa]">
+          {!detailCollapsed && <div className="aspect-[1.45] bg-[#e8e8e8]">
+            {form.coverImage ? (
+              <img src={imageSrc(form.coverImage)} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <Images className="size-9 text-[#bbb]" />
               </div>
-
-              {uploadImages.isPending && (
-                <p className="mt-4 text-sm font-semibold text-[#00a997]">
-                  Uploading and applying watermark...
-                </p>
-              )}
-              {uploadImages.error && (
-                <p className="mt-4 text-sm font-semibold text-red-600">
-                  {uploadImages.error.message}
-                </p>
-              )}
-
-              {!images.length ? (
-                <div className="mt-8 flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
-                  <Upload className="size-10 text-[#999]" />
-                  <p className="mt-5 font-bold">No images uploaded</p>
-                  <p className="mt-2 max-w-[380px] text-sm leading-6 text-[#666]">
-                    Batch or single upload saves image rows with collection ID and metadata.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_300px]">
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                    {images.map((image) => (
+            )}
+          </div>}
+          <div className={cn("grid border-b bg-white", detailCollapsed ? "grid-cols-1" : "grid-cols-3")}>
+            {([
+              ["photos", Images],
+              ["design", Palette],
+              ["settings", Settings],
+            ] as const).map(([tab, Icon]) => (
+              <button
+                key={String(tab)}
+                className={cn("flex h-14 items-center justify-center border-b-2 border-transparent", activeTab === tab && "border-[#22bda7] text-[#00a997]")}
+                onClick={() => setActiveTab(tab as typeof activeTab)}
+                aria-label={String(tab)}
+              >
+                <Icon className="size-5" />
+              </button>
+            ))}
+          </div>
+          {activeTab === "photos" && !detailCollapsed && (
+            <div className="min-h-0 overflow-y-auto p-4">
+              <div className="mb-4 flex items-center justify-end">
+                <button className="inline-flex items-center gap-1 text-sm font-bold text-[#00a997]" onClick={() => setAddSetOpen(true)}>
+                  <PlusCircle className="size-4" />
+                  Add Set
+                </button>
+              </div>
+              <div className="flex flex-col gap-1">
+                {form.sets.map((set) => {
+                  const count = images.filter((image) => (image.setId || "highlights") === set.id).length;
+                  return (
+                    <div
+                      key={set.id}
+                      className={cn("group flex h-12 items-center justify-between gap-2 px-3 text-left text-sm", activeSetId === set.id && "bg-white font-bold")}
+                    >
+                      {editingSetId === set.id ? (
+                        <Input
+                          value={editingSetName}
+                          onChange={(event) => setEditingSetName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") renameSet();
+                            if (event.key === "Escape") setEditingSetId("");
+                          }}
+                          onBlur={renameSet}
+                          className="h-8 rounded-none bg-white"
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          className="min-w-0 flex-1 truncate text-left"
+                          onClick={() => setActiveSetId(set.id)}
+                          onDoubleClick={() => {
+                            setEditingSetId(set.id);
+                            setEditingSetName(set.name);
+                          }}
+                        >
+                          {set.name}
+                        </button>
+                      )}
+                      <span className="ml-auto text-xs text-[#777]">{count}</span>
                       <button
-                        key={image._id}
-                        className={cn(
-                          "group text-left",
-                          activeImage?._id === image._id && "outline outline-2 outline-[#22bda7]",
-                        )}
+                        className="hidden text-[#888] hover:text-red-600 group-hover:inline-flex disabled:text-[#ccc]"
+                        disabled={form.sets.length <= 1}
+                        onClick={() => deleteSet(set.id)}
+                        aria-label="Delete set"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <Dialog open={addSetOpen} onOpenChange={setAddSetOpen}>
+                <DialogContent className="rounded-none sm:max-w-[420px]">
+                  <DialogHeader>
+                    <DialogTitle>Add Set</DialogTitle>
+                    <DialogDescription>
+                      Create a named set inside this collection.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel>Set Name</FieldLabel>
+                      <Input
+                        value={newSetName}
+                        onChange={(event) => setNewSetName(event.target.value)}
+                        placeholder="e.g. Reception"
+                        className="h-11 rounded-none"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") createSet();
+                        }}
+                      />
+                    </Field>
+                  </FieldGroup>
+                  <DialogFooter>
+                    <Button variant="outline" className="rounded-none" onClick={() => setAddSetOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button className="rounded-none bg-[#22bda7] text-white" disabled={!newSetName.trim()} onClick={createSet}>
+                      Create
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+          <button
+            className="mt-auto flex h-12 items-center justify-center border-t text-[#333]"
+            onClick={() => setDetailCollapsed((value) => !value)}
+            aria-label="Toggle collection sidebar"
+          >
+            <ChevronsLeft className={cn("size-5", detailCollapsed && "rotate-180")} />
+          </button>
+        </aside>
+
+        <div className="min-w-0 overflow-y-auto p-5 md:p-6">
+          {activeTab === "photos" && (
+            !activeSetImages.length ? (
+              <label className="flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center">
+                <Upload className="size-10 text-[#bbb]" />
+                <p className="mt-5 font-bold">Drag photos and videos here to upload</p>
+                <p className="mt-3 text-sm text-[#00a997]">or Browse files</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    const files = event.target.files;
+                    if (files?.length) {
+                      const selectedFiles = Array.from(files);
+                      uploadImages.mutate({
+                        files: selectedFiles,
+                        setId: activeSetId,
+                        watermarkId: uploadWatermarkId,
+                      });
+                    }
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            ) : (
+              <div>
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                    {collection.name} / {activeSet?.name ?? "Set"} / Images
+                  </p>
+                  <Button variant="outline" className="h-9 rounded-none" onClick={() => setMetadataOpen(true)}>
+                    Show Metadata
+                  </Button>
+                </div>
+                <div className={cn("grid gap-2", form.design.gridStyle === "Horizontal" ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-3 md:grid-cols-5 xl:grid-cols-6", form.design.thumbnailSize === "Large" && "md:grid-cols-4 xl:grid-cols-5")}>
+                  {visibleSetImages.map((image) => (
+                    <div
+                      key={image._id}
+                      className={cn("group relative text-left", activeImage?._id === image._id && "outline outline-2 outline-[#22bda7]")}
+                    >
+                      <button
+                        className="relative block w-full overflow-hidden bg-[#f2f2f2]"
                         onClick={() => setActiveImageId(image._id)}
                       >
-                        <span className="block overflow-hidden bg-[#f2f2f2]">
-                          <img
-                            src={imageSrc(image.url)}
-                            alt={image.originalName ?? ""}
-                            className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
-                          />
-                        </span>
-                        <span className="mt-2 block truncate text-xs font-semibold text-[#333]">
-                          {image.originalName ?? image.metadata?.filename ?? "Image"}
-                        </span>
-                        {image.watermarked && (
-                          <span className="mt-1 inline-flex text-[11px] font-bold text-[#00a997]">
-                            Watermarked
-                          </span>
+                        <img
+                          src={imageSrc(image.url)}
+                          alt={image.originalName ?? ""}
+                          className={cn(
+                            "w-full object-cover transition-transform group-hover:scale-105",
+                            form.design.gridStyle === "Horizontal" ? "aspect-[1.45]" : "aspect-square",
+                          )}
+                        />
+                        {!image.watermarked && activeWatermark && (
+                          <WatermarkOverlay watermark={activeWatermark} />
                         )}
                       </button>
-                    ))}
-                  </div>
-                  <MetadataPanel image={activeImage} />
+                      <button
+                        className="absolute right-2 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-red-600 group-hover:flex"
+                        onClick={() => {
+                          if (form.coverImage === image.url) {
+                            setForm((value) => ({ ...value, coverImage: "" }));
+                          }
+                          deleteImage.mutate(image._id);
+                        }}
+                        aria-label="Delete image"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                      <button
+                        className="absolute right-12 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997] group-hover:flex"
+                        onClick={() => {
+                          setActiveImageId(image._id);
+                          setPreviewOpen(true);
+                        }}
+                        aria-label="View image"
+                      >
+                        <Eye className="size-4" />
+                      </button>
+                      <button
+                        className="absolute right-[5.5rem] top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997] group-hover:flex"
+                        onClick={() =>
+                          starImage.mutate({
+                            collectionId: image.collectionId,
+                            imageId: image._id,
+                            starred: image.metadata?.starred !== true,
+                          })
+                        }
+                        aria-label="Star image"
+                      >
+                        <Star className={cn("size-4", image.metadata?.starred === true && "fill-[#00a997] text-[#00a997]")} />
+                      </button>
+                      <button
+                        className="absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm hover:text-[#00a997] group-hover:block"
+                        onClick={() => setForm((value) => ({ ...value, coverImage: image.url }))}
+                      >
+                        Make Cover
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </>
-          ) : (
-            <div className="flex min-h-[420px] items-center justify-center border bg-[#fafafa] text-sm text-[#666]">
-              Select or create collection
+                {totalImagePages > 1 && (
+                  <div className="mt-5 flex items-center justify-end gap-3 text-sm">
+                    <Button
+                      variant="outline"
+                      className="h-9 rounded-none"
+                      disabled={imagePage <= 1}
+                      onClick={() => setImagePage((page) => Math.max(1, page - 1))}
+                    >
+                      <ArrowLeft data-icon="inline-start" />
+                      Prev
+                    </Button>
+                    <span className="text-[#666]">
+                      {imagePage} / {totalImagePages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      className="h-9 rounded-none"
+                      disabled={imagePage >= totalImagePages}
+                      onClick={() => setImagePage((page) => Math.min(totalImagePages, page + 1))}
+                    >
+                      Next
+                      <ArrowRight data-icon="inline-end" />
+                    </Button>
+                  </div>
+                )}
+                <Dialog open={metadataOpen} onOpenChange={setMetadataOpen}>
+                  <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
+                    <DialogHeader>
+                      <DialogTitle>Image Metadata</DialogTitle>
+                      <DialogDescription>
+                        View stored camera and file metadata for the selected image.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <MetadataPanel image={activeImage} />
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+                  <DialogContent className="max-h-[92dvh] overflow-y-auto rounded-none sm:max-w-[92vw]">
+                    <DialogHeader>
+                      <DialogTitle>View Image</DialogTitle>
+                      <DialogDescription>
+                        Preview the selected image and its pixel size.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {activeImage && (
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between gap-4 text-sm text-[#666]">
+                          <span className="truncate">{activeImage.originalName ?? "Image"}</span>
+                          <span>
+                            {formatMetaValue(activeImage.metadata?.width)} x {formatMetaValue(activeImage.metadata?.height)}
+                          </span>
+                        </div>
+                        <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
+                          <img
+                            src={imageSrc(activeImage.url)}
+                            alt={activeImage.originalName ?? ""}
+                            className="max-h-[76dvh] max-w-full object-contain"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
+              </div>
+            )
+          )}
+
+          {activeTab === "design" && (
+            <div className="max-w-[700px]">
+                <div className="mb-8 flex items-center gap-3">
+                  <select
+                    value={form.presetId}
+                    onChange={(event) => {
+                      const preset = presetItems.find((item) => item.id === event.target.value);
+                      setForm((value) => ({
+                        ...value,
+                        presetId: event.target.value,
+                        design: preset?.design ?? value.design,
+                        general: preset?.general ?? value.general,
+                        download: preset?.download ?? value.download,
+                      }));
+                    }}
+                    className="h-11 w-full border bg-white px-3 text-sm outline-none"
+                  >
+                    <option value="">Custom design</option>
+                    {presetItems.map((preset) => (
+                      <option key={preset.id} value={preset.id}>{preset.name}</option>
+                    ))}
+                  </select>
+                  <Button className="h-11 rounded-none bg-[#22bda7] px-6 text-white" onClick={saveCollection}>
+                    Save
+                  </Button>
+                </div>
+                <PresetDesignPanel
+                  design={form.design}
+                  onChange={(value) => setForm((current) => ({ ...current, presetId: "", design: { ...current.design, ...value } }))}
+                />
             </div>
           )}
-        </section>
+
+          {activeTab === "settings" && (
+            <div className="max-w-[760px]">
+              <h2 className="text-2xl font-medium">General Settings</h2>
+              <FieldGroup className="mt-8 gap-7">
+                <Field>
+                  <FieldLabel className="font-bold">Collection Name</FieldLabel>
+                  <Input value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} className="h-12 rounded-none bg-white" />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold">Expire Date</FieldLabel>
+                  <Input type="date" value={form.expiresAt} onChange={(event) => setForm((value) => ({ ...value, expiresAt: event.target.value }))} className="h-12 rounded-none bg-white" />
+                </Field>
+              </FieldGroup>
+              <div className="mt-12">
+                <PresetGeneralPanel
+                  general={form.general}
+                  section={section}
+                  onChange={(general) =>
+                    setForm((value) => {
+                      const nextGeneral = { ...value.general, ...general };
+                      return {
+                        ...value,
+                        general: nextGeneral,
+                        sets:
+                          general.photoSets !== undefined
+                            ? syncSetsFromPhotoSets(value.sets, nextGeneral.photoSets)
+                            : value.sets,
+                      };
+                    })
+                  }
+                />
+              </div>
+              <div className="mt-14 border-t pt-12">
+                <h2 className="mb-8 text-2xl font-medium">Download</h2>
+                <PresetDownloadPanel
+                  download={form.download}
+                  onChange={(download) => setForm((value) => ({ ...value, download: { ...value.download, ...download } }))}
+                />
+              </div>
+              <Button className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white" disabled={updateCollection.isPending} onClick={saveCollection}>
+                {updateCollection.isPending ? "Saving..." : "Save Settings"}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+const collectionDefaultDesign: PresetDesignSettings = {
+  cover: "Center",
+  typography: "Classic",
+  color: "White",
+  gridStyle: "Vertical",
+  thumbnailSize: "Regular",
+  gridSpacing: "Regular",
+  navigationStyle: "Icon Only",
+};
+
+const collectionDefaultGeneral: PresetGeneralSettings = {
+  collectionTags: "",
+  photoSets: "Highlights",
+  defaultWatermark: "No watermark",
+  emailRegistration: false,
+  galleryAssist: false,
+  slideshow: true,
+  socialSharing: true,
+  language: "English",
+};
+
+const collectionDefaultDownload: PresetDownloadSettings = {
+  photoDownload: true,
+  highResolution: true,
+  highResolutionSize: "3600px",
+  webSize: true,
+  webSizePx: "1024px",
+  videoDownload: false,
+  downloadPin: true,
+  restrictDownloads: false,
+  limitDownloads: false,
+  limitPinUsage: "",
+};
+
+type CollectionFormState = {
+  name: string;
+  presetId: string;
+  coverImage: string;
+  expiresAt: string;
+  sets: NonNullable<CollectionRecord["sets"]>;
+  design: PresetDesignSettings;
+  general: PresetGeneralSettings;
+  download: PresetDownloadSettings;
+};
+
+function collectionForm(collection?: CollectionRecord): CollectionFormState {
+  return {
+    name: collection?.name ?? "",
+    presetId: collection?.presetId ?? "",
+    coverImage: collection?.coverImage ?? "",
+    expiresAt: collection?.expiresAt ? collection.expiresAt.slice(0, 10) : "",
+    sets: collection?.sets?.length ? collection.sets : [{ id: "highlights", name: "Highlights" }],
+    design: { ...collectionDefaultDesign, ...(collection?.design ?? {}) } as PresetDesignSettings,
+    general: {
+      ...collectionDefaultGeneral,
+      collectionTags: collection?.tags?.join(", ") ?? collectionDefaultGeneral.collectionTags,
+      defaultWatermark: collection?.watermarkId ?? collectionDefaultGeneral.defaultWatermark,
+      ...((collection?.settings?.general as Partial<PresetGeneralSettings> | undefined) ?? {}),
+    },
+    download: {
+      ...collectionDefaultDownload,
+      ...((collection?.settings?.download as Partial<PresetDownloadSettings> | undefined) ?? {}),
+    },
+  };
+}
+
+function syncSetsFromPhotoSets(
+  currentSets: NonNullable<CollectionRecord["sets"]>,
+  photoSets: string,
+) {
+  const names = photoSets
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  const safeNames = names.length ? names : ["Highlights"];
+
+  return safeNames.map((name, index) => {
+    const existing =
+      currentSets.find((set) => set.name.toLowerCase() === name.toLowerCase()) ??
+      currentSets[index];
+
+    return {
+      id: existing?.id ?? `set-${Date.now()}-${index}`,
+      name,
+      watermarkId: existing?.watermarkId,
+      createdAt: existing?.createdAt,
+    };
+  });
+}
+
+function WatermarkOverlay({
+  watermark,
+}: {
+  watermark: {
+    type: "text" | "image";
+    text?: string;
+    font?: string;
+    color?: string;
+    scale?: number;
+    opacity?: number;
+    position?: { x: number; y: number };
+    image?: string;
+  };
+}) {
+  const position = watermark.position ?? { x: 15, y: 85 };
+  const opacity = (watermark.opacity ?? 90) / 100;
+
+  if (watermark.type === "image" && watermark.image) {
+    return (
+      <img
+        src={watermark.image}
+        alt=""
+        className="pointer-events-none absolute max-w-[34%] -translate-x-1/2 -translate-y-1/2 object-contain"
+        style={{
+          left: `${position.x}%`,
+          top: `${position.y}%`,
+          opacity,
+          width: `${Math.max(12, watermark.scale ?? 42)}%`,
+        }}
+      />
+    );
+  }
+
+  return (
+    <span
+      className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-bold"
+      style={{
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        color: watermark.color ?? "#ffffff",
+        fontFamily: watermark.font ?? "Times New Roman",
+        fontSize: `${Math.max(14, (watermark.scale ?? 42) / 2)}px`,
+        opacity,
+      }}
+    >
+      {watermark.text || "Watermark"}
+    </span>
   );
 }
 
@@ -3344,22 +4236,33 @@ const metadataGroups = [
     title: "Camera Settings",
     items: [
       ["camera", "Camera"],
+      ["make", "Make"],
+      ["model", "Model"],
       ["lens", "Lens"],
       ["focalLength", "Focal Length"],
+      ["focalLength35mm", "35mm Focal Length"],
       ["shutterSpeed", "Shutter Speed"],
       ["aperture", "Aperture"],
       ["iso", "ISO"],
       ["flash", "Flash"],
+      ["meteringMode", "Metering Mode"],
+      ["exposureMode", "Exposure Mode"],
+      ["whiteBalance", "White Balance"],
     ],
   },
   {
     title: "Metadata",
     items: [
       ["filename", "Filename"],
+      ["dateTaken", "Date Taken"],
       ["title", "Title"],
       ["caption", "Caption"],
       ["headline", "Headline"],
       ["keyword", "Keyword"],
+      ["artist", "Artist"],
+      ["copyright", "Copyright"],
+      ["software", "Software"],
+      ["gps", "GPS"],
       ["orientation", "Orientation"],
       ["rating", "Rating"],
       ["colorLabel", "Color Label"],

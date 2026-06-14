@@ -9,6 +9,7 @@ import {
 const sections = ["client-gallery", "store-gallery"] as const;
 const pages = [
   "collections",
+  "collection-new",
   "library",
   "starred",
   "homepage",
