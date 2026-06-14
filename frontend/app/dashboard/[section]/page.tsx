@@ -19,7 +19,7 @@ export default async function DashboardSectionPage({
     redirect("/dashboard/client-gallery");
   }
 
-  const page = section === "client-gallery" ? "collections" : "products";
+  const page = section === "client-gallery" ? "collections" : "storefront";
 
   return (
     <ClientDashboard

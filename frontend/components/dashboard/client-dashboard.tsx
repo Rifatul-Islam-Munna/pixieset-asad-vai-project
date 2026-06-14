@@ -100,9 +100,22 @@ import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import {
   useStorePriceSheet,
   useStorePriceSheets,
+  useStoreCustomers,
+  useStoreDashboard,
+  useStoreOrders,
+  useStoreRules,
+  useStoreSettings,
+  type StoreCouponRecord,
+  type StoreCustomerRecord,
+  type StoreDashboardRecord,
+  type StoreOrderRecord,
+  type StoreOrderStatus,
   type StoreProductPayload,
   type StoreProductRecord,
   type StoreProductType,
+  type StoreShippingRecord,
+  type StoreSettingsRecord,
+  type StoreTaxRecord,
 } from "@/api-hooks/use-store";
 import {
   useDashboardStore,
@@ -355,7 +368,7 @@ export function ClientDashboard({
             {sidebarItems[section].map((item) => (
               <Link
                 key={item.label}
-                href={item.page === "collections" || item.page === "products" ? `/dashboard/${section}` : `/dashboard/${section}/${item.page}`}
+                href={item.page === "collections" ? `/dashboard/${section}` : `/dashboard/${section}/${item.page}`}
                 className={cn(
                   "flex items-center gap-4 text-left text-base text-[#222]",
                   activeNav === item.label && "font-semibold text-[#00a997]"
@@ -477,6 +490,8 @@ export function ClientDashboard({
             <LibraryPanel onNewCollection={startWizard} />
           ) : page === "starred" ? (
             <StarredPanel />
+          ) : section === "store-gallery" && page === "settings" ? (
+            <StoreSettingsPanel />
           ) : page === "settings" ? (
             <SettingsPanel section={section} settingsPage={settingsPage} />
           ) : page === "homepage" ? (
@@ -485,6 +500,18 @@ export function ClientDashboard({
             <MarketingPanel marketingPage={marketingPage} />
           ) : page === "collection-new" ? (
             <CollectionNewPanel section={section} />
+          ) : section === "store-gallery" && page === "storefront" ? (
+            <StoreDashboardPanel />
+          ) : section === "store-gallery" && page === "orders" ? (
+            <StoreOrdersPanel />
+          ) : section === "store-gallery" && page === "customers" ? (
+            <StoreCustomersPanel />
+          ) : section === "store-gallery" && page === "coupons" ? (
+            <StoreCouponsPanel />
+          ) : section === "store-gallery" && page === "taxes" ? (
+            <StoreTaxesPanel />
+          ) : section === "store-gallery" && page === "shipping" ? (
+            <StoreShippingPanel />
           ) : page === "products" && priceSheetId ? (
             <StorePriceSheetDetail priceSheetId={priceSheetId} />
           ) : page === "collections" && collectionId ? (
@@ -3329,6 +3356,1190 @@ const productTypeLabels: Record<StoreProductType, string> = {
   "digital-download": "Digital Download",
   "self-fulfilled": "Self Fulfilled Item",
 };
+
+const orderStatuses: StoreOrderStatus[] = [
+  "pending",
+  "processing",
+  "fulfilled",
+  "shipped",
+  "delivered",
+  "cancelled",
+];
+
+function StoreDashboardPanel() {
+  const dashboardQuery = useStoreDashboard();
+  const data = dashboardQuery.data?.data;
+  const stats = [
+    ["Revenue", money(data?.revenue ?? 0)],
+    ["Orders", String(data?.orderCount ?? 0)],
+    ["Customers", String(data?.customerCount ?? 0)],
+    ["Pending", String(data?.pending ?? 0)],
+    ["Avg Order", money(data?.averageOrderValue ?? 0)],
+    ["Products", String(data?.productCount ?? 0)],
+  ];
+
+  return (
+    <StorePageShell
+      title="Store Dashboard"
+      subtitle="Revenue, orders, customers, and fulfillment status."
+    >
+      <div className="grid gap-4 md:grid-cols-3">
+        {stats.map(([label, value]) => (
+          <div key={label} className="border bg-white p-5">
+            <p className="text-xs font-bold uppercase tracking-wide text-[#777]">{label}</p>
+            <p className="mt-3 text-2xl font-semibold">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="border bg-white">
+          <StoreTableHeader title="Recent Orders" />
+          <StoreTable
+            columns={["Order", "Customer", "Status", "Total"]}
+            rows={(data?.recentOrders ?? []).map((order) => [
+              order.orderNumber,
+              order.customer?.name ?? "Customer",
+              <StatusBadge key="status" value={order.status} />,
+              money(order.total),
+            ])}
+            empty="No orders yet"
+          />
+        </div>
+        <div className="border bg-white p-5">
+          <p className="text-sm font-bold">Status Breakdown</p>
+          <div className="mt-5 flex flex-col gap-3">
+            {orderStatuses.map((status) => (
+              <div key={status} className="flex items-center justify-between text-sm">
+                <span className="capitalize text-[#555]">{status}</span>
+                <span className="font-bold">{data?.statusCounts?.[status] ?? 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </StorePageShell>
+  );
+}
+
+function StoreOrdersPanel() {
+  const { ordersQuery, createOrder, updateOrder } = useStoreOrders();
+  const { rulesQuery: shippingQuery } = useStoreRules<StoreShippingRecord>("shipping");
+  const orders = ordersQuery.data?.data ?? [];
+  const shippingMethods = shippingQuery.data?.data ?? [];
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    itemName: "",
+    quantity: "1",
+    unitPrice: "0",
+    tax: "0",
+    shipping: "0",
+    shippingMethodId: "",
+    shippingNote: "",
+    discount: "0",
+    status: "pending" as StoreOrderStatus,
+    trackingNumber: "",
+  });
+
+  const addOrder = () => {
+    createOrder.mutate(
+      {
+        customer: { name: form.name, email: form.email, phone: form.phone },
+        items: [
+          {
+            name: form.itemName || "Manual Product",
+            type: "self-fulfilled",
+            quantity: Number(form.quantity) || 1,
+            unitPrice: Number(form.unitPrice) || 0,
+          },
+        ],
+        tax: Number(form.tax) || 0,
+        shipping: Number(form.shipping) || 0,
+        shippingMethodId: form.shippingMethodId || undefined,
+        shippingMethodName:
+          shippingMethods.find((method) => method._id === form.shippingMethodId)?.name ?? "",
+        shippingNote: form.shippingNote,
+        discount: Number(form.discount) || 0,
+        status: form.status,
+        paymentStatus: "paid",
+        trackingNumber: form.trackingNumber,
+      } as any,
+      {
+        onSuccess: () => {
+          setOpen(false);
+          setForm({
+            name: "",
+            email: "",
+            phone: "",
+            itemName: "",
+            quantity: "1",
+            unitPrice: "0",
+            tax: "0",
+            shipping: "0",
+            shippingMethodId: "",
+            shippingNote: "",
+            discount: "0",
+            status: "pending",
+            trackingNumber: "",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <StorePageShell
+      title="Orders"
+      subtitle="Track customer orders, fulfillment, shipping, and payment."
+      action="Add Order"
+      onAction={() => setOpen(true)}
+    >
+      <div className="border bg-white">
+        <StoreTableHeader title={`${orders.length} Orders`} />
+        <StoreTable
+          columns={["Order", "Customer", "Items", "Shipping", "Tracking", "Status", "Payment", "Total"]}
+          rows={orders.map((order) => [
+            order.orderNumber,
+            <div key="customer">
+              <p className="font-medium">{order.customer?.name}</p>
+              <p className="text-xs text-[#777]">{order.customer?.email}</p>
+            </div>,
+            `${order.items?.length ?? 0} item`,
+            <div key="shipping">
+              <p>{money(order.shipping ?? 0)}</p>
+              <p className="text-xs text-[#777]">{order.shippingMethodName || order.shippingNote || "-"}</p>
+            </div>,
+            order.trackingNumber || "-",
+            <select
+              key="status"
+              value={order.status}
+              onChange={(event) =>
+                updateOrder.mutate({
+                  orderId: order._id,
+                  payload: { status: event.target.value as StoreOrderStatus },
+                })
+              }
+              className="h-8 border bg-white px-2 text-xs outline-none"
+            >
+              {orderStatuses.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>,
+            <StatusBadge key="payment" value={order.paymentStatus} />,
+            money(order.total),
+          ])}
+          empty="No orders yet"
+        />
+      </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="rounded-none sm:max-w-[760px]">
+          <DialogHeader>
+            <DialogTitle>Add Order</DialogTitle>
+            <DialogDescription>Manual order entry with customer and tracking.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="gap-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <StoreInput label="Customer Name" value={form.name} onChange={(name) => setForm((v) => ({ ...v, name }))} />
+              <StoreInput label="Email" value={form.email} onChange={(email) => setForm((v) => ({ ...v, email }))} />
+              <StoreInput label="Phone" value={form.phone} onChange={(phone) => setForm((v) => ({ ...v, phone }))} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <StoreInput label="Item" value={form.itemName} onChange={(itemName) => setForm((v) => ({ ...v, itemName }))} />
+              <StoreInput label="Qty" value={form.quantity} onChange={(quantity) => setForm((v) => ({ ...v, quantity }))} />
+              <StoreInput label="Unit Price" value={form.unitPrice} onChange={(unitPrice) => setForm((v) => ({ ...v, unitPrice }))} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-4">
+              <StoreInput label="Tax" value={form.tax} onChange={(tax) => setForm((v) => ({ ...v, tax }))} />
+              <StoreInput label="Discount" value={form.discount} onChange={(discount) => setForm((v) => ({ ...v, discount }))} />
+              <StoreInput label="Tracking" value={form.trackingNumber} onChange={(trackingNumber) => setForm((v) => ({ ...v, trackingNumber }))} />
+              <StoreInput label="Shipping Note" value={form.shippingNote} onChange={(shippingNote) => setForm((v) => ({ ...v, shippingNote }))} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel className="font-bold">Shipping Method</FieldLabel>
+                <select
+                  value={form.shippingMethodId}
+                  onChange={(event) => {
+                    const method = shippingMethods.find((item) => item._id === event.target.value);
+                    setForm((value) => ({
+                      ...value,
+                      shippingMethodId: event.target.value,
+                      shipping: method ? String(method.price ?? 0) : value.shipping,
+                      shippingNote: method ? method.region ?? "" : value.shippingNote,
+                    }));
+                  }}
+                  className="h-11 border bg-white px-3 text-sm outline-none"
+                >
+                  <option value="">Manual shipping</option>
+                  {shippingMethods.map((method) => (
+                    <option key={method._id} value={method._id}>
+                      {method.name} - {money(method.price)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <StoreInput label="Shipping Charge" value={form.shipping} onChange={(shipping) => setForm((v) => ({ ...v, shipping }))} />
+            </div>
+          </FieldGroup>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button className="rounded-none bg-[#22bda7] text-white" disabled={!form.email.trim()} onClick={addOrder}>
+              Save Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </StorePageShell>
+  );
+}
+
+function StoreCustomersPanel() {
+  const { customersQuery, createCustomer } = useStoreCustomers();
+  const customers = customersQuery.data?.data ?? [];
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+
+  const addCustomer = () => {
+    createCustomer.mutate(form, {
+      onSuccess: () => {
+        setOpen(false);
+        setForm({ name: "", email: "", phone: "" });
+      },
+    });
+  };
+
+  return (
+    <StorePageShell
+      title="Customers"
+      subtitle="People who ordered. Repeat buyers are grouped by email."
+      action="Add Customer"
+      onAction={() => setOpen(true)}
+    >
+      <div className="border bg-white">
+        <StoreTableHeader title={`${customers.length} Customers`} />
+        <StoreTable
+          columns={["Customer", "Phone", "Orders", "Total Spent", "Last Order"]}
+          rows={customers.map((customer) => [
+            <div key="name">
+              <p className="font-medium">{customer.name}</p>
+              <p className="text-xs text-[#777]">{customer.email}</p>
+            </div>,
+            customer.phone || "-",
+            String(customer.orderCount ?? 0),
+            money(customer.totalSpent ?? 0),
+            customer.lastOrderAt ? formatDate(customer.lastOrderAt) : "-",
+          ])}
+          empty="No customers yet"
+        />
+      </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="rounded-none sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Add Customer</DialogTitle>
+            <DialogDescription>Customer records merge by email.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <StoreInput label="Name" value={form.name} onChange={(name) => setForm((v) => ({ ...v, name }))} />
+            <StoreInput label="Email" value={form.email} onChange={(email) => setForm((v) => ({ ...v, email }))} />
+            <StoreInput label="Phone" value={form.phone} onChange={(phone) => setForm((v) => ({ ...v, phone }))} />
+          </FieldGroup>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button className="rounded-none bg-[#22bda7] text-white" disabled={!form.email.trim()} onClick={addCustomer}>
+              Save Customer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </StorePageShell>
+  );
+}
+
+function StoreCouponsPanel() {
+  const { rulesQuery, saveRule, deleteRule } = useStoreRules<StoreCouponRecord>("coupons");
+  const coupons = rulesQuery.data?.data ?? [];
+  const [form, setForm] = useState({ code: "", name: "", discountType: "percent", amount: "" });
+  return (
+    <StorePageShell title="Coupons" subtitle="Discount codes for checkout.">
+      <StoreRuleForm
+        fields={[
+          ["Code", form.code, (code) => setForm((v) => ({ ...v, code }))],
+          ["Name", form.name, (name) => setForm((v) => ({ ...v, name }))],
+          ["Amount", form.amount, (amount) => setForm((v) => ({ ...v, amount }))],
+        ]}
+        extra={
+          <select
+            value={form.discountType}
+            onChange={(event) => setForm((v) => ({ ...v, discountType: event.target.value }))}
+            className="h-11 border bg-white px-3 text-sm outline-none"
+          >
+            <option value="percent">Percent</option>
+            <option value="fixed">Fixed</option>
+          </select>
+        }
+        onSave={() => saveRule.mutate({ ...form, amount: Number(form.amount) } as Partial<StoreCouponRecord>)}
+      />
+      <StoreTable
+        columns={["Code", "Name", "Type", "Amount", "Used", "Status", ""]}
+        rows={coupons.map((coupon) => [
+          coupon.code,
+          coupon.name,
+          coupon.discountType,
+          coupon.discountType === "percent" ? `${coupon.amount}%` : money(coupon.amount),
+          String(coupon.usageCount ?? 0),
+          <StatusBadge key="active" value={coupon.active ? "active" : "off"} />,
+          <button key="delete" className="text-red-600" onClick={() => deleteRule.mutate(coupon._id)}>Delete</button>,
+        ])}
+        empty="No coupons yet"
+      />
+    </StorePageShell>
+  );
+}
+
+function StoreTaxesPanel() {
+  const { rulesQuery, saveRule, deleteRule } = useStoreRules<StoreTaxRecord>("taxes");
+  const taxes = rulesQuery.data?.data ?? [];
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    _id: "",
+    region: "United States",
+    rate: "0",
+    applyShipping: true,
+    applyDigitalDownloads: true,
+  });
+
+  const resetTaxForm = () => {
+    setForm({
+      _id: "",
+      region: "United States",
+      rate: "0",
+      applyShipping: true,
+      applyDigitalDownloads: true,
+    });
+  };
+
+  const saveTax = () => {
+    saveRule.mutate(
+      {
+        _id: form._id || undefined,
+        name: `${form.region} Tax`,
+        region: form.region,
+        rate: Number(form.rate) || 0,
+        applyShipping: form.applyShipping,
+        applyDigitalDownloads: form.applyDigitalDownloads,
+        active: true,
+      } as Partial<StoreTaxRecord>,
+      {
+        onSuccess: () => {
+          setOpen(false);
+          resetTaxForm();
+        },
+      },
+    );
+  };
+
+  return (
+    <StorePageShell
+      title="Taxes"
+      subtitle="Country-wide sales tax rates for checkout."
+      action="Add Tax Rate"
+      onAction={() => {
+        resetTaxForm();
+        setOpen(true);
+      }}
+    >
+      <div className="max-w-[920px]">
+        <Tabs defaultValue="rates">
+          <TabsList className="rounded-none border-b bg-transparent p-0">
+            <TabsTrigger value="rates" className="h-14 rounded-none border border-b-0 px-5 data-[state=active]:bg-white">
+              Tax Rates
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="rates" className="mt-8">
+            <StoreTable
+              columns={["Country", "Tax Rate", "Apply To", "Status", ""]}
+              rows={taxes.map((tax) => [
+                tax.region || "United States",
+                `${tax.rate}%`,
+                [
+                  tax.applyShipping ? "Shipping" : "",
+                  tax.applyDigitalDownloads ? "Digital Downloads" : "",
+                ].filter(Boolean).join(", ") || "-",
+                <StatusBadge key="active" value={tax.active ? "active" : "off"} />,
+                <div key="actions" className="flex justify-end gap-4 text-[#00a997]">
+                  <button
+                    aria-label="Edit tax rate"
+                    onClick={() => {
+                      setForm({
+                        _id: tax._id,
+                        region: tax.region || "United States",
+                        rate: String(tax.rate ?? 0),
+                        applyShipping: tax.applyShipping ?? true,
+                        applyDigitalDownloads: tax.applyDigitalDownloads ?? true,
+                      });
+                      setOpen(true);
+                    }}
+                  >
+                    <Settings className="size-4" />
+                  </button>
+                  <button aria-label="Delete tax rate" onClick={() => deleteRule.mutate(tax._id)}>
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>,
+              ])}
+              empty="No tax rates yet"
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="rounded-none p-0 sm:max-w-[700px]">
+          <DialogHeader className="bg-[#f7f7f7] px-9 py-8">
+            <DialogTitle className="text-base tracking-[0.18em]">ADD TAX RATE</DialogTitle>
+            <DialogDescription className="sr-only">Create or edit tax rate.</DialogDescription>
+          </DialogHeader>
+          <div className="px-12 py-10">
+            <FieldGroup className="gap-7">
+              <Field>
+                <FieldLabel className="font-bold">Country</FieldLabel>
+                <select
+                  value={form.region}
+                  onChange={(event) => setForm((value) => ({ ...value, region: event.target.value }))}
+                  className="h-12 w-full border bg-white px-4 text-base outline-none"
+                >
+                  <option>United States</option>
+                  <option>Canada</option>
+                  <option>United Kingdom</option>
+                  <option>Bangladesh</option>
+                  <option>Australia</option>
+                  <option>Germany</option>
+                </select>
+                <p className="text-sm leading-6 text-[#7a828c]">
+                  Add the country you would like to collect taxes from, then enter a country-wide sales tax rate.
+                </p>
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold">Tax Rate (%)</FieldLabel>
+                <Input
+                  value={form.rate}
+                  onChange={(event) => setForm((value) => ({ ...value, rate: event.target.value }))}
+                  className="h-12 rounded-none text-base"
+                  inputMode="decimal"
+                />
+              </Field>
+              <label className="flex items-center gap-3 text-sm font-bold">
+                <Checkbox
+                  checked={form.applyShipping}
+                  onCheckedChange={(checked) =>
+                    setForm((value) => ({ ...value, applyShipping: Boolean(checked) }))
+                  }
+                />
+                Apply Tax on Shipping
+              </label>
+              <label className="flex items-center gap-3 text-sm font-bold">
+                <Checkbox
+                  checked={form.applyDigitalDownloads}
+                  onCheckedChange={(checked) =>
+                    setForm((value) => ({
+                      ...value,
+                      applyDigitalDownloads: Boolean(checked),
+                    }))
+                  }
+                />
+                Apply Tax on Digital Downloads
+              </label>
+            </FieldGroup>
+          </div>
+          <DialogFooter className="px-12 pb-10">
+            <Button variant="outline" className="rounded-none border-0" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="rounded-none bg-[#22bda7] px-8 text-white" onClick={saveTax}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </StorePageShell>
+  );
+}
+
+function StoreShippingPanel() {
+  const { rulesQuery, saveRule, deleteRule } = useStoreRules<StoreShippingRecord>("shipping");
+  const rates = rulesQuery.data?.data ?? [];
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    _id: "",
+    name: "",
+    region: "United States",
+    price: "",
+    shipInternational: false,
+  });
+
+  const resetShippingForm = () => {
+    setForm({
+      _id: "",
+      name: "",
+      region: "United States",
+      price: "",
+      shipInternational: false,
+    });
+  };
+
+  const saveShipping = () => {
+    saveRule.mutate(
+      {
+        _id: form._id || undefined,
+        name: form.name,
+        region: form.shipInternational ? "International" : form.region,
+        shipInternational: form.shipInternational,
+        price: Number(form.price) || 0,
+        active: true,
+      } as Partial<StoreShippingRecord>,
+      {
+        onSuccess: () => {
+          setOpen(false);
+          resetShippingForm();
+        },
+      },
+    );
+  };
+
+  return (
+    <StorePageShell
+      title="Shipping"
+      subtitle="Create shipping methods for self fulfilled price sheets."
+      action="Add Shipping Method"
+      onAction={() => {
+        resetShippingForm();
+        setOpen(true);
+      }}
+    >
+      <div className="max-w-[920px]">
+        <Tabs defaultValue="self">
+          <TabsList className="rounded-none border-b bg-transparent p-0">
+            <TabsTrigger value="self" className="h-14 rounded-none border border-b-0 px-5 data-[state=active]:bg-white">
+              Self Fulfillment
+            </TabsTrigger>
+            <TabsTrigger value="auto" className="h-14 rounded-none px-5 text-[#00a997]">
+              Automatic Fulfillment
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="self" className="mt-8">
+            <p className="max-w-[850px] text-sm leading-6 text-[#7a828c]">
+              Create shipping methods that will apply to all your Self fulfillment price sheets.
+              You will need to create at least one shipping method for the country you'd like to sell to.
+            </p>
+            <div className="mt-8 overflow-x-auto">
+              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="px-2 py-4 font-bold">Shipping method</th>
+                    <th className="px-2 py-4 font-bold">Fee per order</th>
+                    <th className="px-2 py-4 font-bold">Ships to</th>
+                    <th className="px-2 py-4 text-right font-bold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rates.length ? rates.map((rate) => (
+                    <tr key={rate._id} className="border-b">
+                      <td className="px-2 py-5">{rate.name}</td>
+                      <td className="px-2 py-5">{money(rate.price)}</td>
+                      <td className="px-2 py-5">
+                        {rate.shipInternational ? "International" : rate.region || "United States"}
+                      </td>
+                      <td className="px-2 py-5">
+                        <div className="flex justify-end gap-4 text-[#00a997]">
+                          <button
+                            aria-label="Edit shipping method"
+                            onClick={() => {
+                              setForm({
+                                _id: rate._id,
+                                name: rate.name,
+                                region: rate.region || "United States",
+                                price: String(rate.price ?? 0),
+                                shipInternational: Boolean(rate.shipInternational),
+                              });
+                              setOpen(true);
+                            }}
+                          >
+                            <Settings className="size-4" />
+                          </button>
+                          <button
+                            aria-label="Delete shipping method"
+                            onClick={() => deleteRule.mutate(rate._id)}
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={4} className="px-2 py-12 text-center text-[#777]">
+                        No shipping methods yet
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </TabsContent>
+          <TabsContent value="auto" className="mt-8 border bg-[#fafafa] p-8 text-sm leading-6 text-[#667085]">
+            Automatic fulfillment can be connected later when vendor integration is ready.
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="rounded-none p-0 sm:max-w-[700px]">
+          <DialogHeader className="bg-[#f7f7f7] px-9 py-8">
+            <DialogTitle className="text-base tracking-[0.18em]">ADD SHIPPING METHOD</DialogTitle>
+            <DialogDescription className="sr-only">Create or edit self fulfillment shipping method.</DialogDescription>
+          </DialogHeader>
+          <div className="px-12 py-10">
+            <FieldGroup className="gap-7">
+              <Field>
+                <FieldLabel className="font-bold">Name this Shipping method</FieldLabel>
+                <Input
+                  value={form.name}
+                  onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
+                  placeholder="e.g. USPS Priority Mail Express, Fedex 2Days"
+                  className="h-12 rounded-none text-base"
+                />
+                <p className="text-sm leading-6 text-[#7a828c]">
+                  You can add multiple shipping methods for each country. Each order is charged a flat fee.
+                </p>
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold">Flat fee per order</FieldLabel>
+                <Input
+                  value={form.price}
+                  onChange={(event) => setForm((value) => ({ ...value, price: event.target.value }))}
+                  placeholder="0.00"
+                  className="h-12 rounded-none text-base"
+                  inputMode="decimal"
+                />
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold">Country</FieldLabel>
+                <select
+                  value={form.region}
+                  onChange={(event) => setForm((value) => ({ ...value, region: event.target.value }))}
+                  className="h-12 w-full border bg-white px-4 text-base outline-none"
+                  disabled={form.shipInternational}
+                >
+                  <option>United States</option>
+                  <option>Canada</option>
+                  <option>United Kingdom</option>
+                  <option>Bangladesh</option>
+                  <option>Australia</option>
+                  <option>Germany</option>
+                </select>
+                <p className="text-sm leading-6 text-[#7a828c]">
+                  Specify which country this shipping method is assigned to.
+                </p>
+              </Field>
+              <label className="flex items-center gap-3 text-sm font-bold">
+                <Checkbox
+                  checked={form.shipInternational}
+                  onCheckedChange={(checked) =>
+                    setForm((value) => ({ ...value, shipInternational: Boolean(checked) }))
+                  }
+                />
+                Ship to international
+              </label>
+            </FieldGroup>
+          </div>
+          <DialogFooter className="px-12 pb-10">
+            <Button variant="outline" className="rounded-none border-0" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#22bda7] px-8 text-white"
+              disabled={!form.name.trim()}
+              onClick={saveShipping}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </StorePageShell>
+  );
+}
+
+const defaultStoreSettings: StoreSettingsRecord = {
+  globalStatus: false,
+  currency: "BDT",
+  orderDelay: "6 Hours",
+  maintainMarkup: true,
+  roundPricesUpTo: ".00",
+  paymentMethods: {
+    stripe: { enabled: false, accountLink: "", publishableKey: "" },
+    paypal: { enabled: false, accountLink: "", merchantEmail: "" },
+    offline: { enabled: false, instructions: "" },
+  },
+  links: [],
+  domain: { hostname: "", dnsTarget: "store.pixieset.local", verified: false },
+  giftCardSharingEmail: "",
+  termsOfSale: "",
+  digitalImageLicense: "",
+};
+
+function StoreSettingsPanel() {
+  const { settingsQuery, saveSettings } = useStoreSettings();
+  const [form, setForm] = useState<StoreSettingsRecord>(defaultStoreSettings);
+
+  useEffect(() => {
+    if (settingsQuery.data?.data) {
+      setForm({
+        ...defaultStoreSettings,
+        ...settingsQuery.data.data,
+        paymentMethods: {
+          ...defaultStoreSettings.paymentMethods,
+          ...(settingsQuery.data.data.paymentMethods ?? {}),
+        },
+        domain: {
+          ...defaultStoreSettings.domain,
+          ...(settingsQuery.data.data.domain ?? {}),
+        },
+        links: settingsQuery.data.data.links ?? [],
+      });
+    }
+  }, [settingsQuery.data]);
+
+  const setPayment = (
+    key: "stripe" | "paypal" | "offline",
+    value: Record<string, unknown>,
+  ) => {
+    setForm((current) => ({
+      ...current,
+      paymentMethods: {
+        ...current.paymentMethods,
+        [key]: { ...(current.paymentMethods[key] ?? {}), ...value },
+      },
+    }));
+  };
+
+  const updateLink = (index: number, value: Partial<{ label: string; url: string }>) => {
+    setForm((current) => ({
+      ...current,
+      links: current.links.map((link, itemIndex) =>
+        itemIndex === index ? { ...link, ...value } : link,
+      ),
+    }));
+  };
+
+  return (
+    <StorePageShell
+      title="Store Settings"
+      subtitle="Checkout, payment methods, domain/DNS, terms, and digital license."
+      action={saveSettings.isPending ? "Saving..." : "Save Settings"}
+      onAction={() => saveSettings.mutate(form)}
+    >
+      <div className="max-w-[760px]">
+        <section className="border bg-white p-6">
+          <p className="text-sm font-bold">Store Global Status</p>
+          <div className="mt-4 flex items-center gap-3">
+            <Switch
+              checked={form.globalStatus}
+              onCheckedChange={(globalStatus) =>
+                setForm((current) => ({ ...current, globalStatus }))
+              }
+            />
+            <span className="text-sm">{form.globalStatus ? "On" : "Off"}</span>
+          </div>
+          <p className="mt-3 text-xs text-[#777]">Turn store checkout on/off globally.</p>
+        </section>
+
+        <section className="mt-8">
+          <h2 className="text-sm font-bold">Payment Methods</h2>
+          <div className="mt-4 flex flex-col gap-3">
+            <PaymentMethodRow
+              title="stripe"
+              text="Accept credit card payments online."
+              enabled={Boolean(form.paymentMethods.stripe?.enabled)}
+              link={form.paymentMethods.stripe?.accountLink ?? ""}
+              placeholder="Stripe onboarding/account link"
+              onEnabled={(enabled) => setPayment("stripe", { enabled })}
+              onLink={(accountLink) => setPayment("stripe", { accountLink })}
+            />
+            <PaymentMethodRow
+              title="PayPal"
+              text="Accept PayPal Express Checkout payments."
+              enabled={Boolean(form.paymentMethods.paypal?.enabled)}
+              link={form.paymentMethods.paypal?.accountLink ?? ""}
+              placeholder="PayPal merchant/link"
+              onEnabled={(enabled) => setPayment("paypal", { enabled })}
+              onLink={(accountLink) => setPayment("paypal", { accountLink })}
+            />
+            <PaymentMethodRow
+              title="OFFLINE"
+              text="Arrange alternative payments with clients."
+              enabled={Boolean(form.paymentMethods.offline?.enabled)}
+              link={form.paymentMethods.offline?.instructions ?? ""}
+              placeholder="Offline payment instructions/link"
+              onEnabled={(enabled) => setPayment("offline", { enabled })}
+              onLink={(instructions) => setPayment("offline", { instructions })}
+            />
+          </div>
+        </section>
+
+        <section className="mt-8 grid gap-6">
+          <div>
+            <p className="text-sm font-bold">Store Currency</p>
+            <select
+              value={form.currency}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, currency: event.target.value }))
+              }
+              className="mt-3 h-11 w-full border bg-white px-3 text-sm outline-none"
+            >
+              <option value="BDT">Bangladesh (BDT)</option>
+              <option value="USD">United States (USD)</option>
+              <option value="EUR">Euro (EUR)</option>
+              <option value="GBP">British Pound (GBP)</option>
+            </select>
+          </div>
+          <div>
+            <p className="text-sm font-bold">Order Delay</p>
+            <select
+              value={form.orderDelay}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, orderDelay: event.target.value }))
+              }
+              className="mt-3 h-11 w-full border bg-white px-3 text-sm outline-none"
+            >
+              <option>None</option>
+              <option>6 Hours</option>
+              <option>12 Hours</option>
+              <option>24 Hours</option>
+            </select>
+          </div>
+          <div>
+            <p className="text-sm font-bold">Maintain Markup Percentage</p>
+            <div className="mt-3 flex items-center gap-3">
+              <Switch
+                checked={form.maintainMarkup}
+                onCheckedChange={(maintainMarkup) =>
+                  setForm((current) => ({ ...current, maintainMarkup }))
+                }
+              />
+              <span className="text-sm">{form.maintainMarkup ? "On" : "Off"}</span>
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-bold">Round prices up to</p>
+            <select
+              value={form.roundPricesUpTo}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, roundPricesUpTo: event.target.value }))
+              }
+              className="mt-3 h-11 w-full border bg-white px-3 text-sm outline-none"
+            >
+              <option>.00</option>
+              <option>.50</option>
+              <option>.99</option>
+            </select>
+          </div>
+        </section>
+
+        <section className="mt-10 border bg-white p-6">
+          <h2 className="text-sm font-bold">Domain / DNS Server</h2>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <StoreInput
+              label="Store Domain"
+              value={form.domain.hostname ?? ""}
+              onChange={(hostname) =>
+                setForm((current) => ({
+                  ...current,
+                  domain: { ...current.domain, hostname },
+                }))
+              }
+            />
+            <StoreInput
+              label="DNS Target"
+              value={form.domain.dnsTarget ?? ""}
+              onChange={(dnsTarget) =>
+                setForm((current) => ({
+                  ...current,
+                  domain: { ...current.domain, dnsTarget },
+                }))
+              }
+            />
+          </div>
+        </section>
+
+        <section className="mt-10 border bg-white p-6">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-sm font-bold">Checkout Links</h2>
+            <button
+              className="text-sm font-bold text-[#00a997]"
+              onClick={() =>
+                setForm((current) => ({
+                  ...current,
+                  links: [...current.links, { label: "", url: "" }],
+                }))
+              }
+            >
+              + Add link
+            </button>
+          </div>
+          <div className="mt-4 flex flex-col gap-3">
+            {form.links.map((link, index) => (
+              <div key={index} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  value={link.label}
+                  onChange={(event) => updateLink(index, { label: event.target.value })}
+                  placeholder="Label"
+                  className="h-11 rounded-none"
+                />
+                <Input
+                  value={link.url}
+                  onChange={(event) => updateLink(index, { url: event.target.value })}
+                  placeholder="https://..."
+                  className="h-11 rounded-none"
+                />
+                <Button
+                  variant="outline"
+                  className="h-11 rounded-none"
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      links: current.links.filter((_, itemIndex) => itemIndex !== index),
+                    }))
+                  }
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-10">
+          <Field>
+            <FieldLabel className="font-bold">Gift Card Sharing Email</FieldLabel>
+            <Input
+              value={form.giftCardSharingEmail}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, giftCardSharingEmail: event.target.value }))
+              }
+              className="mt-3 h-11 rounded-none"
+              placeholder="Gift Card Sharing"
+            />
+          </Field>
+        </section>
+
+        <section className="mt-10">
+          <Field>
+            <FieldLabel className="font-bold">Terms of Sale</FieldLabel>
+            <RichTextEditor
+              value={form.termsOfSale}
+              onChange={(termsOfSale) =>
+                setForm((current) => ({ ...current, termsOfSale }))
+              }
+            />
+          </Field>
+        </section>
+
+        <section className="mt-10">
+          <Field>
+            <FieldLabel className="font-bold">Digital Image License</FieldLabel>
+            <RichTextEditor
+              value={form.digitalImageLicense}
+              onChange={(digitalImageLicense) =>
+                setForm((current) => ({ ...current, digitalImageLicense }))
+              }
+            />
+          </Field>
+        </section>
+      </div>
+    </StorePageShell>
+  );
+}
+
+function PaymentMethodRow({
+  title,
+  text,
+  enabled,
+  link,
+  placeholder,
+  onEnabled,
+  onLink,
+}: {
+  title: string;
+  text: string;
+  enabled: boolean;
+  link: string;
+  placeholder: string;
+  onEnabled: (value: boolean) => void;
+  onLink: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-4 bg-[#f6f6f6] p-5 md:grid-cols-[120px_1fr_110px] md:items-center">
+      <p className="font-bold">{title}</p>
+      <div>
+        <p className="text-sm font-semibold">{text}</p>
+        <Input
+          value={link}
+          onChange={(event) => onLink(event.target.value)}
+          placeholder={placeholder}
+          className="mt-3 h-10 rounded-none bg-white"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Switch checked={enabled} onCheckedChange={onEnabled} />
+        <span className="text-xs">{enabled ? "On" : "Off"}</span>
+      </div>
+    </div>
+  );
+}
+
+function StorePageShell({
+  title,
+  subtitle,
+  action,
+  onAction,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  action?: string;
+  onAction?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-[28px] font-medium leading-none">{title}</h1>
+          <p className="mt-3 max-w-[680px] text-sm leading-6 text-[#666]">{subtitle}</p>
+        </div>
+        {action && (
+          <Button className="h-10 w-fit rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white" onClick={onAction}>
+            <PlusCircle data-icon="inline-start" />
+            {action}
+          </Button>
+        )}
+      </div>
+      <div className="mt-8">{children}</div>
+    </div>
+  );
+}
+
+function StoreTableHeader({ title }: { title: string }) {
+  return (
+    <div className="flex h-14 items-center justify-between border-b px-5">
+      <p className="text-sm font-bold">{title}</p>
+    </div>
+  );
+}
+
+function StoreTable({
+  columns,
+  rows,
+  empty,
+}: {
+  columns: string[];
+  rows: ReactNode[][];
+  empty: string;
+}) {
+  return (
+    <div className="overflow-x-auto border bg-white">
+      <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+        <thead className="bg-[#fafafa] text-xs uppercase tracking-wide text-[#777]">
+          <tr>
+            {columns.map((column) => (
+              <th key={column} className="border-b px-5 py-4 font-bold">{column}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length ? rows.map((row, index) => (
+            <tr key={index} className="border-b last:border-b-0">
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex} className="px-5 py-4 align-middle text-[#333]">{cell}</td>
+              ))}
+            </tr>
+          )) : (
+            <tr>
+              <td colSpan={columns.length} className="px-5 py-12 text-center text-[#777]">
+                {empty}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StoreInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field>
+      <FieldLabel className="font-bold">{label}</FieldLabel>
+      <Input value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-none" />
+    </Field>
+  );
+}
+
+function StoreRuleForm({
+  fields,
+  extra,
+  onSave,
+}: {
+  fields: [string, string, (value: string) => void][];
+  extra?: ReactNode;
+  onSave: () => void;
+}) {
+  return (
+    <div className="mb-6 border bg-[#fafafa] p-5">
+      <div className="grid gap-4 md:grid-cols-4">
+        {fields.map(([label, value, onChange]) => (
+          <StoreInput key={label} label={label} value={value} onChange={onChange} />
+        ))}
+        {extra && <Field><FieldLabel className="font-bold">Type</FieldLabel>{extra}</Field>}
+      </div>
+      <Button className="mt-4 h-10 rounded-none bg-[#22bda7] px-6 text-white" onClick={onSave}>
+        Save
+      </Button>
+    </div>
+  );
+}
+
+function StatusBadge({ value }: { value: string }) {
+  const positive = ["paid", "delivered", "fulfilled", "active"].includes(value);
+  const danger = ["cancelled", "refunded", "off"].includes(value);
+  return (
+    <span
+      className={cn(
+        "inline-flex h-7 items-center px-3 text-xs font-bold capitalize",
+        positive && "bg-[#e3f7f2] text-[#008b7d]",
+        danger && "bg-[#fff0f0] text-red-600",
+        !positive && !danger && "bg-[#f1f1f1] text-[#555]",
+      )}
+    >
+      {value}
+    </span>
+  );
+}
+
+function money(value: number) {
+  return `BDT${Number(value || 0).toFixed(2)}`;
+}
 
 function StoreProductsPanel() {
   const router = useRouter();

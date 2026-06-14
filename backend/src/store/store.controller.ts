@@ -11,6 +11,128 @@ import { StoreService } from './store.service';
 export class StoreController {
   constructor(private readonly storeService: StoreService) {}
 
+  @Get('dashboard')
+  async dashboard(@Req() req: ExpressRequest) {
+    const data = await this.storeService.dashboard(req.user.id);
+    return { data };
+  }
+
+  @Get('settings')
+  async getSettings(@Req() req: ExpressRequest) {
+    const data = await this.storeService.getSettings(req.user.id);
+    return { data };
+  }
+
+  @Patch('settings')
+  async updateSettings(@Body() dto: any, @Req() req: ExpressRequest) {
+    const data = await this.storeService.updateSettings(req.user.id, dto);
+    return { message: 'Store settings saved', data };
+  }
+
+  @Get('orders')
+  async findOrders(@Req() req: ExpressRequest) {
+    const data = await this.storeService.findOrders(req.user.id);
+    return { data };
+  }
+
+  @Post('orders')
+  async createOrder(@Body() dto: any, @Req() req: ExpressRequest) {
+    const data = await this.storeService.createOrder(req.user.id, dto);
+    return { message: 'Order saved', data };
+  }
+
+  @Patch('orders/:id')
+  async updateOrder(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.storeService.updateOrder(req.user.id, id, dto);
+    return { message: 'Order updated', data };
+  }
+
+  @Delete('orders/:id')
+  async removeOrder(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.storeService.removeOrder(req.user.id, id);
+    return { message: 'Order deleted', data };
+  }
+
+  @Get('customers')
+  async findCustomers(@Req() req: ExpressRequest) {
+    const data = await this.storeService.findCustomers(req.user.id);
+    return { data };
+  }
+
+  @Post('customers')
+  async createCustomer(@Body() dto: any, @Req() req: ExpressRequest) {
+    const data = await this.storeService.createCustomer(req.user.id, dto);
+    return { message: 'Customer saved', data };
+  }
+
+  @Patch('customers/:id')
+  async updateCustomer(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.storeService.updateCustomer(req.user.id, id, dto);
+    return { message: 'Customer updated', data };
+  }
+
+  @Get('coupons')
+  async findCoupons(@Req() req: ExpressRequest) {
+    const data = await this.storeService.findCoupons(req.user.id);
+    return { data };
+  }
+
+  @Post('coupons')
+  async saveCoupon(@Body() dto: any, @Req() req: ExpressRequest) {
+    const data = await this.storeService.saveCoupon(req.user.id, dto);
+    return { message: 'Coupon saved', data };
+  }
+
+  @Delete('coupons/:id')
+  async deleteCoupon(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.storeService.deleteCoupon(req.user.id, id);
+    return { message: 'Coupon deleted', data };
+  }
+
+  @Get('taxes')
+  async findTaxes(@Req() req: ExpressRequest) {
+    const data = await this.storeService.findTaxes(req.user.id);
+    return { data };
+  }
+
+  @Post('taxes')
+  async saveTax(@Body() dto: any, @Req() req: ExpressRequest) {
+    const data = await this.storeService.saveTax(req.user.id, dto);
+    return { message: 'Tax saved', data };
+  }
+
+  @Delete('taxes/:id')
+  async deleteTax(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.storeService.deleteTax(req.user.id, id);
+    return { message: 'Tax deleted', data };
+  }
+
+  @Get('shipping')
+  async findShipping(@Req() req: ExpressRequest) {
+    const data = await this.storeService.findShipping(req.user.id);
+    return { data };
+  }
+
+  @Post('shipping')
+  async saveShipping(@Body() dto: any, @Req() req: ExpressRequest) {
+    const data = await this.storeService.saveShipping(req.user.id, dto);
+    return { message: 'Shipping saved', data };
+  }
+
+  @Delete('shipping/:id')
+  async deleteShipping(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.storeService.deleteShipping(req.user.id, id);
+    return { message: 'Shipping deleted', data };
+  }
+
   @Get('price-sheets')
   async findPriceSheets(
     @Req() req: ExpressRequest,

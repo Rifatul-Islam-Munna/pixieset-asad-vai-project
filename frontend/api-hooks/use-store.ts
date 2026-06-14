@@ -43,6 +43,120 @@ export type StorePriceSheetRecord = {
   createdAt?: string;
 };
 
+export type StoreOrderStatus =
+  | "pending"
+  | "processing"
+  | "fulfilled"
+  | "shipped"
+  | "delivered"
+  | "cancelled";
+
+export type StoreOrderRecord = {
+  _id: string;
+  orderNumber: string;
+  customerId?: string;
+  customer: { name: string; email: string; phone?: string; address?: Record<string, any> };
+  items: {
+    productId?: string;
+    name: string;
+    type: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }[];
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  shippingMethodId?: string;
+  shippingMethodName?: string;
+  shippingNote?: string;
+  discount: number;
+  total: number;
+  status: StoreOrderStatus;
+  paymentStatus: "unpaid" | "paid" | "refunded";
+  trackingNumber?: string;
+  trackingUrl?: string;
+  note?: string;
+  createdAt?: string;
+};
+
+export type StoreCustomerRecord = {
+  _id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  address?: Record<string, any>;
+  orderCount: number;
+  totalSpent: number;
+  lastOrderAt?: string;
+  createdAt?: string;
+};
+
+export type StoreCouponRecord = {
+  _id: string;
+  code: string;
+  name: string;
+  discountType: "percent" | "fixed";
+  amount: number;
+  active: boolean;
+  usageCount?: number;
+  expiresAt?: string;
+  createdAt?: string;
+};
+
+export type StoreTaxRecord = {
+  _id: string;
+  name: string;
+  region?: string;
+  rate: number;
+  applyShipping?: boolean;
+  applyDigitalDownloads?: boolean;
+  active: boolean;
+  createdAt?: string;
+};
+
+export type StoreShippingRecord = {
+  _id: string;
+  name: string;
+  region?: string;
+  shipInternational?: boolean;
+  price: number;
+  freeOver?: number;
+  active: boolean;
+  createdAt?: string;
+};
+
+export type StoreDashboardRecord = {
+  revenue: number;
+  orderCount: number;
+  customerCount: number;
+  productCount: number;
+  couponCount: number;
+  pending: number;
+  averageOrderValue: number;
+  statusCounts: Record<string, number>;
+  recentOrders: StoreOrderRecord[];
+};
+
+export type StoreSettingsRecord = {
+  _id?: string;
+  globalStatus: boolean;
+  currency: string;
+  orderDelay: string;
+  maintainMarkup: boolean;
+  roundPricesUpTo: string;
+  paymentMethods: {
+    stripe?: { enabled: boolean; accountLink?: string; publishableKey?: string };
+    paypal?: { enabled: boolean; accountLink?: string; merchantEmail?: string };
+    offline?: { enabled: boolean; instructions?: string };
+  };
+  links: { label: string; url: string }[];
+  domain: { hostname?: string; dnsTarget?: string; verified?: boolean };
+  giftCardSharingEmail: string;
+  termsOfSale: string;
+  digitalImageLicense: string;
+};
+
 type ListResponse<T> = { data: T };
 
 export type StoreProductPayload = Omit<
@@ -177,4 +291,144 @@ export function useStorePriceSheet(priceSheetId?: string) {
     updateProduct,
     deleteProduct,
   };
+}
+
+export function useStoreDashboard() {
+  return useQuery({
+    queryKey: ["store-dashboard"],
+    queryFn: () =>
+      GetRequestNormal<ListResponse<StoreDashboardRecord>>("/store/dashboard"),
+  });
+}
+
+export function useStoreSettings() {
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery({
+    queryKey: ["store-settings"],
+    queryFn: () =>
+      GetRequestNormal<ListResponse<StoreSettingsRecord>>("/store/settings"),
+  });
+
+  const saveSettings = useMutation({
+    mutationFn: async (payload: StoreSettingsRecord) => {
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<StoreSettingsRecord> & { message: string }
+      >("/store/settings", payload as any);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["store-settings"] }),
+  });
+
+  return { settingsQuery, saveSettings };
+}
+
+export function useStoreOrders() {
+  const queryClient = useQueryClient();
+  const ordersQuery = useQuery({
+    queryKey: ["store-orders"],
+    queryFn: () => GetRequestNormal<ListResponse<StoreOrderRecord[]>>("/store/orders"),
+  });
+
+  const createOrder = useMutation({
+    mutationFn: async (payload: Partial<StoreOrderRecord>) => {
+      const [data, error] = await PostRequestAxios<
+        ListResponse<StoreOrderRecord> & { message: string }
+      >("/store/orders", payload);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["store-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["store-dashboard"] });
+    },
+  });
+
+  const updateOrder = useMutation({
+    mutationFn: async ({
+      orderId,
+      payload,
+    }: {
+      orderId: string;
+      payload: Partial<StoreOrderRecord>;
+    }) => {
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<StoreOrderRecord> & { message: string }
+      >(`/store/orders/${orderId}`, payload as any);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["store-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["store-dashboard"] });
+    },
+  });
+
+  return { ordersQuery, createOrder, updateOrder };
+}
+
+export function useStoreCustomers() {
+  const queryClient = useQueryClient();
+  const customersQuery = useQuery({
+    queryKey: ["store-customers"],
+    queryFn: () =>
+      GetRequestNormal<ListResponse<StoreCustomerRecord[]>>("/store/customers"),
+  });
+
+  const createCustomer = useMutation({
+    mutationFn: async (payload: Partial<StoreCustomerRecord>) => {
+      const [data, error] = await PostRequestAxios<
+        ListResponse<StoreCustomerRecord> & { message: string }
+      >("/store/customers", payload);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["store-customers"] }),
+  });
+
+  return { customersQuery, createCustomer };
+}
+
+type StoreRuleKind = "coupons" | "taxes" | "shipping";
+type StoreRuleRecord = StoreCouponRecord | StoreTaxRecord | StoreShippingRecord;
+
+export function useStoreRules<T extends StoreRuleRecord>(kind: StoreRuleKind) {
+  const queryClient = useQueryClient();
+  const rulesQuery = useQuery({
+    queryKey: ["store-rules", kind],
+    queryFn: () =>
+      GetRequestNormal<ListResponse<T[]>>(`/store/${kind}`).catch(() => ({ data: [] as T[] })),
+  });
+
+  const saveRule = useMutation({
+    mutationFn: async (payload: Partial<T>) => {
+      const [data, error] = await PostRequestAxios<
+        ListResponse<T> & { message: string }
+      >(`/store/${kind}`, payload);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-rules", kind] });
+      queryClient.invalidateQueries({ queryKey: ["store-dashboard"] });
+    },
+  });
+
+  const deleteRule = useMutation({
+    mutationFn: async (id: string) => {
+      const [data, error] = await DeleteRequestAxios<
+        ListResponse<T> & { message: string }
+      >(`/store/${kind}/${id}`);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-rules", kind] });
+      queryClient.invalidateQueries({ queryKey: ["store-dashboard"] });
+    },
+  });
+
+  return { rulesQuery, saveRule, deleteRule };
 }
