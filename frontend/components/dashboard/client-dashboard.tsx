@@ -1,0 +1,3673 @@
+"use client";
+
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import Link from "next/link";
+import { format, parseISO } from "date-fns";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Calendar as CalendarIcon,
+  Bell,
+  Bold,
+  ChevronDown,
+  Check,
+  ChevronsLeft,
+  CircleHelp,
+  CircleUserRound,
+  Copy,
+  Database,
+  Download,
+  Heart,
+  Images,
+  Info,
+  Italic,
+  LayoutGrid,
+  Link2,
+  ListFilter,
+  Mail,
+  MailCheck,
+  Megaphone,
+  MoreHorizontal,
+  Package,
+  Palette,
+  PanelTop,
+  PlusCircle,
+  Lock,
+  RefreshCw,
+  Save,
+  Settings,
+  ShoppingBag,
+  ShoppingCart,
+  Search,
+  Send,
+  Star,
+  Store,
+  Trash2,
+  Underline,
+  Unlink,
+  Upload,
+  Users,
+  FileUp,
+  Wrench,
+} from "lucide-react";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  useCollectionDetail,
+  useCollections,
+  type CollectionImageRecord,
+} from "@/api-hooks/use-collections";
+import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
+import { useDashboardStore } from "@/lib/dashboard-store";
+import { cn } from "@/lib/utils";
+
+export type DashboardSection = "client-gallery" | "store-gallery";
+export type DashboardPage =
+  | "collections"
+  | "library"
+  | "starred"
+  | "homepage"
+  | "settings"
+  | "marketing"
+  | "products"
+  | "orders"
+  | "storefront"
+  | "storage";
+export type MarketingPage = "email-campaigns" | "contacts" | "settings";
+export type SettingsPage =
+  | "branding"
+  | "watermark"
+  | "watermark-editor"
+  | "presets"
+  | "preset-new"
+  | "email-templates"
+  | "preferences"
+  | "integrations";
+
+const switcherItems = [
+  {
+    key: "client-gallery",
+    title: "Client Gallery",
+    text: "Better way to share, deliver, proof and sell",
+    href: "/dashboard/client-gallery",
+    mark: "bg-[#0dc6b5]",
+  },
+  {
+    key: "store-gallery",
+    title: "Store Gallery",
+    text: "Your online store for prints and downloads",
+    href: "/dashboard/store-gallery",
+    mark: "bg-[#ff4f5d]",
+  },
+] as const;
+
+const sidebarItems = {
+  "client-gallery": [
+    { label: "Collections", icon: Images, page: "collections" },
+    { label: "Library", icon: LayoutGrid, page: "library" },
+    { label: "Starred", icon: Star, page: "starred" },
+    { label: "Homepage", icon: PanelTop, page: "homepage" },
+    { label: "Settings", icon: Settings, page: "settings" },
+  ],
+  "store-gallery": [
+    { label: "Products", icon: Package, page: "products" },
+    { label: "Orders", icon: ShoppingBag, page: "orders" },
+    { label: "Storefront", icon: Store, page: "storefront" },
+    { label: "Collections", icon: Images, page: "collections" },
+    { label: "Settings", icon: Settings, page: "settings" },
+  ],
+} satisfies Record<
+  DashboardSection,
+  { label: string; icon: typeof Images; page: DashboardPage }[]
+>;
+
+const dashboardCopy = {
+  "client-gallery": {
+    title: "Client Gallery",
+    eyebrow: "Get Started",
+    heading: "Create beautiful photo collections in 3 steps",
+    cta: "Get Started with Sample Photos",
+    hero: "AUTUMN FLORALS",
+    bg: "bg-[#dfe9eb]",
+    image:
+      "https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?auto=format&fit=crop&w=1200&q=80",
+  },
+  "store-gallery": {
+    title: "Store Gallery",
+    eyebrow: "Store Setup",
+    heading: "Start selling prints and downloads in 3 steps",
+    cta: "Create Store with Sample Products",
+    hero: "FINE ART PRINTS",
+    bg: "bg-[#ece7df]",
+    image:
+      "https://images.unsplash.com/photo-1529636798458-92182e662485?auto=format&fit=crop&w=1200&q=80",
+  },
+};
+
+const libraryFilters = [
+  {
+    title: "Camera Settings",
+    items: ["Camera", "Lens", "Focal Length", "Shutter Speed", "Aperture", "ISO", "Flash"],
+  },
+  {
+    title: "Metadata",
+    items: ["Filename", "Title", "Caption", "Headline", "Keyword", "Orientation", "Rating", "Color Label", "Color Space"],
+  },
+  {
+    title: "Pixieset",
+    items: ["Starred"],
+  },
+];
+
+const libraryPhotos = [
+  {
+    src: "https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?auto=format&fit=crop&w=600&q=80",
+    title: "yellow floral detail",
+    tags: "Camera Lens Focal Length Aperture Keyword Caption Color Space",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1508808787069-421e7986016e?auto=format&fit=crop&w=600&q=80",
+    title: "green mountain texture",
+    tags: "Filename Title Orientation Rating Keyword",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=80",
+    title: "forest wedding frame",
+    tags: "Starred Caption Headline Camera Flash",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=600&q=80",
+    title: "vintage pine landscape",
+    tags: "Lens ISO Color Label Orientation",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=600&q=80",
+    title: "desert novel cover",
+    tags: "Shutter Speed Aperture Title Keyword",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=600&q=80",
+    title: "soft studio print",
+    tags: "Filename Color Space Rating Camera",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1529636798458-92182e662485?auto=format&fit=crop&w=600&q=80",
+    title: "portrait print store",
+    tags: "Starred Lens Caption ISO",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
+    title: "wedding collection",
+    tags: "Headline Keyword Camera Orientation",
+  },
+];
+
+export function ClientDashboard({
+  section,
+  page,
+  marketingPage = "email-campaigns",
+  settingsPage = "watermark",
+}: {
+  section: DashboardSection;
+  page: DashboardPage;
+  marketingPage?: MarketingPage;
+  settingsPage?: SettingsPage;
+}) {
+  const active = dashboardCopy[section];
+  const activeSwitcher = switcherItems.find((item) => item.key === section);
+  const {
+    collapsed,
+    campaignBuilderOpen,
+    wizardOpen,
+    closeCampaignBuilder,
+    startWizard,
+    setActiveNav,
+    toggleCollapsed,
+  } = useDashboardStore();
+  const activeNav =
+    sidebarItems[section].find((item) => item.page === page)?.label ??
+    (page === "marketing" ? "Marketing" : "Storage");
+  const isCollectionIndex =
+    page === "collections" || (section === "store-gallery" && page === "products");
+
+  return (
+    <main className="min-h-screen bg-white text-[#151515]">
+      {!campaignBuilderOpen && <aside
+        className={cn(
+          "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
+          collapsed ? "w-[76px]" : "w-[292px]"
+        )}
+      >
+        <div className="flex h-[62px] items-center justify-between border-b border-[#f1f1f1] px-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 text-sm font-bold outline-none">
+                <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
+                {!collapsed && active.title}
+                {!collapsed && <ChevronDown className="size-3 text-[#777]" />}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-[310px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+              <DropdownMenuGroup className="p-5">
+                {switcherItems.map((item) => (
+                  <DropdownMenuItem key={item.key} asChild className="p-0">
+                    <Link href={item.href} className="flex gap-4 py-3">
+                      <span className={cn("mt-1 size-8 shrink-0 rounded-full", item.mark)} />
+                      <span className="flex flex-col gap-1">
+                        <span className="font-bold text-[#151515]">{item.title}</span>
+                        <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+              <div className="bg-[#f7f7f7] p-5 text-center">
+                <Link href={`/dashboard/${section}`} className="inline-flex items-center gap-2 text-sm text-[#333]">
+                  <LayoutGrid className="size-4 text-[#999]" />
+                  View Dashboard
+                </Link>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className={cn("flex items-center gap-4", collapsed && "hidden")}>
+            <button aria-label="Help" onClick={() => setActiveNav("Help")}>
+              <CircleHelp className="size-5" />
+            </button>
+            <button
+              aria-label="Notifications"
+              onClick={() => setActiveNav("Notifications")}
+            >
+              <Bell className="size-5" />
+            </button>
+            <Avatar className="size-7">
+              <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
+            </Avatar>
+          </div>
+        </div>
+
+        <nav className="flex flex-1 flex-col px-4 py-7">
+          <div className="flex flex-col gap-8">
+            {sidebarItems[section].map((item) => (
+              <Link
+                key={item.label}
+                href={item.page === "collections" || item.page === "products" ? `/dashboard/${section}` : `/dashboard/${section}/${item.page}`}
+                className={cn(
+                  "flex items-center gap-4 text-left text-base text-[#222]",
+                  activeNav === item.label && "font-semibold text-[#00a997]"
+                )}
+              >
+                <item.icon
+                  className={cn(
+                    "size-5 text-[#333]",
+                    activeNav === item.label && "text-[#00a997]"
+                  )}
+                />
+                {!collapsed && item.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-11 flex flex-col gap-8">
+            {!collapsed && <p className="text-base text-[#777]">Tools</p>}
+            <Link
+              href={`/dashboard/${section}/marketing/email-campaigns`}
+              className={cn(
+                "flex items-center gap-4 text-left text-base text-[#222]",
+                page === "marketing" && "font-semibold text-[#00a997]"
+              )}
+            >
+              <Megaphone
+                className={cn(
+                  "size-5 text-[#333]",
+                  page === "marketing" && "text-[#00a997]"
+                )}
+              />
+              {!collapsed && "Marketing"}
+            </Link>
+            {!collapsed && page === "marketing" && (
+              <div className="ml-7 flex flex-col border-l border-[#e8e8e8] pl-4">
+                {[
+                  { label: "Email Campaigns", slug: "email-campaigns", icon: Mail },
+                  { label: "Contacts", slug: "contacts", icon: Users },
+                  { label: "Settings", slug: "settings", icon: MailCheck },
+                ].map((item) => (
+                  <Link
+                    key={item.slug}
+                    href={`/dashboard/${section}/marketing/${item.slug}`}
+                    className={cn(
+                      "flex h-12 items-center gap-4 px-3 text-base text-[#222]",
+                      marketingPage === item.slug && "bg-[#f3f3f3] font-medium"
+                    )}
+                  >
+                    <item.icon className="size-5" />
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-auto">
+            <Link
+              href={`/dashboard/${section}/storage`}
+              className={cn(
+                "mx-auto flex items-center gap-3 bg-[#f3faf6] p-4 text-left",
+                collapsed ? "w-12 justify-center" : "w-[235px]"
+              )}
+            >
+              <div className="flex size-10 items-center justify-center rounded-full bg-[#dff6ef] text-[#19bba7]">
+                <Database className="size-5" />
+              </div>
+              {!collapsed && <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-[#00a997]">Storage</p>
+                  <PlusCircle className="size-4 text-[#16bda8]" />
+                </div>
+                <p className="mt-1 text-xs text-[#777]">0 GB of 3 GB used</p>
+                <Progress value={0} className="mt-2 bg-[#dceee8]" />
+              </div>}
+            </Link>
+            <button
+              className="mb-4 mt-8 flex items-center text-[#333]"
+              onClick={toggleCollapsed}
+              aria-label="Toggle sidebar"
+            >
+              <ChevronsLeft className={cn("size-6", collapsed && "rotate-180")} />
+            </button>
+          </div>
+        </nav>
+      </aside>}
+
+      <section className={cn("min-h-screen transition-all", campaignBuilderOpen ? "" : collapsed ? "md:pl-[76px]" : "md:pl-[292px]")}>
+        {!campaignBuilderOpen && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 text-sm font-bold outline-none">
+                <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
+                {active.title}
+                <ChevronDown className="size-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-[270px] rounded-none">
+              <DropdownMenuGroup>
+                {switcherItems.map((item) => (
+                  <DropdownMenuItem key={item.key} asChild>
+                    <Link href={item.href}>{item.title}</Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Avatar className="size-7">
+            <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
+          </Avatar>
+        </div>}
+
+        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : "max-w-[1220px] px-5 py-16 md:py-20")}>
+          {campaignBuilderOpen ? (
+            <CampaignBuilder onClose={closeCampaignBuilder} />
+          ) : wizardOpen ? (
+            <CollectionWizard />
+          ) : page === "library" ? (
+            <LibraryPanel onNewCollection={startWizard} />
+          ) : page === "starred" ? (
+            <StarredPanel />
+          ) : page === "settings" ? (
+            <SettingsPanel section={section} settingsPage={settingsPage} />
+          ) : page === "homepage" ? (
+            <HomepageSettings />
+          ) : page === "marketing" ? (
+            <MarketingPanel marketingPage={marketingPage} />
+          ) : isCollectionIndex ? (
+            <CollectionsPanel section={section} />
+          ) : (
+            <DashboardPlaceholder page={page} title={activeNav} />
+          )}
+        </div>
+      </section>
+
+      {!campaignBuilderOpen && <button
+        className="fixed bottom-6 right-6 flex size-12 items-center justify-center rounded-full bg-[#2b2b2b] text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)]"
+        onClick={() => setActiveNav("Support")}
+        aria-label="Support"
+      >
+        <CircleUserRound className="size-5" />
+      </button>}
+    </main>
+  );
+}
+
+function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
+  const {
+    campaignSearch,
+    setCampaignSearch,
+    setShowCampaignTemplates,
+    showCampaignTemplates,
+    startCampaignBuilder,
+  } = useDashboardStore();
+
+  if (marketingPage === "contacts") {
+    return (
+      <div>
+        <PageHeader
+          action="Upload Contacts"
+          title="Contacts"
+        />
+        <div className="mt-12 grid gap-5 md:grid-cols-[360px_1fr]">
+          <div className="border bg-[#fafafa] p-8">
+            <FileUp className="size-9 text-[#22bda7]" />
+            <h2 className="mt-5 text-lg font-bold">Upload contact list</h2>
+            <p className="mt-3 text-sm leading-6 text-[#555]">
+              Import a CSV list to start sending campaigns.
+            </p>
+            <Input type="file" className="mt-6 h-12 rounded-none bg-white" />
+          </div>
+          <ContactGrid />
+        </div>
+      </div>
+    );
+  }
+
+  if (marketingPage === "settings") {
+    return (
+      <div>
+        <PageHeader action="Save Settings" title="Marketing Settings" />
+        <div className="mt-12 max-w-[680px] bg-[#fafafa] p-10">
+          <FieldGroup className="gap-8">
+            <Field>
+              <FieldLabel className="font-bold">Sender Name</FieldLabel>
+              <Input className="h-12 rounded-none bg-white" placeholder="Pixieset Studio" />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Reply-to Email</FieldLabel>
+              <Input className="h-12 rounded-none bg-white" placeholder="hello@example.com" />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Opt-in Location</FieldLabel>
+              <Input className="h-12 rounded-none bg-white" placeholder="Client Gallery checkout" />
+            </Field>
+          </FieldGroup>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <CampaignListHeader
+        query={campaignSearch}
+        onNew={() => setShowCampaignTemplates(true)}
+        onQueryChange={setCampaignSearch}
+      />
+      {showCampaignTemplates ? (
+        <TemplateGrid onSelect={startCampaignBuilder} />
+      ) : (
+        <CampaignTable
+          query={campaignSearch}
+          onEdit={(name) => startCampaignBuilder(name)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CampaignListHeader({
+  query,
+  onNew,
+  onQueryChange,
+}: {
+  query: string;
+  onNew: () => void;
+  onQueryChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-6">
+        <div className="flex items-center gap-8">
+          <h1 className="text-[28px] font-medium leading-none">Email Campaigns</h1>
+          <div className="flex h-10 w-[280px] items-center gap-3 bg-white">
+            <Search className="size-5 text-[#333]" />
+            <Input
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search"
+              className="h-10 rounded-none border-0 px-0 focus-visible:ring-0"
+            />
+          </div>
+        </div>
+        <Button
+          className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+          onClick={onNew}
+        >
+          New Campaign
+        </Button>
+      </div>
+      <div className="mt-7 flex items-center justify-between">
+        <button className="rounded-full bg-[#f7f7f7] px-4 py-2 text-sm font-semibold">
+          Status <ChevronDown className="ml-1 inline size-3" />
+        </button>
+        <div className="flex items-center gap-5">
+          <Button className="h-7 rounded-full bg-[#e3f6f1] px-4 text-[11px] font-bold uppercase tracking-widest text-[#00a997] hover:bg-[#d6f2eb]">
+            Upgrade to Send
+          </Button>
+          <ListFilter className="size-5 text-[#777]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CampaignTable({
+  query,
+  onEdit,
+}: {
+  query: string;
+  onEdit: (name: string) => void;
+}) {
+  const campaigns = [
+    {
+      name: "Travel Dates",
+      status: "Draft",
+      sendDate: "-",
+      recipients: "0",
+      openRate: "-",
+      created: "Jun 14, 2026",
+    },
+  ].filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
+
+  if (!campaigns.length) {
+    return (
+      <div className="mt-12 flex min-h-[520px] flex-col items-center justify-center text-center">
+        <div className="relative">
+          <div className="size-28 rounded-full bg-[#e5f0ef]" />
+          <Mail className="absolute -left-3 top-3 size-10 text-[#444]" />
+          <MailCheck className="absolute left-12 top-14 size-9 text-[#444]" />
+        </div>
+        <h2 className="mt-10 text-lg font-bold">Create your first email campaign</h2>
+        <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#333]">
+          Power up your marketing with email campaigns to opted-in contacts.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-8">
+      <div className="grid grid-cols-[2fr_130px_1.2fr_1.2fr_1.2fr_1.4fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777]">
+        <span>Name</span>
+        <span />
+        <span>Send Date</span>
+        <span># of Recipients</span>
+        <span>Open Rate</span>
+        <span>Date Created</span>
+        <span />
+      </div>
+      {campaigns.map((campaign) => (
+        <button
+          key={campaign.name}
+          className="grid w-full grid-cols-[2fr_130px_1.2fr_1.2fr_1.2fr_1.4fr_40px] items-center border-b py-5 text-left text-sm"
+          onClick={() => onEdit(campaign.name)}
+        >
+          <span className="font-bold">{campaign.name}</span>
+          <span>
+            <span className="rounded-full bg-[#f4f4f4] px-6 py-2 text-xs font-bold uppercase text-[#777]">
+              {campaign.status}
+            </span>
+          </span>
+          <span>{campaign.sendDate}</span>
+          <span>{campaign.recipients}</span>
+          <span>{campaign.openRate}</span>
+          <span>{campaign.created}</span>
+          <MoreHorizontal className="size-5 text-[#777]" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TemplateGrid({ onSelect }: { onSelect: (template?: string) => void }) {
+  const { emailTemplates } = useDashboardStore();
+
+  return (
+    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {emailTemplates.map((template) => (
+        <button
+          key={template.id}
+          className="border bg-white p-4 text-left hover:border-[#22bda7]"
+          onClick={() => onSelect(template.id)}
+        >
+          <div className="flex h-28 items-center justify-center bg-[#090d0f] text-white">
+            {template.image ? (
+              <img src={template.image} alt="" className="h-full w-full object-cover opacity-75" />
+            ) : (
+              <span className="px-3 text-center text-xl font-bold uppercase tracking-wide">
+                {template.title}
+              </span>
+            )}
+          </div>
+          <p className="mt-4 font-bold">{template.name}</p>
+          <p className="mt-2 line-clamp-2 text-sm text-[#666]">{template.subject}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CampaignBuilder({ onClose }: { onClose: () => void }) {
+  const {
+    campaignButtonColor,
+    campaignButtonLink,
+    campaignButtonText,
+    campaignFooterText,
+    campaignTab,
+    campaignImage,
+    campaignMessage,
+    campaignPreviewText,
+    campaignSubject,
+    campaignTemplate,
+    selectedRecipients,
+    setCampaignTab,
+    setCampaignButtonColor,
+    setCampaignButtonLink,
+    setCampaignButtonText,
+    setCampaignFooterText,
+    setCampaignImage,
+    setCampaignMessage,
+    setCampaignPreviewText,
+    setCampaignSubject,
+    setCampaignTemplate,
+    toggleRecipient,
+  } = useDashboardStore();
+  const recipients = ["Avery Woodward", "Jessie Ryan", "Morgan Wells", "Isla Bennett"];
+  const collections = ["Autumn Florals", "Black Friday Clients", "Wedding Leads"];
+
+  return (
+    <div className="min-h-screen bg-[#f3f3f3]">
+      <header className="flex h-12 items-center justify-between border-b bg-white">
+        <div className="flex items-center gap-4 px-8">
+          <button onClick={onClose} aria-label="Back">
+            <ArrowLeft className="size-5 text-[#777]" />
+          </button>
+          <h1 className="text-lg font-bold">{campaignTemplate}</h1>
+          <span className="rounded-full bg-[#f3f3f3] px-5 py-2 text-xs font-bold text-[#777]">
+            DRAFT
+          </span>
+        </div>
+        <div className="flex items-center gap-8">
+          <button className="text-sm font-semibold">Send Test</button>
+          <Button className="h-12 rounded-none bg-[#22bda7] px-9 text-sm font-bold text-white hover:bg-[#19a995]">
+            Send Now
+          </Button>
+        </div>
+      </header>
+
+      <div className="grid min-h-[calc(100vh-48px)] lg:grid-cols-[468px_1fr]">
+        <aside className="border-r bg-white">
+          <Tabs value={campaignTab} onValueChange={(value) => setCampaignTab(value as "email" | "recipients")} className="gap-0">
+            <TabsList className="grid h-16 w-full grid-cols-2 rounded-none bg-[#fafafa] p-0">
+              <TabsTrigger value="email" className="rounded-none data-active:border-b-2 data-active:border-[#22bda7] data-active:bg-white">
+                <Mail data-icon="inline-start" />
+                Email
+              </TabsTrigger>
+              <TabsTrigger value="recipients" className="rounded-none data-active:border-b-2 data-active:border-[#22bda7] data-active:bg-white">
+                <Users data-icon="inline-start" />
+                Recipients
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="email" className="p-8">
+              <h2 className="text-lg font-bold">Design Email</h2>
+              <FieldGroup className="mt-8 gap-8">
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Subject</FieldLabel>
+                  <Input
+                    className="h-12 rounded-none"
+                    value={campaignSubject}
+                    onChange={(event) => setCampaignSubject(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Preview Text</FieldLabel>
+                  <Input
+                    className="h-12 rounded-none"
+                    value={campaignPreviewText}
+                    onChange={(event) => setCampaignPreviewText(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Title</FieldLabel>
+                  <Input
+                    className="h-12 rounded-none"
+                    value={campaignTemplate}
+                    onChange={(event) => setCampaignTemplate(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Image</FieldLabel>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    className="h-12 rounded-none"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) setCampaignImage(URL.createObjectURL(file));
+                    }}
+                  />
+                  <div className="mt-3 flex h-28 items-center justify-center overflow-hidden bg-[#090d0f] text-white">
+                    {campaignImage ? (
+                      <img
+                        src={campaignImage}
+                        alt="Campaign preview"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xl font-bold uppercase">{campaignTemplate}</span>
+                    )}
+                  </div>
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Message</FieldLabel>
+                  <div className="flex h-8 items-center gap-4 border bg-[#f3f3f3] px-3 text-[#777]">
+                    <Bold className="size-4" />
+                    <Italic className="size-4" />
+                    <Underline className="size-4" />
+                    <Link2 className="size-4" />
+                    <Unlink className="size-4" />
+                  </div>
+                  <textarea
+                    className="min-h-[180px] w-full border px-4 py-4 text-sm leading-6 outline-none"
+                    value={campaignMessage}
+                    onChange={(event) => setCampaignMessage(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Button Text</FieldLabel>
+                  <Input
+                    className="h-12 rounded-none"
+                    value={campaignButtonText}
+                    onChange={(event) => setCampaignButtonText(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Button Link</FieldLabel>
+                  <Input
+                    className="h-12 rounded-none"
+                    value={campaignButtonLink}
+                    onChange={(event) => setCampaignButtonLink(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Button Color</FieldLabel>
+                  <div className="flex gap-3">
+                    <Input
+                      type="color"
+                      className="h-12 w-16 rounded-none p-1"
+                      value={campaignButtonColor}
+                      onChange={(event) => setCampaignButtonColor(event.target.value)}
+                    />
+                    <Input
+                      className="h-12 rounded-none"
+                      value={campaignButtonColor}
+                      onChange={(event) => setCampaignButtonColor(event.target.value)}
+                    />
+                  </div>
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Footer Text</FieldLabel>
+                  <div className="flex h-8 items-center gap-4 border bg-[#f3f3f3] px-3 text-[#777]">
+                    <Bold className="size-4" />
+                    <Italic className="size-4" />
+                    <Underline className="size-4" />
+                    <Link2 className="size-4" />
+                  </div>
+                  <textarea
+                    className="min-h-[140px] w-full border px-4 py-4 text-sm leading-6 outline-none"
+                    value={campaignFooterText}
+                    onChange={(event) => setCampaignFooterText(event.target.value)}
+                  />
+                </Field>
+              </FieldGroup>
+            </TabsContent>
+
+            <TabsContent value="recipients" className="p-8">
+              <h2 className="text-lg font-bold">Recipients</h2>
+              <div className="mt-8 flex flex-col gap-8">
+                <div>
+                  <p className="mb-4 text-sm font-bold uppercase text-[#777]">Select individually</p>
+                  <div className="grid gap-3">
+                    {recipients.map((name) => (
+                      <label key={name} className="flex items-center gap-3 border p-4">
+                        <Checkbox
+                          checked={selectedRecipients.includes(name)}
+                          onCheckedChange={() => toggleRecipient(name)}
+                        />
+                        <span>{name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-4 text-sm font-bold uppercase text-[#777]">Select collection</p>
+                  <div className="grid gap-3">
+                    {collections.map((name) => (
+                      <button key={name} className="border p-4 text-left" onClick={() => toggleRecipient(name)}>
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">Upload new collection</FieldLabel>
+                  <Input type="file" className="h-12 rounded-none" />
+                </Field>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </aside>
+
+        <CampaignPreview
+          buttonColor={campaignButtonColor}
+          buttonLink={campaignButtonLink}
+          buttonText={campaignButtonText}
+          footerText={campaignFooterText}
+          image={campaignImage}
+          message={campaignMessage}
+          previewText={campaignPreviewText}
+          subject={campaignSubject}
+          template={campaignTemplate}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CampaignPreview({
+  buttonColor,
+  buttonLink,
+  buttonText,
+  footerText,
+  image,
+  message,
+  previewText,
+  subject,
+  template,
+}: {
+  buttonColor: string;
+  buttonLink: string;
+  buttonText: string;
+  footerText: string;
+  image: string;
+  message: string;
+  previewText: string;
+  subject: string;
+  template: string;
+}) {
+  return (
+    <section className="flex justify-center overflow-auto p-10">
+      <div className="w-[600px] bg-white">
+        <div className="bg-[#080c0e] px-10 py-10 text-center text-white">
+          <h1 className="text-5xl font-bold uppercase tracking-wide">
+            {template}
+          </h1>
+        </div>
+        <div className="h-[240px] overflow-hidden bg-[#080c0e]">
+          {image ? (
+            <img
+              src={image}
+              alt={template}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-4xl font-bold uppercase tracking-wide text-white/10">
+              {template}
+            </div>
+          )}
+        </div>
+        <div className="px-16 py-9 text-base leading-7">
+          <p className="text-sm font-bold uppercase tracking-wide text-[#777]">
+            {subject}
+          </p>
+          <p className="mt-2 text-sm text-[#777]">{previewText}</p>
+          <div className="mt-6 whitespace-pre-line">{message}</div>
+          <div className="mt-9 text-center">
+            <a
+              href={buttonLink === "Collection URL" ? "#" : buttonLink}
+              className="inline-flex h-11 items-center justify-center px-8 font-bold uppercase tracking-wide text-white"
+              style={{ backgroundColor: buttonColor }}
+            >
+              {buttonText}
+            </a>
+          </div>
+          <p className="mt-10 whitespace-pre-line text-center text-xs text-[#555]">
+            {footerText}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PageHeader({ title, action }: { title: string; action: string }) {
+  return (
+    <div className="flex items-center justify-between gap-6">
+      <h1 className="text-[28px] font-medium leading-none">{title}</h1>
+      <div className="flex items-center gap-5">
+        <Button className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]">
+          {action}
+        </Button>
+        <Button className="h-7 rounded-full bg-[#e3f6f1] px-4 text-[11px] font-bold uppercase tracking-widest text-[#00a997] hover:bg-[#d6f2eb]">
+          Upgrade to Send
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ContactGrid() {
+  const contacts = [
+    ["Avery Woodward", "avery@example.com"],
+    ["Jessie Ryan", "jessie@example.com"],
+    ["Morgan Wells", "morgan@example.com"],
+    ["Isla Bennett", "isla@example.com"],
+  ];
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {contacts.map(([name, email]) => (
+        <div key={email} className="border bg-white p-5">
+          <p className="font-bold">{name}</p>
+          <p className="mt-2 text-sm text-[#666]">{email}</p>
+          <p className="mt-4 text-xs uppercase tracking-wide text-[#00a997]">
+            Opted in
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StarredPanel() {
+  const starredCollections = libraryPhotos.slice(0, 4);
+  const starredPhotos = libraryPhotos.slice(4);
+
+  return (
+    <div>
+      <h1 className="text-[28px] font-medium leading-none">Starred</h1>
+      <Tabs defaultValue="collections" className="mt-8 gap-0">
+        <TabsList className="h-auto gap-8 bg-transparent p-0">
+          <TabsTrigger
+            value="collections"
+            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
+          >
+            Collections
+          </TabsTrigger>
+          <TabsTrigger
+            value="photos"
+            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
+          >
+            Photos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="collections" className="mt-20">
+          <StarredGrid
+            emptyText="You have no starred collections yet"
+            emptySubtext="Track your favorite collections with stars."
+            items={starredCollections}
+            kind="collection"
+          />
+        </TabsContent>
+        <TabsContent value="photos" className="mt-20">
+          <StarredGrid
+            emptyText="You have no starred photos yet"
+            emptySubtext="Track your favorite photos with stars."
+            items={starredPhotos}
+            kind="photo"
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function StarredGrid({
+  items,
+  kind,
+  emptyText,
+  emptySubtext,
+}: {
+  items: typeof libraryPhotos;
+  kind: "collection" | "photo";
+  emptyText: string;
+  emptySubtext: string;
+}) {
+  if (!items.length) {
+    return (
+      <div className="mx-auto flex min-h-[430px] max-w-[420px] flex-col items-center justify-center text-center">
+        <div className="relative">
+          <div className="size-28 rounded-full bg-[#edf3ef]" />
+          <Star className="absolute left-0 top-6 size-7 fill-white text-[#444]" />
+          <Images className="absolute left-1/2 top-1/2 size-16 -translate-x-1/2 -translate-y-1/2 text-[#444]" />
+        </div>
+        <p className="mt-8 text-lg font-bold">{emptyText}</p>
+        <p className="mt-4 text-sm text-[#444]">{emptySubtext}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {items.map((item) => (
+        <button key={`${kind}-${item.src}`} className="group text-left">
+          <span className="relative block overflow-hidden bg-[#f3f3f3]">
+            <img
+              src={item.src}
+              alt={item.title}
+              className={cn(
+                "w-full object-cover transition-transform group-hover:scale-105",
+                kind === "collection" ? "aspect-[1.35]" : "aspect-square"
+              )}
+            />
+            <Star className="absolute right-3 top-3 size-5 fill-white text-white drop-shadow" />
+          </span>
+          <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
+            {item.title}
+          </span>
+          <span className="mt-1 block text-xs text-[#777]">
+            {kind === "collection" ? "Sample collection" : "Sample photo"}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
+  const { libraryQuery, setLibraryQuery } = useDashboardStore();
+  const normalizedQuery = libraryQuery.trim().toLowerCase();
+  const visiblePhotos = normalizedQuery
+    ? libraryPhotos.filter((photo) =>
+        `${photo.title} ${photo.tags}`.toLowerCase().includes(normalizedQuery)
+      )
+    : libraryPhotos;
+
+  return (
+    <div className="mx-auto max-w-[1220px]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(160px,max-content)_minmax(340px,480px)_1fr]">
+        <h1 className="whitespace-nowrap text-[28px] font-medium leading-none tracking-normal">
+          Photo Library
+        </h1>
+        <SearchBox query={libraryQuery} onQueryChange={setLibraryQuery} />
+        <div className="hidden justify-end lg:flex">
+          <Button
+            className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={onNewCollection}
+          >
+            New Collection
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {visiblePhotos.map((photo) => (
+          <button
+            key={photo.src}
+            className="group text-left"
+            onClick={() => setLibraryQuery(photo.title)}
+          >
+            <span className="block overflow-hidden bg-[#f3f3f3]">
+              <img
+                src={photo.src}
+                alt={photo.title}
+                className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+              />
+            </span>
+            <span className="mt-2 block truncate text-sm font-medium text-[#222]">
+              {photo.title}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {!visiblePhotos.length && (
+        <div className="mx-auto mt-24 max-w-[360px] text-center">
+          <p className="text-lg font-bold">No matching photos</p>
+          <p className="mt-4 text-sm leading-6 text-[#555]">
+            Try Camera, Lens, Starred, Keyword, or Title.
+          </p>
+          <Button
+            className="mt-6 h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={() => setLibraryQuery("")}
+          >
+            Show All Photos
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const settingsTabs = [
+  { label: "Branding", page: "branding" },
+  { label: "Watermark", page: "watermark" },
+  { label: "Presets", page: "presets" },
+  { label: "Email Templates", page: "email-templates" },
+  { label: "Preferences", page: "preferences" },
+  { label: "Integrations", page: "integrations" },
+] as const;
+
+const watermarkFonts = [
+  "Times New Roman",
+  "Georgia",
+  "Playfair Display",
+  "Helvetica",
+  "Arial",
+  "Courier New",
+];
+
+function SettingsPanel({
+  section,
+  settingsPage,
+}: {
+  section: DashboardSection;
+  settingsPage: SettingsPage;
+}) {
+  const hydrateDashboardSettings = useDashboardStore(
+    (state) => state.hydrateDashboardSettings,
+  );
+  const watermarkSettings = useDashboardSettings("watermark").query;
+  const presetSettings = useDashboardSettings("preset").query;
+  const emailTemplateSettings = useDashboardSettings("email-template").query;
+  const activeTab =
+    settingsPage === "preset-new"
+      ? "presets"
+      : settingsPage === "watermark-editor"
+        ? "watermark"
+        : settingsPage;
+
+  useEffect(() => {
+    const settings = [
+      ...(watermarkSettings.data?.data ?? []),
+      ...(presetSettings.data?.data ?? []),
+      ...(emailTemplateSettings.data?.data ?? []),
+    ];
+
+    if (settings.length) {
+      hydrateDashboardSettings(settings);
+    }
+  }, [
+    emailTemplateSettings.data,
+    hydrateDashboardSettings,
+    presetSettings.data,
+    watermarkSettings.data,
+  ]);
+
+  return (
+    <div>
+      <h1 className="text-[28px] font-medium leading-none">Settings</h1>
+      <div className="mt-9 flex flex-wrap gap-8">
+        {settingsTabs.map((tab) => (
+          <Link
+            key={tab.page}
+            href={`/dashboard/${section}/settings/${tab.page}`}
+            className={cn(
+              "pb-2 text-sm font-semibold",
+              activeTab === tab.page &&
+                "underline decoration-[#22bda7] decoration-2 underline-offset-[10px]"
+            )}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </div>
+
+      <div className="mt-9">
+        {settingsPage === "watermark" ? (
+          <WatermarkList section={section} />
+        ) : settingsPage === "watermark-editor" ? (
+          <WatermarkSettings section={section} />
+        ) : settingsPage === "presets" ? (
+          <PresetList section={section} />
+        ) : settingsPage === "preset-new" ? (
+          <PresetEditor section={section} />
+        ) : settingsPage === "email-templates" ? (
+          <EmailTemplatesPanel />
+        ) : (
+          <div className="max-w-[560px] bg-[#fafafa] p-8">
+            <p className="font-bold">
+              {settingsTabs.find((tab) => tab.page === settingsPage)?.label}
+            </p>
+            <p className="mt-3 text-sm leading-6 text-[#666]">
+              Settings page ready.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmailTemplatesPanel() {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const {
+    addEmailTemplateDraft,
+    activeEmailTemplateId,
+    deleteEmailTemplate,
+    emailTemplateSaved,
+    emailTemplates,
+    saveEmailTemplate,
+    selectEmailTemplate,
+    startCampaignBuilder,
+    updateEmailTemplate,
+  } = useDashboardStore();
+  const { saveSetting, deleteSetting } =
+    useDashboardSettings("email-template");
+  const activeTemplate =
+    emailTemplates.find((template) => template.id === activeEmailTemplateId) ??
+    emailTemplates[0];
+  const visibleTemplates = emailTemplates.filter((template) =>
+    [template.name, template.subject, template.previewText]
+      .join(" ")
+      .toLowerCase()
+      .includes(templateSearch.toLowerCase()),
+  );
+  const saveActiveTemplate = () => {
+    if (!activeTemplate) return;
+    const updatedAt = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    saveEmailTemplate();
+    saveSetting.mutate({
+      localId: activeTemplate.id,
+      name: activeTemplate.name,
+      data: { ...activeTemplate, updatedAt },
+    });
+  };
+  const deleteActiveTemplate = () => {
+    if (!activeTemplate) return;
+    deleteEmailTemplate(activeTemplate.id);
+    deleteSetting.mutate(activeTemplate.id);
+    setEditorOpen(false);
+  };
+  const createTemplate = () => {
+    addEmailTemplateDraft();
+    setEditorOpen(true);
+  };
+  const editTemplate = (id: string) => {
+    selectEmailTemplate(id);
+    setEditorOpen(true);
+  };
+
+  if (!editorOpen) {
+    return (
+      <div>
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex items-center gap-8">
+            <h2 className="text-[28px] font-medium leading-none">Email Templates</h2>
+            <div className="flex h-10 w-[280px] items-center gap-3 bg-white">
+              <Search className="size-5 text-[#333]" />
+              <Input
+                value={templateSearch}
+                onChange={(event) => setTemplateSearch(event.target.value)}
+                placeholder="Search"
+                className="h-10 rounded-none border-0 px-0 focus-visible:ring-0"
+              />
+            </div>
+          </div>
+          <Button
+            className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={createTemplate}
+          >
+            New Template
+          </Button>
+        </div>
+
+        {!emailTemplates.length ? (
+          <div className="mt-12 flex min-h-[520px] flex-col items-center justify-center text-center">
+            <div className="relative">
+              <div className="size-28 rounded-full bg-[#e5f0ef]" />
+              <Mail className="absolute -left-3 top-3 size-10 text-[#444]" />
+              <MailCheck className="absolute left-12 top-14 size-9 text-[#444]" />
+            </div>
+            <h3 className="mt-10 text-lg font-bold">Create your first email template</h3>
+            <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#333]">
+              Saved templates from your account will appear here and can be used in Marketing email campaigns.
+            </p>
+            <Button
+              className="mt-7 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+              onClick={createTemplate}
+            >
+              New Template
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-8 overflow-x-auto">
+            <div className="min-w-[860px]">
+              <div className="grid grid-cols-[2fr_2fr_1.2fr_1.2fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777]">
+                <span>Name</span>
+                <span>Subject</span>
+                <span>Status</span>
+                <span>Last Updated</span>
+                <span />
+              </div>
+              {visibleTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  className="grid w-full grid-cols-[2fr_2fr_1.2fr_1.2fr_40px] items-center border-b py-5 text-left text-sm hover:bg-[#fafafa]"
+                  onClick={() => editTemplate(template.id)}
+                >
+                  <span className="font-bold">{template.name || "Untitled Template"}</span>
+                  <span className="truncate pr-8 text-[#555]">
+                    {template.subject || "-"}
+                  </span>
+                  <span>
+                    <span className="rounded-full bg-[#f4f4f4] px-6 py-2 text-xs font-bold uppercase text-[#777]">
+                      Draft
+                    </span>
+                  </span>
+                  <span>{template.updatedAt || "-"}</span>
+                  <MoreHorizontal className="size-5 text-[#777]" />
+                </button>
+              ))}
+              {!visibleTemplates.length && (
+                <div className="border-b py-12 text-center text-sm font-semibold text-[#777]">
+                  No templates match your search.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!activeTemplate) return null;
+
+  return (
+    <div className="-mx-5 -mt-9">
+      <div className="flex min-h-[72px] items-center justify-between gap-4 border-b border-[#eee] bg-white px-5">
+        <div className="flex min-w-0 items-center gap-4">
+          <button onClick={() => setEditorOpen(false)} aria-label="Back to templates">
+            <ArrowLeft className="size-5 text-[#777]" />
+          </button>
+          <Input
+            value={activeTemplate.name}
+            onChange={(event) =>
+              updateEmailTemplate({
+                name: event.target.value,
+                title: event.target.value,
+              })
+            }
+            className="h-10 w-[260px] rounded-none border-0 px-0 text-lg font-semibold focus-visible:ring-0"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {emailTemplateSaved && (
+            <span className="text-sm font-semibold text-[#00a997]">Saved</span>
+          )}
+          <Button
+            variant="outline"
+            className="h-10 rounded-none px-5 text-sm font-bold"
+            onClick={() => startCampaignBuilder(activeTemplate.id)}
+          >
+            <Send className="size-4" />
+            Use in Campaign
+          </Button>
+          <Button
+            className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={saveActiveTemplate}
+          >
+            <Save className="size-4" />
+            Save Template
+          </Button>
+          {emailTemplates.length > 1 && (
+            <button
+              className="flex items-center gap-2 text-sm font-bold text-red-600"
+              onClick={deleteActiveTemplate}
+            >
+              <Trash2 className="size-4" />
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid min-h-[720px] lg:grid-cols-[minmax(420px,0.85fr)_minmax(460px,1fr)]">
+        <section className="border-r p-7">
+          <FieldGroup className="gap-7">
+            <Field>
+              <FieldLabel className="font-bold uppercase text-[#777]">Subject</FieldLabel>
+              <Input
+                className="h-12 rounded-none"
+                value={activeTemplate.subject}
+                onChange={(event) => updateEmailTemplate({ subject: event.target.value })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold uppercase text-[#777]">Preview Text</FieldLabel>
+              <Input
+                className="h-12 rounded-none"
+                value={activeTemplate.previewText}
+                onChange={(event) =>
+                  updateEmailTemplate({ previewText: event.target.value })
+                }
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold uppercase text-[#777]">Email Title</FieldLabel>
+              <Input
+                className="h-12 rounded-none"
+                value={activeTemplate.title}
+                onChange={(event) => updateEmailTemplate({ title: event.target.value })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold uppercase text-[#777]">Hero Image</FieldLabel>
+              <Input
+                type="file"
+                accept="image/*"
+                className="h-12 rounded-none"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) updateEmailTemplate({ image: URL.createObjectURL(file) });
+                }}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold uppercase text-[#777]">Message</FieldLabel>
+              <Textarea
+                className="min-h-[210px] resize-none rounded-none leading-6"
+                value={activeTemplate.message}
+                onChange={(event) => updateEmailTemplate({ message: event.target.value })}
+              />
+            </Field>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field>
+                <FieldLabel className="font-bold uppercase text-[#777]">Button Text</FieldLabel>
+                <Input
+                  className="h-12 rounded-none"
+                  value={activeTemplate.buttonText}
+                  onChange={(event) =>
+                    updateEmailTemplate({ buttonText: event.target.value })
+                  }
+                />
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold uppercase text-[#777]">Button Link</FieldLabel>
+                <Input
+                  className="h-12 rounded-none"
+                  value={activeTemplate.buttonLink}
+                  onChange={(event) =>
+                    updateEmailTemplate({ buttonLink: event.target.value })
+                  }
+                />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel className="font-bold uppercase text-[#777]">Button Color</FieldLabel>
+              <div className="flex gap-3">
+                <Input
+                  type="color"
+                  className="h-12 w-16 rounded-none p-1"
+                  value={activeTemplate.buttonColor}
+                  onChange={(event) =>
+                    updateEmailTemplate({ buttonColor: event.target.value })
+                  }
+                />
+                <Input
+                  className="h-12 rounded-none"
+                  value={activeTemplate.buttonColor}
+                  onChange={(event) =>
+                    updateEmailTemplate({ buttonColor: event.target.value })
+                  }
+                />
+              </div>
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold uppercase text-[#777]">Footer Text</FieldLabel>
+              <Textarea
+                className="min-h-[120px] resize-none rounded-none leading-6"
+                value={activeTemplate.footerText}
+                onChange={(event) =>
+                  updateEmailTemplate({ footerText: event.target.value })
+                }
+              />
+            </Field>
+          </FieldGroup>
+        </section>
+
+        <div className="bg-[#f3f3f3]">
+          <CampaignPreview
+            buttonColor={activeTemplate.buttonColor}
+            buttonLink={activeTemplate.buttonLink}
+            buttonText={activeTemplate.buttonText}
+            footerText={activeTemplate.footerText}
+            image={activeTemplate.image}
+            message={activeTemplate.message}
+            previewText={activeTemplate.previewText}
+            subject={activeTemplate.subject}
+            template={activeTemplate.title}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PresetList({ section }: { section: DashboardSection }) {
+  const { addPresetDraft, presetItems, selectPreset } = useDashboardStore();
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-6">
+        <div>
+          <h2 className="text-[28px] font-medium leading-none">Collection Presets</h2>
+          <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#666]">
+            Presets save collection defaults by user and can be applied when creating a collection.
+          </p>
+        </div>
+        <Link
+          href={`/dashboard/${section}/settings/presets/new`}
+          className="inline-flex h-10 items-center gap-2 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white"
+          onClick={addPresetDraft}
+        >
+          <PlusCircle className="size-4" />
+          Add Preset
+        </Link>
+      </div>
+
+      {!presetItems.length ? (
+        <div className="mt-12 flex min-h-[420px] flex-col items-center justify-center border bg-[#fafafa] text-center">
+          <Wrench className="size-10 text-[#999]" />
+          <p className="mt-5 font-bold">No presets yet</p>
+          <p className="mt-2 max-w-[360px] text-sm leading-6 text-[#666]">
+            Saved presets from your account will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-8 overflow-x-auto">
+          <div className="min-w-[820px]">
+            <div className="grid grid-cols-[1.6fr_1.2fr_1.2fr_1.3fr_1.1fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777]">
+              <span>Name</span>
+              <span>Collection ID</span>
+              <span>Photo Sets</span>
+              <span>Default Watermark</span>
+              <span>Last Updated</span>
+              <span />
+            </div>
+            {presetItems.map((preset) => (
+              <Link
+                key={preset.id}
+                href={`/dashboard/${section}/settings/presets/new`}
+                className="grid grid-cols-[1.6fr_1.2fr_1.2fr_1.3fr_1.1fr_40px] items-center border-b py-5 text-left text-sm hover:bg-[#fafafa]"
+                onClick={() => selectPreset(preset.id)}
+              >
+                <span className="font-bold">{preset.name || "Untitled Preset"}</span>
+                <span className="truncate pr-6 text-[#555]">
+                  {preset.collectionId || "-"}
+                </span>
+                <span className="truncate pr-6 text-[#555]">
+                  {preset.general.photoSets || "-"}
+                </span>
+                <span className="truncate pr-6 text-[#555]">
+                  {preset.general.defaultWatermark || "No watermark"}
+                </span>
+                <span>{preset.updatedAt || "-"}</span>
+                <MoreHorizontal className="size-5 text-[#777]" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PresetEditor({ section }: { section: DashboardSection }) {
+  const {
+    activePresetId,
+    addPresetDraft,
+    deletePreset,
+    presetCollectionId,
+    presetFavorite,
+    presetGeneral,
+    presetDesign,
+    presetDownload,
+    presetEditorPanel,
+    presetName,
+    presetSaved,
+    savePresetSettings,
+    setPresetFavorite,
+    setPresetGeneral,
+    setPresetDesign,
+    setPresetDownload,
+    setPresetEditorPanel,
+    setPresetCollectionId,
+    setPresetName,
+    presetStore,
+    setPresetStore,
+  } = useDashboardStore();
+  const { saveSetting, deleteSetting } = useDashboardSettings("preset");
+  useEffect(() => {
+    if (!activePresetId) addPresetDraft();
+  }, [activePresetId, addPresetDraft]);
+  const sideItems = [
+    { label: "General", panel: "general", icon: Wrench },
+    { label: "Design", panel: "design", icon: Palette },
+    { label: "Privacy", panel: "privacy", icon: Lock },
+    { label: "Download", panel: "download", icon: Download },
+    { label: "Favorite", panel: "favorite", icon: Heart },
+    { label: "Store", panel: "store", icon: ShoppingCart },
+  ] as const;
+  const savePresetToDb = () => {
+    const id = activePresetId || `preset-${Date.now()}`;
+    const updatedAt = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    savePresetSettings();
+    saveSetting.mutate({
+      localId: id,
+      name: presetName || "Collection Preset",
+      collectionId: presetCollectionId || undefined,
+      data: {
+        id,
+        name: presetName || "Collection Preset",
+        collectionId: presetCollectionId || undefined,
+        general: presetGeneral,
+        design: presetDesign,
+        download: presetDownload,
+        favorite: presetFavorite,
+        store: presetStore,
+        updatedAt,
+      },
+    });
+  };
+  const deleteActivePreset = () => {
+    if (!activePresetId) return;
+    deletePreset(activePresetId);
+    deleteSetting.mutate(activePresetId);
+  };
+
+  return (
+    <div className="-mx-5 -mt-9 md:-mx-5">
+      <div className="flex min-h-[72px] items-center justify-between border-b border-[#eee] bg-white px-5">
+        <div className="flex items-center gap-4">
+          <Link href={`/dashboard/${section}/settings/presets`}>
+            <ArrowLeft className="size-5 text-[#777]" />
+          </Link>
+          <Input
+            value={presetName}
+            onChange={(event) => setPresetName(event.target.value)}
+            className="h-10 w-[260px] rounded-none border-0 px-0 text-lg font-semibold focus-visible:ring-0"
+          />
+          <Input
+            value={presetCollectionId}
+            onChange={(event) => setPresetCollectionId(event.target.value)}
+            placeholder="Collection ID (optional)"
+            className="h-10 w-[230px] rounded-none border-0 px-0 text-sm focus-visible:ring-0"
+          />
+        </div>
+        <div className="flex items-center gap-4">
+          {presetSaved && (
+            <span className="text-sm font-semibold text-[#00a997]">Saved</span>
+          )}
+          <Link
+            href={`/collection/${encodeURIComponent(presetName || "preset")}/sample-gallery`}
+            className="text-sm font-semibold text-[#00a997]"
+          >
+            Preview Gallery
+          </Link>
+          <Button
+            className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={savePresetToDb}
+          >
+          Save
+          </Button>
+          {activePresetId && (
+            <button
+              className="text-sm font-bold text-red-600"
+              onClick={deleteActivePreset}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mx-auto grid max-w-[1000px] gap-16 px-5 py-10 md:grid-cols-[220px_1fr]">
+        <div className="flex flex-col gap-7">
+          {sideItems.map((item) => (
+            <button
+              key={item.label}
+              className={cn(
+                "flex items-center gap-6 border-l-2 py-1 pl-6 text-left text-base",
+                presetEditorPanel === item.panel
+                  ? "border-[#22bda7] font-semibold text-[#111]"
+                  : "border-transparent text-[#777]"
+              )}
+              onClick={() => setPresetEditorPanel(item.panel)}
+            >
+              <item.icon className="size-5" />
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {presetEditorPanel === "general" && (
+          <PresetGeneralPanel
+            general={presetGeneral}
+            onChange={setPresetGeneral}
+            section={section}
+          />
+        )}
+        {presetEditorPanel === "design" && (
+          <PresetDesignPanel
+            design={presetDesign}
+            onChange={setPresetDesign}
+          />
+        )}
+        {presetEditorPanel === "download" && (
+          <PresetDownloadPanel
+            download={presetDownload}
+            onChange={setPresetDownload}
+          />
+        )}
+        {presetEditorPanel === "favorite" && (
+          <PresetFavoritePanel
+            favorite={presetFavorite}
+            onChange={setPresetFavorite}
+            onBack={() => setPresetEditorPanel("download")}
+            onNext={() => setPresetEditorPanel("store")}
+          />
+        )}
+        {presetEditorPanel === "store" && (
+          <PresetStorePanel
+            store={presetStore}
+            onBack={() => setPresetEditorPanel("favorite")}
+            onChange={setPresetStore}
+          />
+        )}
+        {!["general", "design", "download", "favorite", "store"].includes(presetEditorPanel) && (
+          <div className="max-w-[560px]">
+            <h2 className="text-2xl font-medium capitalize">
+              {presetEditorPanel}
+            </h2>
+            <p className="mt-6 text-sm text-[#666]">
+              {presetEditorPanel} settings ready.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PresetGeneralPanel({
+  general,
+  onChange,
+  section,
+}: {
+  general: {
+    collectionTags: string;
+    photoSets: string;
+    defaultWatermark: string;
+    emailRegistration: boolean;
+    galleryAssist: boolean;
+    slideshow: boolean;
+    socialSharing: boolean;
+    language: string;
+  };
+  onChange: (value: Partial<typeof general>) => void;
+  section: DashboardSection;
+}) {
+  const { watermarkItems } = useDashboardStore();
+  return (
+    <div className="max-w-[560px]">
+      <h2 className="text-2xl font-medium">General</h2>
+      <FieldGroup className="mt-8 gap-12">
+        <Field>
+          <FieldLabel className="font-bold">Collection Tags</FieldLabel>
+          <Input
+            value={general.collectionTags}
+            onChange={(event) => onChange({ collectionTags: event.target.value })}
+            placeholder="Optional"
+            className="h-12 rounded-none bg-white px-5"
+          />
+          <p className="text-sm leading-6 text-[#666]">
+            Add tags to categorize different collections e.g. wedding, outdoor,
+            summer. <span className="text-[#00a997]">Learn more</span>
+          </p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Photo Sets</FieldLabel>
+          <div className="flex h-12 items-center border px-5" role="button">
+            <span className="rounded-full bg-[#f4f4f4] px-4 py-2 text-sm">
+              {general.photoSets}
+            </span>
+          </div>
+          <p className="text-sm leading-6 text-[#666]">
+            Separate photo sets by comma. e.g. Highlights, Reception, Getting Ready
+          </p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Default Watermark</FieldLabel>
+          <select
+            value={general.defaultWatermark}
+            onChange={(event) => onChange({ defaultWatermark: event.target.value })}
+            className="h-12 rounded-none border bg-white px-5"
+          >
+            <option>No watermark</option>
+            {watermarkItems.map((watermark) => (
+              <option key={watermark.id}>{watermark.name}</option>
+            ))}
+          </select>
+          <p className="text-sm leading-6 text-[#666]">
+            Set default watermark. Manage watermarks in{" "}
+            <Link href={`/dashboard/${section}/settings/watermark`} className="text-[#00a997]">
+              App Settings
+            </Link>.
+          </p>
+        </Field>
+
+        <Field>
+          <FieldLabel className="font-bold">
+            Auto Expiry Reminder Email
+          </FieldLabel>
+          <div className="bg-[#eef7f9] p-5">
+            <p className="font-bold">Upgrade for Premium Features</p>
+            <p className="mt-2 text-sm leading-6 text-[#333]">
+              Sending reminder emails to activity lists is only available for
+              upgraded accounts. Default settings for activity lists will not
+              apply until you have upgraded.
+            </p>
+            <button className="mt-3 text-sm font-semibold text-[#00a997]">
+              Upgrade
+            </button>
+          </div>
+          <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
+            <PlusCircle className="size-4" />
+            Add expiry reminder email
+          </button>
+          <p className="text-sm leading-6 text-[#666]">
+            Setup reminder emails that will send when you create a collection and
+            add an Auto Expiry date.
+          </p>
+        </Field>
+
+        {[
+          [
+            "Email Registration",
+            "emailRegistration",
+            "Track email addresses accessing this collection.",
+          ],
+          [
+            "Gallery Assist",
+            "galleryAssist",
+            "Add walk-through cards to help visitors use the collection.",
+          ],
+          [
+            "Slideshow",
+            "slideshow",
+            "Allow visitors to view the images in their collection as a slideshow.",
+          ],
+          [
+            "Social Sharing",
+            "socialSharing",
+            "Allow collection visitors to share your work to social media.",
+          ],
+        ].map(([label, key, text]) => {
+          const typedKey = key as
+            | "emailRegistration"
+            | "galleryAssist"
+            | "slideshow"
+            | "socialSharing";
+          return (
+            <Field key={key}>
+              <FieldLabel className="font-bold">{label}</FieldLabel>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={general[typedKey]}
+                  onCheckedChange={(value) =>
+                    onChange({ [typedKey]: value } as Partial<typeof general>)
+                  }
+                />
+                <span>{general[typedKey] ? "On" : "Off"}</span>
+              </div>
+              <p className="text-sm leading-6 text-[#666]">
+                {text} <span className="text-[#00a997]">Learn more</span>
+              </p>
+              {key === "slideshow" && (
+                <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
+                  Additional options <ChevronDown className="size-4" />
+                </button>
+              )}
+            </Field>
+          );
+        })}
+
+        <Field>
+          <FieldLabel className="font-bold">Language</FieldLabel>
+          <select
+            value={general.language}
+            onChange={(event) => onChange({ language: event.target.value })}
+            className="h-12 rounded-none border bg-white px-5"
+          >
+            <option>English</option>
+            <option>Bangla</option>
+            <option>Spanish</option>
+            <option>French</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">
+            Choose the language to display these collections in.
+          </p>
+        </Field>
+      </FieldGroup>
+    </div>
+  );
+}
+
+function PresetFavoritePanel({
+  favorite,
+  onBack,
+  onChange,
+  onNext,
+}: {
+  favorite: {
+    favoritePhotos: boolean;
+    favoriteNotes: boolean;
+  };
+  onBack: () => void;
+  onChange: (value: Partial<typeof favorite>) => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="max-w-[560px]">
+      <h2 className="text-2xl font-medium">Favorite</h2>
+      <FieldGroup className="mt-8 gap-12">
+        <Field>
+          <FieldLabel className="font-bold">Favorite Photos</FieldLabel>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={favorite.favoritePhotos}
+              onCheckedChange={(value) => onChange({ favoritePhotos: value })}
+            />
+            <span>{favorite.favoritePhotos ? "On" : "Off"}</span>
+          </div>
+          <p className="text-sm leading-6 text-[#666]">
+            Allow visitors to favorite photos. You can review these afterwards in
+            Favorite Activity.
+          </p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Favorite Notes</FieldLabel>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={favorite.favoriteNotes}
+              onCheckedChange={(value) => onChange({ favoriteNotes: value })}
+            />
+            <span>{favorite.favoriteNotes ? "On" : "Off"}</span>
+          </div>
+          <p className="text-sm leading-6 text-[#666]">
+            Allow clients to add notes to photos they have favorited.{" "}
+            <span className="text-[#00a997]">Learn more</span>
+          </p>
+        </Field>
+      </FieldGroup>
+      <PresetPager onBack={onBack} onNext={onNext} />
+    </div>
+  );
+}
+
+function PresetStorePanel({
+  onBack,
+  onChange,
+  store,
+}: {
+  onBack: () => void;
+  onChange: (value: Partial<typeof store>) => void;
+  store: {
+    storeStatus: boolean;
+    priceSheet: string;
+    productPreview: boolean;
+  };
+}) {
+  return (
+    <div className="max-w-[560px]">
+      <h2 className="text-2xl font-medium">Store</h2>
+      <div className="mt-8 bg-[#eef7f9] p-6">
+        <p className="font-bold">Activate Store</p>
+        <p className="mt-4 text-sm leading-7 text-[#222]">
+          Setup Pixieset Store to start selling prints, digital downloads, and
+          more directly from your collections.
+        </p>
+        <button className="mt-3 text-sm font-semibold text-[#00a997]">
+          Get Started
+        </button>
+      </div>
+
+      <FieldGroup className="mt-12 gap-12">
+        <Field>
+          <FieldLabel className="font-bold">Store Status</FieldLabel>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={store.storeStatus}
+              onCheckedChange={(value) => onChange({ storeStatus: value })}
+            />
+            <span>{store.storeStatus ? "On" : "Off"}</span>
+          </div>
+          <p className="text-sm leading-6 text-[#666]">
+            Allow visitors to purchase products from collections.
+          </p>
+        </Field>
+
+        <Field>
+          <FieldLabel className="font-bold">Price Sheet</FieldLabel>
+          <select
+            value={store.priceSheet}
+            onChange={(event) => onChange({ priceSheet: event.target.value })}
+            className="h-12 rounded-none border bg-white px-5"
+          >
+            <option>My Price Sheet</option>
+            <option>Wedding Price Sheet</option>
+            <option>Portrait Price Sheet</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">
+            Set which products are for sale in collections. Manage price sheets
+            in <span className="text-[#00a997]">Store</span>
+          </p>
+        </Field>
+
+        <Field>
+          <FieldLabel className="font-bold">
+            Personalized Product Preview
+          </FieldLabel>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={store.productPreview}
+              onCheckedChange={(value) => onChange({ productPreview: value })}
+            />
+            <span>{store.productPreview ? "On" : "Off"}</span>
+          </div>
+          <p className="text-sm leading-6 text-[#666]">
+            This feature is only available with a lab price sheet on our next
+            generation Store system. Create a new Price Sheet to gain full access
+            or select existing price sheet that matches requirements.
+          </p>
+        </Field>
+      </FieldGroup>
+
+      <div className="mt-14">
+        <button className="inline-flex items-center gap-2 font-semibold" onClick={onBack}>
+          <ArrowLeft className="size-4" />
+          Back
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PresetPager({
+  onBack,
+  onNext,
+}: {
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="mt-14 flex justify-between">
+      <button className="inline-flex items-center gap-2 font-semibold" onClick={onBack}>
+        <ArrowLeft className="size-4" />
+        Back
+      </button>
+      <button className="inline-flex items-center gap-2 font-semibold" onClick={onNext}>
+        Next <ArrowRight className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+const coverOptions = [
+  ["Center", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80"],
+  ["Left", "https://images.unsplash.com/photo-1508808787069-421e7986016e?auto=format&fit=crop&w=480&q=80"],
+  ["Novel", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=480&q=80"],
+  ["Vintage", "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=480&q=80"],
+  ["Frame", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80"],
+  ["Stripe", "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=480&q=80"],
+  ["Divider", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=480&q=80"],
+  ["Journal", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80"],
+  ["Stamp", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=480&q=80"],
+  ["Outline", "https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=480&q=80"],
+  ["Classic", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80"],
+  ["Split", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=480&q=80"],
+] as const;
+
+const typographyOptions = [
+  ["Sans", "SANS", "A neutral font"],
+  ["Serif", "Serif", "A classic font"],
+  ["Modern", "Modern", "A sophisticated font"],
+  ["Timeless", "Timeless", "A light and airy font"],
+  ["Bold", "BOLD", "A punchy font"],
+  ["Subtle", "SUBTLE", "A minimal font"],
+] as const;
+
+const colorOptions = [
+  ["Light", ["#ffffff", "#f7f7f7", "#303030"]],
+  ["Gold", ["#fffdf8", "#f6efe6", "#a99167"]],
+  ["Rose", ["#fbf7f6", "#f3eeee", "#a9807c"]],
+  ["Terracotta", ["#fbf8f5", "#eee7e1", "#aa7b60"]],
+  ["Sand", ["#f5f3f1", "#e8e3df", "#9f8f82"]],
+  ["Olive", ["#f3f4f0", "#e9e9e3", "#96977a"]],
+] as const;
+
+function PresetDesignPanel({
+  design,
+  onChange,
+}: {
+  design: {
+    cover: string;
+    typography: string;
+    color: string;
+    gridStyle: "Vertical" | "Horizontal";
+    thumbnailSize: "Regular" | "Large";
+    gridSpacing: "Regular" | "Large";
+    navigationStyle: "Icon Only" | "Icon & Text";
+  };
+  onChange: (value: Partial<typeof design>) => void;
+}) {
+  return (
+    <div className="max-w-[700px]">
+      <h2 className="text-2xl font-medium">Design</h2>
+      <p className="mt-10 text-sm font-bold">Cover</p>
+      <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3">
+        {coverOptions.map(([name, src]) => (
+          <button key={name} className="text-center" onClick={() => onChange({ cover: name })}>
+            <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+              <span className="relative block aspect-[1.45] overflow-hidden bg-white">
+                <img src={src} alt={name} className={cn("h-full w-full object-cover", name === "Stamp" && "scale-50")} />
+                <span className={cn("absolute font-bold tracking-widest text-white", name === "Novel" || name === "Stamp" || name === "Journal" ? "bottom-8 left-6 text-[#222]" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2")}>
+                  TITLE
+                </span>
+              </span>
+            </span>
+            <span className="mt-3 block text-sm">{name}</span>
+          </button>
+        ))}
+      </div>
+
+      <OptionSection title="Typography">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          {typographyOptions.map(([name, sample, desc]) => (
+            <button key={name} className="text-center" onClick={() => onChange({ typography: name })}>
+              <span className={cn("block border p-8 text-left", design.typography === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                <span className="block text-xl tracking-widest">{sample}</span>
+                <span className="mt-3 block text-sm text-[#555]">{desc}</span>
+              </span>
+              <span className="mt-3 block text-sm">{name}</span>
+            </button>
+          ))}
+        </div>
+      </OptionSection>
+
+      <OptionSection title="Color">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          {colorOptions.map(([name, colors]) => (
+            <button key={name} className="text-center" onClick={() => onChange({ color: name })}>
+              <span className={cn("flex h-[118px] items-center justify-center gap-2 border", design.color === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                {colors.map((color) => (
+                  <span key={color} className="size-10 rounded-full border" style={{ backgroundColor: color }} />
+                ))}
+              </span>
+              <span className="mt-3 block text-sm">{name}</span>
+            </button>
+          ))}
+        </div>
+      </OptionSection>
+
+      <OptionSection title="Grid Style">
+        <TwoOption value={design.gridStyle} a="Vertical" b="Horizontal" onPick={(value) => onChange({ gridStyle: value as "Vertical" | "Horizontal" })} />
+      </OptionSection>
+      <OptionSection title="Thumbnail Size">
+        <TwoOption value={design.thumbnailSize} a="Regular" b="Large" onPick={(value) => onChange({ thumbnailSize: value as "Regular" | "Large" })} />
+      </OptionSection>
+      <OptionSection title="Grid Spacing">
+        <TwoOption value={design.gridSpacing} a="Regular" b="Large" onPick={(value) => onChange({ gridSpacing: value as "Regular" | "Large" })} />
+      </OptionSection>
+      <OptionSection title="Navigation Style">
+        <TwoOption value={design.navigationStyle} a="Icon Only" b="Icon & Text" onPick={(value) => onChange({ navigationStyle: value as "Icon Only" | "Icon & Text" })} />
+      </OptionSection>
+    </div>
+  );
+}
+
+function OptionSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mt-14">
+      <p className="mb-5 text-sm font-bold">{title}</p>
+      {children}
+    </section>
+  );
+}
+
+function TwoOption({
+  value,
+  a,
+  b,
+  onPick,
+}: {
+  value: string;
+  a: string;
+  b: string;
+  onPick: (value: string) => void;
+}) {
+  return (
+    <div className="grid max-w-[340px] grid-cols-2 gap-2">
+      {[a, b].map((item) => (
+        <button key={item} className="text-center" onClick={() => onPick(item)}>
+          <span className={cn("flex h-[108px] items-center justify-center border", value === item && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+            <LayoutGrid className="size-7" />
+          </span>
+          <span className="mt-3 block text-sm">{item}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PresetDownloadPanel({
+  download,
+  onChange,
+}: {
+  download: {
+    photoDownload: boolean;
+    highResolution: boolean;
+    highResolutionSize: "Original" | "3600px";
+    webSize: boolean;
+    webSizePx: "2048px" | "1024px" | "640px";
+    videoDownload: boolean;
+    downloadPin: boolean;
+    restrictDownloads: boolean;
+    limitDownloads: boolean;
+    limitPinUsage: string;
+  };
+  onChange: (value: Partial<typeof download>) => void;
+}) {
+  return (
+    <div className="max-w-[620px]">
+      <FieldGroup className="gap-12">
+        <Field>
+          <FieldLabel className="font-bold">Photo Download</FieldLabel>
+          <div className="flex items-center gap-3">
+            <Switch checked={download.photoDownload} onCheckedChange={(value) => onChange({ photoDownload: value })} />
+            <span>{download.photoDownload ? "On" : "Off"}</span>
+          </div>
+          <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
+            Additional options <ChevronDown className="size-4" />
+          </button>
+        </Field>
+
+        <Field>
+          <FieldLabel className="font-bold">Photo Downloadable Sizes</FieldLabel>
+          <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+            <label className="flex items-center gap-2">
+              <Checkbox checked={download.highResolution} onCheckedChange={(value) => onChange({ highResolution: Boolean(value) })} />
+              High Resolution
+            </label>
+            {(["Original", "3600px"] as const).map((size) => (
+              <label key={size} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={download.highResolutionSize === size}
+                  onChange={() => onChange({ highResolutionSize: size })}
+                />
+                {size === "Original" ? "Original - Upgrade required. Upgrade" : size}
+              </label>
+            ))}
+            <label className="flex items-center gap-2">
+              <Checkbox checked={download.webSize} onCheckedChange={(value) => onChange({ webSize: Boolean(value) })} />
+              Web Size
+            </label>
+            {(["2048px", "1024px", "640px"] as const).map((size) => (
+              <label key={size} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={download.webSizePx === size}
+                  onChange={() => onChange({ webSizePx: size })}
+                />
+                {size}
+              </label>
+            ))}
+          </div>
+          <p className="text-sm leading-6 text-[#666]">
+            Allow photos to be downloaded in select sizes.{" "}
+            <span className="text-[#00a997]">Learn more</span>
+          </p>
+        </Field>
+
+        {[
+          ["Video Download", "videoDownload", "Allow videos to be downloaded for offline viewing."],
+          ["Download PIN", "downloadPin", "If enabled, all collections created from this preset will have a download PIN set automatically."],
+        ].map(([label, key, text]) => (
+          <Field key={key}>
+            <FieldLabel className="font-bold">{label}</FieldLabel>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={download[key as "videoDownload" | "downloadPin"]}
+                onCheckedChange={(value) =>
+                  onChange({ [key]: value } as Partial<typeof download>)
+                }
+              />
+              <span>{download[key as "videoDownload" | "downloadPin"] ? "On" : "Off"}</span>
+            </div>
+            <p className="text-sm leading-6 text-[#666]">
+              {text} <span className="text-[#00a997]">Learn more</span>
+            </p>
+          </Field>
+        ))}
+
+        <div>
+          <p className="mb-8 text-[11px] font-bold uppercase tracking-widest text-[#777]">
+            Advanced Settings
+          </p>
+          <FieldGroup className="gap-12">
+            {[
+              ["Restrict Downloads to Collection Contacts", "restrictDownloads", "Allow only assigned Collection Contacts to download photos."],
+              ["Limit Photo Downloads", "limitDownloads", "Set number of photos that can be downloaded in these collections."],
+            ].map(([label, key, text]) => (
+              <Field key={key}>
+                <FieldLabel className="font-bold">{label}</FieldLabel>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={download[key as "restrictDownloads" | "limitDownloads"]}
+                  onCheckedChange={(value) =>
+                    onChange({ [key]: value } as Partial<typeof download>)
+                  }
+                  />
+                  <span>{download[key as "restrictDownloads" | "limitDownloads"] ? "On" : "Off"}</span>
+                </div>
+                <p className="text-sm leading-6 text-[#666]">{text}</p>
+              </Field>
+            ))}
+            <Field>
+              <FieldLabel className="font-bold">Limit PIN Usage</FieldLabel>
+              <Input
+                value={download.limitPinUsage}
+                onChange={(event) => onChange({ limitPinUsage: event.target.value })}
+                placeholder="e.g. 5"
+                className="h-12 rounded-none bg-white px-5"
+              />
+            </Field>
+          </FieldGroup>
+        </div>
+      </FieldGroup>
+    </div>
+  );
+}
+
+function WatermarkList({ section }: { section: DashboardSection }) {
+  const {
+    addWatermarkDraft,
+    selectWatermark,
+    watermarkItems,
+  } = useDashboardStore();
+
+  return (
+    <div className="max-w-[760px]">
+      <div className="flex items-center justify-between gap-6">
+        <div>
+          <p className="text-sm font-bold">Watermarks</p>
+          <p className="mt-3 max-w-[560px] text-sm leading-6 text-[#666]">
+            Create multiple watermarks, then pick one as default inside collection
+            presets.
+          </p>
+        </div>
+        <Link
+          href={`/dashboard/${section}/settings/watermark/new`}
+          className="inline-flex h-10 items-center rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
+          onClick={addWatermarkDraft}
+        >
+          Add Watermark
+        </Link>
+      </div>
+
+      {watermarkItems.length ? (
+        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          {watermarkItems.map((item) => (
+            <Link
+              key={item.id}
+              href={`/dashboard/${section}/settings/watermark/${item.id}`}
+              className="border bg-white p-5"
+              onClick={() => selectWatermark(item.id)}
+            >
+              <div className="flex aspect-[1.5] items-center justify-center bg-[#f3f3f3]">
+                {item.type === "text" ? (
+                  <span
+                    style={{
+                      color: item.color,
+                      fontFamily: item.font,
+                      fontSize: `${Math.max(22, item.scale)}px`,
+                      opacity: item.opacity / 100,
+                    }}
+                  >
+                    {item.text || "Watermark"}
+                  </span>
+                ) : item.image ? (
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    className="max-h-[120px] max-w-[180px] object-contain"
+                    style={{ opacity: item.opacity / 100 }}
+                  />
+                ) : (
+                  <Images className="size-9 text-[#999]" />
+                )}
+              </div>
+              <p className="mt-4 font-semibold">{item.name}</p>
+              <p className="mt-1 text-sm text-[#777] capitalize">{item.type}</p>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-10 flex min-h-[260px] flex-col items-center justify-center border bg-[#fafafa] text-center">
+          <Images className="size-10 text-[#999]" />
+          <p className="mt-5 font-bold">No watermarks yet</p>
+          <p className="mt-2 max-w-[340px] text-sm leading-6 text-[#666]">
+            Saved watermarks from your account will appear here.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WatermarkSettings({ section }: { section: DashboardSection }) {
+  const previewRef = useRef<HTMLDivElement>(null);
+  const {
+    activeWatermarkId,
+    watermarkApplyDownloads,
+    watermarkColor,
+    watermarkFont,
+    watermarkImage,
+    watermarkOpacity,
+    watermarkPosition,
+    watermarkSaved,
+    watermarkScale,
+    watermarkText,
+    watermarkType,
+    saveWatermarkSettings,
+    setWatermarkApplyDownloads,
+    setWatermarkColor,
+    setWatermarkFont,
+    setWatermarkImage,
+    setWatermarkOpacity,
+    setWatermarkPosition,
+    setWatermarkScale,
+    setWatermarkText,
+    setWatermarkType,
+  } = useDashboardStore();
+  const { saveSetting } = useDashboardSettings("watermark");
+
+  const clamp = (value: number) => Math.max(5, Math.min(95, value));
+  const moveWatermark = (clientX: number, clientY: number) => {
+    const rect = previewRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setWatermarkPosition({
+      x: clamp(((clientX - rect.left) / rect.width) * 100),
+      y: clamp(((clientY - rect.top) / rect.height) * 100),
+    });
+  };
+  const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    if (watermarkType !== "text") return;
+    event.preventDefault();
+    moveWatermark(event.clientX, event.clientY);
+    const onMove = (moveEvent: globalThis.PointerEvent) =>
+      moveWatermark(moveEvent.clientX, moveEvent.clientY);
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  const saveWatermarkToDb = () => {
+    const watermark = {
+      id: activeWatermarkId,
+      name:
+        watermarkType === "text"
+          ? `${watermarkText || "Untitled"} text watermark`
+          : "Image watermark",
+      type: watermarkType,
+      text: watermarkText,
+      font: watermarkFont,
+      color: watermarkColor,
+      scale: watermarkScale,
+      opacity: watermarkOpacity,
+      position: watermarkPosition,
+      image: watermarkImage,
+      applyDownloads: watermarkApplyDownloads,
+    };
+
+    saveWatermarkSettings();
+    saveSetting.mutate({
+      localId: activeWatermarkId,
+      name: watermark.name,
+      data: watermark,
+    });
+  };
+
+  return (
+    <div className="grid gap-10 xl:grid-cols-[360px_1fr]">
+      <div className="flex flex-col gap-8">
+        <div>
+          <Link
+            href={`/dashboard/${section}/settings/watermark`}
+            className="mb-6 inline-flex items-center gap-2 text-sm font-semibold"
+          >
+            <ArrowLeft className="size-4" />
+            Back to Watermarks
+          </Link>
+          <p className="mb-4 text-sm font-bold">Watermark</p>
+          <label className="flex size-[148px] cursor-pointer items-center justify-center bg-[#e9e9e9] text-2xl text-[#888]">
+            +
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  setWatermarkImage(URL.createObjectURL(file));
+                  setWatermarkType("image");
+                }
+              }}
+            />
+          </label>
+          <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#666]">
+            Protect your photos with custom watermarks. Saved setting can apply
+            to all future images.
+          </p>
+        </div>
+
+        <div>
+          <p className="mb-3 text-sm font-bold">Watermark Type</p>
+          <div className="grid grid-cols-2 border bg-[#fafafa] p-1">
+            {(["text", "image"] as const).map((type) => (
+              <button
+                key={type}
+                className={cn(
+                  "h-10 text-xs font-bold uppercase tracking-widest",
+                  watermarkType === type && "bg-white shadow-sm"
+                )}
+                onClick={() => setWatermarkType(type)}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {watermarkType === "text" ? (
+          <FieldGroup className="gap-8">
+            <Field>
+              <FieldLabel className="font-bold">Watermark Text</FieldLabel>
+              <Input
+                value={watermarkText}
+                onChange={(event) => setWatermarkText(event.target.value)}
+                className="h-12 rounded-none bg-white px-5"
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Font Style</FieldLabel>
+              <select
+                value={watermarkFont}
+                onChange={(event) => setWatermarkFont(event.target.value)}
+                className="h-12 rounded-none border bg-white px-5"
+              >
+                {watermarkFonts.map((font) => (
+                  <option key={font} value={font}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Font Color</FieldLabel>
+              <div className="flex gap-3">
+                {["#ffffff", "#000000", "#22bda7"].map((color) => (
+                  <button
+                    key={color}
+                    className={cn(
+                      "size-10 rounded-full border",
+                      watermarkColor === color && "ring-2 ring-[#22bda7] ring-offset-2"
+                    )}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setWatermarkColor(color)}
+                    aria-label={`Use ${color}`}
+                  />
+                ))}
+                <Input
+                  type="color"
+                  value={watermarkColor}
+                  onChange={(event) => setWatermarkColor(event.target.value)}
+                  className="size-10 rounded-full p-1"
+                />
+              </div>
+            </Field>
+          </FieldGroup>
+        ) : (
+          <Field>
+            <FieldLabel className="font-bold">Watermark Image</FieldLabel>
+            <Input
+              type="file"
+              accept="image/*"
+              className="h-12 rounded-none bg-white"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) setWatermarkImage(URL.createObjectURL(file));
+              }}
+            />
+          </Field>
+        )}
+
+        <FieldGroup className="gap-8">
+          <Field>
+            <FieldLabel className="flex items-center justify-between font-bold">
+              Scale <span>{watermarkScale}%</span>
+            </FieldLabel>
+            <Slider
+              value={[watermarkScale]}
+              min={10}
+              max={120}
+              step={1}
+              onValueChange={(value) => setWatermarkScale(value[0] ?? 70)}
+            />
+          </Field>
+          <Field>
+            <FieldLabel className="flex items-center justify-between font-bold">
+              Opacity <span>{watermarkOpacity}%</span>
+            </FieldLabel>
+            <Slider
+              value={[watermarkOpacity]}
+              min={5}
+              max={100}
+              step={1}
+              onValueChange={(value) => setWatermarkOpacity(value[0] ?? 90)}
+            />
+          </Field>
+        </FieldGroup>
+
+        <div>
+          <p className="mb-3 text-sm font-bold">Position</p>
+          <div className="grid w-36 grid-cols-3 gap-2 bg-[#fafafa] p-4">
+            {[15, 50, 85].flatMap((y) =>
+              [15, 50, 85].map((x) => (
+                <button
+                  key={`${x}-${y}`}
+                  className={cn(
+                    "size-4 rounded-full bg-[#d8d8d8]",
+                    Math.abs(watermarkPosition.x - x) < 16 &&
+                      Math.abs(watermarkPosition.y - y) < 16 &&
+                      "bg-[#22bda7]"
+                  )}
+                  onClick={() => setWatermarkPosition({ x, y })}
+                  aria-label={`Set watermark ${x} ${y}`}
+                />
+              ))
+            )}
+          </div>
+          <p className="mt-3 text-sm text-[#666]">
+            Text watermark drag works on preview.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={watermarkApplyDownloads}
+            onCheckedChange={setWatermarkApplyDownloads}
+          />
+          <span className="text-sm font-medium">
+            Apply watermark to web size downloads
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Button
+            className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={saveWatermarkToDb}
+          >
+            Save Settings
+          </Button>
+          <Link
+            href={`/dashboard/${section}/settings/watermark`}
+            className="text-sm font-semibold text-[#00a997]"
+          >
+            Watermark List
+          </Link>
+          {watermarkSaved && (
+            <span className="text-sm font-semibold text-[#00a997]">Saved</span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center justify-center gap-8">
+        <div
+          ref={previewRef}
+          className="relative aspect-[1.5] w-full max-w-[860px] overflow-hidden bg-[#f3f3f3]"
+        >
+          <img
+            src="https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1400&q=80"
+            alt="Watermark preview"
+            className="h-full w-full object-cover"
+          />
+          {watermarkType === "text" ? (
+            <button
+              className="absolute cursor-grab select-none leading-none active:cursor-grabbing"
+              style={{
+                left: `${watermarkPosition.x}%`,
+                top: `${watermarkPosition.y}%`,
+                transform: "translate(-50%, -50%)",
+                color: watermarkColor,
+                fontFamily: watermarkFont,
+                fontSize: `${Math.max(28, watermarkScale * 1.7)}px`,
+                opacity: watermarkOpacity / 100,
+              }}
+              onPointerDown={startDrag}
+            >
+              {watermarkText || "Watermark"}
+            </button>
+          ) : watermarkImage ? (
+            <img
+              src={watermarkImage}
+              alt="Uploaded watermark"
+              className="absolute left-1/2 top-1/2 object-contain"
+              style={{
+                width: `${watermarkScale * 2.4}px`,
+                opacity: watermarkOpacity / 100,
+                transform: "translate(-50%, -50%)",
+              }}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white">
+              Upload watermark image
+            </div>
+          )}
+        </div>
+        <div className="flex gap-5 text-[#777]">
+          <button className="rounded bg-[#eee] px-2 py-1">Desktop</button>
+          <button className="px-2 py-1">Mobile</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardPlaceholder({
+  page,
+  title,
+}: {
+  page: DashboardPage;
+  title: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-6">
+        <div>
+          <p className="text-sm text-[#777]">Dashboard</p>
+          <h1 className="mt-2 text-[28px] font-medium">{title}</h1>
+        </div>
+        <Button className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]">
+          New {title}
+        </Button>
+      </div>
+      <div className="mt-10 grid gap-4 md:grid-cols-3">
+        {["Overview", "Recent Activity", "Quick Actions"].map((item) => (
+          <div key={item} className="border bg-white p-6">
+            <p className="text-sm font-bold text-[#222]">{item}</p>
+            <p className="mt-3 text-sm leading-6 text-[#666]">
+              {title} page ready at `/dashboard/[section]/{page}`.
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HomepageSettings() {
+  const [enabled, setEnabled] = useState(true);
+  const [bio, setBio] = useState("");
+  const [include, setInclude] = useState({
+    biography: true,
+    social: true,
+    website: false,
+    email: true,
+    phone: true,
+    address: true,
+  });
+
+  const toggleInclude = (key: keyof typeof include) =>
+    setInclude((value) => ({ ...value, [key]: !value[key] }));
+
+  return (
+    <div>
+      <h1 className="text-[28px] font-semibold">Homepage</h1>
+
+      <div className="mt-8 grid items-start gap-12 lg:grid-cols-[minmax(360px,620px)_minmax(320px,1fr)]">
+        <div className="max-w-[620px]">
+          <section>
+            <p className="text-sm font-bold">Homepage Status</p>
+            <div className="mt-4 flex items-center gap-3">
+              <Switch checked={enabled} onCheckedChange={setEnabled} />
+              <span className="text-sm font-medium">{enabled ? "On" : "Off"}</span>
+            </div>
+            <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#667085]">
+              Your Homepage is a public page where your collections are listed. You can also select
+              which collections appear here under each collection's setting.{" "}
+              <button className="font-semibold text-[#00a997]">Learn more</button>
+            </p>
+          </section>
+
+          <section className="mt-12">
+            <p className="text-sm font-bold">Homepage URL</p>
+            <div className="mt-4 flex h-14 items-center justify-between bg-[#f6f6f6] px-5">
+              <span className="truncate text-sm font-medium">https://rifat39.pixieset.com</span>
+              <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
+                <Copy className="size-4" />
+                Copy
+              </button>
+            </div>
+          </section>
+
+          <section className="mt-12">
+            <p className="text-sm font-bold">Homepage Password</p>
+            <div className="mt-4 flex h-14 items-center justify-between border px-5">
+              <input
+                type="password"
+                placeholder="Add a password"
+                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+              />
+              <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
+                <RefreshCw className="size-4" />
+                Generate
+              </button>
+            </div>
+            <p className="mt-3 text-sm text-[#667085]">Protect your Homepage with a password</p>
+          </section>
+
+          <section className="mt-12">
+            <p className="text-sm font-bold">Biography</p>
+            <div className="mt-4 border">
+              <Textarea
+                value={bio}
+                onChange={(event) => setBio(event.target.value.slice(0, 500))}
+                maxLength={500}
+                className="min-h-44 resize-none rounded-none border-0 focus-visible:ring-0"
+              />
+              <p className="px-5 pb-3 text-xs font-semibold text-[#667085]">{bio.length} / 500</p>
+            </div>
+          </section>
+
+          <section className="mt-12">
+            <p className="text-sm font-bold">Homepage Info</p>
+            <div className="mt-4 grid gap-3">
+              {[
+                ["biography", "Biography"],
+                ["social", "Social Links"],
+                ["website", "Website"],
+                ["email", "Contact Email"],
+                ["phone", "Phone Number"],
+                ["address", "Business Address"],
+              ].map(([key, label]) => (
+                <label key={key} className="flex w-fit items-center gap-3 text-sm font-medium">
+                  <Checkbox
+                    checked={include[key as keyof typeof include]}
+                    onCheckedChange={() => toggleInclude(key as keyof typeof include)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#667085]">
+              To update details, go to your <button className="font-semibold text-[#00a997]">profile</button>.
+              Blank information will not appear on your homepage.
+            </p>
+          </section>
+
+          <section className="mt-12">
+            <p className="text-sm font-bold">Collection Sort Order</p>
+            <select className="mt-4 h-14 w-full border bg-white px-5 text-sm font-bold outline-none">
+              <option>Date created: New to Old</option>
+              <option>Date created: Old to New</option>
+              <option>Collection name: A to Z</option>
+            </select>
+            <p className="mt-3 text-sm text-[#667085]">
+              Select order you wish collections to appear
+            </p>
+          </section>
+        </div>
+
+        <div className="sticky top-10 hidden min-h-[520px] items-center justify-center bg-[#f5f5f5] p-12 lg:flex">
+          <div className="w-full max-w-[390px] bg-white p-7 shadow-[0_28px_60px_rgba(0,0,0,0.12)]">
+            <div className="flex gap-2 text-[#b8b8b8]">
+              {[0, 1, 2, 3].map((item) => (
+                <span key={item} className="size-1.5 rounded-full bg-current" />
+              ))}
+            </div>
+            <div className="mt-6 text-center">
+              <p className="text-sm font-bold tracking-wide">RIFAT</p>
+              <p className="mt-3 text-[10px] font-semibold">email@pixieset.com</p>
+              <p className="mt-1 text-[10px] font-semibold">101 Main Street</p>
+              <p className="mt-1 text-[10px] font-semibold">123-456-7890</p>
+            </div>
+            <div className="mt-8 grid grid-cols-3 gap-5">
+              {Array.from({ length: 6 }).map((_, item) => (
+                <div key={item}>
+                  <div className="aspect-[1.45] bg-[#d8d8d8]" />
+                  <div className="mx-auto mt-3 h-1 w-12 bg-[#d8d8d8]" />
+                  <div className="mx-auto mt-1.5 h-1 w-9 bg-[#d8d8d8]" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchBox({
+  query,
+  onQueryChange,
+}: {
+  query: string;
+  onQueryChange: (value: string) => void;
+}) {
+  return (
+    <Popover>
+      <div className="flex h-10 items-center bg-[#fafafa]">
+        <Search className="ml-4 size-5 text-[#333]" />
+        <PopoverTrigger asChild>
+          <Input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder={"Search 'detail shots of rings'"}
+            className="h-10 rounded-none border-0 bg-transparent focus-visible:ring-0"
+          />
+        </PopoverTrigger>
+        <span className="mx-3 rounded border px-1 text-sm text-[#777]">/</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="flex h-10 w-12 items-center justify-center border-l">
+              <CalendarIcon className="size-4 text-[#777]" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto rounded-none p-0" align="end">
+            <Calendar mode="single" />
+          </PopoverContent>
+        </Popover>
+      </div>
+      <PopoverContent className="w-[480px] rounded-none border-0 p-6 shadow-[0_18px_45px_rgba(0,0,0,0.12)]" align="start">
+        <div className="flex flex-col gap-6">
+          {libraryFilters.map((group) => (
+            <div key={group.title}>
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-[#777]">
+                {group.title}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {group.items.map((item) => (
+                  <button
+                    key={item}
+                    className="rounded-full bg-[#f3f3f3] px-3 py-2 text-sm text-[#444]"
+                    onClick={() => onQueryChange(item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <p className="flex items-center gap-2 text-sm text-[#777]">
+            <Info className="size-4" />
+            Need help searching?{" "}
+            <button className="text-[#00a997]" onClick={() => onQueryChange("Keyword")}>
+              Learn more
+            </button>
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function CollectionsPanel({ section }: { section: DashboardSection }) {
+  const { collectionsQuery, createCollection } = useCollections();
+  const presetSettings = useDashboardSettings("preset").query;
+  const { hydrateDashboardSettings, presetItems } = useDashboardStore();
+  const collections = collectionsQuery.data?.data ?? [];
+  const [activeCollectionId, setActiveCollectionId] = useState("");
+  const [activeImageId, setActiveImageId] = useState("");
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [form, setForm] = useState({ name: "", eventDate: "", presetId: "" });
+  const { collectionQuery, uploadImages } = useCollectionDetail(activeCollectionId);
+  const activeCollection = collections.find((item) => item._id === activeCollectionId);
+  const detail = collectionQuery.data?.data;
+  const images = detail?.images ?? [];
+  const activeImage =
+    images.find((image) => image._id === activeImageId) ?? images[0];
+
+  useEffect(() => {
+    const settings = presetSettings.data?.data ?? [];
+    if (settings.length) hydrateDashboardSettings(settings);
+  }, [hydrateDashboardSettings, presetSettings.data]);
+
+  useEffect(() => {
+    if (!collections.length) {
+      setActiveCollectionId("");
+      return;
+    }
+    if (!activeCollectionId || !collections.some((item) => item._id === activeCollectionId)) {
+      setActiveCollectionId(collections[0]._id);
+    }
+  }, [activeCollectionId, collections]);
+
+  useEffect(() => {
+    if (!images.length) {
+      setActiveImageId("");
+      return;
+    }
+    if (!activeImageId || !images.some((image) => image._id === activeImageId)) {
+      setActiveImageId(images[0]._id);
+    }
+  }, [activeImageId, images]);
+
+  const createNewCollection = () => {
+    const name = form.name.trim();
+    if (!name) return;
+
+    createCollection.mutate(
+      {
+        name,
+        eventDate: form.eventDate || undefined,
+        presetId: form.presetId || undefined,
+      },
+      {
+        onSuccess: (response) => {
+          const id = response?.data?._id;
+          if (id) setActiveCollectionId(id);
+          setForm({ name: "", eventDate: "", presetId: "" });
+          setShowNewForm(false);
+        },
+      },
+    );
+  };
+
+  const presetName = (id?: string) =>
+    presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
+
+  return (
+    <div>
+      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-[28px] font-medium leading-none tracking-normal">
+            {section === "client-gallery" ? "Collections" : "Products"}
+          </h1>
+          <p className="mt-3 max-w-[600px] text-sm leading-6 text-[#666]">
+            Collections save to DB. Uploaded images save as linked image records with metadata.
+          </p>
+        </div>
+        <Button
+          className="h-10 w-fit rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
+          onClick={() => setShowNewForm((value) => !value)}
+        >
+          <PlusCircle className="mr-2 size-4" />
+          New Collection
+        </Button>
+      </div>
+
+      {showNewForm && (
+        <div className="mt-8 grid gap-4 border bg-[#fafafa] p-5 md:grid-cols-[1.4fr_220px_240px_auto]">
+          <Input
+            value={form.name}
+            onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
+            placeholder="Collection name"
+            className="h-11 rounded-none bg-white"
+          />
+          <Input
+            type="date"
+            value={form.eventDate}
+            onChange={(event) =>
+              setForm((value) => ({ ...value, eventDate: event.target.value }))
+            }
+            className="h-11 rounded-none bg-white"
+          />
+          <select
+            value={form.presetId}
+            onChange={(event) =>
+              setForm((value) => ({ ...value, presetId: event.target.value }))
+            }
+            className="h-11 border bg-white px-3 text-sm outline-none"
+          >
+            <option value="">No preset</option>
+            {presetItems.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+          <Button
+            className="h-11 rounded-none bg-[#222] px-7 text-sm font-bold text-white hover:bg-[#111]"
+            disabled={createCollection.isPending || !form.name.trim()}
+            onClick={createNewCollection}
+          >
+            Create
+          </Button>
+        </div>
+      )}
+
+      <div className="mt-10 grid gap-8 lg:grid-cols-[360px_1fr]">
+        <div className="border-t">
+          {collectionsQuery.isLoading ? (
+            <p className="py-8 text-sm text-[#666]">Loading collections...</p>
+          ) : !collections.length ? (
+            <div className="flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+              <Images className="size-10 text-[#999]" />
+              <p className="mt-5 font-bold">No collections yet</p>
+              <p className="mt-2 text-sm leading-6 text-[#666]">
+                Create collection, then upload single or batch images.
+              </p>
+              <Button
+                className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+                onClick={() => setShowNewForm(true)}
+              >
+                New Collection
+              </Button>
+            </div>
+          ) : (
+            collections.map((collection) => (
+              <button
+                key={collection._id}
+                className={cn(
+                  "grid w-full grid-cols-[78px_1fr] gap-4 border-b py-4 text-left",
+                  activeCollectionId === collection._id && "bg-[#f7fbfa]",
+                )}
+                onClick={() => setActiveCollectionId(collection._id)}
+              >
+                <span className="block aspect-square overflow-hidden bg-[#f2f2f2]">
+                  {collection.coverImage ? (
+                    <img
+                      src={imageSrc(collection.coverImage)}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Images className="mx-auto mt-6 size-6 text-[#aaa]" />
+                  )}
+                </span>
+                <span className="min-w-0 py-1">
+                  <span className="block truncate text-sm font-bold text-[#222]">
+                    {collection.name}
+                  </span>
+                  <span className="mt-2 block text-xs text-[#666]">
+                    {collection.imageCount ?? 0} images
+                  </span>
+                  <span className="mt-1 block truncate text-xs text-[#888]">
+                    {presetName(collection.presetId)}
+                  </span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+
+        <section className="min-w-0">
+          {activeCollection ? (
+            <>
+              <div className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">{activeCollection.name}</h2>
+                  <p className="mt-2 text-sm text-[#666]">
+                    {formatDate(activeCollection.eventDate)} - {presetName(activeCollection.presetId)}
+                  </p>
+                </div>
+                <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white">
+                  <Upload className="size-4" />
+                  Upload Images
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      const files = event.target.files;
+                      if (files?.length) uploadImages.mutate(files);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+
+              {uploadImages.isPending && (
+                <p className="mt-4 text-sm font-semibold text-[#00a997]">
+                  Uploading and applying watermark...
+                </p>
+              )}
+              {uploadImages.error && (
+                <p className="mt-4 text-sm font-semibold text-red-600">
+                  {uploadImages.error.message}
+                </p>
+              )}
+
+              {!images.length ? (
+                <div className="mt-8 flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+                  <Upload className="size-10 text-[#999]" />
+                  <p className="mt-5 font-bold">No images uploaded</p>
+                  <p className="mt-2 max-w-[380px] text-sm leading-6 text-[#666]">
+                    Batch or single upload saves image rows with collection ID and metadata.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_300px]">
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                    {images.map((image) => (
+                      <button
+                        key={image._id}
+                        className={cn(
+                          "group text-left",
+                          activeImage?._id === image._id && "outline outline-2 outline-[#22bda7]",
+                        )}
+                        onClick={() => setActiveImageId(image._id)}
+                      >
+                        <span className="block overflow-hidden bg-[#f2f2f2]">
+                          <img
+                            src={imageSrc(image.url)}
+                            alt={image.originalName ?? ""}
+                            className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+                          />
+                        </span>
+                        <span className="mt-2 block truncate text-xs font-semibold text-[#333]">
+                          {image.originalName ?? image.metadata?.filename ?? "Image"}
+                        </span>
+                        {image.watermarked && (
+                          <span className="mt-1 inline-flex text-[11px] font-bold text-[#00a997]">
+                            Watermarked
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <MetadataPanel image={activeImage} />
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex min-h-[420px] items-center justify-center border bg-[#fafafa] text-sm text-[#666]">
+              Select or create collection
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+const metadataGroups = [
+  {
+    title: "Camera Settings",
+    items: [
+      ["camera", "Camera"],
+      ["lens", "Lens"],
+      ["focalLength", "Focal Length"],
+      ["shutterSpeed", "Shutter Speed"],
+      ["aperture", "Aperture"],
+      ["iso", "ISO"],
+      ["flash", "Flash"],
+    ],
+  },
+  {
+    title: "Metadata",
+    items: [
+      ["filename", "Filename"],
+      ["title", "Title"],
+      ["caption", "Caption"],
+      ["headline", "Headline"],
+      ["keyword", "Keyword"],
+      ["orientation", "Orientation"],
+      ["rating", "Rating"],
+      ["colorLabel", "Color Label"],
+      ["colorSpace", "Color Space"],
+    ],
+  },
+  {
+    title: "Pixieset",
+    items: [["starred", "Starred"]],
+  },
+] as const;
+
+function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
+  const metadata = image?.metadata ?? {};
+
+  return (
+    <aside className="border bg-white p-5">
+      <p className="text-sm font-bold">Image Metadata</p>
+      {metadataGroups.map((group) => (
+        <div key={group.title} className="mt-7">
+          <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-[#777]">
+            {group.title}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {group.items.map(([key, label]) => {
+              const value = formatMetaValue(metadata[key]);
+              return (
+                <span
+                  key={key}
+                  className={cn(
+                    "rounded-full px-3 py-2 text-sm",
+                    value ? "bg-[#f1f5f4] text-[#333]" : "bg-[#f5f5f5] text-[#777]",
+                  )}
+                  title={value || label}
+                >
+                  {value ? `${label}: ${value}` : label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </aside>
+  );
+}
+
+function formatMetaValue(value: unknown) {
+  if (value === undefined || value === null || value === "") return "";
+  if (Array.isArray(value)) return value.filter(Boolean).join(", ");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function formatDate(value?: string) {
+  if (!value) return "No date";
+  try {
+    return format(parseISO(value), "MMM d, yyyy");
+  } catch {
+    return value;
+  }
+}
+
+function imageSrc(url?: string) {
+  if (!url) return "";
+  if (url.startsWith("/uploads/")) {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+    return `${baseUrl}${url}`;
+  }
+  return url;
+}
+
+function GetStartedPanel({
+  active,
+  onStart,
+}: {
+  active: (typeof dashboardCopy)[DashboardSection];
+  onStart: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center text-center">
+      <p className="text-sm text-[#777]">{active.eyebrow}</p>
+      <h1 className="mt-4 max-w-[760px] text-3xl font-medium leading-tight tracking-normal md:text-[28px]">
+        {active.heading}
+      </h1>
+      <Button
+        className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+        onClick={onStart}
+      >
+        {active.cta}
+      </Button>
+
+      <div className={cn("mt-8 w-full max-w-[686px] p-8 md:mt-8 md:p-12", active.bg)}>
+        <GalleryPreview active={active} />
+      </div>
+    </div>
+  );
+}
+
+function GalleryPreview({ active }: { active: (typeof dashboardCopy)[DashboardSection] }) {
+  return (
+    <div className="relative mx-auto aspect-[1.18] max-w-[555px]">
+      <div className="absolute left-0 top-10 h-[78%] w-[82%] bg-white/45 shadow-sm" />
+      <div className="absolute left-5 top-6 h-[86%] w-[90%] bg-white/65 shadow-sm" />
+      <div className="absolute inset-x-10 top-0 overflow-hidden bg-white shadow-[0_8px_18px_rgba(0,0,0,0.08)]">
+        <div className="flex h-3 items-center gap-1 bg-[#f5f5f5] px-3">
+          <span className="size-1 rounded-full bg-[#d8d8d8]" />
+          <span className="size-1 rounded-full bg-[#d8d8d8]" />
+          <span className="size-1 rounded-full bg-[#d8d8d8]" />
+        </div>
+        <div className="relative h-[270px] md:h-[280px]">
+          <img src={active.image} alt={active.hero} className="h-full w-full object-cover" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/10 text-white">
+            <p className="text-xl font-bold tracking-wide">{active.hero}</p>
+            <span className="mt-3 h-7 w-24 border border-white/85" />
+          </div>
+        </div>
+        <div className="p-3 text-left">
+          <p className="text-[9px] font-bold">{active.hero}</p>
+          <p className="text-[7px] tracking-wide text-[#777]">AVERY WOODWARD PHOTOGRAPHY</p>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {[
+              "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=300&q=80",
+              "https://images.unsplash.com/photo-1508808787069-421e7986016e?auto=format&fit=crop&w=300&q=80",
+              "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=300&q=80",
+              active.image,
+            ].map((src) => (
+              <img key={src} src={src} alt="" className="aspect-square w-full object-cover" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CollectionWizard() {
+  const {
+    wizardStep,
+    collectionName,
+    eventDate,
+    photos,
+    coverDesign,
+    setWizardStep,
+    setCollectionName,
+    setEventDate,
+    addSamplePhotos,
+    setCoverDesign,
+    resetWizard,
+  } = useDashboardStore();
+  const selectedEventDate = eventDate ? parseISO(eventDate) : undefined;
+
+  if (wizardStep === 1) {
+    return (
+      <div className="mx-auto max-w-[686px]">
+        <p className="text-sm text-[#777]">Step 1 of 3</p>
+        <h1 className="mt-4 text-[28px] font-medium">Pick a name and date</h1>
+        <div className="mt-8 bg-[#fafafa] p-12">
+          <FieldGroup className="gap-12">
+            <Field>
+              <FieldLabel htmlFor="collection-name" className="font-bold">
+                Collection Name
+              </FieldLabel>
+              <Input
+                id="collection-name"
+                value={collectionName}
+                onChange={(event) => setCollectionName(event.target.value)}
+                placeholder="e.g. Jessie & Ryan"
+                className="h-12 rounded-none bg-white px-5"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="event-date" className="font-bold">
+                Event Date
+              </FieldLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="event-date"
+                    variant="outline"
+                    className={cn(
+                      "h-12 justify-between rounded-none bg-white px-5 text-left font-normal",
+                      !eventDate && "text-[#777]"
+                    )}
+                  >
+                    {selectedEventDate
+                      ? format(selectedEventDate, "PPP")
+                      : "Select a date (optional)"}
+                    <CalendarIcon data-icon="inline-end" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto rounded-none p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedEventDate}
+                    onSelect={(date) =>
+                      setEventDate(date ? format(date, "yyyy-MM-dd") : "")
+                    }
+                  />
+                </PopoverContent>
+              </Popover>
+            </Field>
+          </FieldGroup>
+        </div>
+        <Button
+          className="mt-6 h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+          onClick={() => setWizardStep(2)}
+        >
+          Next
+        </Button>
+      </div>
+    );
+  }
+
+  if (wizardStep === 2) {
+    return (
+      <div className="mx-auto max-w-[686px]">
+        <p className="text-sm text-[#777]">Step 2 of 3</p>
+        <h1 className="mt-4 text-[28px] font-medium">Add your photos</h1>
+        <div className="mt-8 bg-[#fafafa] p-12">
+          <button
+            className="flex min-h-[250px] w-full flex-col items-center justify-center border border-dashed border-[#cfcfcf] bg-white text-center"
+            onClick={addSamplePhotos}
+          >
+            <Upload className="size-9 text-[#22bda7]" />
+            <span className="mt-5 text-base font-semibold">Upload sample photos</span>
+            <span className="mt-2 text-sm text-[#777]">Click to add photos for now</span>
+          </button>
+          {photos.length > 0 && (
+            <div className="mt-6 grid grid-cols-3 gap-3">
+              {photos.map((photo) => (
+                <img key={photo} src={photo} alt="" className="aspect-square w-full object-cover" />
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="mt-6 flex gap-3">
+          <Button variant="outline" className="h-10 rounded-none px-8" onClick={() => setWizardStep(1)}>
+            Back
+          </Button>
+          <Button
+            className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={() => {
+              if (!photos.length) addSamplePhotos();
+              setWizardStep(3);
+            }}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const designs = [
+    { name: "Center", image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=300&q=80" },
+    { name: "Left", image: "https://images.unsplash.com/photo-1508808787069-421e7986016e?auto=format&fit=crop&w=300&q=80" },
+    { name: "Novel", image: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=300&q=80" },
+    { name: "Vintage", image: "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=300&q=80" },
+    { name: "Frame", image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=300&q=80" },
+  ];
+  const coverImage = designs.find((design) => design.name === coverDesign)?.image ?? designs[0].image;
+
+  return (
+    <div className="mx-auto max-w-[686px]">
+      <p className="text-sm text-[#777]">Step 3 of 3</p>
+      <h1 className="mt-4 text-[28px] font-medium">Choose a cover photo design</h1>
+      <div className="mt-8 bg-[#fafafa] p-8">
+        <div className="relative h-[322px] bg-[#ddd]">
+          <img src={coverImage} alt={coverDesign} className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-black/20" />
+          <div className={cn("absolute bottom-8 text-white", coverDesign === "Center" ? "left-1/2 -translate-x-1/2 text-center" : "left-8")}>
+            <p className="text-2xl font-bold">MY SAMPLE COLLECTION</p>
+            <p className="mt-2 text-xs tracking-wide">JUNE 14TH, 2026</p>
+          </div>
+          <div className="absolute bottom-0 right-8 h-[250px] w-[138px] bg-white p-3 shadow-lg">
+            <img src={coverImage} alt="" className="h-full w-full object-cover" />
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {designs.map((design) => (
+            <button
+              key={design.name}
+              className="text-center"
+              onClick={() => setCoverDesign(design.name)}
+            >
+              <span className={cn("relative block border p-1", coverDesign === design.name && "border-[#22bda7] ring-2 ring-[#22bda7]")}>
+                <img src={design.image} alt={design.name} className="aspect-[1.6] w-full object-cover" />
+                {coverDesign === design.name && (
+                  <Check className="absolute right-2 top-2 size-4 bg-[#22bda7] text-white" />
+                )}
+              </span>
+              <span className="mt-3 block text-sm text-[#555]">{design.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-6 flex gap-3">
+        <Button variant="outline" className="h-10 rounded-none px-8" onClick={() => setWizardStep(2)}>
+          Back
+        </Button>
+        <Button
+          className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+          onClick={resetWizard}
+        >
+          Create Collection
+        </Button>
+      </div>
+    </div>
+  );
+}

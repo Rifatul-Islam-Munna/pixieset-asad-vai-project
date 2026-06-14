@@ -1,0 +1,45 @@
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { HydratedDocument } from 'mongoose';
+
+export enum UserType {
+  ADMIN = 'admin',
+  EDITOR = 'editor',
+  USER = 'user',
+}
+
+export type UserDocument = HydratedDocument<User>;
+
+@Schema({ timestamps: true, autoIndex: true })
+export class User {
+  @Prop({ required: true, trim: true })
+  name: string;
+
+  @Prop({ trim: true, lowercase: true })
+  email?: string;
+
+  @Prop({ required: true, unique: true, trim: true })
+  phoneNumber: string;
+
+  @Prop({ required: true })
+  password: string;
+
+  @Prop({ type: String, enum: UserType, default: UserType.USER })
+  role: UserType;
+
+  @Prop()
+  gender?: string;
+
+  @Prop({ default: true })
+  isOtpVerified: boolean;
+
+  @Prop()
+  otpNumber?: string;
+
+  @Prop()
+  otpValidatedAt?: Date;
+
+  @Prop({ default: 0 })
+  numberOfConnections: number;
+}
+
+export const UserSchema = SchemaFactory.createForClass(User);
