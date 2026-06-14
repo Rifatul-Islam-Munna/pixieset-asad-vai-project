@@ -385,66 +385,70 @@ export function ClientDashboard({
             ))}
           </div>
 
-          <div className="mt-11 flex flex-col gap-8">
-            {!collapsed && <p className="text-base text-[#777]">Tools</p>}
-            <Link
-              href={`/dashboard/${section}/marketing/email-campaigns`}
-              className={cn(
-                "flex items-center gap-4 text-left text-base text-[#222]",
-                page === "marketing" && "font-semibold text-[#00a997]"
-              )}
-            >
-              <Megaphone
+          {section === "client-gallery" && (
+            <div className="mt-11 flex flex-col gap-8">
+              {!collapsed && <p className="text-base text-[#777]">Tools</p>}
+              <Link
+                href={`/dashboard/${section}/marketing/email-campaigns`}
                 className={cn(
-                  "size-5 text-[#333]",
-                  page === "marketing" && "text-[#00a997]"
+                  "flex items-center gap-4 text-left text-base text-[#222]",
+                  page === "marketing" && "font-semibold text-[#00a997]"
                 )}
-              />
-              {!collapsed && "Marketing"}
-            </Link>
-            {!collapsed && page === "marketing" && (
-              <div className="ml-7 flex flex-col border-l border-[#e8e8e8] pl-4">
-                {[
-                  { label: "Email Campaigns", slug: "email-campaigns", icon: Mail },
-                  { label: "Contacts", slug: "contacts", icon: Users },
-                  { label: "Settings", slug: "settings", icon: MailCheck },
-                ].map((item) => (
-                  <Link
-                    key={item.slug}
-                    href={`/dashboard/${section}/marketing/${item.slug}`}
-                    className={cn(
-                      "flex h-12 items-center gap-4 px-3 text-base text-[#222]",
-                      marketingPage === item.slug && "bg-[#f3f3f3] font-medium"
-                    )}
-                  >
-                    <item.icon className="size-5" />
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+              >
+                <Megaphone
+                  className={cn(
+                    "size-5 text-[#333]",
+                    page === "marketing" && "text-[#00a997]"
+                  )}
+                />
+                {!collapsed && "Marketing"}
+              </Link>
+              {!collapsed && page === "marketing" && (
+                <div className="ml-7 flex flex-col border-l border-[#e8e8e8] pl-4">
+                  {[
+                    { label: "Email Campaigns", slug: "email-campaigns", icon: Mail },
+                    { label: "Contacts", slug: "contacts", icon: Users },
+                    { label: "Settings", slug: "settings", icon: MailCheck },
+                  ].map((item) => (
+                    <Link
+                      key={item.slug}
+                      href={`/dashboard/${section}/marketing/${item.slug}`}
+                      className={cn(
+                        "flex h-12 items-center gap-4 px-3 text-base text-[#222]",
+                        marketingPage === item.slug && "bg-[#f3f3f3] font-medium"
+                      )}
+                    >
+                      <item.icon className="size-5" />
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-auto">
-            <Link
-              href={`/dashboard/${section}/storage`}
-              className={cn(
-                "mx-auto flex items-center gap-3 bg-[#f3faf6] p-4 text-left",
-                collapsed ? "w-12 justify-center" : "w-[235px]"
-              )}
-            >
-              <div className="flex size-10 items-center justify-center rounded-full bg-[#dff6ef] text-[#19bba7]">
-                <Database className="size-5" />
-              </div>
-              {!collapsed && <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-[#00a997]">Storage</p>
-                  <PlusCircle className="size-4 text-[#16bda8]" />
+            {section === "client-gallery" && (
+              <Link
+                href={`/dashboard/${section}/storage`}
+                className={cn(
+                  "mx-auto flex items-center gap-3 bg-[#f3faf6] p-4 text-left",
+                  collapsed ? "w-12 justify-center" : "w-[235px]"
+                )}
+              >
+                <div className="flex size-10 items-center justify-center rounded-full bg-[#dff6ef] text-[#19bba7]">
+                  <Database className="size-5" />
                 </div>
-                <p className="mt-1 text-xs text-[#777]">0 GB of 3 GB used</p>
-                <Progress value={0} className="mt-2 bg-[#dceee8]" />
-              </div>}
-            </Link>
+                {!collapsed && <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-[#00a997]">Storage</p>
+                    <PlusCircle className="size-4 text-[#16bda8]" />
+                  </div>
+                  <p className="mt-1 text-xs text-[#777]">0 GB of 3 GB used</p>
+                  <Progress value={0} className="mt-2 bg-[#dceee8]" />
+                </div>}
+              </Link>
+            )}
             <button
               className="mb-4 mt-8 flex items-center text-[#333]"
               onClick={toggleCollapsed}
@@ -4079,9 +4083,7 @@ const defaultStoreSettings: StoreSettingsRecord = {
   maintainMarkup: true,
   roundPricesUpTo: ".00",
   paymentMethods: {
-    stripe: { enabled: false, accountLink: "", publishableKey: "" },
-    paypal: { enabled: false, accountLink: "", merchantEmail: "" },
-    offline: { enabled: false, instructions: "" },
+    stripe: { enabled: false, accountLink: "", publishableKey: "", secretKey: "" },
   },
   links: [],
   domain: { hostname: "", dnsTarget: "store.pixieset.local", verified: false },
@@ -4112,15 +4114,12 @@ function StoreSettingsPanel() {
     }
   }, [settingsQuery.data]);
 
-  const setPayment = (
-    key: "stripe" | "paypal" | "offline",
-    value: Record<string, unknown>,
-  ) => {
+  const setStripe = (value: Record<string, unknown>) => {
     setForm((current) => ({
       ...current,
       paymentMethods: {
         ...current.paymentMethods,
-        [key]: { ...(current.paymentMethods[key] ?? {}), ...value },
+        stripe: { ...(current.paymentMethods.stripe ?? {}), ...value },
       },
     }));
   };
@@ -4158,34 +4157,47 @@ function StoreSettingsPanel() {
 
         <section className="mt-8">
           <h2 className="text-sm font-bold">Payment Methods</h2>
-          <div className="mt-4 flex flex-col gap-3">
-            <PaymentMethodRow
-              title="stripe"
-              text="Accept credit card payments online."
-              enabled={Boolean(form.paymentMethods.stripe?.enabled)}
-              link={form.paymentMethods.stripe?.accountLink ?? ""}
-              placeholder="Stripe onboarding/account link"
-              onEnabled={(enabled) => setPayment("stripe", { enabled })}
-              onLink={(accountLink) => setPayment("stripe", { accountLink })}
-            />
-            <PaymentMethodRow
-              title="PayPal"
-              text="Accept PayPal Express Checkout payments."
-              enabled={Boolean(form.paymentMethods.paypal?.enabled)}
-              link={form.paymentMethods.paypal?.accountLink ?? ""}
-              placeholder="PayPal merchant/link"
-              onEnabled={(enabled) => setPayment("paypal", { enabled })}
-              onLink={(accountLink) => setPayment("paypal", { accountLink })}
-            />
-            <PaymentMethodRow
-              title="OFFLINE"
-              text="Arrange alternative payments with clients."
-              enabled={Boolean(form.paymentMethods.offline?.enabled)}
-              link={form.paymentMethods.offline?.instructions ?? ""}
-              placeholder="Offline payment instructions/link"
-              onEnabled={(enabled) => setPayment("offline", { enabled })}
-              onLink={(instructions) => setPayment("offline", { instructions })}
-            />
+          <div className="mt-4 bg-[#f6f6f6] p-5">
+            <div className="flex items-center justify-between gap-5">
+              <div>
+                <p className="text-lg font-bold">stripe</p>
+                <p className="mt-2 text-sm text-[#667085]">
+                  Client pays directly to this store owner's Stripe account.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={Boolean(form.paymentMethods.stripe?.enabled)}
+                  onCheckedChange={(enabled) => setStripe({ enabled })}
+                />
+                <span className="text-xs">
+                  {form.paymentMethods.stripe?.enabled ? "On" : "Off"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <StoreInput
+                label="Publishable Key"
+                value={form.paymentMethods.stripe?.publishableKey ?? ""}
+                onChange={(publishableKey) => setStripe({ publishableKey })}
+              />
+              <Field>
+                <FieldLabel className="font-bold">Secret Key</FieldLabel>
+                <Input
+                  type="password"
+                  value={form.paymentMethods.stripe?.secretKey ?? ""}
+                  onChange={(event) => setStripe({ secretKey: event.target.value })}
+                  placeholder="Write secret key only when changing"
+                  className="h-11 rounded-none bg-white"
+                />
+                <p className="text-xs text-[#777]">Write-only. Saved key is never shown again.</p>
+              </Field>
+              <StoreInput
+                label="Stripe Account / Dashboard Link"
+                value={form.paymentMethods.stripe?.accountLink ?? ""}
+                onChange={(accountLink) => setStripe({ accountLink })}
+              />
+            </div>
           </div>
         </section>
 

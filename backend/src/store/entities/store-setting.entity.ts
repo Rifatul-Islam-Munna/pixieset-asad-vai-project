@@ -25,9 +25,12 @@ export class StoreSetting {
 
   @Prop({ type: Object, default: {} })
   paymentMethods: {
-    stripe?: { enabled: boolean; accountLink?: string; publishableKey?: string };
-    paypal?: { enabled: boolean; accountLink?: string; merchantEmail?: string };
-    offline?: { enabled: boolean; instructions?: string };
+    stripe?: {
+      enabled: boolean;
+      publishableKey?: string;
+      secretKey?: string;
+      accountLink?: string;
+    };
   };
 
   @Prop({ type: [{ label: String, url: String }], default: [] })

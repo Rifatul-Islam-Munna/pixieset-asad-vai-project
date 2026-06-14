@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import Stripe from 'stripe';
 import { CreatePriceSheetDto } from './dto/create-price-sheet.dto';
 import { CreateStoreProductDto } from './dto/create-store-product.dto';
 import { UpdatePriceSheetDto } from './dto/update-price-sheet.dto';
@@ -75,9 +76,7 @@ export class StoreService {
           maintainMarkup: true,
           roundPricesUpTo: '.00',
           paymentMethods: {
-            stripe: { enabled: false, accountLink: '' },
-            paypal: { enabled: false, accountLink: '' },
-            offline: { enabled: false, instructions: '' },
+            stripe: { enabled: false, publishableKey: '', secretKey: '', accountLink: '' },
           },
           links: [],
           domain: { hostname: '', dnsTarget: 'store.pixieset.local', verified: false },
@@ -86,12 +85,22 @@ export class StoreService {
           digitalImageLicense: '',
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
-    return settings.toObject();
+    return this.hideStripeSecret(settings.toObject());
   }
 
   async updateSettings(userId: string, dto: any) {
+    const existing = await this.settingModel.findOne({ userId }).lean();
+    const incomingStripe = dto.paymentMethods?.stripe ?? {};
+    const stripe = {
+      enabled: Boolean(incomingStripe.enabled),
+      publishableKey: incomingStripe.publishableKey ?? existing?.paymentMethods?.stripe?.publishableKey ?? '',
+      accountLink: incomingStripe.accountLink ?? existing?.paymentMethods?.stripe?.accountLink ?? '',
+      secretKey: incomingStripe.secretKey
+        ? incomingStripe.secretKey
+        : existing?.paymentMethods?.stripe?.secretKey ?? '',
+    };
     const settings = await this.settingModel.findOneAndUpdate(
       { userId },
       {
@@ -101,7 +110,7 @@ export class StoreService {
           orderDelay: dto.orderDelay ?? '6 Hours',
           maintainMarkup: Boolean(dto.maintainMarkup),
           roundPricesUpTo: dto.roundPricesUpTo ?? '.00',
-          paymentMethods: dto.paymentMethods ?? {},
+          paymentMethods: { stripe },
           links: dto.links ?? [],
           domain: dto.domain ?? {},
           giftCardSharingEmail: dto.giftCardSharingEmail ?? '',
@@ -109,9 +118,52 @@ export class StoreService {
           digitalImageLicense: dto.digitalImageLicense ?? '',
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
-    return settings.toObject();
+    return this.hideStripeSecret(settings.toObject());
+  }
+
+  async createStripePaymentIntent(userId: string, dto: any) {
+    const settings = await this.settingModel.findOne({ userId }).lean();
+    const stripeConfig = settings?.paymentMethods?.stripe;
+    if (!stripeConfig?.enabled || !stripeConfig.secretKey || !stripeConfig.publishableKey) {
+      throw new BadRequestException('Stripe is not configured');
+    }
+    const amount = Math.round(Number(dto.amount ?? 0) * 100);
+    if (amount < 50) throw new BadRequestException('Payment amount is too low');
+    const stripe = new Stripe(stripeConfig.secretKey);
+    const intent = await stripe.paymentIntents.create({
+      amount,
+      currency: (dto.currency ?? settings?.currency ?? 'BDT').toLowerCase(),
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        ownerUserId: userId,
+        orderId: dto.orderId ?? '',
+      },
+    });
+
+    return {
+      publishableKey: stripeConfig.publishableKey,
+      paymentIntentId: intent.id,
+      clientSecret: intent.client_secret,
+      status: intent.status,
+    };
+  }
+
+  async verifyStripePayment(userId: string, paymentIntentId: string) {
+    const settings = await this.settingModel.findOne({ userId }).lean();
+    const secretKey = settings?.paymentMethods?.stripe?.secretKey;
+    if (!secretKey) throw new BadRequestException('Stripe is not configured');
+    const stripe = new Stripe(secretKey);
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const success = intent.status === 'succeeded';
+    return {
+      paymentIntentId: intent.id,
+      status: intent.status,
+      success,
+      amount: intent.amount / 100,
+      currency: intent.currency.toUpperCase(),
+    };
   }
 
   async findPriceSheets(userId: string, collectionId?: string) {
@@ -324,7 +376,7 @@ export class StoreService {
           address: dto.address ?? {},
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
     return customer.toObject();
   }
@@ -333,7 +385,7 @@ export class StoreService {
     const customer = await this.customerModel.findOneAndUpdate(
       { _id: id, userId },
       { $set: dto },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
     if (!customer) throw new NotFoundException('Customer not found');
     return customer;
@@ -356,7 +408,7 @@ export class StoreService {
           expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
     return coupon.toObject();
   }
@@ -374,7 +426,7 @@ export class StoreService {
   async saveTax(userId: string, dto: any) {
     const { _id, ...payload } = dto;
     const tax = dto._id
-      ? await this.taxModel.findOneAndUpdate({ _id: dto._id, userId }, { $set: payload }, { new: true })
+      ? await this.taxModel.findOneAndUpdate({ _id: dto._id, userId }, { $set: payload }, { returnDocument: 'after' })
       : await this.taxModel.create({
           userId,
           name: dto.name?.trim() || 'Sales Tax',
@@ -401,7 +453,7 @@ export class StoreService {
   async saveShipping(userId: string, dto: any) {
     const { _id, ...payload } = dto;
     const shipping = dto._id
-      ? await this.shippingModel.findOneAndUpdate({ _id: dto._id, userId }, { $set: payload }, { new: true })
+      ? await this.shippingModel.findOneAndUpdate({ _id: dto._id, userId }, { $set: payload }, { returnDocument: 'after' })
       : await this.shippingModel.create({
           userId,
           name: dto.name?.trim() || 'Standard Shipping',
@@ -439,7 +491,7 @@ export class StoreService {
           lastOrderAt: new Date(),
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
   }
 
@@ -452,7 +504,7 @@ export class StoreService {
         $set: {
           orderCount: orders.length,
           totalSpent: paidOrders.reduce((sum, order) => sum + (order.total ?? 0), 0),
-          lastOrderAt: orders[0]?.createdAt,
+          lastOrderAt: (orders[0] as any)?.createdAt,
         },
       },
     );
@@ -462,7 +514,9 @@ export class StoreService {
     userId: string,
     items: { productId?: string; quantity: number }[],
   ) {
-    const productIds = items.map((item) => item.productId).filter(Boolean);
+    const productIds = items
+      .map((item) => item.productId)
+      .filter((id): id is string => Boolean(id));
     if (!productIds.length) return 0;
     const products = await this.productModel
       .find({ userId, _id: { $in: productIds } })
@@ -502,5 +556,17 @@ export class StoreService {
       : subtotal;
     const taxableShipping = tax.applyShipping ? shipping : 0;
     return ((taxableProducts + taxableShipping) * tax.rate) / 100;
+  }
+
+  private hideStripeSecret(settings: any) {
+    return {
+      ...settings,
+      paymentMethods: {
+        stripe: {
+          ...(settings.paymentMethods?.stripe ?? {}),
+          secretKey: '',
+        },
+      },
+    };
   }
 }

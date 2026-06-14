@@ -72,7 +72,7 @@ export class UserService implements OnModuleInit {
 
   async verifyOtp(otp: string) {
     const user = await this.userModel
-      .findOneAndUpdate({ otpNumber: otp }, { isOtpVerified: true, otpNumber: null }, { new: true })
+      .findOneAndUpdate({ otpNumber: otp }, { isOtpVerified: true, otpNumber: null }, { returnDocument: 'after' })
       .lean();
 
     if (!user) {

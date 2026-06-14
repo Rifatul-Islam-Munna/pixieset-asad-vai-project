@@ -146,9 +146,12 @@ export type StoreSettingsRecord = {
   maintainMarkup: boolean;
   roundPricesUpTo: string;
   paymentMethods: {
-    stripe?: { enabled: boolean; accountLink?: string; publishableKey?: string };
-    paypal?: { enabled: boolean; accountLink?: string; merchantEmail?: string };
-    offline?: { enabled: boolean; instructions?: string };
+    stripe?: {
+      enabled: boolean;
+      publishableKey?: string;
+      secretKey?: string;
+      accountLink?: string;
+    };
   };
   links: { label: string; url: string }[];
   domain: { hostname?: string; dnsTarget?: string; verified?: boolean };
@@ -321,6 +324,43 @@ export function useStoreSettings() {
   });
 
   return { settingsQuery, saveSettings };
+}
+
+export function useStripePayments() {
+  const createIntent = useMutation({
+    mutationFn: async (payload: { amount: number; currency?: string; orderId?: string }) => {
+      const [data, error] = await PostRequestAxios<{
+        message: string;
+        data: {
+          publishableKey: string;
+          paymentIntentId: string;
+          clientSecret: string;
+          status: string;
+        };
+      }>("/store/payments/stripe-intent", payload);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+  });
+
+  const verifyPayment = useMutation({
+    mutationFn: async (paymentIntentId: string) => {
+      const [data, error] = await PostRequestAxios<{
+        message: string;
+        data: {
+          paymentIntentId: string;
+          status: string;
+          success: boolean;
+          amount: number;
+          currency: string;
+        };
+      }>("/store/payments/stripe-verify", { paymentIntentId });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+  });
+
+  return { createIntent, verifyPayment };
 }
 
 export function useStoreOrders() {

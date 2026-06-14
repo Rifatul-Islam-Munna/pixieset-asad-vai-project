@@ -29,6 +29,18 @@ export class StoreController {
     return { message: 'Store settings saved', data };
   }
 
+  @Post('payments/stripe-intent')
+  async createStripePaymentIntent(@Body() dto: any, @Req() req: ExpressRequest) {
+    const data = await this.storeService.createStripePaymentIntent(req.user.id, dto);
+    return { message: 'Stripe payment intent created', data };
+  }
+
+  @Post('payments/stripe-verify')
+  async verifyStripePayment(@Body('paymentIntentId') paymentIntentId: string, @Req() req: ExpressRequest) {
+    const data = await this.storeService.verifyStripePayment(req.user.id, paymentIntentId);
+    return { message: data.success ? 'Payment succeeded' : 'Payment not completed', data };
+  }
+
   @Get('orders')
   async findOrders(@Req() req: ExpressRequest) {
     const data = await this.storeService.findOrders(req.user.id);
