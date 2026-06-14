@@ -8,6 +8,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { UserModule } from './user/user.module';
 import { SettingsModule } from './settings/settings.module';
 import { CollectionsModule } from './collections/collections.module';
+import { StoreModule } from './store/store.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { CollectionsModule } from './collections/collections.module';
     SettingsModule,
     CollectionsModule,
     ImageUploadModule,
+    StoreModule,
   ],
   controllers: [AppController],
   providers: [AppService],

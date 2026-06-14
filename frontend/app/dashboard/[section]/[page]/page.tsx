@@ -17,6 +17,10 @@ const pages = [
   "marketing",
   "products",
   "orders",
+  "customers",
+  "taxes",
+  "shipping",
+  "coupons",
   "storefront",
   "storage",
 ] as const;

@@ -4,6 +4,10 @@ import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
+import LinkExtension from "@tiptap/extension-link";
+import UnderlineExtension from "@tiptap/extension-underline";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import {
   ArrowLeft,
   ArrowRight,
@@ -94,6 +98,13 @@ import {
 } from "@/api-hooks/use-collections";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import {
+  useStorePriceSheet,
+  useStorePriceSheets,
+  type StoreProductPayload,
+  type StoreProductRecord,
+  type StoreProductType,
+} from "@/api-hooks/use-store";
+import {
   useDashboardStore,
   type PresetDesignSettings,
   type PresetDownloadSettings,
@@ -112,6 +123,10 @@ export type DashboardPage =
   | "marketing"
   | "products"
   | "orders"
+  | "customers"
+  | "taxes"
+  | "shipping"
+  | "coupons"
   | "storefront"
   | "storage";
 export type MarketingPage = "email-campaigns" | "contacts" | "settings";
@@ -151,10 +166,12 @@ const sidebarItems = {
     { label: "Settings", icon: Settings, page: "settings" },
   ],
   "store-gallery": [
-    { label: "Products", icon: Package, page: "products" },
     { label: "Orders", icon: ShoppingBag, page: "orders" },
-    { label: "Storefront", icon: Store, page: "storefront" },
-    { label: "Collections", icon: Images, page: "collections" },
+    { label: "Customers", icon: Users, page: "customers" },
+    { label: "Products", icon: Package, page: "products" },
+    { label: "Taxes", icon: ListFilter, page: "taxes" },
+    { label: "Shipping", icon: Package, page: "shipping" },
+    { label: "Coupons", icon: Copy, page: "coupons" },
     { label: "Settings", icon: Settings, page: "settings" },
   ],
 } satisfies Record<
@@ -249,12 +266,14 @@ export function ClientDashboard({
   marketingPage = "email-campaigns",
   settingsPage = "watermark",
   collectionId,
+  priceSheetId,
 }: {
   section: DashboardSection;
   page: DashboardPage;
   marketingPage?: MarketingPage;
   settingsPage?: SettingsPage;
   collectionId?: string;
+  priceSheetId?: string;
 }) {
   const active = dashboardCopy[section];
   const activeSwitcher = switcherItems.find((item) => item.key === section);
@@ -273,10 +292,11 @@ export function ClientDashboard({
   const isCollectionIndex =
     page === "collections" || (section === "store-gallery" && page === "products");
   const isCollectionDetail = page === "collections" && Boolean(collectionId);
+  const isPriceSheetDetail = page === "products" && Boolean(priceSheetId);
 
   return (
     <main className="min-h-screen bg-white text-[#151515]">
-      {!campaignBuilderOpen && !isCollectionDetail && <aside
+      {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <aside
         className={cn(
           "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
           collapsed ? "w-[76px]" : "w-[292px]"
@@ -423,8 +443,8 @@ export function ClientDashboard({
         </nav>
       </aside>}
 
-      <section className={cn("min-h-screen transition-all", campaignBuilderOpen || isCollectionDetail ? "" : collapsed ? "md:pl-[76px]" : "md:pl-[292px]")}>
-        {!campaignBuilderOpen && !isCollectionDetail && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
+      <section className={cn("min-h-screen transition-all", campaignBuilderOpen || isCollectionDetail || isPriceSheetDetail ? "" : collapsed ? "md:pl-[76px]" : "md:pl-[292px]")}>
+        {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 text-sm font-bold outline-none">
@@ -448,7 +468,7 @@ export function ClientDashboard({
           </Avatar>
         </div>}
 
-        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail ? "max-w-none px-0 py-0" : "max-w-[1220px] px-5 py-16 md:py-20")}>
+        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : "max-w-[1220px] px-5 py-16 md:py-20")}>
           {campaignBuilderOpen ? (
             <CampaignBuilder onClose={closeCampaignBuilder} />
           ) : wizardOpen ? (
@@ -465,8 +485,12 @@ export function ClientDashboard({
             <MarketingPanel marketingPage={marketingPage} />
           ) : page === "collection-new" ? (
             <CollectionNewPanel section={section} />
+          ) : page === "products" && priceSheetId ? (
+            <StorePriceSheetDetail priceSheetId={priceSheetId} />
           ) : page === "collections" && collectionId ? (
             <CollectionDetailView section={section} collectionId={collectionId} />
+          ) : section === "store-gallery" && page === "products" ? (
+            <StoreProductsPanel />
           ) : isCollectionIndex ? (
             <CollectionsPanel section={section} />
           ) : (
@@ -475,7 +499,7 @@ export function ClientDashboard({
         </div>
       </section>
 
-      {!campaignBuilderOpen && !isCollectionDetail && <button
+      {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <button
         className="fixed bottom-6 right-6 flex size-12 items-center justify-center rounded-full bg-[#2b2b2b] text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)]"
         onClick={() => setActiveNav("Support")}
         aria-label="Support"
@@ -3301,6 +3325,760 @@ function SearchBox({
   );
 }
 
+const productTypeLabels: Record<StoreProductType, string> = {
+  "digital-download": "Digital Download",
+  "self-fulfilled": "Self Fulfilled Item",
+};
+
+function StoreProductsPanel() {
+  const router = useRouter();
+  const [collectionId, setCollectionId] = useState<string | undefined>();
+  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets(collectionId);
+  const sheets = priceSheetsQuery.data?.data ?? [];
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sheetName, setSheetName] = useState("My Price Sheet");
+  const [minimumOrderAmount, setMinimumOrderAmount] = useState("0");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setCollectionId(params.get("collectionId") ?? undefined);
+  }, []);
+
+  const addSheet = () => {
+    createPriceSheet.mutate(
+      {
+        name: sheetName.trim() || "My Price Sheet",
+        isDefault: !sheets.length,
+        collectionIds: collectionId ? [collectionId] : [],
+        minimumOrderAmount: Number(minimumOrderAmount) || 0,
+      },
+      {
+        onSuccess: (response) => {
+          const id = response?.data?._id;
+          if (id) router.push(`/dashboard/store-gallery/products/${id}`);
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="mx-auto max-w-[950px]">
+      <div className="flex items-center justify-between gap-5 border-b pb-4">
+        <div>
+          <h1 className="text-[26px] font-medium leading-none">Price Sheets</h1>
+          {collectionId && (
+            <p className="mt-3 text-sm text-[#777]">Showing sheets connected to this collection.</p>
+          )}
+        </div>
+        <Button
+          className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <PlusCircle data-icon="inline-start" />
+          Add Price Sheet
+        </Button>
+      </div>
+
+      {priceSheetsQuery.isLoading ? (
+        <p className="mt-10 text-sm text-[#666]">Loading price sheets...</p>
+      ) : !sheets.length ? (
+        <div className="mt-8 flex min-h-[300px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+          <ShoppingCart className="size-10 text-[#999]" />
+          <p className="mt-5 font-bold">No price sheets yet</p>
+          <p className="mt-2 max-w-[420px] text-sm leading-6 text-[#666]">
+            Create one sheet for digital downloads and self fulfilled products.
+          </p>
+          <Button
+            className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Add Price Sheet
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-8 grid gap-7 sm:grid-cols-2">
+          {sheets.map((sheet) => (
+            <button
+              key={sheet._id}
+              className="group text-left"
+              onClick={() => router.push(`/dashboard/store-gallery/products/${sheet._id}`)}
+            >
+              <span className="relative flex aspect-[1.8] items-center justify-center bg-[#f4f4f4]">
+                {sheet.isDefault && (
+                  <span className="absolute left-3 top-3 bg-[#e7e7e7] px-2 py-1 text-[10px] font-bold uppercase">
+                    Default
+                  </span>
+                )}
+                <CircleUserRound className="size-10 text-[#2f3438]" />
+              </span>
+              <span className="mt-4 flex items-center justify-between gap-4">
+                <span className="font-bold uppercase">{sheet.name}</span>
+                <MoreHorizontal className="size-5 text-[#00a997]" />
+              </span>
+              <span className="mt-2 block text-sm text-[#777]">
+                {sheet.productCount ?? 0} Products &nbsp; {sheet.collectionCount ?? 0} Collection
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="rounded-none sm:max-w-[630px]">
+          <DialogHeader>
+            <DialogTitle className="tracking-[0.18em]">PRICE SHEET SETTINGS</DialogTitle>
+            <DialogDescription>
+              Name, minimum order, and collection connection.
+            </DialogDescription>
+          </DialogHeader>
+          <Tabs defaultValue="general">
+            <TabsList className="rounded-none">
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="advanced">Advanced</TabsTrigger>
+            </TabsList>
+            <TabsContent value="general" className="mt-7">
+              <FieldGroup className="gap-7">
+                <Field>
+                  <FieldLabel className="font-bold">Price Sheet Name</FieldLabel>
+                  <Input
+                    value={sheetName}
+                    onChange={(event) => setSheetName(event.target.value)}
+                    className="h-12 rounded-none bg-white"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold">Fulfillment</FieldLabel>
+                  <p className="text-sm">Self Fulfillment</p>
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold">Minimum Order Amount</FieldLabel>
+                  <Input
+                    value={minimumOrderAmount}
+                    onChange={(event) => setMinimumOrderAmount(event.target.value)}
+                    className="h-12 rounded-none bg-white"
+                    inputMode="decimal"
+                  />
+                </Field>
+              </FieldGroup>
+            </TabsContent>
+            <TabsContent value="advanced" className="mt-7 text-sm leading-6 text-[#666]">
+              Connected collections: {collectionId ? "1 selected" : "All collections can be assigned later"}
+            </TabsContent>
+          </Tabs>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setSettingsOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#22bda7] text-white"
+              disabled={createPriceSheet.isPending}
+              onClick={addSheet}
+            >
+              {createPriceSheet.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
+  const router = useRouter();
+  const { priceSheetQuery, updatePriceSheet, createProduct, deleteProduct } =
+    useStorePriceSheet(priceSheetId);
+  const sheet = priceSheetQuery.data?.data;
+  const products = sheet?.products ?? [];
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [productOpen, setProductOpen] = useState(false);
+  const [productType, setProductType] = useState<StoreProductType>("self-fulfilled");
+  const [settingsForm, setSettingsForm] = useState({
+    name: "",
+    minimumOrderAmount: "0",
+  });
+
+  useEffect(() => {
+    if (!sheet) return;
+    setSettingsForm({
+      name: sheet.name,
+      minimumOrderAmount: String(sheet.minimumOrderAmount ?? 0),
+    });
+  }, [sheet]);
+
+  const groupedProducts = products.reduce<Record<string, StoreProductRecord[]>>(
+    (groups, product) => {
+      const key = product.type === "digital-download" ? "Digital Downloads" : product.category || "Prints";
+      groups[key] = [...(groups[key] ?? []), product];
+      return groups;
+    },
+    {},
+  );
+
+  const saveSettings = () => {
+    updatePriceSheet.mutate(
+      {
+        name: settingsForm.name.trim() || sheet?.name,
+        minimumOrderAmount: Number(settingsForm.minimumOrderAmount) || 0,
+      },
+      { onSuccess: () => setSettingsOpen(false) },
+    );
+  };
+
+  if (!sheet) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
+        Loading price sheet...
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-[855px] px-5 py-8">
+      <button
+        className="inline-flex items-center gap-2 text-sm text-[#777]"
+        onClick={() => router.push("/dashboard/store-gallery")}
+      >
+        <ArrowLeft className="size-4" />
+        Price Sheets
+      </button>
+
+      <div className="mt-7 flex items-center justify-between gap-5 border-b pb-5">
+        <div className="flex items-center gap-4">
+          <h1 className="text-[26px] font-medium">{sheet.name}</h1>
+          {sheet.isDefault && (
+            <span className="bg-[#e7e7e7] px-2 py-1 text-[10px] font-bold uppercase">
+              Default
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-5">
+          <button className="text-[#333]" aria-label="More">
+            <MoreHorizontal className="size-5" />
+          </button>
+          <button
+            className="inline-flex items-center gap-2 text-sm text-[#333]"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="size-4" />
+            Settings
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white">
+                <PlusCircle data-icon="inline-start" />
+                Add Product
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
+              <DropdownMenuGroup className="flex flex-col gap-4">
+                {([
+                  {
+                    type: "self-fulfilled",
+                    icon: Images,
+                    title: "Self Fulfilled Item",
+                    text: "Items to be fulfilled manually by yourself at your preferred vendor.",
+                  },
+                  {
+                    type: "digital-download",
+                    icon: Download,
+                    title: "Digital Download",
+                    text: "Digital files are automatically delivered via a secure link.",
+                  },
+                ] as const).map((item) => (
+                  <DropdownMenuItem
+                    key={item.type}
+                    className="cursor-pointer items-start gap-4 rounded-none p-2"
+                    onClick={() => {
+                      setProductType(item.type);
+                      setProductOpen(true);
+                    }}
+                  >
+                    <item.icon className="mt-1 size-5 text-[#8a949e]" />
+                    <span>
+                      <span className="block font-bold text-[#222]">{item.title}</span>
+                      <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
+                        {item.text}
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <div className="mt-7 bg-[#f7f7f7] p-7">
+        <p className="mb-5 text-xs font-bold uppercase tracking-wide">Price Sheet Details</p>
+        <div className="grid gap-7 text-sm sm:grid-cols-3">
+          <DetailStat label="Name" value={sheet.name} />
+          <DetailStat label="Assigned To" value={`${sheet.collectionCount ?? 0} Collection`} />
+          <DetailStat label="Fulfillment" value="Self Fulfillment" />
+          <DetailStat label="Minimum Order Value" value={`BDT${(sheet.minimumOrderAmount ?? 0).toFixed(2)}`} />
+          <DetailStat label="Available Products" value={`${products.length} Items`} />
+        </div>
+      </div>
+
+      {products.length ? (
+        <div className="mt-9 flex flex-col gap-12">
+          {Object.entries(groupedProducts).map(([category, items]) => (
+            <section key={category}>
+              <h2 className="text-lg font-medium">{category}</h2>
+              <div className="mt-5 grid gap-8 border-t pt-5 sm:grid-cols-2 md:grid-cols-4">
+                {items.map((product) => (
+                  <ProductTile
+                    key={product._id}
+                    product={product}
+                    onDelete={() => deleteProduct.mutate(product._id)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-9 flex min-h-[260px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+          <Package className="size-10 text-[#aaa]" />
+          <p className="mt-5 font-bold">No products yet</p>
+          <p className="mt-2 text-sm text-[#666]">Add digital downloads or self fulfilled items.</p>
+        </div>
+      )}
+
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="rounded-none sm:max-w-[630px]">
+          <DialogHeader>
+            <DialogTitle className="tracking-[0.18em]">PRICE SHEET SETTINGS</DialogTitle>
+            <DialogDescription>General settings for this sheet.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="gap-7">
+            <Field>
+              <FieldLabel className="font-bold">Price Sheet Name</FieldLabel>
+              <Input
+                value={settingsForm.name}
+                onChange={(event) =>
+                  setSettingsForm((value) => ({ ...value, name: event.target.value }))
+                }
+                className="h-12 rounded-none"
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Fulfillment</FieldLabel>
+              <p className="text-sm">Self Fulfillment</p>
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Minimum Order Amount</FieldLabel>
+              <Input
+                value={settingsForm.minimumOrderAmount}
+                onChange={(event) =>
+                  setSettingsForm((value) => ({
+                    ...value,
+                    minimumOrderAmount: event.target.value,
+                  }))
+                }
+                className="h-12 rounded-none"
+              />
+              <p className="text-sm text-[#777]">
+                Your clients must meet this order amount in order to checkout.
+              </p>
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setSettingsOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="rounded-none bg-[#22bda7] text-white" onClick={saveSettings}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ProductEditorDialog
+        open={productOpen}
+        type={productType}
+        pending={createProduct.isPending}
+        onOpenChange={setProductOpen}
+        onSave={(payload) =>
+          createProduct.mutate(payload, { onSuccess: () => setProductOpen(false) })
+        }
+      />
+    </div>
+  );
+}
+
+function DetailStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase">{label}</p>
+      <p className="mt-3">{value}</p>
+    </div>
+  );
+}
+
+function ProductTile({
+  product,
+  onDelete,
+}: {
+  product: StoreProductRecord;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="group">
+      <div className="relative flex aspect-square items-center justify-center bg-[#f3f3f3]">
+        {product.images?.[0] ? (
+          <img src={product.images[0]} alt="" className="h-full w-full object-cover" />
+        ) : product.type === "digital-download" ? (
+          <Download className="size-9 text-[#999]" />
+        ) : (
+          <Package className="size-9 text-[#999]" />
+        )}
+        <button
+          className="absolute right-2 top-2 hidden size-8 items-center justify-center bg-white text-red-600 shadow-sm group-hover:flex"
+          onClick={onDelete}
+          aria-label="Delete product"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      </div>
+      <div className="mt-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{product.name}</p>
+          <p className="mt-1 text-sm text-[#777]">From BDT{Number(product.price || 0).toFixed(2)}</p>
+          <p className="mt-1 text-xs text-[#999]">{productTypeLabels[product.type]}</p>
+        </div>
+        <MoreHorizontal className="size-5 shrink-0 text-[#00a997]" />
+      </div>
+    </div>
+  );
+}
+
+function RichTextEditor({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+        blockquote: false,
+        codeBlock: false,
+        horizontalRule: false,
+      }),
+      UnderlineExtension,
+      LinkExtension.configure({
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: "https",
+      }),
+    ],
+    content: value || "",
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class:
+          "min-h-36 px-4 py-3 text-sm leading-6 outline-none [&_a]:text-[#00a997] [&_a]:underline [&_p]:mb-2",
+      },
+    },
+    onUpdate: ({ editor: currentEditor }) => {
+      onChange(currentEditor.getHTML());
+    },
+  });
+
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.getHTML();
+    const next = value || "";
+    if (current !== next) editor.commands.setContent(next, { emitUpdate: false });
+  }, [editor, value]);
+
+  const setLink = () => {
+    if (!editor) return;
+    const previous = editor.getAttributes("link").href as string | undefined;
+    const href = window.prompt("URL", previous ?? "https://");
+    if (href === null) return;
+    if (!href.trim()) {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: href.trim() }).run();
+  };
+
+  const tools = [
+    {
+      label: "Bold",
+      icon: Bold,
+      active: editor?.isActive("bold") ?? false,
+      action: () => editor?.chain().focus().toggleBold().run(),
+    },
+    {
+      label: "Italic",
+      icon: Italic,
+      active: editor?.isActive("italic") ?? false,
+      action: () => editor?.chain().focus().toggleItalic().run(),
+    },
+    {
+      label: "Underline",
+      icon: Underline,
+      active: editor?.isActive("underline") ?? false,
+      action: () => editor?.chain().focus().toggleUnderline().run(),
+    },
+    {
+      label: "Link",
+      icon: Link2,
+      active: editor?.isActive("link") ?? false,
+      action: setLink,
+    },
+    {
+      label: "Unlink",
+      icon: Unlink,
+      active: false,
+      action: () => editor?.chain().focus().unsetLink().run(),
+    },
+  ];
+
+  return (
+    <div className="border bg-white">
+      <div className="flex h-9 items-center border-b">
+        {tools.map((tool) => (
+          <button
+            key={tool.label}
+            type="button"
+            className={cn(
+              "flex h-9 w-10 items-center justify-center border-r text-[#1f2937]",
+              tool.active && "bg-[#e8f7f4] text-[#00a997]",
+            )}
+            onClick={tool.action}
+            aria-label={tool.label}
+          >
+            <tool.icon className="size-4" />
+          </button>
+        ))}
+      </div>
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+
+function ProductEditorDialog({
+  open,
+  type,
+  pending,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean;
+  type: StoreProductType;
+  pending: boolean;
+  onOpenChange: (value: boolean) => void;
+  onSave: (payload: StoreProductPayload) => void;
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    description: "",
+    price: "",
+    extraShipping: "0",
+    category: "Prints",
+    downloadType: "single-photo" as "single-photo" | "all-photos",
+    downloadSize: "High Resolution Original (Full res)",
+    noImageRequired: false,
+    exemptFromSalesTax: false,
+    limitOnePerCheckout: false,
+    allowBulkPurchase: false,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      name:
+        type === "digital-download"
+          ? "Single Photo Download (High Resolution)"
+          : "",
+      description: "",
+      price: "",
+      extraShipping: "0",
+      category: type === "digital-download" ? "Digital Downloads" : "Prints",
+      downloadType: "single-photo",
+      downloadSize: "High Resolution Original (Full res)",
+      noImageRequired: false,
+      exemptFromSalesTax: false,
+      limitOnePerCheckout: false,
+      allowBulkPurchase: false,
+    });
+  }, [open, type]);
+
+  const save = () => {
+    const name = form.name.trim();
+    if (!name) return;
+    onSave({
+      type,
+      name,
+      description: form.description,
+      price: Number(form.price) || 0,
+      extraShipping: Number(form.extraShipping) || 0,
+      category: form.category,
+      downloadType: type === "digital-download" ? form.downloadType : undefined,
+      downloadSize: type === "digital-download" ? form.downloadSize : undefined,
+      noImageRequired: form.noImageRequired,
+      exemptFromSalesTax: form.exemptFromSalesTax,
+      limitOnePerCheckout: form.limitOnePerCheckout,
+      allowBulkPurchase: form.allowBulkPurchase,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
+        <DialogHeader>
+          <DialogTitle>
+            {type === "digital-download" ? "Add Digital Download" : "Add Product"}
+          </DialogTitle>
+          <DialogDescription>{productTypeLabels[type]}</DialogDescription>
+        </DialogHeader>
+
+        <FieldGroup className="gap-7">
+          {type === "digital-download" && (
+            <Field>
+              <FieldLabel className="font-bold">Download Type</FieldLabel>
+              <div className="flex gap-4">
+                {([
+                  ["single-photo", Images, "Single Photo"],
+                  ["all-photos", LayoutGrid, "All Photos"],
+                ] as const).map(([value, Icon, label]) => (
+                  <button
+                    key={value}
+                    className={cn(
+                      "flex size-24 flex-col items-center justify-center border text-xs",
+                      form.downloadType === value && "border-[#22bda7]",
+                    )}
+                    onClick={() => setForm((current) => ({ ...current, downloadType: value }))}
+                  >
+                    <Icon className="mb-3 size-6" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+
+          {type === "digital-download" && (
+            <Field>
+              <FieldLabel className="font-bold">Download Size</FieldLabel>
+              <select
+                value={form.downloadSize}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, downloadSize: event.target.value }))
+                }
+                className="h-12 w-full border bg-white px-3 text-sm outline-none"
+              >
+                <option>High Resolution Original (Full res)</option>
+                <option>High Resolution 3600px</option>
+                <option>Web Size 2048px</option>
+              </select>
+            </Field>
+          )}
+
+          <Field>
+            <FieldLabel className="font-bold">Name</FieldLabel>
+            <Input
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              placeholder='e.g. 4x6" Print, 8x10" Print Metallic, 16x20" Canvas'
+              className="h-12 rounded-none"
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel className="font-bold">Description</FieldLabel>
+            <RichTextEditor
+              value={form.description}
+              onChange={(description) =>
+                setForm((current) => ({ ...current, description }))
+              }
+            />
+          </Field>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field>
+              <FieldLabel className="font-bold">Price</FieldLabel>
+              <Input
+                value={form.price}
+                onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))}
+                placeholder="e.g. 0.00"
+                className="h-12 rounded-none"
+              />
+            </Field>
+            {type === "self-fulfilled" && (
+              <Field>
+                <FieldLabel className="font-bold">Extra shipping</FieldLabel>
+                <Input
+                  value={form.extraShipping}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, extraShipping: event.target.value }))
+                  }
+                  className="h-12 rounded-none"
+                />
+              </Field>
+            )}
+          </div>
+
+          {type === "self-fulfilled" && (
+            <Field>
+              <FieldLabel className="font-bold">Category</FieldLabel>
+              <select
+                value={form.category}
+                onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
+                className="h-12 w-full border bg-white px-3 text-sm outline-none"
+              >
+                <option>Prints</option>
+                <option>Wall Art</option>
+                <option>Albums</option>
+                <option>Cards</option>
+              </select>
+            </Field>
+          )}
+
+          {type === "self-fulfilled" && (
+            <div className="grid gap-5">
+              {([
+                ["noImageRequired", "No Image Required"],
+                ["exemptFromSalesTax", "Exempt From Sales Tax"],
+                ["limitOnePerCheckout", "Limit One Per Checkout"],
+                ["allowBulkPurchase", "Allow Bulk Purchase"],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="flex items-center justify-between gap-5 text-sm font-bold">
+                  {label}
+                  <Switch
+                    checked={form[key]}
+                    onCheckedChange={(value) =>
+                      setForm((current) => ({ ...current, [key]: value }))
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+        </FieldGroup>
+
+        <DialogFooter>
+          <Button variant="outline" className="rounded-none" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="rounded-none bg-[#22bda7] text-white"
+            disabled={pending || !form.name.trim()}
+            onClick={save}
+          >
+            {pending ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CollectionsPanel({ section }: { section: DashboardSection }) {
   const { collectionsQuery, createCollection } = useCollections();
   const router = useRouter();
@@ -3681,28 +4459,40 @@ function CollectionDetailView({
           </p>
           <p className="mt-2 break-all text-xs text-[#00a997]">{publicLink}</p>
         </div>
-        <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white">
-          <Upload className="size-4" />
-          Add Media
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              const files = event.target.files;
-              if (files?.length) {
-                const selectedFiles = Array.from(files);
-                uploadImages.mutate({
-                  files: selectedFiles,
-                  setId: activeSetId,
-                  watermarkId: uploadWatermarkId,
-                });
-              }
-              event.currentTarget.value = "";
-            }}
-          />
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            className="h-10 rounded-none"
+            onClick={() =>
+              router.push(`/dashboard/store-gallery/products?collectionId=${collectionId}`)
+            }
+          >
+            <Store data-icon="inline-start" />
+            Store
+          </Button>
+          <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white">
+            <Upload className="size-4" />
+            Add Media
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                const files = event.target.files;
+                if (files?.length) {
+                  const selectedFiles = Array.from(files);
+                  uploadImages.mutate({
+                    files: selectedFiles,
+                    setId: activeSetId,
+                    watermarkId: uploadWatermarkId,
+                  });
+                }
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       {uploadImages.isPending && (
