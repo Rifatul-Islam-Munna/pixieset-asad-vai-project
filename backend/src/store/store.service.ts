@@ -15,6 +15,7 @@ import { StoreSetting, StoreSettingDocument } from './entities/store-setting.ent
 import { StoreShipping, StoreShippingDocument } from './entities/store-shipping.entity';
 import { StoreTax, StoreTaxDocument } from './entities/store-tax.entity';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
+import { User, UserDocument } from 'src/user/entities/user.entity';
 
 @Injectable()
 export class StoreService {
@@ -37,6 +38,8 @@ export class StoreService {
     private readonly settingModel: Model<StoreSettingDocument>,
     @InjectModel(Collection.name)
     private readonly collectionModel: Model<CollectionDocument>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
   ) {}
 
   async dashboard(userId: string) {
@@ -94,6 +97,7 @@ export class StoreService {
   }
 
   async updateSettings(userId: string, dto: any) {
+    if (dto.globalStatus) await this.assertStoreAllowed(userId);
     const existing = await this.settingModel.findOne({ userId }).lean();
     const incomingStripe = dto.paymentMethods?.stripe ?? {};
     const stripe = {
@@ -857,5 +861,12 @@ export class StoreService {
     ]);
     const amount = Number(value ?? 0);
     return Math.max(1, Math.round(amount * (zeroDecimal.has(currency) ? 1 : 100)));
+  }
+
+  private async assertStoreAllowed(userId: string) {
+    const user = await this.userModel.findById(userId).select('planFeatures').lean();
+    if (!user?.planFeatures?.store) {
+      throw new BadRequestException('Current plan does not allow Store.');
+    }
   }
 }

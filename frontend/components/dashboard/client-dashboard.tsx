@@ -20,6 +20,7 @@ import {
   CircleHelp,
   CircleUserRound,
   Copy,
+  CreditCard,
   Database,
   Download,
   Eye,
@@ -30,6 +31,7 @@ import {
   LayoutGrid,
   Link2,
   ListFilter,
+  Loader2,
   LogOut,
   Mail,
   MailCheck,
@@ -99,6 +101,8 @@ import {
 } from "@/api-hooks/use-collections";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import { logOutUser } from "@/actions/auth";
+import { checkoutPlan, confirmPlanCheckout, getBillingOverview, recordEmailUsage, type BillingUser } from "@/actions/billing";
+import type { AdminPlan } from "@/actions/admin";
 import { CoverPreview, coverOptions } from "@/components/dashboard/cover-designs";
 import {
   useStorePriceSheet,
@@ -533,6 +537,8 @@ export function ClientDashboard({
             <SettingsPanel section={section} settingsPage={settingsPage} />
           ) : page === "homepage" ? (
             <HomepageSettings />
+          ) : page === "storage" ? (
+            <StoragePlanPanel />
           ) : page === "marketing" ? (
             <MarketingPanel marketingPage={marketingPage} />
           ) : page === "collection-new" ? (
@@ -572,6 +578,140 @@ export function ClientDashboard({
       </button>}
     </main>
   );
+}
+
+function StoragePlanPanel() {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const [data, setData] = useState<{ plans: AdminPlan[]; user: BillingUser } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    const load = async () => {
+      if (sessionId) await confirmPlanCheckout(sessionId).catch(() => null);
+      return getBillingOverview();
+    };
+    load()
+      .then((value) => {
+        if (active) setData(value);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "Billing failed");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const user = data?.user;
+  const usedGb = bytesToGb(user?.storageUsedBytes ?? 0);
+  const limitGb = Number(user?.storageLimitGb ?? 0);
+  const storagePercent = limitGb > 0 ? Math.min(100, (usedGb / limitGb) * 100) : 0;
+  const emailLimit = Number(user?.monthlyEmailLimit ?? 0);
+  const emailsUsed = Number(user?.monthlyEmailsUsed ?? 0);
+  const emailPercent = emailLimit > 0 ? Math.min(100, (emailsUsed / emailLimit) * 100) : 0;
+
+  const buyPlan = (planId: string) => {
+    startTransition(async () => {
+      setError("");
+      try {
+        const result = await checkoutPlan(planId);
+        if (result.checkoutUrl) window.location.href = result.checkoutUrl;
+        else setError("Stripe checkout URL missing");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Checkout failed");
+      }
+    });
+  };
+
+  return (
+    <div>
+      <PageHeader title="Storage & Plan" action="Monthly Plan" />
+      {error && <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">{error}</p>}
+      <div className="mt-10 grid gap-5 lg:grid-cols-2">
+        <UsagePanel
+          icon={<Database className="size-5" />}
+          title={user?.planName ?? "Free"}
+          label="Storage"
+          value={`${usedGb.toFixed(2)} GB used`}
+          limit={limitGb > 0 ? `${limitGb} GB / month` : "No plan limit"}
+          percent={storagePercent}
+        />
+        <UsagePanel
+          icon={<Mail className="size-5" />}
+          title="Monthly emails"
+          label="Emails"
+          value={`${emailsUsed} sent`}
+          limit={emailLimit > 0 ? `${emailLimit} emails / month` : "No plan limit"}
+          percent={emailPercent}
+        />
+      </div>
+      <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {(data?.plans ?? []).map((plan) => (
+          <article key={plan._id} className="border bg-white p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">{plan.name}</h2>
+                <p className="mt-2 text-sm text-[#666]">Monthly allowance</p>
+              </div>
+              <CreditCard className="size-5 text-[#00a997]" />
+            </div>
+            <div className="mt-8 grid gap-3 text-sm">
+              <div className="flex justify-between"><span>Storage</span><b>{plan.storageGb} GB</b></div>
+              <div className="flex justify-between"><span>Emails</span><b>{plan.monthlyEmails}</b></div>
+              <div className="flex justify-between"><span>Price</span><b>${Number(plan.priceMonthly ?? 0)}/month</b></div>
+            </div>
+            <Button
+              className="mt-6 h-11 w-full rounded-none bg-[#111] text-white"
+              disabled={pending || !Number(plan.priceMonthly ?? 0)}
+              onClick={() => buyPlan(plan._id)}
+            >
+              {pending ? <Loader2 className="size-4 animate-spin" /> : "Buy Plan"}
+            </Button>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UsagePanel({
+  icon,
+  title,
+  label,
+  value,
+  limit,
+  percent,
+}: {
+  icon: ReactNode;
+  title: string;
+  label: string;
+  value: string;
+  limit: string;
+  percent: number;
+}) {
+  return (
+    <div className="border bg-white p-6">
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 items-center justify-center bg-[#e3f6f1] text-[#00a997]">{icon}</span>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">{label}</p>
+          <h2 className="mt-1 text-lg font-semibold">{title}</h2>
+        </div>
+      </div>
+      <div className="mt-6 flex justify-between text-sm">
+        <span>{value}</span>
+        <span className="font-semibold">{limit}</span>
+      </div>
+      <Progress value={percent} className="mt-4 h-2 bg-[#e8e8e8]" />
+    </div>
+  );
+}
+
+function bytesToGb(value: number) {
+  return Number(value ?? 0) / 1024 / 1024 / 1024;
 }
 
 function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
@@ -815,8 +955,21 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
     setCampaignTemplate,
     toggleRecipient,
   } = useDashboardStore();
+  const [sendPending, startSendTransition] = useTransition();
+  const [sendError, setSendError] = useState("");
   const recipients = ["Avery Woodward", "Jessie Ryan", "Morgan Wells", "Isla Bennett"];
   const collections = ["Autumn Florals", "Black Friday Clients", "Wedding Leads"];
+  const sendNow = () => {
+    setSendError("");
+    startSendTransition(async () => {
+      try {
+        await recordEmailUsage(Math.max(1, selectedRecipients.length));
+        onClose();
+      } catch (error) {
+        setSendError(error instanceof Error ? error.message : "Email send failed");
+      }
+    });
+  };
 
   return (
     <div className="min-h-screen bg-[#f3f3f3]">
@@ -832,11 +985,12 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex items-center gap-8">
           <button className="text-sm font-semibold">Send Test</button>
-          <Button className="h-12 rounded-none bg-[#22bda7] px-9 text-sm font-bold text-white hover:bg-[#19a995]">
-            Send Now
+          <Button className="h-12 rounded-none bg-[#22bda7] px-9 text-sm font-bold text-white hover:bg-[#19a995]" onClick={sendNow} disabled={sendPending}>
+            {sendPending ? <Loader2 className="size-4 animate-spin" /> : "Send Now"}
           </Button>
         </div>
       </header>
+      {sendError && <p className="border-l-2 border-red-500 bg-white px-8 py-3 text-sm font-semibold text-red-600">{sendError}</p>}
 
       <div className="grid min-h-[calc(100vh-48px)] lg:grid-cols-[468px_1fr]">
         <aside className="border-r bg-white">

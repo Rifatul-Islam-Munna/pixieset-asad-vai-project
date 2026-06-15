@@ -40,6 +40,33 @@ export class User {
 
   @Prop({ default: 0 })
   numberOfConnections: number;
+
+  @Prop()
+  planId?: string;
+
+  @Prop({ default: 'Free' })
+  planName: string;
+
+  @Prop({ default: 0 })
+  storageLimitGb: number;
+
+  @Prop({ default: 0 })
+  monthlyEmailLimit: number;
+
+  @Prop({ default: 0 })
+  storageUsedBytes: number;
+
+  @Prop({ default: 0 })
+  monthlyEmailsUsed: number;
+
+  @Prop({ type: Object, default: {} })
+  planFeatures: Record<string, boolean>;
+
+  @Prop()
+  monthlyUsageKey?: string;
+
+  @Prop()
+  planActivatedAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -97,7 +97,14 @@ export class UserService implements OnModuleInit {
   }
 
   async findProfile(id: string) {
-    const user = await this.userModel.findById(id).select('-password').lean();
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const userRecord = await this.userModel.findById(id).select('-password');
+    if (userRecord && userRecord.monthlyUsageKey !== monthKey) {
+      userRecord.monthlyUsageKey = monthKey;
+      userRecord.monthlyEmailsUsed = 0;
+      await userRecord.save();
+    }
+    const user = userRecord?.toObject();
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }

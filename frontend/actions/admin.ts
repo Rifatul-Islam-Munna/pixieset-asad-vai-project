@@ -28,10 +28,32 @@ export type AdminCollection = {
   user?: Pick<AdminUser, "_id" | "name" | "email" | "phoneNumber"> | null;
 };
 
+export type AdminPlan = {
+  _id: string;
+  name: string;
+  storageGb: number;
+  monthlyEmails: number;
+  priceMonthly?: number;
+  features?: Record<string, boolean>;
+  active: boolean;
+  createdAt?: string;
+};
+
+export type AdminStripeSetting = {
+  enabled: boolean;
+  publishableKey: string;
+  secretKey?: string;
+  webhookSecret?: string;
+  hasSecretKey?: boolean;
+  hasWebhookSecret?: boolean;
+};
+
 export type AdminDashboardData = {
   stats: { users: number; collections: number; images: number };
   users: AdminUser[];
   collections: AdminCollection[];
+  plans: AdminPlan[];
+  stripe: AdminStripeSetting;
 };
 
 async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -51,13 +73,28 @@ async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return payload?.data as T;
 }
 
+async function adminOptionalRequest<T>(path: string, fallback: T): Promise<T> {
+  try {
+    return await adminRequest<T>(path);
+  } catch {
+    return fallback;
+  }
+}
+
 export async function getAdminDashboard(): Promise<AdminDashboardData> {
-  const [stats, users, collections] = await Promise.all([
+  const [stats, users, collections, plans, stripe] = await Promise.all([
     adminRequest<AdminDashboardData["stats"]>("/admin/dashboard"),
     adminRequest<AdminUser[]>("/admin/users"),
     adminRequest<AdminCollection[]>("/admin/collections"),
+    adminRequest<AdminPlan[]>("/admin/plans"),
+    adminOptionalRequest<AdminStripeSetting>("/admin/stripe", {
+      enabled: false,
+      publishableKey: "",
+      hasSecretKey: false,
+      hasWebhookSecret: false,
+    }),
   ]);
-  return { stats, users, collections };
+  return { stats, users, collections, plans, stripe };
 }
 
 export async function createAdminUser(payload: {
@@ -93,6 +130,39 @@ export async function deleteAdminUser(id: string) {
 
 export async function deleteAdminCollection(id: string) {
   const data = await adminRequest<AdminCollection>(`/admin/collections/${id}`, { method: "DELETE" });
+  revalidatePath("/admin");
+  return data;
+}
+
+export async function createAdminPlan(payload: Omit<AdminPlan, "_id" | "createdAt">) {
+  const data = await adminRequest<AdminPlan>("/admin/plans", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/admin");
+  return data;
+}
+
+export async function updateAdminPlan(id: string, payload: Partial<Omit<AdminPlan, "_id" | "createdAt">>) {
+  const data = await adminRequest<AdminPlan>(`/admin/plans/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/admin");
+  return data;
+}
+
+export async function deleteAdminPlan(id: string) {
+  const data = await adminRequest<AdminPlan>(`/admin/plans/${id}`, { method: "DELETE" });
+  revalidatePath("/admin");
+  return data;
+}
+
+export async function updateAdminStripeSettings(payload: AdminStripeSetting) {
+  const data = await adminRequest<AdminStripeSetting>("/admin/stripe", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
   revalidatePath("/admin");
   return data;
 }

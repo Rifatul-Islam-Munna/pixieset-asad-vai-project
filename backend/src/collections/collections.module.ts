@@ -12,6 +12,7 @@ import {
   CollectionImage,
   CollectionImageSchema,
 } from './entities/collection-image.entity';
+import { User, UserSchema } from 'src/user/entities/user.entity';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import {
       { name: Collection.name, schema: CollectionSchema },
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [CollectionsController, PublicCollectionsController],

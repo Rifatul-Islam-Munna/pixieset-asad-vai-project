@@ -2,15 +2,21 @@
 
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Edit3, Images, Loader2, LogOut, PlusCircle, Search, ShieldCheck, Trash2, Users, X } from "lucide-react";
+import { Edit3, Images, Loader2, LogOut, Package, PlusCircle, Search, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import {
+  createAdminPlan,
   createAdminUser,
   deleteAdminCollection,
+  deleteAdminPlan,
   deleteAdminUser,
+  updateAdminPlan,
+  updateAdminStripeSettings,
   updateAdminUser,
   type AdminCollection,
   type AdminDashboardData,
+  type AdminPlan,
+  type AdminStripeSetting,
   type AdminUser,
 } from "@/actions/admin";
 import { logOutUser } from "@/actions/auth";
@@ -28,6 +34,16 @@ type UserForm = {
   gender: string;
 };
 
+type PlanForm = {
+  id?: string;
+  name: string;
+  storageGb: string;
+  monthlyEmails: string;
+  priceMonthly: string;
+  features: Record<string, boolean>;
+  active: boolean;
+};
+
 const emptyForm: UserForm = {
   name: "",
   email: "",
@@ -37,17 +53,42 @@ const emptyForm: UserForm = {
   gender: "",
 };
 
+const emptyPlanForm: PlanForm = {
+  name: "",
+  storageGb: "",
+  monthlyEmails: "",
+  priceMonthly: "",
+  features: {},
+  active: true,
+};
+
+const planFeatures = [
+  ["pinSet", "PIN set"],
+  ["downloadLimit", "Download limit"],
+  ["coverImage", "Cover image"],
+  ["layouts", "Layouts"],
+  ["advancedDesign", "Advanced design"],
+  ["store", "Store"],
+  ["marketingEmails", "Marketing email"],
+] as const;
+
 export function AdminDashboard({ initialData }: { initialData: AdminDashboardData }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [tab, setTab] = useState<"users" | "collections">("users");
+  const [tab, setTab] = useState<"users" | "collections" | "plans" | "stripe">("users");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<UserForm>(emptyForm);
+  const [planForm, setPlanForm] = useState<PlanForm>(emptyPlanForm);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [userModalOpen, setUserModalOpen] = useState(false);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [stripeForm, setStripeForm] = useState<AdminStripeSetting>(
+    initialData.stripe ?? { enabled: false, publishableKey: "" },
+  );
 
   const users = initialData.users;
   const collections = initialData.collections;
+  const plans = initialData.plans ?? [];
 
   const filteredUsers = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -67,6 +108,14 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     });
   }, [collections, query, selectedUserId]);
 
+  const filteredPlans = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return plans;
+    return plans.filter((plan) =>
+      [plan.name, String(plan.storageGb), String(plan.monthlyEmails)].some((value) => value.toLowerCase().includes(term)),
+    );
+  }, [plans, query]);
+
   const submitUser = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     startTransition(async () => {
@@ -84,6 +133,34 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
         }
         setForm(emptyForm);
         setUserModalOpen(false);
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Action failed");
+      }
+    });
+  };
+
+  const submitPlan = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const payload = {
+      name: planForm.name,
+      storageGb: Number(planForm.storageGb || 0),
+      monthlyEmails: Number(planForm.monthlyEmails || 0),
+      priceMonthly: Number(planForm.priceMonthly || 0),
+      features: planForm.features,
+      active: planForm.active,
+    };
+    startTransition(async () => {
+      try {
+        if (planForm.id) {
+          await updateAdminPlan(planForm.id, payload);
+          toast.success("Plan updated");
+        } else {
+          await createAdminPlan(payload);
+          toast.success("Plan created");
+        }
+        setPlanForm(emptyPlanForm);
+        setPlanModalOpen(false);
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");
@@ -131,6 +208,46 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     });
   };
 
+  const editPlan = (plan: AdminPlan) => {
+    setTab("plans");
+    setPlanForm({
+      id: plan._id,
+      name: plan.name,
+      storageGb: String(plan.storageGb ?? 0),
+      monthlyEmails: String(plan.monthlyEmails ?? 0),
+      priceMonthly: String(plan.priceMonthly ?? 0),
+      features: plan.features ?? {},
+      active: plan.active,
+    });
+    setPlanModalOpen(true);
+  };
+
+  const removePlan = (id: string) => {
+    if (!confirm("Delete this plan?")) return;
+    startTransition(async () => {
+      try {
+        await deleteAdminPlan(id);
+        toast.success("Plan deleted");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Delete failed");
+      }
+    });
+  };
+
+  const saveStripe = () => {
+    startTransition(async () => {
+      try {
+        const data = await updateAdminStripeSettings(stripeForm);
+        setStripeForm(data);
+        toast.success("Stripe settings saved");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Stripe save failed");
+      }
+    });
+  };
+
   const logout = () => {
     startTransition(async () => {
       await logOutUser();
@@ -145,6 +262,14 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const closeUserModal = () => {
     setUserModalOpen(false);
     setForm(emptyForm);
+  };
+  const openPlanModal = () => {
+    setPlanForm(emptyPlanForm);
+    setPlanModalOpen(true);
+  };
+  const closePlanModal = () => {
+    setPlanModalOpen(false);
+    setPlanForm(emptyPlanForm);
   };
 
   return (
@@ -170,6 +295,20 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <Images className="size-4" />
               Collections
             </button>
+            <button
+              className={navClass(tab === "plans")}
+              onClick={() => setTab("plans")}
+            >
+              <Package className="size-4" />
+              Plans
+            </button>
+            <button
+              className={navClass(tab === "stripe")}
+              onClick={() => setTab("stripe")}
+            >
+              <ShieldCheck className="size-4" />
+              Stripe
+            </button>
           </nav>
           <Button onClick={logout} variant="outline" className="mt-10 h-10 w-full rounded-none" disabled={pending}>
             <LogOut className="size-4" />
@@ -187,10 +326,11 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <h1 className="mt-3 text-3xl font-medium">Admin Dashboard</h1>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Stat label="Users" value={initialData.stats.users} />
                 <Stat label="Collections" value={initialData.stats.collections} />
                 <Stat label="Images" value={initialData.stats.images} />
+                <Stat label="Plans" value={plans.length} />
               </div>
               <Button onClick={logout} variant="outline" className="h-11 rounded-none bg-white" disabled={pending}>
                 <LogOut className="size-4" />
@@ -205,7 +345,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={tab === "users" ? "Search users" : "Search collections"}
+                placeholder={tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "stripe" ? "Stripe settings" : "Search collections"}
                 className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
               />
             </div>
@@ -221,10 +361,21 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
                 ))}
               </select>
             )}
+            {tab === "stripe" && (
+              <Button onClick={saveStripe} className="h-11 rounded-none bg-[#111] text-white" disabled={pending}>
+                {pending ? <Loader2 className="size-4 animate-spin" /> : "Save Stripe"}
+              </Button>
+            )}
             {tab === "users" && (
               <Button onClick={openAddModal} className="h-11 rounded-none bg-[#111] text-white">
                 <PlusCircle className="size-4" />
                 Add user
+              </Button>
+            )}
+            {tab === "plans" && (
+              <Button onClick={openPlanModal} className="h-11 rounded-none bg-[#111] text-white">
+                <PlusCircle className="size-4" />
+                Add plan
               </Button>
             )}
           </div>
@@ -233,6 +384,10 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             <div className="mt-6">
               <UserTable users={filteredUsers} onEdit={editUser} onDelete={removeUser} busy={pending} />
             </div>
+          ) : tab === "plans" ? (
+            <PlanTable plans={filteredPlans} onEdit={editPlan} onDelete={removePlan} busy={pending} />
+          ) : tab === "stripe" ? (
+            <StripeSettingsPanel form={stripeForm} setForm={setStripeForm} />
           ) : (
             <CollectionTable collections={filteredCollections} onDelete={removeCollection} busy={pending} />
           )}
@@ -272,6 +427,59 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               </Button>
               <Button className="h-11 rounded-none bg-[#111] px-6 text-white" disabled={pending}>
                 {pending ? <Loader2 className="size-4 animate-spin" /> : form.id ? "Save" : "Create"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {planModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <form onSubmit={submitPlan} className="w-full max-w-[460px] bg-white p-6 shadow-[0_28px_80px_rgba(0,0,0,0.18)]">
+            <div className="mb-5 flex items-center justify-between gap-4 border-b pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Monthly Plan</p>
+                <h2 className="mt-2 text-xl font-semibold">{planForm.id ? "Edit plan" : "Add plan"}</h2>
+              </div>
+              <button type="button" onClick={closePlanModal} aria-label="Close plan modal" className="p-2 hover:bg-[#f3f3f3]">
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="grid gap-3">
+              <InputField label="Plan name" value={planForm.name} onChange={(value) => setPlanForm({ ...planForm, name: value })} required />
+              <InputField label="Storage GB / month" value={planForm.storageGb} onChange={(value) => setPlanForm({ ...planForm, storageGb: value })} required type="number" />
+              <InputField label="Emails / month" value={planForm.monthlyEmails} onChange={(value) => setPlanForm({ ...planForm, monthlyEmails: value })} required type="number" />
+              <InputField label="Monthly price USD" value={planForm.priceMonthly} onChange={(value) => setPlanForm({ ...planForm, priceMonthly: value })} required type="number" />
+              <div className="grid gap-2 sm:grid-cols-2">
+                {planFeatures.map(([key, label]) => (
+                  <label key={key} className="flex h-10 items-center justify-between border px-3 text-sm">
+                    <span>{label}</span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(planForm.features[key])}
+                      onChange={(event) => setPlanForm({
+                        ...planForm,
+                        features: { ...planForm.features, [key]: event.target.checked },
+                      })}
+                    />
+                  </label>
+                ))}
+              </div>
+              <label className="flex h-11 items-center justify-between border px-3 text-sm">
+                <span className="font-semibold">Active</span>
+                <input
+                  type="checkbox"
+                  checked={planForm.active}
+                  onChange={(event) => setPlanForm({ ...planForm, active: event.target.checked })}
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="outline" className="h-11 rounded-none" onClick={closePlanModal}>
+                Cancel
+              </Button>
+              <Button className="h-11 rounded-none bg-[#111] px-6 text-white" disabled={pending}>
+                {pending ? <Loader2 className="size-4 animate-spin" /> : planForm.id ? "Save" : "Create"}
               </Button>
             </div>
           </form>
@@ -401,6 +609,101 @@ function CollectionTable({ collections, onDelete, busy }: {
               </td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StripeSettingsPanel({ form, setForm }: {
+  form: AdminStripeSetting;
+  setForm: (value: AdminStripeSetting) => void;
+}) {
+  return (
+    <div className="mt-6 max-w-[760px] bg-white p-6">
+      <div className="border-b pb-5">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Stripe</p>
+        <h2 className="mt-2 text-xl font-semibold">Plan checkout settings</h2>
+        <p className="mt-2 text-sm text-[#666]">
+          Webhook endpoint: `/billing/stripe/webhook`
+        </p>
+      </div>
+      <div className="mt-5 grid gap-4">
+        <label className="flex h-11 items-center justify-between border px-3 text-sm">
+          <span className="font-semibold">Enable Stripe</span>
+          <input
+            type="checkbox"
+            checked={Boolean(form.enabled)}
+            onChange={(event) => setForm({ ...form, enabled: event.target.checked })}
+          />
+        </label>
+        <InputField label="Publishable key" value={form.publishableKey ?? ""} onChange={(publishableKey) => setForm({ ...form, publishableKey })} />
+        <InputField
+          label={form.hasSecretKey ? "Secret key saved - enter new key to replace" : "Secret key"}
+          value={form.secretKey && form.secretKey !== "********" ? form.secretKey : ""}
+          onChange={(secretKey) => setForm({ ...form, secretKey })}
+          type="password"
+        />
+        <InputField
+          label={form.hasWebhookSecret ? "Webhook secret saved - optional, enter new secret to replace" : "Webhook secret (optional)"}
+          value={form.webhookSecret && form.webhookSecret !== "********" ? form.webhookSecret : ""}
+          onChange={(webhookSecret) => setForm({ ...form, webhookSecret })}
+          type="password"
+        />
+      </div>
+    </div>
+  );
+}
+
+function PlanTable({ plans, onEdit, onDelete, busy }: {
+  plans: AdminPlan[];
+  onEdit: (plan: AdminPlan) => void;
+  onDelete: (id: string) => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="mt-6 overflow-x-auto bg-white">
+      <table className="w-full min-w-[720px] text-sm">
+        <thead className="border-b text-left text-xs uppercase tracking-[0.14em] text-[#777]">
+          <tr>
+            <th className="px-4 py-3">Plan</th>
+            <th className="px-4 py-3">Storage</th>
+            <th className="px-4 py-3">Emails</th>
+            <th className="px-4 py-3">Price</th>
+            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {plans.map((plan) => (
+            <tr key={plan._id} className="border-b last:border-0">
+              <td className="px-4 py-4">
+                <p className="font-bold">{plan.name}</p>
+                <p className="mt-1 text-xs text-[#777]">Monthly allowance</p>
+              </td>
+              <td className="px-4 py-4">{plan.storageGb} GB / month</td>
+              <td className="px-4 py-4">{plan.monthlyEmails} emails / month</td>
+              <td className="px-4 py-4">${Number(plan.priceMonthly ?? 0).toLocaleString()} / month</td>
+              <td className="px-4 py-4">{plan.active ? "Active" : "Inactive"}</td>
+              <td className="px-4 py-4">
+                <div className="flex justify-end gap-2">
+                  <button className="p-2 hover:bg-[#f3f3f3]" onClick={() => onEdit(plan)} disabled={busy} aria-label="Edit plan">
+                    <Edit3 className="size-4" />
+                  </button>
+                  <button className="p-2 text-red-600 hover:bg-red-50" onClick={() => onDelete(plan._id)} disabled={busy} aria-label="Delete plan">
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {!plans.length && (
+            <tr>
+              <td className="px-4 py-8 text-center text-sm font-semibold text-[#777]" colSpan={6}>
+                No plans yet.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

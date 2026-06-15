@@ -1,0 +1,70 @@
+"use server";
+
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import type { AdminPlan } from "./admin";
+
+const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+
+export type BillingUser = {
+  _id: string;
+  planName?: string;
+  storageLimitGb?: number;
+  monthlyEmailLimit?: number;
+  storageUsedBytes?: number;
+  monthlyEmailsUsed?: number;
+};
+
+async function authedRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = (await cookies()).get("access_token")?.value;
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      access_token: token ?? "",
+    },
+    cache: "no-store",
+  });
+  if (response.status === 401 || response.status === 403) redirect("/login");
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.message ?? "Request failed");
+  return payload?.data as T;
+}
+
+export async function getBillingOverview() {
+  const [plans, user] = await Promise.all([
+    authedRequest<AdminPlan[]>("/billing/plans"),
+    authedRequest<BillingUser>("/user/get-my-profile"),
+  ]);
+  return { plans, user };
+}
+
+export async function getPublicPlans() {
+  const response = await fetch(`${baseUrl}/billing/public/plans`, { cache: "no-store" });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) return [];
+  return (payload?.data ?? []) as AdminPlan[];
+}
+
+export async function checkoutPlan(planId: string) {
+  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const data = await authedRequest<{ checkoutUrl?: string }>(`/billing/plans/${planId}/checkout`, {
+    method: "POST",
+    body: JSON.stringify({
+      successUrl: `${origin}/dashboard/client-gallery/storage?plan=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${origin}/dashboard/client-gallery/storage?plan=cancel`,
+    }),
+  });
+  return data;
+}
+
+export async function confirmPlanCheckout(sessionId: string) {
+  return authedRequest<AdminPlan>(`/billing/checkout-session/${encodeURIComponent(sessionId)}`);
+}
+
+export async function recordEmailUsage(count: number) {
+  return authedRequest<{ monthlyEmailsUsed: number; monthlyEmailLimit: number }>("/billing/email-usage", {
+    method: "POST",
+    body: JSON.stringify({ count }),
+  });
+}

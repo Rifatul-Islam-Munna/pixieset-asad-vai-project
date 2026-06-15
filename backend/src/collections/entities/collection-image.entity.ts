@@ -26,6 +26,9 @@ export class CollectionImage {
   @Prop()
   mimetype?: string;
 
+  @Prop({ default: 0 })
+  sizeBytes: number;
+
   @Prop({ default: false })
   watermarked: boolean;
 

@@ -9,6 +9,7 @@ import sharp, { type Metadata } from 'sharp';
 import * as exifr from 'exifr';
 import { MinioService } from 'src/lib/minio.service';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
+import { User, UserDocument } from 'src/user/entities/user.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { Collection, CollectionDocument } from './entities/collection.entity';
@@ -34,6 +35,7 @@ export class CollectionsService {
     @InjectModel(Collection.name) private readonly collectionModel: Model<CollectionDocument>,
     @InjectModel(CollectionImage.name) private readonly imageModel: Model<CollectionImageDocument>,
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly minioService: MinioService,
   ) {}
 
@@ -167,6 +169,7 @@ export class CollectionsService {
   async update(userId: string, id: string, dto: UpdateCollectionDto) {
     const collection = await this.collectionModel.findOne({ _id: id, userId });
     if (!collection) throw new NotFoundException('Collection not found');
+    await this.assertCollectionCapabilities(userId, dto);
 
     if (dto.name !== undefined) {
       collection.name = dto.name;
@@ -219,6 +222,7 @@ export class CollectionsService {
 
   async uploadImages(userId: string, collectionId: string, files: Express.Multer.File[], setId?: string, uploadWatermarkId?: string) {
     if (!files?.length) throw new BadRequestException('Files are required');
+    await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + (file.size ?? 0), 0));
 
     const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
     if (!collection) throw new NotFoundException('Collection not found');
@@ -246,6 +250,10 @@ export class CollectionsService {
         $set: { coverImage: collection.coverImage ?? uploaded[0]?.url },
       },
     );
+    await this.userModel.updateOne(
+      { _id: userId },
+      { $inc: { storageUsedBytes: files.reduce((sum, file) => sum + (file.size ?? 0), 0) } },
+    );
 
     return uploaded;
   }
@@ -256,6 +264,12 @@ export class CollectionsService {
     const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
 
     await this.imageModel.deleteOne({ _id: imageId, userId, collectionId });
+    if (image.sizeBytes) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $inc: { storageUsedBytes: -Math.max(0, Number(image.sizeBytes ?? 0)) } },
+      );
+    }
     const nextImage = await this.imageModel
       .findOne({ userId, collectionId })
       .sort({ createdAt: -1 })
@@ -322,6 +336,7 @@ export class CollectionsService {
       originalName: file.originalname,
       filename: uploadFile.filename,
       mimetype: file.mimetype,
+      sizeBytes: file.size ?? 0,
       watermarked,
       metadata,
     });
@@ -526,5 +541,35 @@ export class CollectionsService {
           item instanceof Date ? item.toISOString() : item,
         ]),
     );
+  }
+
+  private async ensureStorageAvailable(userId: string, incomingBytes: number) {
+    const user = await this.userModel.findById(userId).select('storageLimitGb storageUsedBytes').lean();
+    const limitBytes = Number(user?.storageLimitGb ?? 0) * 1024 * 1024 * 1024;
+    if (limitBytes <= 0) return;
+    const used = Number(user?.storageUsedBytes ?? 0);
+    if (used + incomingBytes > limitBytes) {
+      throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');
+    }
+  }
+
+  private async assertCollectionCapabilities(userId: string, dto: UpdateCollectionDto) {
+    const user = await this.userModel.findById(userId).select('planFeatures').lean();
+    const features = user?.planFeatures ?? {};
+    const settings = (dto.settings ?? {}) as any;
+    const download = settings.download ?? {};
+
+    if (dto.coverImage && !features.coverImage) {
+      throw new BadRequestException('Current plan does not allow custom cover image.');
+    }
+    if (dto.design && !features.advancedDesign) {
+      throw new BadRequestException('Current plan does not allow advanced design changes.');
+    }
+    if ((download.limitDownloads || download.restrictDownloads) && !features.downloadLimit) {
+      throw new BadRequestException('Current plan does not allow download limits.');
+    }
+    if (download.downloadPin && !features.pinSet) {
+      throw new BadRequestException('Current plan does not allow download PIN.');
+    }
   }
 }

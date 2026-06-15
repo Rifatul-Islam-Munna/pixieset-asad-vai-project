@@ -11,6 +11,7 @@ import { StoreTax, StoreTaxSchema } from './entities/store-tax.entity';
 import { PublicStoreController, StoreController } from './store.controller';
 import { StoreService } from './store.service';
 import { Collection, CollectionSchema } from 'src/collections/entities/collection.entity';
+import { User, UserSchema } from 'src/user/entities/user.entity';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { Collection, CollectionSchema } from 'src/collections/entities/collectio
       { name: StoreShipping.name, schema: StoreShippingSchema },
       { name: StoreSetting.name, schema: StoreSettingSchema },
       { name: Collection.name, schema: CollectionSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [StoreController, PublicStoreController],
