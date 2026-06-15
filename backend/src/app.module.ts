@@ -10,6 +10,7 @@ import { SettingsModule } from './settings/settings.module';
 import { CollectionsModule } from './collections/collections.module';
 import { StoreModule } from './store/store.module';
 import { AdminModule } from './admin/admin.module';
+import { HomeCmsModule } from './home-cms/home-cms.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AdminModule } from './admin/admin.module';
     ImageUploadModule,
     StoreModule,
     AdminModule,
+    HomeCmsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

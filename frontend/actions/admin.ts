@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { mergeHomeCms, type HomeCmsData } from "@/lib/home-cms";
 
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
 
@@ -54,6 +55,7 @@ export type AdminDashboardData = {
   collections: AdminCollection[];
   plans: AdminPlan[];
   stripe: AdminStripeSetting;
+  homeCms: HomeCmsData;
 };
 
 async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -82,7 +84,7 @@ async function adminOptionalRequest<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function getAdminDashboard(): Promise<AdminDashboardData> {
-  const [stats, users, collections, plans, stripe] = await Promise.all([
+  const [stats, users, collections, plans, stripe, homeCms] = await Promise.all([
     adminRequest<AdminDashboardData["stats"]>("/admin/dashboard"),
     adminRequest<AdminUser[]>("/admin/users"),
     adminRequest<AdminCollection[]>("/admin/collections"),
@@ -93,8 +95,9 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       hasSecretKey: false,
       hasWebhookSecret: false,
     }),
+    adminOptionalRequest<HomeCmsData>("/home-cms", mergeHomeCms()),
   ]);
-  return { stats, users, collections, plans, stripe };
+  return { stats, users, collections, plans, stripe, homeCms: mergeHomeCms(homeCms) };
 }
 
 export async function createAdminUser(payload: {
@@ -165,4 +168,25 @@ export async function updateAdminStripeSettings(payload: AdminStripeSetting) {
   });
   revalidatePath("/admin");
   return data;
+}
+
+export async function updateHomeCms(payload: HomeCmsData) {
+  const data = await adminRequest<HomeCmsData>("/home-cms", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/");
+  revalidatePath("/admin");
+  return mergeHomeCms(data);
+}
+
+export async function uploadHomeCmsFile(formData: FormData) {
+  const response = await fetch(`${baseUrl}/image-upload/upload-image`, {
+    method: "POST",
+    body: formData,
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.message ?? "Upload failed");
+  return payload?.data as string;
 }

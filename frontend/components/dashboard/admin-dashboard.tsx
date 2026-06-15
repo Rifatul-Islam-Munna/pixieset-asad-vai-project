@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Edit3, Images, Loader2, LogOut, Package, PlusCircle, Search, ShieldCheck, Trash2, Users, X } from "lucide-react";
+import { Edit3, FileImage, Images, Loader2, LogOut, Package, PlusCircle, Search, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   createAdminPlan,
@@ -13,6 +13,8 @@ import {
   updateAdminPlan,
   updateAdminStripeSettings,
   updateAdminUser,
+  updateHomeCms,
+  uploadHomeCmsFile,
   type AdminCollection,
   type AdminDashboardData,
   type AdminPlan,
@@ -22,6 +24,8 @@ import {
 import { logOutUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { mergeHomeCms, type HomeCmsData } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 type UserForm = {
@@ -75,7 +79,7 @@ const planFeatures = [
 export function AdminDashboard({ initialData }: { initialData: AdminDashboardData }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [tab, setTab] = useState<"users" | "collections" | "plans" | "stripe">("users");
+  const [tab, setTab] = useState<"users" | "collections" | "plans" | "stripe" | "cms">("users");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [planForm, setPlanForm] = useState<PlanForm>(emptyPlanForm);
@@ -85,6 +89,11 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const [stripeForm, setStripeForm] = useState<AdminStripeSetting>(
     initialData.stripe ?? { enabled: false, publishableKey: "" },
   );
+  const [homeCms, setHomeCms] = useState<HomeCmsData>(mergeHomeCms(initialData.homeCms));
+  const [homeCmsText, setHomeCmsText] = useState({
+    en: JSON.stringify(homeCms.content.en, null, 2),
+    gr: JSON.stringify(homeCms.content.gr, null, 2),
+  });
 
   const users = initialData.users;
   const collections = initialData.collections;
@@ -248,6 +257,50 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     });
   };
 
+  const saveHomeCms = () => {
+    startTransition(async () => {
+      try {
+        const payload = {
+          ...homeCms,
+          content: {
+            en: JSON.parse(homeCmsText.en),
+            gr: JSON.parse(homeCmsText.gr),
+          },
+        };
+        const data = await updateHomeCms(payload);
+        setHomeCms(data);
+        setHomeCmsText({
+          en: JSON.stringify(data.content.en, null, 2),
+          gr: JSON.stringify(data.content.gr, null, 2),
+        });
+        toast.success("Home CMS saved");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "CMS save failed");
+      }
+    });
+  };
+
+  const uploadCmsMedia = (file: File) => {
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const url = await uploadHomeCmsFile(formData);
+        setHomeCms({
+          ...homeCms,
+          media: {
+            heroMediaType: file.type.startsWith("video/") ? "video" : "image",
+            heroMediaUrl: url,
+          },
+        });
+        toast.success("Hero media uploaded");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Upload failed");
+      }
+    });
+  };
+
   const logout = () => {
     startTransition(async () => {
       await logOutUser();
@@ -309,6 +362,13 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <ShieldCheck className="size-4" />
               Stripe
             </button>
+            <button
+              className={navClass(tab === "cms")}
+              onClick={() => setTab("cms")}
+            >
+              <FileImage className="size-4" />
+              Home CMS
+            </button>
           </nav>
           <Button onClick={logout} variant="outline" className="mt-10 h-10 w-full rounded-none" disabled={pending}>
             <LogOut className="size-4" />
@@ -345,7 +405,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "stripe" ? "Stripe settings" : "Search collections"}
+                placeholder={tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "stripe" ? "Stripe settings" : tab === "cms" ? "Home CMS" : "Search collections"}
                 className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
               />
             </div>
@@ -364,6 +424,11 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             {tab === "stripe" && (
               <Button onClick={saveStripe} className="h-11 rounded-none bg-[#111] text-white" disabled={pending}>
                 {pending ? <Loader2 className="size-4 animate-spin" /> : "Save Stripe"}
+              </Button>
+            )}
+            {tab === "cms" && (
+              <Button onClick={saveHomeCms} className="h-11 rounded-none bg-[#111] text-white" disabled={pending}>
+                {pending ? <Loader2 className="size-4 animate-spin" /> : "Save CMS"}
               </Button>
             )}
             {tab === "users" && (
@@ -388,6 +453,15 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             <PlanTable plans={filteredPlans} onEdit={editPlan} onDelete={removePlan} busy={pending} />
           ) : tab === "stripe" ? (
             <StripeSettingsPanel form={stripeForm} setForm={setStripeForm} />
+          ) : tab === "cms" ? (
+            <HomeCmsPanel
+              form={homeCms}
+              text={homeCmsText}
+              setForm={setHomeCms}
+              setText={setHomeCmsText}
+              onUpload={uploadCmsMedia}
+              busy={pending}
+            />
           ) : (
             <CollectionTable collections={filteredCollections} onDelete={removeCollection} busy={pending} />
           )}
@@ -652,6 +726,83 @@ function StripeSettingsPanel({ form, setForm }: {
         />
       </div>
     </div>
+  );
+}
+
+function HomeCmsPanel({ form, text, setForm, setText, onUpload, busy }: {
+  form: HomeCmsData;
+  text: { en: string; gr: string };
+  setForm: (value: HomeCmsData) => void;
+  setText: (value: { en: string; gr: string }) => void;
+  onUpload: (file: File) => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="mt-6 grid gap-5 xl:grid-cols-[420px_1fr]">
+      <div className="bg-white p-6">
+        <div className="border-b pb-5">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Home CMS</p>
+          <h2 className="mt-2 text-xl font-semibold">Hero media</h2>
+        </div>
+        <div className="mt-5 grid gap-4">
+          <label className="grid gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Hero media type</span>
+            <select
+              value={form.media.heroMediaType}
+              onChange={(event) => setForm({ ...form, media: { ...form.media, heroMediaType: event.target.value as "image" | "video" } })}
+              className="h-11 border px-3 text-sm outline-none"
+            >
+              <option value="image">Image</option>
+              <option value="video">Video</option>
+            </select>
+          </label>
+          <InputField label="Hero media URL" value={form.media.heroMediaUrl} onChange={(heroMediaUrl) => setForm({ ...form, media: { ...form.media, heroMediaUrl } })} />
+          <label className="grid gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Upload image or video</span>
+            <Input
+              type="file"
+              accept="image/*,video/*"
+              disabled={busy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onUpload(file);
+              }}
+              className="h-11 rounded-none border-[#ddd] pt-2 shadow-none"
+            />
+          </label>
+          {form.media.heroMediaUrl && (
+            <div className="overflow-hidden border bg-[#f6f6f3]">
+              {form.media.heroMediaType === "video" ? (
+                <video src={form.media.heroMediaUrl} className="h-52 w-full object-cover" controls />
+              ) : (
+                <img src={form.media.heroMediaUrl} alt="Hero CMS preview" className="h-52 w-full object-cover" />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-5">
+        <CmsJsonBox label="English JSON" value={text.en} onChange={(en) => setText({ ...text, en })} />
+        <CmsJsonBox label="Green / GR JSON" value={text.gr} onChange={(gr) => setText({ ...text, gr })} />
+      </div>
+    </div>
+  );
+}
+
+function CmsJsonBox({ label, value, onChange }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-2 bg-white p-6">
+      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">{label}</span>
+      <Textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-h-[380px] rounded-none border-[#ddd] font-mono text-xs shadow-none focus-visible:ring-[#22bda7]"
+      />
+    </label>
   );
 }
 
