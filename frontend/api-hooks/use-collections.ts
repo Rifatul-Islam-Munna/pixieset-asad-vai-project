@@ -55,6 +55,8 @@ export function useCollections() {
       name: string;
       eventDate?: string;
       presetId?: string;
+      design?: Record<string, any>;
+      settings?: Record<string, any>;
     }) => {
       const [data, error] = await PostRequestAxios<
         ListResponse<CollectionRecord> & { message: string }

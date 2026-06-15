@@ -10,6 +10,14 @@ export type PresetEditorPanel =
 
 export type PresetDesignSettings = {
   cover: string;
+  coverSmallTitle: string;
+  coverTitle: string;
+  coverDate: string;
+  coverButtonText: string;
+  showCoverSmallTitle: boolean;
+  showCoverTitle: boolean;
+  showCoverDate: boolean;
+  showCoverButton: boolean;
   typography: string;
   color: string;
   gridStyle: "Vertical" | "Horizontal";
@@ -232,6 +240,14 @@ const emptyPresetGeneral: PresetGeneralSettings = {
 
 const emptyPresetDesign: PresetDesignSettings = {
   cover: "Center",
+  coverSmallTitle: "Avery Studio",
+  coverTitle: "Sarah & Daniel",
+  coverDate: "June 14, 2026",
+  coverButtonText: "View Gallery",
+  showCoverSmallTitle: true,
+  showCoverTitle: true,
+  showCoverDate: true,
+  showCoverButton: true,
   typography: "Classic",
   color: "White",
   gridStyle: "Vertical",
@@ -527,7 +543,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         name: state.presetName || "Untitled Preset",
         collectionId: state.presetCollectionId || undefined,
         general: state.presetGeneral,
-        design: state.presetDesign,
+        design: { ...emptyPresetDesign, ...state.presetDesign },
         download: state.presetDownload,
         favorite: state.presetFavorite,
         store: state.presetStore,
@@ -587,7 +603,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         presetName: preset.name,
         presetCollectionId: preset.collectionId ?? "",
         presetGeneral: preset.general,
-        presetDesign: preset.design,
+        presetDesign: { ...emptyPresetDesign, ...preset.design },
         presetDownload: preset.download,
         presetFavorite: preset.favorite,
         presetStore: preset.store,
@@ -606,7 +622,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         presetName: nextPreset?.name ?? "",
         presetCollectionId: nextPreset?.collectionId ?? "",
         presetGeneral: nextPreset?.general ?? emptyPresetGeneral,
-        presetDesign: nextPreset?.design ?? emptyPresetDesign,
+        presetDesign: nextPreset ? { ...emptyPresetDesign, ...nextPreset.design } : emptyPresetDesign,
         presetDownload: nextPreset?.download ?? emptyPresetDownload,
         presetFavorite: nextPreset?.favorite ?? emptyPresetFavorite,
         presetStore: nextPreset?.store ?? emptyPresetStore,
@@ -704,7 +720,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
             name: data.name ?? data.presetName ?? setting.name,
             collectionId: data.collectionId,
             general: data.general ?? data.presetGeneral ?? emptyPresetGeneral,
-            design: data.design ?? data.presetDesign ?? emptyPresetDesign,
+            design: { ...emptyPresetDesign, ...(data.design ?? data.presetDesign ?? {}) },
             download: data.download ?? data.presetDownload ?? emptyPresetDownload,
             favorite: data.favorite ?? data.presetFavorite ?? emptyPresetFavorite,
             store: data.store ?? data.presetStore ?? emptyPresetStore,
@@ -727,7 +743,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         presetName: activePreset?.name ?? state.presetName,
         presetCollectionId: activePreset?.collectionId ?? state.presetCollectionId,
         presetGeneral: activePreset?.general ?? state.presetGeneral,
-        presetDesign: activePreset?.design ?? state.presetDesign,
+        presetDesign: activePreset ? { ...emptyPresetDesign, ...activePreset.design } : state.presetDesign,
         presetDownload: activePreset?.download ?? state.presetDownload,
         presetFavorite: activePreset?.favorite ?? state.presetFavorite,
         presetStore: activePreset?.store ?? state.presetStore,

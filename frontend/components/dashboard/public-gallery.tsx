@@ -3,6 +3,7 @@
 import { Download, Grid2X2, Heart, Lock, ShoppingBag } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore } from "@/lib/dashboard-store";
 import { cn } from "@/lib/utils";
 
@@ -81,42 +82,15 @@ export function PublicGallery({
       </nav>
 
       <section className="px-5 pb-10 md:px-10">
-        <div
-          className={cn(
-            "relative mx-auto flex min-h-[62vh] max-w-[1180px] overflow-hidden",
-            presetDesign.cover === "Stamp" && "items-center justify-center bg-white",
-            presetDesign.cover === "Split" && "grid md:grid-cols-2",
-            presetDesign.cover === "Left" && "items-end justify-start",
-            presetDesign.cover === "Center" && "items-center justify-center"
-          )}
-        >
-          <img
-            src={coverPhoto}
-            alt={galary}
-            className={cn(
-              "h-full min-h-[62vh] w-full object-cover",
-              presetDesign.cover === "Stamp" && "max-h-[240px] max-w-[240px] min-h-0",
-              presetDesign.cover === "Split" && "md:col-start-2"
-            )}
-          />
-          <div
-            className={cn(
-              "absolute p-8",
-              presetDesign.cover === "Left" && "bottom-8 left-8 text-left text-white",
-              presetDesign.cover === "Center" && "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center text-white",
-              presetDesign.cover === "Stamp" && "bottom-20 left-1/2 -translate-x-1/2 text-center",
-              !["Left", "Center", "Stamp"].includes(presetDesign.cover) &&
-                "bottom-8 left-8 text-white"
-            )}
-          >
-            <p className="text-4xl font-bold uppercase tracking-[0.18em] md:text-6xl">
-              {decodeURIComponent(galary)}
-            </p>
-            <p className="mt-4 text-sm uppercase tracking-[0.24em]">
-              {presetDesign.cover} cover / {presetDesign.typography}
-            </p>
-          </div>
-        </div>
+        <CoverPreview
+          design={{
+            ...presetDesign,
+            coverTitle: presetDesign.coverTitle || decodeURIComponent(galary),
+            coverSmallTitle: presetDesign.coverSmallTitle || decodeURIComponent(name),
+          }}
+          image={coverPhoto}
+          className="mx-auto max-w-[1180px]"
+        />
       </section>
 
       <section className="mx-auto max-w-[1180px] px-5 py-14 md:px-10">

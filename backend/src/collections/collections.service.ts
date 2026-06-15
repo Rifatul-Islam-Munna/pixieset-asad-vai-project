@@ -44,6 +44,8 @@ export class CollectionsService {
       slug: this.slugify(dto.name),
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
       presetId: dto.presetId,
+      design: dto.design ?? {},
+      settings: dto.settings ?? {},
       sets: [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],
       imageCount: 0,
     });

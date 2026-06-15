@@ -97,6 +97,7 @@ import {
   type CollectionRecord,
 } from "@/api-hooks/use-collections";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
+import { CoverPreview, coverOptions } from "@/components/dashboard/cover-designs";
 import {
   useStorePriceSheet,
   useStorePriceSheets,
@@ -2429,21 +2430,6 @@ function PresetPager({
   );
 }
 
-const coverOptions = [
-  ["Center", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80"],
-  ["Left", "https://images.unsplash.com/photo-1508808787069-421e7986016e?auto=format&fit=crop&w=480&q=80"],
-  ["Novel", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=480&q=80"],
-  ["Vintage", "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=480&q=80"],
-  ["Frame", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80"],
-  ["Stripe", "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=480&q=80"],
-  ["Divider", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=480&q=80"],
-  ["Journal", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80"],
-  ["Stamp", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=480&q=80"],
-  ["Outline", "https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=480&q=80"],
-  ["Classic", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80"],
-  ["Split", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=480&q=80"],
-] as const;
-
 const typographyOptions = [
   ["Sans", "SANS", "A neutral font"],
   ["Serif", "Serif", "A classic font"],
@@ -2468,6 +2454,14 @@ function PresetDesignPanel({
 }: {
   design: {
     cover: string;
+    coverSmallTitle: string;
+    coverTitle: string;
+    coverDate: string;
+    coverButtonText: string;
+    showCoverSmallTitle: boolean;
+    showCoverTitle: boolean;
+    showCoverDate: boolean;
+    showCoverButton: boolean;
     typography: string;
     color: string;
     gridStyle: "Vertical" | "Horizontal";
@@ -2480,22 +2474,48 @@ function PresetDesignPanel({
   return (
     <div className="max-w-[700px]">
       <h2 className="text-2xl font-medium">Design</h2>
+      <div className="mt-8 overflow-hidden border bg-[#f7f7f7] p-3">
+        <CoverPreview design={design} className="min-h-[360px]" />
+      </div>
       <p className="mt-10 text-sm font-bold">Cover</p>
       <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3">
-        {coverOptions.map(([name, src]) => (
+        {coverOptions.map(([name]) => (
           <button key={name} className="text-center" onClick={() => onChange({ cover: name })}>
             <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
               <span className="relative block aspect-[1.45] overflow-hidden bg-white">
-                <img src={src} alt={name} className={cn("h-full w-full object-cover", name === "Stamp" && "scale-50")} />
-                <span className={cn("absolute font-bold tracking-widest text-white", name === "Novel" || name === "Stamp" || name === "Journal" ? "bottom-8 left-6 text-[#222]" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2")}>
-                  TITLE
-                </span>
+                <CoverPreview design={{ ...design, cover: name }} compact className="min-h-0" />
               </span>
             </span>
             <span className="mt-3 block text-sm">{name}</span>
           </button>
         ))}
       </div>
+
+      <OptionSection title="Cover Text">
+        <FieldGroup className="gap-5">
+          {([
+            ["Small Title", "coverSmallTitle", "showCoverSmallTitle"],
+            ["Title", "coverTitle", "showCoverTitle"],
+            ["Date", "coverDate", "showCoverDate"],
+            ["Button", "coverButtonText", "showCoverButton"],
+          ] as const).map(([label, key, toggle]) => (
+            <Field key={key}>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={design[toggle]}
+                  onCheckedChange={(value) => onChange({ [toggle]: Boolean(value) } as Partial<typeof design>)}
+                />
+                <FieldLabel className="font-bold">{label}</FieldLabel>
+              </div>
+              <Input
+                value={design[key]}
+                onChange={(event) => onChange({ [key]: event.target.value } as Partial<typeof design>)}
+                className="mt-2 h-11 rounded-none bg-white"
+              />
+            </Field>
+          ))}
+        </FieldGroup>
+      </OptionSection>
 
       <OptionSection title="Typography">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -5395,12 +5415,26 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
   const handleCreate = () => {
     const name = form.name.trim();
     if (!name) return;
+    const preset = presetItems.find((item) => item.id === form.presetId);
+    const eventLabel = form.eventDate ? format(parseISO(form.eventDate), "PPP") : "";
+    const design = {
+      ...(preset?.design ?? collectionDefaultDesign),
+      coverSmallTitle: coverTextOrDefault(preset?.design.coverSmallTitle, preset?.name || "Your Studio"),
+      coverTitle: coverTextOrDefault(preset?.design.coverTitle, name),
+      coverDate: coverTextOrDefault(preset?.design.coverDate, eventLabel),
+      coverButtonText: coverTextOrDefault(preset?.design.coverButtonText, "View Gallery"),
+    };
 
     createCollection.mutate(
       {
         name,
         eventDate: form.eventDate || undefined,
         presetId: form.presetId || undefined,
+        design,
+        settings: {
+          general: preset?.general ?? collectionDefaultGeneral,
+          download: preset?.download ?? collectionDefaultDownload,
+        },
       },
       {
         onSuccess: () => {
@@ -6028,10 +6062,19 @@ function CollectionDetailView({
                     value={form.presetId}
                     onChange={(event) => {
                       const preset = presetItems.find((item) => item.id === event.target.value);
+                      const eventLabel = collection?.eventDate ? formatDate(collection.eventDate) : "";
                       setForm((value) => ({
                         ...value,
                         presetId: event.target.value,
-                        design: preset?.design ?? value.design,
+                        design: preset
+                          ? {
+                              ...preset.design,
+                              coverSmallTitle: coverTextOrDefault(preset.design.coverSmallTitle, preset.name),
+                              coverTitle: coverTextOrDefault(preset.design.coverTitle, value.name || collection?.name || ""),
+                              coverDate: coverTextOrDefault(preset.design.coverDate, eventLabel),
+                              coverButtonText: coverTextOrDefault(preset.design.coverButtonText, "View Gallery"),
+                            }
+                          : value.design,
                         general: preset?.general ?? value.general,
                         download: preset?.download ?? value.download,
                       }));
@@ -6106,6 +6149,14 @@ function CollectionDetailView({
 
 const collectionDefaultDesign: PresetDesignSettings = {
   cover: "Center",
+  coverSmallTitle: "Avery Studio",
+  coverTitle: "Sarah & Daniel",
+  coverDate: "June 14, 2026",
+  coverButtonText: "View Gallery",
+  showCoverSmallTitle: true,
+  showCoverTitle: true,
+  showCoverDate: true,
+  showCoverButton: true,
   typography: "Classic",
   color: "White",
   gridStyle: "Vertical",
@@ -6148,6 +6199,12 @@ type CollectionFormState = {
   general: PresetGeneralSettings;
   download: PresetDownloadSettings;
 };
+
+function coverTextOrDefault(value: string | undefined, fallback: string) {
+  return value && !["Avery Studio", "Sarah & Daniel", "June 14, 2026", "View Gallery"].includes(value)
+    ? value
+    : fallback;
+}
 
 function collectionForm(collection?: CollectionRecord): CollectionFormState {
   return {
@@ -6530,13 +6587,7 @@ function CollectionWizard() {
     );
   }
 
-  const designs = [
-    { name: "Center", image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=300&q=80" },
-    { name: "Left", image: "https://images.unsplash.com/photo-1508808787069-421e7986016e?auto=format&fit=crop&w=300&q=80" },
-    { name: "Novel", image: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=300&q=80" },
-    { name: "Vintage", image: "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=300&q=80" },
-    { name: "Frame", image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=300&q=80" },
-  ];
+  const designs = coverOptions.map(([name, image]) => ({ name, image }));
   const coverImage = designs.find((design) => design.name === coverDesign)?.image ?? designs[0].image;
 
   return (
@@ -6545,17 +6596,18 @@ function CollectionWizard() {
       <h1 className="mt-4 text-[28px] font-medium">Choose a cover photo design</h1>
       <div className="mt-8 bg-[#fafafa] p-8">
         <div className="relative h-[322px] bg-[#ddd]">
-          <img src={coverImage} alt={coverDesign} className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-black/20" />
-          <div className={cn("absolute bottom-8 text-white", coverDesign === "Center" ? "left-1/2 -translate-x-1/2 text-center" : "left-8")}>
-            <p className="text-2xl font-bold">MY SAMPLE COLLECTION</p>
-            <p className="mt-2 text-xs tracking-wide">JUNE 14TH, 2026</p>
-          </div>
-          <div className="absolute bottom-0 right-8 h-[250px] w-[138px] bg-white p-3 shadow-lg">
-            <img src={coverImage} alt="" className="h-full w-full object-cover" />
-          </div>
+          <CoverPreview
+            design={{
+              ...collectionDefaultDesign,
+              cover: coverDesign,
+              coverTitle: collectionName || "My Sample Collection",
+              coverDate: eventDate ? format(parseISO(eventDate), "PPP") : "June 14, 2026",
+            }}
+            image={coverImage}
+            className="min-h-0"
+          />
         </div>
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-6">
           {designs.map((design) => (
             <button
               key={design.name}
