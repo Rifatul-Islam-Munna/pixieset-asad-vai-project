@@ -10,6 +10,29 @@ export type StoreOrderStatus =
   | 'delivered'
   | 'cancelled';
 
+@Schema({ _id: false })
+export class StoreOrderItem {
+  @Prop()
+  productId?: string;
+
+  @Prop({ required: true })
+  name: string;
+
+  @Prop({ required: true })
+  type: string;
+
+  @Prop({ default: 1 })
+  quantity: number;
+
+  @Prop({ default: 0 })
+  unitPrice: number;
+
+  @Prop({ default: 0 })
+  total: number;
+}
+
+const StoreOrderItemSchema = SchemaFactory.createForClass(StoreOrderItem);
+
 @Schema({ timestamps: true, autoIndex: true })
 export class StoreOrder {
   @Prop({ required: true, index: true })
@@ -29,7 +52,7 @@ export class StoreOrder {
     address?: Record<string, unknown>;
   };
 
-  @Prop({ type: [{ productId: String, name: String, type: String, quantity: Number, unitPrice: Number, total: Number }], default: [] })
+  @Prop({ type: [StoreOrderItemSchema], default: [] })
   items: {
     productId?: string;
     name: string;

@@ -6,6 +6,29 @@ import { UpdatePriceSheetDto } from './dto/update-price-sheet.dto';
 import { UpdateStoreProductDto } from './dto/update-store-product.dto';
 import { StoreService } from './store.service';
 
+@Controller('public/store')
+export class PublicStoreController {
+  constructor(private readonly storeService: StoreService) {}
+
+  @Get('checkout-session/:sessionId')
+  async publicCheckoutSession(@Param('sessionId') sessionId: string) {
+    const data = await this.storeService.publicCheckoutSession(sessionId);
+    return { data };
+  }
+
+  @Post(':identifier/checkout')
+  async publicCheckout(@Param('identifier') identifier: string, @Body() dto: any) {
+    const data = await this.storeService.publicCheckout(identifier, dto);
+    return { message: 'Checkout created', data };
+  }
+
+  @Get(':identifier')
+  async publicStore(@Param('identifier') identifier: string) {
+    const data = await this.storeService.publicStore(identifier);
+    return { data };
+  }
+}
+
 @Controller('store')
 @UseGuards(AuthGuard)
 export class StoreController {

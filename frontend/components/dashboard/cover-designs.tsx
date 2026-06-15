@@ -57,13 +57,14 @@ export function CoverPreview({
   const title = design.coverTitle || "Sarah & Daniel";
   const date = design.coverDate || "June 14, 2026";
   const buttonText = design.coverButtonText || "View Gallery";
+  const sampleTitle = compact ? "TITLE" : title;
   const text = (
     <div className={cn("flex flex-col gap-2", compact && "gap-1")}>
-      {showSmall && <p className={cn("text-[10px] uppercase tracking-[0.28em]", !compact && "text-xs")}>{smallTitle}</p>}
-      {showTitle && <h3 className={cn("font-semibold uppercase tracking-[0.18em]", compact ? "text-sm" : "text-4xl md:text-6xl")}>{title}</h3>}
-      {showDate && <p className={cn("text-[10px] uppercase tracking-[0.22em]", !compact && "text-sm")}>{date}</p>}
-      {showButton && (
-        <span className={cn("mt-1 inline-flex border px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.2em]", !compact && "mt-4 px-6 py-3 text-xs")}>
+      {!compact && showSmall && <p className="text-xs uppercase tracking-[0.28em]">{smallTitle}</p>}
+      {showTitle && <h3 className={cn("font-semibold uppercase", compact ? "text-[11px] tracking-[0.24em]" : "text-4xl tracking-[0.18em] md:text-6xl")}>{sampleTitle}</h3>}
+      {!compact && showDate && <p className="text-sm uppercase tracking-[0.22em]">{date}</p>}
+      {!compact && showButton && (
+        <span className="mt-4 inline-flex w-fit max-w-full border px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em]">
           {buttonText}
         </span>
       )}
@@ -73,8 +74,8 @@ export function CoverPreview({
   if (design.cover === "Novel") {
     return (
       <div className={cn("relative grid h-full min-h-[62vh] grid-cols-2 bg-white text-[#222]", compact && "min-h-0", className)}>
-        <div className="flex items-center justify-center p-4 text-center">{text}</div>
-        <img src={src} alt="" className="h-full w-full object-cover p-3" />
+        <div className={cn("flex items-center justify-center p-4 text-center", compact && "p-2")}>{text}</div>
+        <img src={src} alt="" className={cn("h-full w-full object-cover p-3", compact && "p-2")} />
       </div>
     );
   }
@@ -83,7 +84,7 @@ export function CoverPreview({
     return (
       <div className={cn("relative grid h-full min-h-[62vh] grid-cols-2 bg-white text-[#222]", compact && "min-h-0", className)}>
         <img src={src} alt="" className="h-full w-full object-cover" />
-        <div className={cn("flex items-center p-6", design.cover === "Journal" ? "justify-start" : "justify-center text-center")}>{text}</div>
+        <div className={cn("flex items-center p-6", design.cover === "Journal" ? "justify-start" : "justify-center text-center", compact && "p-2")}>{text}</div>
       </div>
     );
   }
@@ -91,7 +92,7 @@ export function CoverPreview({
   if (design.cover === "Stamp" || design.cover === "Minimal") {
     return (
       <div className={cn("relative flex h-full min-h-[62vh] flex-col items-center justify-center gap-5 bg-white text-center text-[#222]", compact && "min-h-0 gap-2", className)}>
-        <img src={src} alt="" className={cn("aspect-square w-[34%] object-cover", compact && "w-[30%]")} />
+        <img src={src} alt="" className={cn("aspect-square w-[34%] object-cover", compact && "w-[32%]")} />
         {text}
       </div>
     );
@@ -101,10 +102,10 @@ export function CoverPreview({
     <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
       <img src={src} alt="" className="h-full w-full object-cover" />
       <div className={cn("absolute inset-0", design.cover === "Vintage" ? "bg-white/55" : "bg-black/28")} />
-      {design.cover === "Frame" && <div className="absolute inset-4 border border-white" />}
+      {design.cover === "Frame" && <div className={cn("absolute inset-4 border border-white", compact && "inset-2")} />}
       {design.cover === "Stripe" && <><div className="absolute left-[12%] right-[12%] top-[22%] border-t border-white" /><div className="absolute bottom-[22%] left-[12%] right-[12%] border-t border-white" /></>}
       {design.cover === "Divider" && <div className="absolute bottom-0 left-1/2 top-0 border-l border-white" />}
-      {design.cover === "Outline" && <div className="absolute inset-[18%] border border-white" />}
+      {design.cover === "Outline" && <div className={cn("absolute inset-[18%] border border-white", compact && "inset-[16%]")} />}
       {design.cover === "Banner" && <div className="absolute inset-x-0 bottom-[18%] bg-white/88 py-3 text-center text-[#222]" />}
       {design.cover === "Portal" && <div className="absolute inset-[13%] rounded-full border border-white/85" />}
       <div
@@ -116,6 +117,7 @@ export function CoverPreview({
           design.cover === "Divider" && "bottom-8 left-8 text-left",
           design.cover === "Banner" && "bottom-[18%] left-1/2 -translate-x-1/2 translate-y-1/2 text-center text-[#222]",
           design.cover === "Maison" && "right-8 top-8 text-right",
+          !["Vintage", "Gallery", "Banner"].includes(design.cover) && "[text-shadow:0_2px_14px_rgba(0,0,0,0.55)]",
           compact && "p-3"
         )}
       >

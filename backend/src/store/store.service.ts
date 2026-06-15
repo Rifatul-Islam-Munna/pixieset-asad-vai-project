@@ -14,6 +14,7 @@ import { StoreProduct, StoreProductDocument } from './entities/store-product.ent
 import { StoreSetting, StoreSettingDocument } from './entities/store-setting.entity';
 import { StoreShipping, StoreShippingDocument } from './entities/store-shipping.entity';
 import { StoreTax, StoreTaxDocument } from './entities/store-tax.entity';
+import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 
 @Injectable()
 export class StoreService {
@@ -34,6 +35,8 @@ export class StoreService {
     private readonly shippingModel: Model<StoreShippingDocument>,
     @InjectModel(StoreSetting.name)
     private readonly settingModel: Model<StoreSettingDocument>,
+    @InjectModel(Collection.name)
+    private readonly collectionModel: Model<CollectionDocument>,
   ) {}
 
   async dashboard(userId: string) {
@@ -71,7 +74,7 @@ export class StoreService {
         $setOnInsert: {
           userId,
           globalStatus: false,
-          currency: 'BDT',
+          currency: 'EUR',
           orderDelay: '6 Hours',
           maintainMarkup: true,
           roundPricesUpTo: '.00',
@@ -106,7 +109,7 @@ export class StoreService {
       {
         $set: {
           globalStatus: Boolean(dto.globalStatus),
-          currency: dto.currency ?? 'BDT',
+          currency: dto.currency ?? 'EUR',
           orderDelay: dto.orderDelay ?? '6 Hours',
           maintainMarkup: Boolean(dto.maintainMarkup),
           roundPricesUpTo: dto.roundPricesUpTo ?? '.00',
@@ -125,8 +128,8 @@ export class StoreService {
 
   async createStripePaymentIntent(userId: string, dto: any) {
     const settings = await this.settingModel.findOne({ userId }).lean();
-    const stripeConfig = settings?.paymentMethods?.stripe;
-    if (!stripeConfig?.enabled || !stripeConfig.secretKey || !stripeConfig.publishableKey) {
+    const stripeConfig = this.resolveStripeConfig(settings);
+    if (!stripeConfig.enabled || !stripeConfig.secretKey || !stripeConfig.publishableKey) {
       throw new BadRequestException('Stripe is not configured');
     }
     const amount = Math.round(Number(dto.amount ?? 0) * 100);
@@ -134,7 +137,7 @@ export class StoreService {
     const stripe = new Stripe(stripeConfig.secretKey);
     const intent = await stripe.paymentIntents.create({
       amount,
-      currency: (dto.currency ?? settings?.currency ?? 'BDT').toLowerCase(),
+      currency: (dto.currency ?? settings?.currency ?? 'EUR').toLowerCase(),
       automatic_payment_methods: { enabled: true },
       metadata: {
         ownerUserId: userId,
@@ -152,7 +155,7 @@ export class StoreService {
 
   async verifyStripePayment(userId: string, paymentIntentId: string) {
     const settings = await this.settingModel.findOne({ userId }).lean();
-    const secretKey = settings?.paymentMethods?.stripe?.secretKey;
+    const secretKey = this.resolveStripeConfig(settings).secretKey;
     if (!secretKey) throw new BadRequestException('Stripe is not configured');
     const stripe = new Stripe(secretKey);
     const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -212,6 +215,235 @@ export class StoreService {
       productCount: products.length,
       collectionCount: sheet.collectionIds?.length ?? 0,
       products,
+    };
+  }
+
+  async publicStore(identifier: string) {
+    const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];
+    if (identifier.match(/^[a-f\d]{24}$/i)) query.unshift({ _id: identifier });
+    const collection = await this.collectionModel.findOne({ $or: query }).lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const settings = await this.settingModel.findOne({ userId: collection.userId }).lean();
+    const stripe = this.resolveStripeConfig(settings);
+    const sheets = await this.priceSheetModel
+      .find({ userId: collection.userId })
+      .sort({ isDefault: -1, createdAt: -1 })
+      .lean();
+    const sheetIds = sheets.map((sheet) => sheet._id.toString());
+    const products = sheetIds.length
+      ? await this.productModel
+          .find({ userId: collection.userId, priceSheetId: { $in: sheetIds } })
+          .sort({ type: 1, category: 1, createdAt: -1 })
+          .lean()
+      : [];
+    const [shipping, taxes, coupons] = await Promise.all([
+      this.shippingModel.find({ userId: collection.userId, active: true }).sort({ createdAt: -1 }).lean(),
+      this.taxModel.find({ userId: collection.userId, active: true }).sort({ createdAt: -1 }).lean(),
+      this.couponModel
+        .find({
+          userId: collection.userId,
+          active: true,
+          $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }],
+        })
+        .select('code name discountType amount')
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
+
+    return {
+      collection: { _id: collection._id, name: collection.name, slug: collection.slug },
+      store: {
+        ...this.hideStripeSecret(settings ?? {}),
+        canCheckout: Boolean(stripe.enabled && stripe.secretKey && stripe.publishableKey),
+        checkoutMessage: this.stripeMissingMessage(stripe),
+      },
+      priceSheets: sheets,
+      products,
+      shipping,
+      taxes,
+      coupons,
+    };
+  }
+
+  async publicCheckout(identifier: string, dto: any) {
+    const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];
+    if (identifier.match(/^[a-f\d]{24}$/i)) query.unshift({ _id: identifier });
+    const collection = await this.collectionModel.findOne({ $or: query }).lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const settings = await this.settingModel.findOne({ userId: collection.userId }).lean();
+    const items = Array.isArray(dto.items) ? dto.items : [];
+    const productIds = items.map((item) => item.productId).filter(Boolean);
+    const products = await this.productModel
+      .find({ userId: collection.userId, _id: { $in: productIds } })
+      .lean();
+    const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+    const orderItems = items
+      .map((item) => {
+        const product = productMap.get(item.productId);
+        if (!product) return null;
+        const quantity = Math.max(1, Number(item.quantity ?? 1));
+        const unitPrice = Number(product.price ?? 0);
+        return {
+          productId: product._id.toString(),
+          name: product.name,
+          type: product.type,
+          quantity,
+          unitPrice,
+          total: quantity * unitPrice,
+        };
+      })
+      .filter(Boolean) as any[];
+    if (!orderItems.length) throw new BadRequestException('Cart is empty');
+
+    const rawCustomer = dto.customer ?? {};
+    const customer = {
+      ...rawCustomer,
+      address: {
+        ...(rawCustomer.address ?? {}),
+        country: rawCustomer.country ?? rawCustomer.address?.country ?? '',
+      },
+    };
+    if (!customer.email?.trim()) throw new BadRequestException('Email is required');
+    const subtotal = orderItems.reduce((sum, item) => sum + item.total, 0);
+    const shippingMethod = dto.shippingMethodId
+      ? await this.shippingModel.findOne({ _id: dto.shippingMethodId, userId: collection.userId, active: true }).lean()
+      : null;
+    const shipping = Number(shippingMethod?.price ?? 0);
+    const couponCode = String(dto.couponCode ?? '').trim().toUpperCase();
+    const coupon = couponCode
+      ? await this.couponModel.findOne({
+          userId: collection.userId,
+          code: couponCode,
+          active: true,
+          $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }],
+        })
+      : null;
+    const discount = coupon
+      ? coupon.discountType === 'percent'
+        ? Math.min(subtotal, (subtotal * Number(coupon.amount ?? 0)) / 100)
+        : Math.min(subtotal, Number(coupon.amount ?? 0))
+      : 0;
+    const tax = await this.resolveTax(collection.userId, orderItems, Math.max(0, subtotal - discount), shipping, customer.address);
+    const total = Math.max(0, subtotal + tax + shipping - discount);
+    const stripeConfig = this.resolveStripeConfig(settings);
+    if (!stripeConfig.enabled || !stripeConfig.secretKey || !stripeConfig.publishableKey) {
+      throw new BadRequestException(this.stripeMissingMessage(stripeConfig));
+    }
+
+    const order = await this.createOrder(collection.userId, {
+      customer,
+      items: orderItems,
+      subtotal,
+      tax,
+      shipping,
+      shippingMethodId: shippingMethod?._id?.toString(),
+      shippingMethodName: shippingMethod?.name ?? '',
+      shippingNote: shippingMethod?.region ?? '',
+      discount,
+      total,
+      paymentStatus: 'unpaid',
+      status: 'pending',
+    });
+
+    const stripe = new Stripe(stripeConfig.secretKey);
+    const currency = (settings?.currency ?? 'EUR').toLowerCase();
+    const stripeCoupon = discount > 0
+      ? await stripe.coupons.create(
+          {
+            amount_off: this.stripeAmount(discount, currency),
+            currency,
+            duration: 'once',
+            name: couponCode || 'Discount',
+          },
+        )
+      : null;
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: orderItems.map((item) => ({
+        quantity: item.quantity,
+        price_data: {
+          currency,
+          unit_amount: this.stripeAmount(item.unitPrice, currency),
+          product_data: {
+            name: item.name,
+          },
+        },
+      })).concat([
+        ...(shipping > 0
+          ? [{
+              quantity: 1,
+              price_data: {
+                currency,
+                unit_amount: this.stripeAmount(shipping, currency),
+                product_data: { name: shippingMethod?.name ?? 'Shipping' },
+              },
+            }]
+          : []),
+        ...(tax > 0
+          ? [{
+              quantity: 1,
+              price_data: {
+                currency,
+                unit_amount: this.stripeAmount(tax, currency),
+                product_data: { name: 'Tax' },
+              },
+            }]
+          : []),
+      ]),
+      discounts: stripeCoupon ? [{ coupon: stripeCoupon.id }] : undefined,
+      customer_email: customer.email,
+      payment_intent_data: {
+        receipt_email: customer.email,
+      },
+      success_url:
+        dto.successUrl ||
+        `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/store/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:
+        dto.cancelUrl ||
+        `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/store/cancel`,
+      metadata: {
+        orderId: order._id?.toString(),
+        ownerUserId: collection.userId,
+        couponId: coupon?._id?.toString() ?? '',
+      },
+    });
+
+    return {
+      order,
+      paymentUnavailable: false,
+      checkoutUrl: session.url,
+      sessionId: session.id,
+    };
+  }
+
+  async publicCheckoutSession(sessionId: string) {
+    const settings = await this.settingModel.findOne({ 'paymentMethods.stripe.enabled': true }).lean();
+    const stripeConfig = this.resolveStripeConfig(settings);
+    if (!stripeConfig.secretKey) throw new BadRequestException('Stripe secret key is missing.');
+    const stripe = new Stripe(stripeConfig.secretKey);
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const orderId = session.metadata?.orderId;
+    if (orderId && session.payment_status === 'paid') {
+      await this.orderModel.updateOne(
+        { _id: orderId },
+        { $set: { paymentStatus: 'paid', status: 'processing' } },
+      );
+      if (session.metadata?.couponId) {
+        await this.couponModel.updateOne(
+          { _id: session.metadata.couponId },
+          { $inc: { usageCount: 1 } },
+        );
+      }
+    }
+    return {
+      sessionId: session.id,
+      paymentStatus: session.payment_status,
+      status: session.status,
+      orderId,
+      success: session.payment_status === 'paid',
     };
   }
 
@@ -280,6 +512,7 @@ export class StoreService {
   }
 
   async findOrders(userId: string) {
+    await this.deleteExpiredUnpaidOrders(userId);
     return this.orderModel.find({ userId }).sort({ createdAt: -1 }).lean();
   }
 
@@ -531,6 +764,15 @@ export class StoreService {
     );
   }
 
+  private async deleteExpiredUnpaidOrders(userId: string) {
+    const cutoff = new Date(Date.now() - 60 * 60 * 1000);
+    await this.orderModel.deleteMany({
+      userId,
+      paymentStatus: 'unpaid',
+      createdAt: { $lt: cutoff },
+    });
+  }
+
   private async resolveTax(
     userId: string,
     items: { type: string; total: number }[],
@@ -568,5 +810,52 @@ export class StoreService {
         },
       },
     };
+  }
+
+  private resolveStripeConfig(settings: any) {
+    const stripe = settings?.paymentMethods?.stripe ?? {};
+    return {
+      enabled: Boolean(stripe.enabled || process.env.STRIPE_ENABLED === 'true'),
+      publishableKey:
+        stripe.publishableKey ||
+        process.env.STRIPE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+        '',
+      secretKey:
+        stripe.secretKey ||
+        process.env.STRIPE_SECRET_KEY ||
+        process.env.STRIPE_SK ||
+        '',
+    };
+  }
+
+  private stripeMissingMessage(stripe: { enabled: boolean; publishableKey?: string; secretKey?: string }) {
+    if (!stripe.enabled) return 'Stripe is turned off.';
+    if (!stripe.publishableKey) return 'Stripe publishable key is missing.';
+    if (!stripe.secretKey) return 'Stripe secret key is missing.';
+    return 'No payment method active at this moment.';
+  }
+
+  private stripeAmount(value: number, currency: string) {
+    const zeroDecimal = new Set([
+      'bif',
+      'clp',
+      'djf',
+      'gnf',
+      'jpy',
+      'kmf',
+      'krw',
+      'mga',
+      'pyg',
+      'rwf',
+      'ugx',
+      'vnd',
+      'vuv',
+      'xaf',
+      'xof',
+      'xpf',
+    ]);
+    const amount = Number(value ?? 0);
+    return Math.max(1, Math.round(amount * (zeroDecimal.has(currency) ? 1 : 100)));
   }
 }

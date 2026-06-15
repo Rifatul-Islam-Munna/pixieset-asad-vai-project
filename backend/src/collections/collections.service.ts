@@ -84,6 +84,60 @@ export class CollectionsService {
     return { ...collection, images };
   }
 
+  async findPublic(identifier: string) {
+    const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];
+    if (identifier.match(/^[a-f\d]{24}$/i)) query.unshift({ _id: identifier });
+    const collection = await this.collectionModel
+      .findOne({
+        $or: query,
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const images = await this.imageModel
+      .find({ collectionId: collection._id.toString() })
+      .sort({ createdAt: -1 })
+      .lean();
+    const preset = collection.presetId
+      ? await this.settingModel
+          .findOne({
+            userId: collection.userId,
+            type: DashboardSettingType.PRESET,
+            localId: collection.presetId,
+          })
+          .lean()
+      : null;
+    const presetData = preset?.data as any;
+
+    return {
+      ...collection,
+      design: {
+        ...(presetData?.design ?? presetData?.presetDesign ?? {}),
+        ...(collection.design ?? {}),
+      },
+      settings: {
+        general: {
+          ...(presetData?.general ?? presetData?.presetGeneral ?? {}),
+          ...((collection.settings as any)?.general ?? {}),
+        },
+        download: {
+          ...(presetData?.download ?? presetData?.presetDownload ?? {}),
+          ...((collection.settings as any)?.download ?? {}),
+        },
+        favorite: {
+          ...(presetData?.favorite ?? presetData?.presetFavorite ?? {}),
+          ...((collection.settings as any)?.favorite ?? {}),
+        },
+        store: {
+          ...(presetData?.store ?? presetData?.presetStore ?? {}),
+          ...((collection.settings as any)?.store ?? {}),
+        },
+      },
+      images,
+    };
+  }
+
   async findAllImages(userId: string) {
     const images = await this.imageModel
       .find({ userId })

@@ -8,8 +8,9 @@ import { StoreOrder, StoreOrderSchema } from './entities/store-order.entity';
 import { StoreShipping, StoreShippingSchema } from './entities/store-shipping.entity';
 import { StoreSetting, StoreSettingSchema } from './entities/store-setting.entity';
 import { StoreTax, StoreTaxSchema } from './entities/store-tax.entity';
-import { StoreController } from './store.controller';
+import { PublicStoreController, StoreController } from './store.controller';
 import { StoreService } from './store.service';
+import { Collection, CollectionSchema } from 'src/collections/entities/collection.entity';
 
 @Module({
   imports: [
@@ -22,9 +23,10 @@ import { StoreService } from './store.service';
       { name: StoreTax.name, schema: StoreTaxSchema },
       { name: StoreShipping.name, schema: StoreShippingSchema },
       { name: StoreSetting.name, schema: StoreSettingSchema },
+      { name: Collection.name, schema: CollectionSchema },
     ]),
   ],
-  controllers: [StoreController],
+  controllers: [StoreController, PublicStoreController],
   providers: [StoreService],
 })
 export class StoreModule {}

@@ -406,7 +406,22 @@ export function useStoreOrders() {
     },
   });
 
-  return { ordersQuery, createOrder, updateOrder };
+  const deleteOrder = useMutation({
+    mutationFn: async (orderId: string) => {
+      const [data, error] = await DeleteRequestAxios<
+        ListResponse<StoreOrderRecord> & { message: string }
+      >(`/store/orders/${orderId}`);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["store-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["store-dashboard"] });
+    },
+  });
+
+  return { ordersQuery, createOrder, updateOrder, deleteOrder };
 }
 
 export function useStoreCustomers() {

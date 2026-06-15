@@ -2477,20 +2477,6 @@ function PresetDesignPanel({
       <div className="mt-8 overflow-hidden border bg-[#f7f7f7] p-3">
         <CoverPreview design={design} className="min-h-[360px]" />
       </div>
-      <p className="mt-10 text-sm font-bold">Cover</p>
-      <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3">
-        {coverOptions.map(([name]) => (
-          <button key={name} className="text-center" onClick={() => onChange({ cover: name })}>
-            <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-              <span className="relative block aspect-[1.45] overflow-hidden bg-white">
-                <CoverPreview design={{ ...design, cover: name }} compact className="min-h-0" />
-              </span>
-            </span>
-            <span className="mt-3 block text-sm">{name}</span>
-          </button>
-        ))}
-      </div>
-
       <OptionSection title="Cover Text">
         <FieldGroup className="gap-5">
           {([
@@ -2516,6 +2502,19 @@ function PresetDesignPanel({
           ))}
         </FieldGroup>
       </OptionSection>
+      <p className="mt-10 text-sm font-bold">Cover</p>
+      <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3">
+        {coverOptions.map(([name]) => (
+          <button key={name} className="text-center" onClick={() => onChange({ cover: name })}>
+            <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+              <span className="relative block aspect-[1.45] overflow-hidden bg-white">
+                <CoverPreview design={{ ...design, cover: name }} compact className="min-h-0" />
+              </span>
+            </span>
+            <span className="mt-3 block text-sm">{name}</span>
+          </button>
+        ))}
+      </div>
 
       <OptionSection title="Typography">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -2608,6 +2607,7 @@ function PresetDownloadPanel({
     webSizePx: "2048px" | "1024px" | "640px";
     videoDownload: boolean;
     downloadPin: boolean;
+    downloadPinCode: string;
     restrictDownloads: boolean;
     limitDownloads: boolean;
     limitPinUsage: string;
@@ -2684,6 +2684,14 @@ function PresetDownloadPanel({
             <p className="text-sm leading-6 text-[#666]">
               {text} <span className="text-[#00a997]">Learn more</span>
             </p>
+            {key === "downloadPin" && download.downloadPin && (
+              <Input
+                value={download.downloadPinCode}
+                onChange={(event) => onChange({ downloadPinCode: event.target.value })}
+                placeholder="Set download PIN"
+                className="mt-3 h-12 rounded-none bg-white px-5"
+              />
+            )}
           </Field>
         ))}
 
@@ -2708,17 +2716,16 @@ function PresetDownloadPanel({
                   <span>{download[key as "restrictDownloads" | "limitDownloads"] ? "On" : "Off"}</span>
                 </div>
                 <p className="text-sm leading-6 text-[#666]">{text}</p>
+                {key === "limitDownloads" && download.limitDownloads && (
+                  <Input
+                    value={download.limitPinUsage}
+                    onChange={(event) => onChange({ limitPinUsage: event.target.value })}
+                    placeholder="Number of downloads e.g. 5"
+                    className="mt-3 h-12 rounded-none bg-white px-5"
+                  />
+                )}
               </Field>
             ))}
-            <Field>
-              <FieldLabel className="font-bold">Limit PIN Usage</FieldLabel>
-              <Input
-                value={download.limitPinUsage}
-                onChange={(event) => onChange({ limitPinUsage: event.target.value })}
-                placeholder="e.g. 5"
-                className="h-12 rounded-none bg-white px-5"
-              />
-            </Field>
           </FieldGroup>
         </div>
       </FieldGroup>
@@ -3392,13 +3399,15 @@ const orderStatuses: StoreOrderStatus[] = [
 
 function StoreDashboardPanel() {
   const dashboardQuery = useStoreDashboard();
+  const settingsQuery = useStoreSettings().settingsQuery;
+  const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const data = dashboardQuery.data?.data;
   const stats = [
-    ["Revenue", money(data?.revenue ?? 0)],
+    ["Revenue", money(data?.revenue ?? 0, currency)],
     ["Orders", String(data?.orderCount ?? 0)],
     ["Customers", String(data?.customerCount ?? 0)],
     ["Pending", String(data?.pending ?? 0)],
-    ["Avg Order", money(data?.averageOrderValue ?? 0)],
+    ["Avg Order", money(data?.averageOrderValue ?? 0, currency)],
     ["Products", String(data?.productCount ?? 0)],
   ];
 
@@ -3424,7 +3433,7 @@ function StoreDashboardPanel() {
               order.orderNumber,
               order.customer?.name ?? "Customer",
               <StatusBadge key="status" value={order.status} />,
-              money(order.total),
+              money(order.total, currency),
             ])}
             empty="No orders yet"
           />
@@ -3446,8 +3455,10 @@ function StoreDashboardPanel() {
 }
 
 function StoreOrdersPanel() {
-  const { ordersQuery, createOrder, updateOrder } = useStoreOrders();
+  const { ordersQuery, createOrder, updateOrder, deleteOrder } = useStoreOrders();
   const { rulesQuery: shippingQuery } = useStoreRules<StoreShippingRecord>("shipping");
+  const settingsQuery = useStoreSettings().settingsQuery;
+  const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const orders = ordersQuery.data?.data ?? [];
   const shippingMethods = shippingQuery.data?.data ?? [];
   const [open, setOpen] = useState(false);
@@ -3523,7 +3534,7 @@ function StoreOrdersPanel() {
       <div className="border bg-white">
         <StoreTableHeader title={`${orders.length} Orders`} />
         <StoreTable
-          columns={["Order", "Customer", "Items", "Shipping", "Tracking", "Status", "Payment", "Total"]}
+          columns={["Order", "Customer", "Items", "Shipping", "Tracking", "Status", "Payment", "Total", "Actions"]}
           rows={orders.map((order) => [
             order.orderNumber,
             <div key="customer">
@@ -3532,7 +3543,7 @@ function StoreOrdersPanel() {
             </div>,
             `${order.items?.length ?? 0} item`,
             <div key="shipping">
-              <p>{money(order.shipping ?? 0)}</p>
+              <p>{money(order.shipping ?? 0, currency)}</p>
               <p className="text-xs text-[#777]">{order.shippingMethodName || order.shippingNote || "-"}</p>
             </div>,
             order.trackingNumber || "-",
@@ -3552,7 +3563,15 @@ function StoreOrdersPanel() {
               ))}
             </select>,
             <StatusBadge key="payment" value={order.paymentStatus} />,
-            money(order.total),
+            money(order.total, currency),
+            <button
+              key="delete"
+              className="text-red-600"
+              onClick={() => deleteOrder.mutate(order._id)}
+              aria-label="Delete order"
+            >
+              <Trash2 className="size-4" />
+            </button>,
           ])}
           empty="No orders yet"
         />
@@ -3599,7 +3618,7 @@ function StoreOrdersPanel() {
                   <option value="">Manual shipping</option>
                   {shippingMethods.map((method) => (
                     <option key={method._id} value={method._id}>
-                      {method.name} - {money(method.price)}
+                      {method.name} - {money(method.price, currency)}
                     </option>
                   ))}
                 </select>
@@ -3621,6 +3640,8 @@ function StoreOrdersPanel() {
 
 function StoreCustomersPanel() {
   const { customersQuery, createCustomer } = useStoreCustomers();
+  const settingsQuery = useStoreSettings().settingsQuery;
+  const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const customers = customersQuery.data?.data ?? [];
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
@@ -3652,7 +3673,7 @@ function StoreCustomersPanel() {
             </div>,
             customer.phone || "-",
             String(customer.orderCount ?? 0),
-            money(customer.totalSpent ?? 0),
+            money(customer.totalSpent ?? 0, currency),
             customer.lastOrderAt ? formatDate(customer.lastOrderAt) : "-",
           ])}
           empty="No customers yet"
@@ -3683,6 +3704,8 @@ function StoreCustomersPanel() {
 
 function StoreCouponsPanel() {
   const { rulesQuery, saveRule, deleteRule } = useStoreRules<StoreCouponRecord>("coupons");
+  const settingsQuery = useStoreSettings().settingsQuery;
+  const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const coupons = rulesQuery.data?.data ?? [];
   const [form, setForm] = useState({ code: "", name: "", discountType: "percent", amount: "" });
   return (
@@ -3711,7 +3734,7 @@ function StoreCouponsPanel() {
           coupon.code,
           coupon.name,
           coupon.discountType,
-          coupon.discountType === "percent" ? `${coupon.amount}%` : money(coupon.amount),
+          coupon.discountType === "percent" ? `${coupon.amount}%` : money(coupon.amount, currency),
           String(coupon.usageCount ?? 0),
           <StatusBadge key="active" value={coupon.active ? "active" : "off"} />,
           <button key="delete" className="text-red-600" onClick={() => deleteRule.mutate(coupon._id)}>Delete</button>,
@@ -3893,6 +3916,8 @@ function StoreTaxesPanel() {
 
 function StoreShippingPanel() {
   const { rulesQuery, saveRule, deleteRule } = useStoreRules<StoreShippingRecord>("shipping");
+  const settingsQuery = useStoreSettings().settingsQuery;
+  const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const rates = rulesQuery.data?.data ?? [];
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -3971,7 +3996,7 @@ function StoreShippingPanel() {
                   {rates.length ? rates.map((rate) => (
                     <tr key={rate._id} className="border-b">
                       <td className="px-2 py-5">{rate.name}</td>
-                      <td className="px-2 py-5">{money(rate.price)}</td>
+                      <td className="px-2 py-5">{money(rate.price, currency)}</td>
                       <td className="px-2 py-5">
                         {rate.shipInternational ? "International" : rate.region || "United States"}
                       </td>
@@ -4098,7 +4123,7 @@ function StoreShippingPanel() {
 
 const defaultStoreSettings: StoreSettingsRecord = {
   globalStatus: false,
-  currency: "BDT",
+  currency: "EUR",
   orderDelay: "6 Hours",
   maintainMarkup: true,
   roundPricesUpTo: ".00",
@@ -4231,9 +4256,9 @@ function StoreSettingsPanel() {
               }
               className="mt-3 h-11 w-full border bg-white px-3 text-sm outline-none"
             >
-              <option value="BDT">Bangladesh (BDT)</option>
-              <option value="USD">United States (USD)</option>
               <option value="EUR">Euro (EUR)</option>
+              <option value="USD">United States (USD)</option>
+              <option value="BDT">Bangladesh (BDT)</option>
               <option value="GBP">British Pound (GBP)</option>
             </select>
           </div>
@@ -4569,8 +4594,8 @@ function StatusBadge({ value }: { value: string }) {
   );
 }
 
-function money(value: number) {
-  return `BDT${Number(value || 0).toFixed(2)}`;
+function money(value: number, currency = "EUR") {
+  return `${currency} ${Number(value || 0).toFixed(2)}`;
 }
 
 function StoreProductsPanel() {
@@ -4730,6 +4755,8 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
   const router = useRouter();
   const { priceSheetQuery, updatePriceSheet, createProduct, deleteProduct } =
     useStorePriceSheet(priceSheetId);
+  const settingsQuery = useStoreSettings().settingsQuery;
+  const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const sheet = priceSheetQuery.data?.data;
   const products = sheet?.products ?? [];
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -4857,7 +4884,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
           <DetailStat label="Name" value={sheet.name} />
           <DetailStat label="Assigned To" value={`${sheet.collectionCount ?? 0} Collection`} />
           <DetailStat label="Fulfillment" value="Self Fulfillment" />
-          <DetailStat label="Minimum Order Value" value={`BDT${(sheet.minimumOrderAmount ?? 0).toFixed(2)}`} />
+          <DetailStat label="Minimum Order Value" value={money(sheet.minimumOrderAmount ?? 0, currency)} />
           <DetailStat label="Available Products" value={`${products.length} Items`} />
         </div>
       </div>
@@ -4872,6 +4899,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                   <ProductTile
                     key={product._id}
                     product={product}
+                    currency={currency}
                     onDelete={() => deleteProduct.mutate(product._id)}
                   />
                 ))}
@@ -4960,9 +4988,11 @@ function DetailStat({ label, value }: { label: string; value: string }) {
 
 function ProductTile({
   product,
+  currency,
   onDelete,
 }: {
   product: StoreProductRecord;
+  currency: string;
   onDelete: () => void;
 }) {
   return (
@@ -4986,7 +5016,7 @@ function ProductTile({
       <div className="mt-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{product.name}</p>
-          <p className="mt-1 text-sm text-[#777]">From BDT{Number(product.price || 0).toFixed(2)}</p>
+          <p className="mt-1 text-sm text-[#777]">From {money(product.price || 0, currency)}</p>
           <p className="mt-1 text-xs text-[#999]">{productTypeLabels[product.type]}</p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#00a997]" />
@@ -5124,6 +5154,7 @@ function ProductEditorDialog({
     price: "",
     extraShipping: "0",
     category: "Prints",
+    images: [] as string[],
     downloadType: "single-photo" as "single-photo" | "all-photos",
     downloadSize: "High Resolution Original (Full res)",
     noImageRequired: false,
@@ -5143,6 +5174,7 @@ function ProductEditorDialog({
       price: "",
       extraShipping: "0",
       category: type === "digital-download" ? "Digital Downloads" : "Prints",
+      images: [],
       downloadType: "single-photo",
       downloadSize: "High Resolution Original (Full res)",
       noImageRequired: false,
@@ -5162,6 +5194,7 @@ function ProductEditorDialog({
       price: Number(form.price) || 0,
       extraShipping: Number(form.extraShipping) || 0,
       category: form.category,
+      images: form.images,
       downloadType: type === "digital-download" ? form.downloadType : undefined,
       downloadSize: type === "digital-download" ? form.downloadSize : undefined,
       noImageRequired: form.noImageRequired,
@@ -5169,6 +5202,21 @@ function ProductEditorDialog({
       limitOnePerCheckout: form.limitOnePerCheckout,
       allowBulkPurchase: form.allowBulkPurchase,
     });
+  };
+  const pickImages = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const images = await Promise.all(
+      Array.from(files).map(
+        (file) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          }),
+      ),
+    );
+    setForm((current) => ({ ...current, images: [...current.images, ...images] }));
   };
 
   return (
@@ -5222,6 +5270,47 @@ function ProductEditorDialog({
               </select>
             </Field>
           )}
+
+          <Field>
+            <FieldLabel className="font-bold">Product Images</FieldLabel>
+            <label className="flex min-h-[150px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white text-center">
+              <FileUp className="size-8 text-[#22bda7]" />
+              <span className="mt-3 text-sm font-bold">Upload product photo</span>
+              <span className="mt-1 text-xs text-[#777]">Shown in store product cards.</span>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  pickImages(event.target.files);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            {form.images.length > 0 && (
+              <div className="mt-3 grid grid-cols-4 gap-3">
+                {form.images.map((image, index) => (
+                  <div key={`${image.slice(0, 24)}-${index}`} className="group relative aspect-square bg-[#f3f3f3]">
+                    <img src={image} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1 hidden size-7 items-center justify-center bg-white text-red-600 shadow-sm group-hover:flex"
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          images: current.images.filter((_, itemIndex) => itemIndex !== index),
+                        }))
+                      }
+                      aria-label="Remove product image"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Field>
 
           <Field>
             <FieldLabel className="font-bold">Name</FieldLabel>
@@ -5434,6 +5523,8 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
         settings: {
           general: preset?.general ?? collectionDefaultGeneral,
           download: preset?.download ?? collectionDefaultDownload,
+          favorite: preset?.favorite,
+          store: preset?.store,
         },
       },
       {
@@ -5559,6 +5650,8 @@ function CollectionDetailView({
   const [newSetName, setNewSetName] = useState("");
   const [editingSetId, setEditingSetId] = useState("");
   const [editingSetName, setEditingSetName] = useState("");
+  const [pageOrigin, setPageOrigin] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
   const [form, setForm] = useState(() => collectionForm(collection));
   const activeImage =
     images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
@@ -5578,7 +5671,12 @@ function CollectionDetailView({
       watermark.id === uploadWatermarkId ||
       watermark.name === uploadWatermarkId,
   );
-  const publicLink = `/collection/${collection?.slug ?? collectionId}`;
+  const publicPath = `/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collection?.slug ?? collectionId)}`;
+  const publicLink = `${pageOrigin}${publicPath}`;
+
+  useEffect(() => {
+    setPageOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     const settings = [
@@ -5619,6 +5717,7 @@ function CollectionDetailView({
   const presetName = (id?: string) =>
     presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
   const saveCollection = () => {
+    const selectedPreset = presetItems.find((preset) => preset.id === form.presetId);
     updateCollection.mutate({
       name: form.name.trim() || collection?.name,
       presetId: form.presetId || undefined,
@@ -5631,6 +5730,8 @@ function CollectionDetailView({
       settings: {
         general: form.general,
         download: form.download,
+        favorite: selectedPreset?.favorite ?? collection?.settings?.favorite,
+        store: selectedPreset?.store ?? collection?.settings?.store,
       },
     });
   };
@@ -5688,6 +5789,11 @@ function CollectionDetailView({
     setEditingSetId("");
     setEditingSetName("");
   };
+  const copyPublicLink = async () => {
+    await navigator.clipboard.writeText(publicLink);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 1600);
+  };
   if (!collection) {
     return (
       <div className="flex min-h-[420px] items-center justify-center text-sm text-[#666]">
@@ -5714,7 +5820,13 @@ function CollectionDetailView({
           <p className="mt-2 text-sm text-[#666]">
             {formatDate(collection.eventDate)} &middot; {presetName(collection.presetId)} &middot; {images.length} images
           </p>
-          <p className="mt-2 break-all text-xs text-[#00a997]">{publicLink}</p>
+          <div className="mt-2 flex max-w-[720px] flex-wrap items-center gap-2">
+            <p className="break-all text-xs text-[#00a997]">{publicLink}</p>
+            <Button variant="outline" className="h-8 rounded-none px-3 text-xs" onClick={copyPublicLink}>
+              <Copy data-icon="inline-start" />
+              {linkCopied ? "Copied" : "Copy"}
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button
@@ -6184,6 +6296,7 @@ const collectionDefaultDownload: PresetDownloadSettings = {
   webSizePx: "1024px",
   videoDownload: false,
   downloadPin: true,
+  downloadPinCode: "1234",
   restrictDownloads: false,
   limitDownloads: false,
   limitPinUsage: "",
@@ -6207,13 +6320,23 @@ function coverTextOrDefault(value: string | undefined, fallback: string) {
 }
 
 function collectionForm(collection?: CollectionRecord): CollectionFormState {
+  const savedDesign = (collection?.design ?? {}) as Partial<PresetDesignSettings>;
+  const eventLabel = collection?.eventDate ? formatDate(collection.eventDate) : "";
+  const design = {
+    ...collectionDefaultDesign,
+    ...savedDesign,
+    coverTitle: coverTextOrDefault(savedDesign.coverTitle, collection?.name ?? collectionDefaultDesign.coverTitle),
+    coverDate: coverTextOrDefault(savedDesign.coverDate, eventLabel || collectionDefaultDesign.coverDate),
+    coverButtonText: coverTextOrDefault(savedDesign.coverButtonText, "View Gallery"),
+  } as PresetDesignSettings;
+
   return {
     name: collection?.name ?? "",
     presetId: collection?.presetId ?? "",
     coverImage: collection?.coverImage ?? "",
     expiresAt: collection?.expiresAt ? collection.expiresAt.slice(0, 10) : "",
     sets: collection?.sets?.length ? collection.sets : [{ id: "highlights", name: "Highlights" }],
-    design: { ...collectionDefaultDesign, ...(collection?.design ?? {}) } as PresetDesignSettings,
+    design,
     general: {
       ...collectionDefaultGeneral,
       collectionTags: collection?.tags?.join(", ") ?? collectionDefaultGeneral.collectionTags,

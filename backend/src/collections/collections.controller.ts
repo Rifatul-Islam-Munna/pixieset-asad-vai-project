@@ -38,6 +38,17 @@ const uploadOptions = {
   limits: { fileSize: 1024 * 1024 * 30 },
 };
 
+@Controller('public/collections')
+export class PublicCollectionsController {
+  constructor(private readonly collectionsService: CollectionsService) {}
+
+  @Get(':identifier')
+  async findPublic(@Param('identifier') identifier: string) {
+    const data = await this.collectionsService.findPublic(identifier);
+    return { data };
+  }
+}
+
 @Controller('collections')
 @UseGuards(AuthGuard)
 export class CollectionsController {

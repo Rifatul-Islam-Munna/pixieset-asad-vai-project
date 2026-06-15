@@ -5,7 +5,7 @@ import {
   DashboardSetting,
   DashboardSettingSchema,
 } from 'src/settings/entities/dashboard-setting.entity';
-import { CollectionsController } from './collections.controller';
+import { CollectionsController, PublicCollectionsController } from './collections.controller';
 import { CollectionsService } from './collections.service';
 import { Collection, CollectionSchema } from './entities/collection.entity';
 import {
@@ -21,7 +21,7 @@ import {
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
     ]),
   ],
-  controllers: [CollectionsController],
+  controllers: [CollectionsController, PublicCollectionsController],
   providers: [CollectionsService, MinioService],
 })
 export class CollectionsModule {}

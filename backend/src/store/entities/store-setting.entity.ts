@@ -11,7 +11,7 @@ export class StoreSetting {
   @Prop({ default: false })
   globalStatus: boolean;
 
-  @Prop({ default: 'BDT' })
+  @Prop({ default: 'EUR' })
   currency: string;
 
   @Prop({ default: '6 Hours' })
