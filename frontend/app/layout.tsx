@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import QueryClint from "@/lib/queryclient";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -43,6 +44,7 @@ export default function RootLayout({
         <QueryClint>
           <TooltipProvider>{children}</TooltipProvider>
         </QueryClint>
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );

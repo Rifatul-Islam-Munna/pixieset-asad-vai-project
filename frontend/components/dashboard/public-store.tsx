@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, ShoppingBag, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 
 type PublicProduct = {
   _id: string;
@@ -77,12 +78,10 @@ export function PublicStore({
     setCart((items) => {
       const existing = items.find((item) => item.product._id === product._id);
       if (existing) {
-        return items.map((item) =>
-          item.product._id === product._id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item,
-        );
+        toast.info("Product already in cart");
+        return items;
       }
+      toast.success("Product added to cart");
       return [...items, { product, quantity: 1 }];
     });
   };
