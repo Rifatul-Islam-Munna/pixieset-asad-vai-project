@@ -11,6 +11,7 @@ import { AdminStripeSettingDto } from './dto/admin-stripe-setting.dto';
 import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
 import { AdminStripeSetting, AdminStripeSettingDocument } from './entities/admin-stripe-setting.entity';
 import { Plan, PlanDocument } from './entities/plan.entity';
+import { StoreOrder, StoreOrderDocument } from 'src/store/entities/store-order.entity';
 
 @Injectable()
 export class AdminService {
@@ -21,15 +22,68 @@ export class AdminService {
     @InjectModel(Plan.name) private readonly planModel: Model<PlanDocument>,
     @InjectModel(AdminStripeSetting.name)
     private readonly stripeSettingModel: Model<AdminStripeSettingDocument>,
+    @InjectModel(StoreOrder.name) private readonly orderModel: Model<StoreOrderDocument>,
   ) {}
 
   async dashboard() {
-    const [users, collections, images] = await Promise.all([
+    const now = new Date();
+    const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const monthKeys = Array.from({ length: 6 }).map((_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+      return date.toISOString().slice(0, 7);
+    });
+
+    const [users, collections, images, plans, orders, paidRevenue, usersByMonth, ordersByMonth, planMix, recentUsers] = await Promise.all([
       this.userModel.countDocuments(),
       this.collectionModel.countDocuments(),
       this.imageModel.countDocuments(),
+      this.planModel.countDocuments(),
+      this.orderModel.countDocuments(),
+      this.orderModel.aggregate([
+        { $match: { paymentStatus: 'paid' } },
+        { $group: { _id: null, revenue: { $sum: '$total' } } },
+      ]),
+      this.userModel.aggregate([
+        { $match: { createdAt: { $gte: startMonth } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } }, users: { $sum: 1 } } },
+      ]),
+      this.orderModel.aggregate([
+        { $match: { createdAt: { $gte: startMonth } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
+            orders: { $sum: 1 },
+            revenue: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, '$total', 0] } },
+          },
+        },
+      ]),
+      this.userModel.aggregate([
+        { $group: { _id: { $ifNull: ['$planName', 'Free'] }, value: { $sum: 1 } } },
+        { $sort: { value: -1 } },
+      ]),
+      this.userModel.find().select('name email phoneNumber role planName createdAt').sort({ createdAt: -1 }).limit(6).lean(),
     ]);
-    return { users, collections, images };
+
+    const userMonthMap = new Map(usersByMonth.map((item) => [item._id, item.users]));
+    const orderMonthMap = new Map(ordersByMonth.map((item) => [item._id, item]));
+    const monthly = monthKeys.map((month) => ({
+      month,
+      users: userMonthMap.get(month) ?? 0,
+      orders: orderMonthMap.get(month)?.orders ?? 0,
+      revenue: orderMonthMap.get(month)?.revenue ?? 0,
+    }));
+
+    return {
+      users,
+      collections,
+      images,
+      plans,
+      orders,
+      revenue: paidRevenue[0]?.revenue ?? 0,
+      monthly,
+      planMix: planMix.map((item) => ({ name: item._id, value: item.value })),
+      recentUsers,
+    };
   }
 
   async findUsers() {

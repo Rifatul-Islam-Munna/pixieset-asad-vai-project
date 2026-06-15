@@ -15,6 +15,7 @@ export type AdminUser = {
   role: "admin" | "editor" | "user";
   gender?: string;
   collectionCount?: number;
+  planName?: string;
   createdAt?: string;
 };
 
@@ -50,7 +51,17 @@ export type AdminStripeSetting = {
 };
 
 export type AdminDashboardData = {
-  stats: { users: number; collections: number; images: number };
+  stats: {
+    users: number;
+    collections: number;
+    images: number;
+    plans?: number;
+    orders?: number;
+    revenue?: number;
+    monthly?: { month: string; users: number; orders: number; revenue: number }[];
+    planMix?: { name: string; value: number }[];
+    recentUsers?: AdminUser[];
+  };
   users: AdminUser[];
   collections: AdminCollection[];
   plans: AdminPlan[];
@@ -69,7 +80,7 @@ async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
     cache: "no-store",
   });
 
-  if (response.status === 401 || response.status === 403) redirect("/admin/login");
+  if (response.status === 401 || response.status === 403) redirect("/login");
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message ?? "Request failed");
   return payload?.data as T;

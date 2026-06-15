@@ -3,7 +3,7 @@
 import { useState, useTransition, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Loader2, LockKeyhole, Mail, Phone, UserRound, VenusAndMars } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, Mail, Phone, UserRound, VenusAndMars } from "lucide-react";
 import { registerUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,6 +126,9 @@ function AuthInput({
   type?: string;
   required?: boolean;
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const inputType = type === "password" && showPassword ? "text" : type;
+
   return (
     <label className="grid gap-2">
       <span className="text-sm font-bold">{label}</span>
@@ -135,10 +138,20 @@ function AuthInput({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          type={type}
+          type={inputType}
           required={required}
           className="h-11 rounded-none border-0 px-0 text-[#151515] shadow-none focus-visible:ring-0"
         />
+        {type === "password" && (
+          <button
+            type="button"
+            onClick={() => setShowPassword((value) => !value)}
+            className="ml-3 text-[#777]"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        )}
       </div>
     </label>
   );

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition, type FormEvent } from "react";
+import { useMemo, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Edit3, FileImage, Images, Loader2, LogOut, Package, PlusCircle, Search, ShieldCheck, Trash2, Users, X } from "lucide-react";
+import { BarChart3, DollarSign, Edit3, FileImage, Images, Loader2, LogOut, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
   createAdminPlan,
@@ -25,7 +26,7 @@ import { logOutUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { mergeHomeCms, type HomeCmsData } from "@/lib/home-cms";
+import { mergeHomeCms, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 type UserForm = {
@@ -47,6 +48,8 @@ type PlanForm = {
   features: Record<string, boolean>;
   active: boolean;
 };
+
+type AdminTab = "overview" | "users" | "collections" | "plans" | "stripe" | "cms";
 
 const emptyForm: UserForm = {
   name: "",
@@ -79,21 +82,19 @@ const planFeatures = [
 export function AdminDashboard({ initialData }: { initialData: AdminDashboardData }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [tab, setTab] = useState<"users" | "collections" | "plans" | "stripe" | "cms">("users");
+  const [tab, setTab] = useState<AdminTab>("overview");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [planForm, setPlanForm] = useState<PlanForm>(emptyPlanForm);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [stripeForm, setStripeForm] = useState<AdminStripeSetting>(
     initialData.stripe ?? { enabled: false, publishableKey: "" },
   );
   const [homeCms, setHomeCms] = useState<HomeCmsData>(mergeHomeCms(initialData.homeCms));
-  const [homeCmsText, setHomeCmsText] = useState({
-    en: JSON.stringify(homeCms.content.en, null, 2),
-    gr: JSON.stringify(homeCms.content.gr, null, 2),
-  });
+  const [homeCmsLang, setHomeCmsLang] = useState<HomeLanguage>("en");
 
   const users = initialData.users;
   const collections = initialData.collections;
@@ -260,19 +261,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const saveHomeCms = () => {
     startTransition(async () => {
       try {
-        const payload = {
-          ...homeCms,
-          content: {
-            en: JSON.parse(homeCmsText.en),
-            gr: JSON.parse(homeCmsText.gr),
-          },
-        };
-        const data = await updateHomeCms(payload);
+        const data = await updateHomeCms(homeCms);
         setHomeCms(data);
-        setHomeCmsText({
-          en: JSON.stringify(data.content.en, null, 2),
-          gr: JSON.stringify(data.content.gr, null, 2),
-        });
         toast.success("Home CMS saved");
         router.refresh();
       } catch (error) {
@@ -281,12 +271,16 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     });
   };
 
+  const uploadCmsFile = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return uploadHomeCmsFile(formData);
+  };
+
   const uploadCmsMedia = (file: File) => {
     startTransition(async () => {
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const url = await uploadHomeCmsFile(formData);
+        const url = await uploadCmsFile(file);
         setHomeCms({
           ...homeCms,
           media: {
@@ -304,7 +298,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const logout = () => {
     startTransition(async () => {
       await logOutUser();
-      router.push("/admin/login");
+      router.push("/login");
     });
   };
 
@@ -328,71 +322,66 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   return (
     <main className="min-h-screen bg-[#f6f6f3] text-[#151515]">
       <div className="grid min-h-screen lg:grid-cols-[260px_1fr]">
-        <aside className="border-r bg-white px-5 py-6">
+        <aside className="hidden border-r bg-white px-5 py-6 lg:block">
           <div className="flex items-center gap-3 text-sm font-bold">
             <span className="size-5 rounded-full bg-[#0dc6b5]" />
             Pixieset Admin
           </div>
-          <nav className="mt-10 grid gap-2">
-            <button
-              className={navClass(tab === "users")}
-              onClick={() => setTab("users")}
-            >
-              <Users className="size-4" />
-              Users
-            </button>
-            <button
-              className={navClass(tab === "collections")}
-              onClick={() => setTab("collections")}
-            >
-              <Images className="size-4" />
-              Collections
-            </button>
-            <button
-              className={navClass(tab === "plans")}
-              onClick={() => setTab("plans")}
-            >
-              <Package className="size-4" />
-              Plans
-            </button>
-            <button
-              className={navClass(tab === "stripe")}
-              onClick={() => setTab("stripe")}
-            >
-              <ShieldCheck className="size-4" />
-              Stripe
-            </button>
-            <button
-              className={navClass(tab === "cms")}
-              onClick={() => setTab("cms")}
-            >
-              <FileImage className="size-4" />
-              Home CMS
-            </button>
-          </nav>
+          <AdminNav tab={tab} setTab={setTab} />
           <Button onClick={logout} variant="outline" className="mt-10 h-10 w-full rounded-none" disabled={pending}>
             <LogOut className="size-4" />
             Logout
           </Button>
         </aside>
 
-        <section className="min-w-0 px-5 py-6 md:px-8">
+        <section className="min-w-0 px-4 py-4 md:px-8 md:py-6">
+          <div className="mb-5 flex items-center justify-between bg-white px-4 py-3 lg:hidden">
+            <div className="flex items-center gap-3 text-sm font-bold">
+              <span className="size-5 rounded-full bg-[#0dc6b5]" />
+              Pixieset Admin
+            </div>
+            <button className="flex size-10 items-center justify-center bg-[#111] text-white" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu">
+              <Menu />
+            </button>
+          </div>
+
+          {adminMenuOpen && (
+            <div className="fixed inset-0 z-50 bg-black/50 lg:hidden">
+              <aside className="h-full w-[82vw] max-w-[320px] bg-white px-5 py-6 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-sm font-bold">
+                    <span className="size-5 rounded-full bg-[#0dc6b5]" />
+                    Pixieset Admin
+                  </div>
+                  <button className="flex size-10 items-center justify-center bg-[#f3f3f3]" onClick={() => setAdminMenuOpen(false)} aria-label="Close admin menu">
+                    <X className="size-5" />
+                  </button>
+                </div>
+                <AdminNav tab={tab} setTab={(next) => { setTab(next); setAdminMenuOpen(false); }} />
+                <Button onClick={logout} variant="outline" className="mt-10 h-10 w-full rounded-none" disabled={pending}>
+                  <LogOut className="size-4" />
+                  Logout
+                </Button>
+              </aside>
+            </div>
+          )}
+
           <header className="flex flex-wrap items-start justify-between gap-5 border-b border-[#ddd] pb-6">
-            <div>
+            <div className="min-w-0">
               <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-[#777]">
                 <ShieldCheck className="size-4 text-[#0aa997]" />
                 Control Panel
               </p>
-              <h1 className="mt-3 text-3xl font-medium">Admin Dashboard</h1>
+              <h1 className="mt-3 text-2xl font-medium md:text-3xl">Admin Dashboard</h1>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="flex w-full flex-wrap items-center justify-end gap-3 lg:w-auto">
+              <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto lg:gap-3">
                 <Stat label="Users" value={initialData.stats.users} />
                 <Stat label="Collections" value={initialData.stats.collections} />
                 <Stat label="Images" value={initialData.stats.images} />
-                <Stat label="Plans" value={plans.length} />
+                <Stat label="Revenue" value={Number(initialData.stats.revenue ?? 0)} money />
               </div>
-              <Button onClick={logout} variant="outline" className="h-11 rounded-none bg-white" disabled={pending}>
+              <Button onClick={logout} variant="outline" className="hidden h-11 rounded-none bg-white lg:flex" disabled={pending}>
                 <LogOut className="size-4" />
                 Logout
               </Button>
@@ -400,12 +389,12 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
           </header>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <div className="flex h-11 min-w-[260px] flex-1 items-center border bg-white px-3">
+            <div className="flex h-11 min-w-0 flex-1 basis-full items-center border bg-white px-3 md:basis-auto">
               <Search className="mr-2 size-4 text-[#777]" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "stripe" ? "Stripe settings" : tab === "cms" ? "Home CMS" : "Search collections"}
+                placeholder={tab === "overview" ? "Dashboard overview" : tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "stripe" ? "Stripe settings" : tab === "cms" ? "Home CMS" : "Search collections"}
                 className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
               />
             </div>
@@ -445,7 +434,9 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             )}
           </div>
 
-          {tab === "users" ? (
+          {tab === "overview" ? (
+            <AdminOverview data={initialData} />
+          ) : tab === "users" ? (
             <div className="mt-6">
               <UserTable users={filteredUsers} onEdit={editUser} onDelete={removeUser} busy={pending} />
             </div>
@@ -456,10 +447,11 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
           ) : tab === "cms" ? (
             <HomeCmsPanel
               form={homeCms}
-              text={homeCmsText}
+              lang={homeCmsLang}
               setForm={setHomeCms}
-              setText={setHomeCmsText}
-              onUpload={uploadCmsMedia}
+              setLang={setHomeCmsLang}
+              onUpload={uploadCmsFile}
+              onHeroUpload={uploadCmsMedia}
               busy={pending}
             />
           ) : (
@@ -570,10 +562,32 @@ function navClass(active: boolean) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function AdminNav({ tab, setTab }: { tab: AdminTab; setTab: (tab: AdminTab) => void }) {
+  const items: { id: AdminTab; label: string; icon: ComponentType<{ className?: string }> }[] = [
+    { id: "overview", label: "Dashboard", icon: BarChart3 },
+    { id: "users", label: "Users", icon: Users },
+    { id: "collections", label: "Collections", icon: Images },
+    { id: "plans", label: "Plans", icon: Package },
+    { id: "stripe", label: "Stripe", icon: ShieldCheck },
+    { id: "cms", label: "Home CMS", icon: FileImage },
+  ];
+
   return (
-    <div className="min-w-24 bg-white px-4 py-3 text-right">
-      <p className="text-xl font-semibold">{value}</p>
+    <nav className="mt-10 grid gap-2">
+      {items.map((item) => (
+        <button key={item.id} className={navClass(tab === item.id)} onClick={() => setTab(item.id)}>
+          <item.icon className="size-4" />
+          {item.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function Stat({ label, value, money }: { label: string; value: number; money?: boolean }) {
+  return (
+    <div className="min-w-0 bg-white px-3 py-3 text-right md:min-w-24 md:px-4">
+      <p className="truncate text-lg font-semibold md:text-xl">{money ? `$${value.toLocaleString()}` : value.toLocaleString()}</p>
       <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#777]">{label}</p>
     </div>
   );
@@ -642,6 +656,144 @@ function UserTable({ users, onEdit, onDelete, busy }: {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function AdminOverview({ data }: { data: AdminDashboardData }) {
+  const stats = data.stats;
+  const monthly = stats.monthly ?? [];
+  const planMix = stats.planMix?.length ? stats.planMix : [{ name: "No plans", value: 1 }];
+  const recentUsers = stats.recentUsers ?? data.users.slice(0, 6);
+  const chartColors = ["#22bda7", "#111111", "#9ca3af", "#d6b86a", "#ec6f58", "#6b8afd"];
+
+  return (
+    <div className="mt-6 grid gap-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard icon={Users} label="Total users" value={stats.users} />
+        <MetricCard icon={Images} label="Collections" value={stats.collections} />
+        <MetricCard icon={FileImage} label="Images" value={stats.images} />
+        <MetricCard icon={ShoppingBag} label="Orders" value={stats.orders ?? 0} />
+        <MetricCard icon={DollarSign} label="Revenue" value={`$${Number(stats.revenue ?? 0).toLocaleString()}`} strong />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
+        <div className="bg-white p-6">
+          <div className="mb-5 flex items-end justify-between gap-4 border-b pb-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">Revenue</p>
+              <h2 className="mt-2 text-xl font-semibold">Orders and revenue</h2>
+            </div>
+            <p className="text-sm font-semibold text-[#777]">Last 6 months</p>
+          </div>
+          <div className="h-[320px] min-h-[320px] min-w-0">
+            <ResponsiveContainer width="100%" height={320} minWidth={280}>
+              <ComposedChart data={monthly}>
+                <CartesianGrid stroke="#eee" vertical={false} />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} />
+                <Tooltip formatter={(value, name) => name === "revenue" ? [`$${Number(value).toLocaleString()}`, "Revenue"] : [value, "Orders"]} />
+                <Bar dataKey="revenue" fill="#22bda7" radius={[4, 4, 0, 0]} />
+                <Line type="monotone" dataKey="orders" stroke="#111" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white p-6">
+          <div className="mb-5 border-b pb-4">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">Plans</p>
+            <h2 className="mt-2 text-xl font-semibold">User plan mix</h2>
+          </div>
+          <div className="h-[270px] min-h-[270px] min-w-0">
+            <ResponsiveContainer width="100%" height={270} minWidth={240}>
+              <PieChart>
+                <Pie data={planMix} dataKey="value" nameKey="name" innerRadius={58} outerRadius={100} paddingAngle={3}>
+                  {planMix.map((item, index) => (
+                    <Cell key={item.name} fill={chartColors[index % chartColors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid gap-2">
+            {planMix.map((item, index) => (
+              <div key={item.name} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2"><span className="size-2" style={{ backgroundColor: chartColors[index % chartColors.length] }} />{item.name}</span>
+                <b>{item.value}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
+        <div className="bg-white p-6">
+          <div className="mb-5 border-b pb-4">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">Growth</p>
+            <h2 className="mt-2 text-xl font-semibold">New users</h2>
+          </div>
+          <div className="h-[260px] min-h-[260px] min-w-0">
+            <ResponsiveContainer width="100%" height={260} minWidth={240}>
+              <LineChart data={monthly}>
+                <CartesianGrid stroke="#eee" vertical={false} />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="users" stroke="#22bda7" strokeWidth={3} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto bg-white p-6">
+          <div className="mb-5 border-b pb-4">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">Latest</p>
+            <h2 className="mt-2 text-xl font-semibold">Recent users</h2>
+          </div>
+          <table className="w-full min-w-[620px] text-sm">
+            <thead className="text-left text-xs uppercase tracking-[0.14em] text-[#777]">
+              <tr>
+                <th className="py-3">User</th>
+                <th className="py-3">Role</th>
+                <th className="py-3">Plan</th>
+                <th className="py-3 text-right">Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentUsers.map((user) => (
+                <tr key={user._id} className="border-t">
+                  <td className="py-4">
+                    <p className="font-bold">{user.name || "Unnamed"}</p>
+                    <p className="mt-1 text-xs text-[#777]">{user.email || user.phoneNumber}</p>
+                  </td>
+                  <td className="py-4 capitalize">{user.role}</td>
+                  <td className="py-4">{user.planName ?? "Free"}</td>
+                  <td className="py-4 text-right">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value, strong }: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string | number;
+  strong?: boolean;
+}) {
+  return (
+    <div className={cn("bg-white p-5", strong && "bg-[#141715] text-white")}>
+      <div className="flex items-center justify-between gap-4">
+        <p className={cn("text-xs font-bold uppercase tracking-[0.16em]", strong ? "text-white/60" : "text-[#777]")}>{label}</p>
+        <Icon className={cn("size-5", strong ? "text-[#22bda7]" : "text-[#0a9c8b]")} />
+      </div>
+      <p className="mt-5 text-3xl font-semibold">{typeof value === "number" ? value.toLocaleString() : value}</p>
     </div>
   );
 }
@@ -729,35 +881,100 @@ function StripeSettingsPanel({ form, setForm }: {
   );
 }
 
-function HomeCmsPanel({ form, text, setForm, setText, onUpload, busy }: {
+function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, busy }: {
   form: HomeCmsData;
-  text: { en: string; gr: string };
+  lang: HomeLanguage;
   setForm: (value: HomeCmsData) => void;
-  setText: (value: { en: string; gr: string }) => void;
-  onUpload: (file: File) => void;
+  setLang: (value: HomeLanguage) => void;
+  onUpload: (file: File) => Promise<string>;
+  onHeroUpload: (file: File) => void;
   busy: boolean;
 }) {
+  const content = form.content[lang];
+
+  const setContent = (next: HomeContent) => {
+    setForm({ ...form, content: { ...form.content, [lang]: next } });
+  };
+
+  const patch = <K extends keyof HomeContent>(key: K, value: HomeContent[K]) => {
+    setContent({ ...content, [key]: value });
+  };
+
+  const patchObject = <K extends keyof HomeContent>(key: K, value: Partial<HomeContent[K]>) => {
+    patch(key, { ...(content[key] as object), ...value } as HomeContent[K]);
+  };
+
+  const patchGalleryTab = (index: number, value: Partial<GalleryTab>) => {
+    const tabs = [...content.gallery.tabs];
+    tabs[index] = { ...tabs[index], ...value };
+    patchObject("gallery", { tabs });
+  };
+
+  const patchWorkflowTab = (index: number, value: Partial<GalleryTab>) => {
+    const tabs = [...content.workflow.tabs];
+    tabs[index] = { ...tabs[index], ...value };
+    patchObject("workflow", { tabs });
+  };
+
+  const patchProduct = (index: number, value: Partial<HomeContent["products"][number]>) => {
+    const products = [...content.products];
+    products[index] = { ...products[index], ...value };
+    patch("products", products);
+  };
+
+  const patchTestimonial = (index: number, value: Partial<Testimonial>) => {
+    const items = [...content.testimonials.items];
+    items[index] = { ...items[index], ...value };
+    patchObject("testimonials", { items });
+  };
+
+  const patchCtaImage = (index: number, value: string) => {
+    const images = [...content.cta.images];
+    images[index] = value;
+    patchObject("cta", { images });
+  };
+
+  const patchFooterColumn = (index: number, value: Partial<HomeContent["footer"]["columns"][number]>) => {
+    const columns = [...content.footer.columns];
+    columns[index] = { ...columns[index], ...value };
+    patchObject("footer", { columns });
+  };
+
   return (
-    <div className="mt-6 grid gap-5 xl:grid-cols-[420px_1fr]">
-      <div className="bg-white p-6">
-        <div className="border-b pb-5">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Home CMS</p>
-          <h2 className="mt-2 text-xl font-semibold">Hero media</h2>
+    <div className="mt-6 grid gap-5">
+      <div className="bg-white p-5 shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">Home CMS</p>
+            <h2 className="mt-2 text-2xl font-semibold">Page control</h2>
+            <p className="mt-2 text-sm leading-6 text-[#666]">Editing {lang === "en" ? "English" : "Green / GR"} content</p>
+          </div>
+          <div className="grid min-w-[260px] grid-cols-2 gap-1 bg-[#f4f4f1] p-1">
+            <Button type="button" onClick={() => setLang("en")} className={cn("h-10 rounded-none shadow-none", lang === "en" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>English</Button>
+            <Button type="button" onClick={() => setLang("gr")} className={cn("h-10 rounded-none shadow-none", lang === "gr" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>Green / GR</Button>
+          </div>
         </div>
-        <div className="mt-5 grid gap-4">
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <label className="flex h-11 items-center justify-between border bg-[#fbfbfa] px-3 text-sm">
+            <span className="font-semibold">Default language</span>
+            <select value={form.defaultLanguage} onChange={(event) => setForm({ ...form, defaultLanguage: event.target.value as HomeLanguage })} className="bg-transparent text-sm outline-none">
+              <option value="en">EN</option>
+              <option value="gr">GR</option>
+            </select>
+          </label>
           <label className="grid gap-2">
             <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Hero media type</span>
             <select
               value={form.media.heroMediaType}
               onChange={(event) => setForm({ ...form, media: { ...form.media, heroMediaType: event.target.value as "image" | "video" } })}
-              className="h-11 border px-3 text-sm outline-none"
+              className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none"
             >
               <option value="image">Image</option>
               <option value="video">Video</option>
             </select>
           </label>
-          <InputField label="Hero media URL" value={form.media.heroMediaUrl} onChange={(heroMediaUrl) => setForm({ ...form, media: { ...form.media, heroMediaUrl } })} />
-          <label className="grid gap-2">
+          <CmsInput label="Hero media URL" value={form.media.heroMediaUrl} onChange={(heroMediaUrl) => setForm({ ...form, media: { ...form.media, heroMediaUrl } })} />
+          <label className="grid gap-2 lg:col-span-2">
             <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Upload image or video</span>
             <Input
               type="file"
@@ -765,42 +982,271 @@ function HomeCmsPanel({ form, text, setForm, setText, onUpload, busy }: {
               disabled={busy}
               onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) onUpload(file);
+                if (file) onHeroUpload(file);
               }}
-              className="h-11 rounded-none border-[#ddd] pt-2 shadow-none"
+              className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] pt-2 shadow-none"
             />
           </label>
           {form.media.heroMediaUrl && (
-            <div className="overflow-hidden border bg-[#f6f6f3]">
+            <div className="overflow-hidden border bg-[#fbfbfa] p-2">
               {form.media.heroMediaType === "video" ? (
-                <video src={form.media.heroMediaUrl} className="h-52 w-full object-cover" controls />
+                <video src={form.media.heroMediaUrl} className="h-44 w-full object-cover" controls />
               ) : (
-                <img src={form.media.heroMediaUrl} alt="Hero CMS preview" className="h-52 w-full object-cover" />
+                <img src={form.media.heroMediaUrl} alt="Hero CMS preview" className="h-44 w-full object-cover" />
               )}
             </div>
           )}
         </div>
       </div>
+
       <div className="grid gap-5">
-        <CmsJsonBox label="English JSON" value={text.en} onChange={(en) => setText({ ...text, en })} />
-        <CmsJsonBox label="Green / GR JSON" value={text.gr} onChange={(gr) => setText({ ...text, gr })} />
+        <CmsSection eyebrow={lang.toUpperCase()} title="Navigation" defaultOpen>
+          <div className="grid gap-4 md:grid-cols-2">
+            <CmsInput label="Brand" value={content.nav.brand} onChange={(brand) => patchObject("nav", { brand })} />
+            <CmsInput label="Products" value={content.nav.products} onChange={(products) => patchObject("nav", { products })} />
+            <CmsInput label="Examples" value={content.nav.examples} onChange={(examples) => patchObject("nav", { examples })} />
+            <CmsInput label="Pricing" value={content.nav.pricing} onChange={(pricing) => patchObject("nav", { pricing })} />
+            <CmsInput label="Login" value={content.nav.login} onChange={(login) => patchObject("nav", { login })} />
+            <CmsInput label="CTA" value={content.nav.cta} onChange={(cta) => patchObject("nav", { cta })} />
+          </div>
+        </CmsSection>
+
+        <CmsSection title="Hero" defaultOpen>
+          <div className="grid gap-4">
+            <CmsInput label="Eyebrow" value={content.hero.eyebrow} onChange={(eyebrow) => patchObject("hero", { eyebrow })} />
+            <CmsTextarea label="Title" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
+            <CmsTextarea label="Subtitle" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
+            <CmsInput label="Button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
+          </div>
+        </CmsSection>
+
+        <CmsSection title="Gallery section" defaultOpen>
+          <div className="grid gap-4">
+            <CmsTextarea label="Heading" value={content.gallery.title} onChange={(title) => patchObject("gallery", { title })} />
+            <CmsTextarea label="Subtitle" value={content.gallery.subtitle} onChange={(subtitle) => patchObject("gallery", { subtitle })} />
+            <CmsInput label="Cart label" value={content.gallery.cartLabel} onChange={(cartLabel) => patchObject("gallery", { cartLabel })} />
+            <CmsInput label="Product tab labels" value={content.gallery.productTabs.join(", ")} onChange={(value) => patchObject("gallery", { productTabs: value.split(",").map((item) => item.trim()).filter(Boolean) })} />
+            <CmsRepeater title="Gallery tabs">
+              {content.gallery.tabs.map((tab, index) => (
+                <div key={tab.value} className="grid gap-3 border p-4 md:grid-cols-2">
+                  <CmsInput label="Label" value={tab.label} onChange={(label) => patchGalleryTab(index, { label })} />
+                  <CmsInput label="Title" value={tab.title ?? ""} onChange={(title) => patchGalleryTab(index, { title })} />
+                  <CmsImageInput label="Image" value={tab.image} onChange={(image) => patchGalleryTab(index, { image })} onUpload={onUpload} busy={busy} wide />
+                </div>
+              ))}
+            </CmsRepeater>
+            <CmsRepeater title="Products">
+              {content.products.map((product, index) => (
+                <div key={`${product.title}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
+                  <CmsInput label="Title" value={product.title} onChange={(title) => patchProduct(index, { title })} />
+                  <CmsInput label="Price" value={product.price} onChange={(price) => patchProduct(index, { price })} />
+                </div>
+              ))}
+            </CmsRepeater>
+          </div>
+        </CmsSection>
+
+        <CmsSection title="Workflow section">
+          <div className="grid gap-4">
+            <CmsInput label="Eyebrow" value={content.workflow.eyebrow} onChange={(eyebrow) => patchObject("workflow", { eyebrow })} />
+            <CmsInput label="Heading" value={content.workflow.title} onChange={(title) => patchObject("workflow", { title })} />
+            <CmsTextarea label="Subtitle" value={content.workflow.subtitle} onChange={(subtitle) => patchObject("workflow", { subtitle })} />
+            <CmsTextarea label="Card text" value={content.workflow.cardText} onChange={(cardText) => patchObject("workflow", { cardText })} />
+            <CmsRepeater title="Workflow tabs">
+              {content.workflow.tabs.map((tab, index) => (
+                <div key={tab.value} className="grid gap-3 border p-4 md:grid-cols-2">
+                  <CmsInput label="Label" value={tab.label} onChange={(label) => patchWorkflowTab(index, { label })} />
+                  <CmsImageInput label="Image" value={tab.image} onChange={(image) => patchWorkflowTab(index, { image })} onUpload={onUpload} busy={busy} />
+                </div>
+              ))}
+            </CmsRepeater>
+          </div>
+        </CmsSection>
+
+        <CmsSection title="Testimonials">
+          <div className="grid gap-4">
+            <CmsInput label="Eyebrow" value={content.testimonials.eyebrow} onChange={(eyebrow) => patchObject("testimonials", { eyebrow })} />
+            <CmsInput label="Heading" value={content.testimonials.title} onChange={(title) => patchObject("testimonials", { title })} />
+            <CmsTextarea label="Subtitle" value={content.testimonials.subtitle} onChange={(subtitle) => patchObject("testimonials", { subtitle })} />
+            <CmsRepeater title="Cards">
+              {content.testimonials.items.map((item, index) => (
+                <div key={`${item.name}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
+                  <CmsInput label="Name" value={item.name} onChange={(name) => patchTestimonial(index, { name })} />
+                  <CmsInput label="Site" value={item.site} onChange={(site) => patchTestimonial(index, { site })} />
+                  <CmsImageInput label="Image" value={item.image} onChange={(image) => patchTestimonial(index, { image })} onUpload={onUpload} busy={busy} wide />
+                  <CmsTextarea label="Quote" value={item.quote} onChange={(quote) => patchTestimonial(index, { quote })} wide />
+                </div>
+              ))}
+            </CmsRepeater>
+          </div>
+        </CmsSection>
+
+        <CmsSection title="CTA and footer">
+          <div className="grid gap-4 md:grid-cols-2">
+            <CmsInput label="CTA heading" value={content.cta.title} onChange={(title) => patchObject("cta", { title })} />
+            <CmsInput label="CTA subtitle" value={content.cta.subtitle} onChange={(subtitle) => patchObject("cta", { subtitle })} />
+            <CmsInput label="CTA button" value={content.cta.button} onChange={(button) => patchObject("cta", { button })} />
+            <CmsInput label="Footer copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
+            <CmsTextarea label="Footer description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} wide />
+            <CmsRepeater title="CTA images">
+              {content.cta.images.map((image, index) => (
+                <CmsImageInput key={`${image}-${index}`} label={`Image ${index + 1}`} value={image} onChange={(value) => patchCtaImage(index, value)} onUpload={onUpload} busy={busy} />
+              ))}
+            </CmsRepeater>
+            <CmsRepeater title="Footer columns">
+              {content.footer.columns.map((column, index) => (
+                <div key={`${column.title}-${index}`} className="grid gap-3 border p-4">
+                  <CmsInput label="Column title" value={column.title} onChange={(title) => patchFooterColumn(index, { title })} />
+                  <CmsRepeater title="Links">
+                    {column.links.map((link, linkIndex) => {
+                      const item = typeof link === "string" ? { label: link, url: "#" } : link;
+                      return (
+                        <div key={`${item.label}-${linkIndex}`} className="grid gap-3 md:grid-cols-2">
+                          <CmsInput
+                            label="Title"
+                            value={item.label}
+                            onChange={(label) => {
+                              const links = [...column.links];
+                              links[linkIndex] = { ...item, label };
+                              patchFooterColumn(index, { links });
+                            }}
+                          />
+                          <CmsInput
+                            label="URL"
+                            value={item.url}
+                            onChange={(url) => {
+                              const links = [...column.links];
+                              links[linkIndex] = { ...item, url };
+                              patchFooterColumn(index, { links });
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </CmsRepeater>
+                </div>
+              ))}
+            </CmsRepeater>
+          </div>
+        </CmsSection>
       </div>
     </div>
   );
 }
 
-function CmsJsonBox({ label, value, onChange }: {
+function CmsSection({ eyebrow, title, children, defaultOpen }: {
+  eyebrow?: string;
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details className="group bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]" open={defaultOpen}>
+      <summary className="flex cursor-pointer list-none items-center justify-between border-b px-6 py-5">
+        <div>
+          {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">{eyebrow}</p>}
+          <h3 className="mt-1 text-xl font-semibold">{title}</h3>
+        </div>
+        <span className="flex size-8 items-center justify-center bg-[#f4f4f1] text-lg font-semibold text-[#555] group-open:rotate-45">+</span>
+      </summary>
+      <div className="p-6">{children}</div>
+    </details>
+  );
+}
+
+function CmsRepeater({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-3 rounded-none bg-[#fafaf8] p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">{title}</p>
+      <div className="grid gap-3">{children}</div>
+    </div>
+  );
+}
+
+function CmsInput({ label, value, onChange, wide, dark }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  wide?: boolean;
+  dark?: boolean;
 }) {
   return (
-    <label className="grid gap-2 bg-white p-6">
+    <label className={cn("grid gap-2", wide && "md:col-span-2")}>
+      <span className={cn("text-xs font-bold uppercase tracking-[0.14em]", dark ? "text-white/50" : "text-[#777]")}>{label}</span>
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(
+          "h-11 rounded-none shadow-none focus-visible:ring-[#22bda7]",
+          dark ? "border-0 bg-white/8 text-white placeholder:text-white/40" : "border-[#ddd] bg-[#fbfbfa]",
+        )}
+      />
+    </label>
+  );
+}
+
+function CmsImageInput({ label, value, onChange, onUpload, busy, wide }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onUpload: (file: File) => Promise<string>;
+  busy: boolean;
+  wide?: boolean;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  return (
+    <div className={cn("grid gap-2", wide && "md:col-span-2")}>
+      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">{label}</span>
+      <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
+        <Input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] shadow-none focus-visible:ring-[#22bda7]"
+        />
+        <label className="flex h-11 cursor-pointer items-center justify-center bg-[#111] px-4 text-sm font-bold text-white hover:bg-[#202020]">
+          {uploading ? "Uploading" : "Upload"}
+          <input
+            type="file"
+            accept="image/*"
+            disabled={busy || uploading}
+            className="hidden"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              setUploading(true);
+              try {
+                const url = await onUpload(file);
+                onChange(url);
+                toast.success("Image uploaded");
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Upload failed");
+              } finally {
+                setUploading(false);
+                event.target.value = "";
+              }
+            }}
+          />
+        </label>
+      </div>
+      {value && <img src={value} alt={label} className="h-24 w-full max-w-[260px] border bg-white object-cover p-1" />}
+    </div>
+  );
+}
+
+function CmsTextarea({ label, value, onChange, wide }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  wide?: boolean;
+}) {
+  return (
+    <label className={cn("grid gap-2", wide && "md:col-span-2")}>
       <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">{label}</span>
       <Textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-[380px] rounded-none border-[#ddd] font-mono text-xs shadow-none focus-visible:ring-[#22bda7]"
+        className="min-h-28 rounded-none border-[#ddd] bg-[#fbfbfa] shadow-none focus-visible:ring-[#22bda7]"
       />
     </label>
   );

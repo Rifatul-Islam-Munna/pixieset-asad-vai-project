@@ -17,11 +17,12 @@ export type HomeContent = {
   workflow: { eyebrow: string; title: string; subtitle: string; tabs: GalleryTab[]; cardText: string };
   testimonials: { eyebrow: string; title: string; subtitle: string; items: Testimonial[] };
   cta: { title: string; subtitle: string; button: string; desktopName: string; desktopSubtitle: string; invoiceTitle: string; invoiceText: string; galleryName: string; images: string[] };
-  footer: { description: string; copyright: string; columns: { title: string; links: string[] }[] };
+  footer: { description: string; copyright: string; columns: { title: string; links: FooterLink[] }[] };
 };
 
 export type GalleryTab = { value: string; label: string; image: string; title?: string };
 export type Testimonial = { name: string; site: string; image: string; quote: string };
+export type FooterLink = string | { label: string; url: string };
 
 const image = "https://images.unsplash.com/photo-1529636798458-92182e662485?auto=format&fit=crop&w=900&q=80";
 

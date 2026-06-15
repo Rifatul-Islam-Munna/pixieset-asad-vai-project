@@ -3,7 +3,7 @@
 import { useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, Loader2, LockKeyhole, UserRound } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, UserRound } from "lucide-react";
 import { loginUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [form, setForm] = useState({ phoneNumber: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,11 +67,18 @@ export default function LoginPage() {
                       value={form.password}
                       onChange={(event) => setForm({ ...form, password: event.target.value })}
                       placeholder="Password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       className="h-11 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
                       required
                     />
-                    <Eye className="ml-3 size-4 text-[#aaa]" />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="ml-3 text-[#777]"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
                   </div>
                 </label>
               </div>

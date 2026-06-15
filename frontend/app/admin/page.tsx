@@ -5,7 +5,7 @@ import { AdminDashboard } from "@/components/dashboard/admin-dashboard";
 
 export default async function AdminPage() {
   const user = await getUser();
-  if (user?.role !== "admin") redirect("/admin/login");
+  if (user?.role !== "admin") redirect("/login");
 
   const data = await getAdminDashboard();
   return <AdminDashboard initialData={data} />;

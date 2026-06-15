@@ -77,7 +77,49 @@ export function PlansPage({ plans }: { plans: AdminPlan[] }) {
         {!filtered.length ? (
           <div className="mt-8 border bg-white p-8 text-sm font-semibold text-[#777]">No plans found.</div>
         ) : (
-          <div className="mt-8 overflow-x-auto">
+          <>
+          <div className="mt-8 grid gap-4 md:hidden">
+            {filtered.map((plan) => {
+              const recommended = plan._id === recommendedId;
+              const price = Number(plan.priceMonthly ?? 0);
+              return (
+                <article key={plan._id} className={cn("border p-5", recommended ? "bg-[#f1faf8]" : "bg-white")}>
+                  <div className="h-5 text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">
+                    {recommended ? "Recommended" : ""}
+                  </div>
+                  <div className="mt-3 flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-2xl font-medium">{plan.name}</h2>
+                      <p className="mt-4 flex items-end gap-1">
+                        <span className="text-5xl font-medium">${price.toLocaleString()}</span>
+                        <span className="pb-2 text-sm">/mo</span>
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[#22bda7] px-3 py-1 text-xs font-bold text-white">
+                      {Number(plan.storageGb ?? 0).toLocaleString()} GB
+                    </span>
+                  </div>
+                  <div className="mt-6 grid gap-3 border-t pt-5 text-sm">
+                    <div className="flex justify-between gap-4"><span>Photo storage</span><b>{Number(plan.storageGb ?? 0).toLocaleString()} GB</b></div>
+                    <div className="flex justify-between gap-4"><span>Monthly emails</span><b>{Number(plan.monthlyEmails ?? 0).toLocaleString()}</b></div>
+                  </div>
+                  <div className="mt-5 grid gap-3 border-t pt-5">
+                    {Object.entries(featureLabels).map(([key, label]) => (
+                      <p key={key} className={cn("flex items-center justify-between gap-4 text-sm", plan.features?.[key] ? "text-[#222]" : "text-[#999]")}>
+                        <span>{label}</span>
+                        {plan.features?.[key] ? <Check className="size-5 text-[#20a786]" /> : <span className="text-[#c9c9c9]">-</span>}
+                      </p>
+                    ))}
+                  </div>
+                  <Button className="mt-6 h-11 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending} onClick={() => buy(plan._id)}>
+                    {pending && pendingId === plan._id ? <Loader2 className="size-4 animate-spin" /> : price > 0 ? "Start Plan" : "Start Free"}
+                  </Button>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="mt-8 hidden overflow-x-auto md:block">
             <div
               className="grid min-w-[1100px] border-l border-t"
               style={{ gridTemplateColumns: `210px repeat(${filtered.length}, minmax(170px, 1fr))` }}
@@ -124,6 +166,7 @@ export function PlansPage({ plans }: { plans: AdminPlan[] }) {
               ))}
             </div>
           </div>
+          </>
         )}
       </div>
     </main>

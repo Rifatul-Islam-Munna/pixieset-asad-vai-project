@@ -46,13 +46,19 @@ export class UserService implements OnModuleInit {
   }
 
   async create(dto: CreateUserDto) {
-    const exists = await this.userModel.findOne({ phoneNumber: dto.phoneNumber }).lean();
+    const exists = await this.userModel.findOne({
+      $or: [
+        { phoneNumber: dto.phoneNumber },
+        ...(dto.email ? [{ email: dto.email.trim().toLowerCase() }] : []),
+      ],
+    }).lean();
     if (exists) {
       throw new HttpException('User already exists', HttpStatus.BAD_REQUEST);
     }
 
     const user = await this.userModel.create({
       ...dto,
+      email: dto.email?.trim().toLowerCase(),
       role: dto.role ?? UserType.USER,
       password: await bcrypt.hash(dto.password, 10),
       isOtpVerified: true,
@@ -66,7 +72,10 @@ export class UserService implements OnModuleInit {
   }
 
   async loginUser(dto: LoginDto) {
-    const user = await this.userModel.findOne({ phoneNumber: dto.phoneNumber }).lean();
+    const login = dto.phoneNumber.trim().toLowerCase();
+    const user = await this.userModel.findOne({
+      $or: [{ phoneNumber: login }, { email: login }],
+    }).lean();
     if (!user) {
       throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
     }

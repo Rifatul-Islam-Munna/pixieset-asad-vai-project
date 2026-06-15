@@ -12,12 +12,10 @@ import {
   ArrowLeft,
   ArrowRight,
   Calendar as CalendarIcon,
-  Bell,
   Bold,
   ChevronDown,
   Check,
   ChevronsLeft,
-  CircleHelp,
   CircleUserRound,
   Copy,
   CreditCard,
@@ -37,6 +35,7 @@ import {
   MailCheck,
   Megaphone,
   MoreHorizontal,
+  Menu,
   Package,
   Palette,
   PanelTop,
@@ -58,6 +57,7 @@ import {
   Users,
   FileUp,
   Wrench,
+  X,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -315,6 +315,7 @@ export function ClientDashboard({
   const isCollectionDetail = page === "collections" && Boolean(collectionId);
   const isPriceSheetDetail = page === "products" && Boolean(priceSheetId);
   const [logoutPending, startLogoutTransition] = useTransition();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logout = () => {
     startLogoutTransition(async () => {
       await logOutUser();
@@ -363,15 +364,6 @@ export function ClientDashboard({
           </DropdownMenu>
 
           <div className={cn("flex items-center gap-4", collapsed && "hidden")}>
-            <button aria-label="Help" onClick={() => setActiveNav("Help")}>
-              <CircleHelp className="size-5" />
-            </button>
-            <button
-              aria-label="Notifications"
-              onClick={() => setActiveNav("Notifications")}
-            >
-              <Bell className="size-5" />
-            </button>
             <Avatar className="size-7">
               <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
             </Avatar>
@@ -496,33 +488,89 @@ export function ClientDashboard({
 
       <section className={cn("min-h-screen transition-all", campaignBuilderOpen || isCollectionDetail || isPriceSheetDetail ? "" : collapsed ? "md:pl-[76px]" : "md:pl-[292px]")}>
         {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 text-sm font-bold outline-none">
-                <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
-                {active.title}
-                <ChevronDown className="size-3" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[270px] rounded-none">
-              <DropdownMenuGroup>
-                {switcherItems.map((item) => (
-                  <DropdownMenuItem key={item.key} asChild>
-                    <Link href={item.href}>{item.title}</Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Avatar className="size-7">
-            <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
-          </Avatar>
-          <button aria-label="Logout" onClick={logout} disabled={logoutPending}>
+          <button className="flex size-10 items-center justify-center bg-[#111] text-white" onClick={() => setMobileMenuOpen(true)} aria-label="Open dashboard menu">
+            <Menu className="size-5" />
+          </button>
+          <div className="flex min-w-0 items-center gap-2 text-sm font-bold">
+            <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
+            <span className="truncate">{active.title}</span>
+          </div>
+          <button aria-label="Logout" onClick={logout} disabled={logoutPending} className="flex size-10 items-center justify-center bg-[#f4f4f4]">
             <LogOut className="size-5" />
           </button>
         </div>}
 
-        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : "max-w-[1220px] px-5 py-16 md:py-20")}>
+        {mobileMenuOpen && !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && (
+          <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
+            <aside className="h-full w-[84vw] max-w-[330px] overflow-y-auto bg-white px-5 py-5 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
+              <div className="flex items-center justify-between border-b pb-4">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-2 text-sm font-bold outline-none">
+                      <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
+                      {active.title}
+                      <ChevronDown className="size-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[270px] rounded-none">
+                    <DropdownMenuGroup>
+                      {switcherItems.map((item) => (
+                        <DropdownMenuItem key={item.key} asChild>
+                          <Link href={item.href} onClick={() => setMobileMenuOpen(false)}>{item.title}</Link>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <button className="flex size-10 items-center justify-center bg-[#f4f4f4]" onClick={() => setMobileMenuOpen(false)} aria-label="Close dashboard menu">
+                  <X className="size-5" />
+                </button>
+              </div>
+
+              <nav className="mt-7 grid gap-5">
+                {sidebarItems[section].map((item) => (
+                  <Link
+                    key={item.label}
+                    href={item.page === "collections" ? `/dashboard/${section}` : `/dashboard/${section}/${item.page}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn("flex items-center gap-4 text-base text-[#222]", activeNav === item.label && "font-semibold text-[#00a997]")}
+                  >
+                    <item.icon className={cn("size-5 text-[#333]", activeNav === item.label && "text-[#00a997]")} />
+                    {item.label}
+                  </Link>
+                ))}
+                {section === "client-gallery" && (
+                  <>
+                    <p className="mt-4 text-sm font-semibold text-[#777]">Tools</p>
+                    <Link
+                      href={`/dashboard/${section}/marketing/email-campaigns`}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={cn("flex items-center gap-4 text-base text-[#222]", page === "marketing" && "font-semibold text-[#00a997]")}
+                    >
+                      <Megaphone className={cn("size-5 text-[#333]", page === "marketing" && "text-[#00a997]")} />
+                      Marketing
+                    </Link>
+                    <Link
+                      href={`/dashboard/${section}/storage`}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-4 text-base text-[#222]"
+                    >
+                      <Database className="size-5 text-[#333]" />
+                      Storage
+                    </Link>
+                  </>
+                )}
+              </nav>
+
+              <button className="mt-10 flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50" onClick={logout} disabled={logoutPending}>
+                <LogOut className="size-5" />
+                Logout
+              </button>
+            </aside>
+          </div>
+        )}
+
+        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20")}>
           {campaignBuilderOpen ? (
             <CampaignBuilder onClose={closeCampaignBuilder} />
           ) : wizardOpen ? (
@@ -3380,10 +3428,10 @@ function HomepageSettings() {
 
   return (
     <div>
-      <h1 className="text-[28px] font-semibold">Homepage</h1>
+      <h1 className="text-2xl font-semibold md:text-[28px]">Homepage</h1>
 
-      <div className="mt-8 grid items-start gap-12 lg:grid-cols-[minmax(360px,620px)_minmax(320px,1fr)]">
-        <div className="max-w-[620px]">
+      <div className="mt-6 grid items-start gap-8 md:mt-8 lg:grid-cols-[minmax(320px,620px)_minmax(320px,1fr)] lg:gap-12">
+        <div className="max-w-[620px] min-w-0">
           <section>
             <p className="text-sm font-bold">Homepage Status</p>
             <div className="mt-4 flex items-center gap-3">
@@ -3399,7 +3447,7 @@ function HomepageSettings() {
 
           <section className="mt-12">
             <p className="text-sm font-bold">Homepage URL</p>
-            <div className="mt-4 flex h-14 items-center justify-between bg-[#f6f6f6] px-5">
+            <div className="mt-4 flex min-h-14 flex-wrap items-center justify-between gap-3 bg-[#f6f6f6] px-4 py-3 sm:px-5">
               <span className="truncate text-sm font-medium">https://rifat39.pixieset.com</span>
               <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
                 <Copy className="size-4" />
@@ -3410,11 +3458,11 @@ function HomepageSettings() {
 
           <section className="mt-12">
             <p className="text-sm font-bold">Homepage Password</p>
-            <div className="mt-4 flex h-14 items-center justify-between border px-5">
+            <div className="mt-4 flex min-h-14 flex-wrap items-center justify-between gap-3 border px-4 py-3 sm:px-5">
               <input
                 type="password"
                 placeholder="Add a password"
-                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+                className="h-10 min-w-[180px] flex-1 bg-transparent text-sm outline-none"
               />
               <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
                 <RefreshCw className="size-4" />
@@ -3426,7 +3474,7 @@ function HomepageSettings() {
 
           <section className="mt-12">
             <p className="text-sm font-bold">Biography</p>
-            <div className="mt-4 border">
+            <div className="mt-4 border bg-white">
               <Textarea
                 value={bio}
                 onChange={(event) => setBio(event.target.value.slice(0, 500))}
@@ -3465,7 +3513,7 @@ function HomepageSettings() {
 
           <section className="mt-12">
             <p className="text-sm font-bold">Collection Sort Order</p>
-            <select className="mt-4 h-14 w-full border bg-white px-5 text-sm font-bold outline-none">
+            <select className="mt-4 h-14 w-full min-w-0 border bg-white px-4 text-sm font-bold outline-none sm:px-5">
               <option>Date created: New to Old</option>
               <option>Date created: Old to New</option>
               <option>Collection name: A to Z</option>

@@ -1,7 +1,7 @@
-import { ChevronDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SiteNav } from "@/components/home/site-nav";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { mergeHomeCms, type HomeCmsData, type HomeLanguage } from "@/lib/home-cms";
 
@@ -36,7 +36,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <section className="relative min-h-[820px] overflow-hidden text-white">
+      <section className="relative min-h-[720px] overflow-hidden text-white md:min-h-[820px]">
         {cms.media.heroMediaType === "video" && cms.media.heroMediaUrl ? (
           <video className="absolute inset-0 h-full w-full object-cover" src={cms.media.heroMediaUrl} autoPlay muted loop playsInline />
         ) : (
@@ -45,39 +45,24 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         <div className="absolute inset-0 bg-black/55" />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.68),rgba(0,0,0,0.18)_55%,rgba(0,0,0,0.5))]" />
 
-        <header className="relative z-10 flex h-14 items-center justify-between px-7 lg:px-8">
-          <a href="#" className="font-serif text-2xl tracking-[0.36em] text-white" aria-label={t.nav.brand}>{t.nav.brand}</a>
-          <nav className="hidden items-center gap-8 text-sm font-semibold md:flex">
-            <a href="#" className="inline-flex items-center gap-1">{t.nav.products} <ChevronDown data-icon="inline-end" /></a>
-            <a href="#">{t.nav.examples}</a>
-            <a href="/pricing">{t.nav.pricing}</a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <a href={`/?lang=en`} className={lang === "en" ? "text-sm font-bold" : "text-sm text-white/75"}>EN</a>
-            <a href={`/?lang=gr`} className={lang === "gr" ? "text-sm font-bold" : "text-sm text-white/75"}>GR</a>
-            <a href="#" className="hidden text-sm font-semibold md:inline">{t.nav.login}</a>
-            <Button asChild className="h-11 min-w-36 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]">
-              <a href="#">{t.nav.cta}</a>
-            </Button>
-          </div>
-        </header>
+        <SiteNav nav={t.nav} lang={lang} />
 
-        <div className="relative z-10 mx-auto flex min-h-[720px] w-full max-w-[1240px] items-center px-7 pt-8 lg:px-8">
-          <div className="max-w-[760px] pt-16">
-            <p className="mb-7 text-sm font-bold tracking-wide">{t.hero.eyebrow}</p>
-            <h1 className="max-w-[760px] text-5xl font-semibold leading-[1.28] tracking-normal md:text-[52px]">{lines(t.hero.title)}</h1>
-            <p className="mt-6 max-w-[760px] text-lg font-semibold leading-7 text-white/90">{t.hero.subtitle}</p>
+        <div className="relative z-10 mx-auto flex min-h-[620px] w-full max-w-[1240px] items-center px-5 pt-6 md:min-h-[720px] md:px-7 lg:px-8">
+          <div className="max-w-[760px] pt-10 md:pt-16">
+            <p className="mb-5 text-xs font-bold tracking-wide sm:text-sm md:mb-7">{t.hero.eyebrow}</p>
+            <h1 className="max-w-[760px] text-4xl font-semibold leading-[1.18] tracking-normal sm:text-5xl md:text-[52px] md:leading-[1.28]">{lines(t.hero.title)}</h1>
+            <p className="mt-5 max-w-[760px] text-base font-semibold leading-7 text-white/90 sm:text-lg md:mt-6">{t.hero.subtitle}</p>
             <Button asChild className="mt-8 h-11 min-w-40 rounded-none bg-[#22bda7] text-base font-bold text-white hover:bg-[#19a995]">
-              <a href="#">{t.hero.cta}</a>
+              <a href="/register">{t.hero.cta}</a>
             </Button>
           </div>
         </div>
       </section>
 
-      <section className="border-t bg-white px-6 py-20 text-center">
+      <section className="border-t bg-white px-5 py-14 text-center md:px-6 md:py-20">
         <div className="mx-auto max-w-[1240px]">
-          <h2 className="text-[40px] font-semibold leading-[1.2] tracking-normal text-[#202020]">{lines(t.gallery.title)}</h2>
-          <p className="mx-auto mt-7 max-w-[730px] text-lg leading-7 text-[#666]">{t.gallery.subtitle}</p>
+          <h2 className="text-3xl font-semibold leading-[1.2] tracking-normal text-[#202020] md:text-[40px]">{lines(t.gallery.title)}</h2>
+          <p className="mx-auto mt-5 max-w-[730px] text-base leading-7 text-[#666] md:mt-7 md:text-lg">{t.gallery.subtitle}</p>
           <Tabs defaultValue={defaultGallery} className="mt-12 w-full items-center gap-0">
             <TabsList className="flex h-auto w-full flex-wrap justify-center gap-2 bg-transparent p-0">
               {t.gallery.tabs.map((tab) => (
@@ -88,14 +73,14 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
             </TabsList>
             {t.gallery.tabs.map((tab) => (
               <TabsContent key={tab.value} value={tab.value} className="w-full">
-                <div className="mx-auto mt-12 grid max-w-[980px] gap-6 bg-[#eef4f3] p-5 text-left shadow-[0_18px_45px_rgba(0,0,0,0.09)] md:grid-cols-[1fr_1.2fr] md:p-8">
-                  <img src={tab.image} alt={tab.label} className="h-[420px] w-full object-cover" />
+                <div className="mx-auto mt-8 grid max-w-[980px] gap-4 bg-[#eef4f3] p-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.09)] md:mt-12 md:grid-cols-[1fr_1.2fr] md:gap-6 md:p-8">
+                  <img src={tab.image} alt={tab.label} className="h-72 w-full object-cover sm:h-[420px]" />
                   <div className="bg-white p-6 shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
                     <h3 className="text-base font-semibold text-[#222]">{tab.title ?? tab.label}</h3>
                     <div className="mt-6 flex flex-wrap gap-5 text-[11px] font-semibold tracking-wide text-[#8a8a8a]">
                       {t.gallery.productTabs.map((item) => <span key={item}>{item}</span>)}
                     </div>
-                    <div className="mt-5 grid grid-cols-3 gap-3 border-t pt-5">
+                    <div className="mt-5 grid grid-cols-1 gap-3 border-t pt-5 sm:grid-cols-3">
                       {t.products.map((product) => (
                         <div key={product.title}>
                           <img src={tab.image} alt={product.title} className="h-28 w-full object-cover" />
@@ -113,20 +98,20 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         </div>
       </section>
 
-      <section className="border-t bg-white px-6 py-20 md:py-24">
+      <section className="border-t bg-white px-5 py-14 md:px-6 md:py-24">
         <div className="mx-auto max-w-[1240px]">
           <div className="mx-auto max-w-[780px] text-center">
             <p className="text-sm font-bold tracking-[0.18em] text-[#008f7f]">{t.workflow.eyebrow}</p>
-            <h2 className="mt-8 text-4xl font-semibold leading-[1.18] tracking-normal text-[#202020] md:text-[40px]">{t.workflow.title}</h2>
-            <p className="mt-6 text-lg leading-7 text-[#666]">{t.workflow.subtitle}</p>
+            <h2 className="mt-6 text-3xl font-semibold leading-[1.18] tracking-normal text-[#202020] md:mt-8 md:text-[40px]">{t.workflow.title}</h2>
+            <p className="mt-5 text-base leading-7 text-[#666] md:mt-6 md:text-lg">{t.workflow.subtitle}</p>
           </div>
-          <Tabs defaultValue={defaultWorkflow} className="mx-auto mt-16 grid max-w-[1060px] items-start gap-10 lg:grid-cols-[minmax(0,760px)_220px] lg:gap-20">
+          <Tabs defaultValue={defaultWorkflow} className="mx-auto mt-10 grid max-w-[1060px] items-start gap-8 md:mt-16 lg:grid-cols-[minmax(0,760px)_220px] lg:gap-20">
             <div className="w-full">
               {t.workflow.tabs.map((tab) => (
                 <TabsContent key={tab.value} value={tab.value} className="mt-0">
-                  <div className="relative mx-auto min-h-[520px] w-full max-w-[770px] overflow-hidden bg-[#ddecf5] md:min-h-[575px]">
+                  <div className="relative mx-auto min-h-[380px] w-full max-w-[770px] overflow-hidden bg-[#ddecf5] sm:min-h-[520px] md:min-h-[575px]">
                     <img src={tab.image} alt={tab.label} className="absolute inset-0 h-full w-full object-cover opacity-65" />
-                    <div className="absolute left-1/2 top-10 w-[60%] min-w-[300px] -translate-x-1/2 overflow-hidden rounded-md bg-white shadow-[0_12px_34px_rgba(0,0,0,0.18)]">
+                    <div className="absolute left-1/2 top-8 w-[82%] min-w-0 -translate-x-1/2 overflow-hidden rounded-md bg-white shadow-[0_12px_34px_rgba(0,0,0,0.18)] sm:top-10 sm:w-[60%] sm:min-w-[300px]">
                       <img src={tab.image} alt={tab.label} className="h-36 w-full object-cover opacity-85" />
                       <div className="p-6">
                         <h3 className="text-sm font-semibold text-[#222]">{tab.label}</h3>
@@ -139,7 +124,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
             </div>
             <TabsList className="mx-auto grid h-auto w-full max-w-[520px] grid-cols-2 gap-x-8 gap-y-5 bg-transparent p-0 text-left lg:mx-0 lg:max-w-none lg:grid-cols-1 lg:gap-y-5">
               {t.workflow.tabs.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value} className="h-auto justify-start rounded-none border-0 bg-transparent p-0 text-2xl font-semibold leading-tight text-[#adadad] shadow-none data-active:bg-transparent data-active:text-[#202020] data-active:underline data-active:decoration-2 data-active:underline-offset-4 sm:text-3xl">
+                <TabsTrigger key={tab.value} value={tab.value} className="h-auto justify-start rounded-none border-0 bg-transparent p-0 text-xl font-semibold leading-tight text-[#adadad] shadow-none data-active:bg-transparent data-active:text-[#202020] data-active:underline data-active:decoration-2 data-active:underline-offset-4 sm:text-3xl">
                   {tab.label}
                 </TabsTrigger>
               ))}
@@ -148,12 +133,12 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         </div>
       </section>
 
-      <section className="bg-[#f7f7f7] px-6 py-20 md:py-24">
+      <section className="bg-[#f7f7f7] px-5 py-14 md:px-6 md:py-24">
         <div className="mx-auto max-w-[1240px]">
           <div className="mx-auto max-w-[780px] text-center">
             <p className="text-sm font-bold tracking-[0.18em] text-[#008f7f]">{t.testimonials.eyebrow}</p>
-            <h2 className="mt-8 text-4xl font-semibold leading-[1.18] tracking-normal text-[#202020] md:text-[40px]">{t.testimonials.title}</h2>
-            <p className="mt-6 text-lg leading-7 text-[#666]">{t.testimonials.subtitle}</p>
+            <h2 className="mt-6 text-3xl font-semibold leading-[1.18] tracking-normal text-[#202020] md:mt-8 md:text-[40px]">{t.testimonials.title}</h2>
+            <p className="mt-5 text-base leading-7 text-[#666] md:mt-6 md:text-lg">{t.testimonials.subtitle}</p>
           </div>
           <div className="mt-16 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {t.testimonials.items.map((item) => (
@@ -171,16 +156,16 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         </div>
       </section>
 
-      <section className="overflow-hidden bg-white px-6 py-20 text-center">
-        <h2 className="text-4xl font-semibold leading-[1.16] tracking-normal text-[#202020] md:text-[40px]">{t.cta.title}</h2>
+      <section className="overflow-hidden bg-white px-5 py-14 text-center md:px-6 md:py-20">
+        <h2 className="text-3xl font-semibold leading-[1.16] tracking-normal text-[#202020] md:text-[40px]">{t.cta.title}</h2>
         <p className="mt-7 text-lg text-[#666]">{t.cta.subtitle}</p>
-        <Button asChild className="mt-9 h-11 min-w-40 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"><a href="#">{t.cta.button}</a></Button>
+        <Button asChild className="mt-9 h-11 min-w-40 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"><a href="/register">{t.cta.button}</a></Button>
         <div className="mx-auto mt-14 grid max-w-[1000px] gap-5 md:grid-cols-3">
           {t.cta.images.slice(0, 3).map((item, index) => <img key={item} src={item} alt={`${t.cta.title} ${index + 1}`} className="h-72 w-full object-cover shadow-[0_20px_45px_rgba(0,0,0,0.16)]" />)}
         </div>
       </section>
 
-      <footer className="bg-[#171918] px-6 py-20 text-white">
+      <footer className="bg-[#171918] px-5 py-14 text-white md:px-6 md:py-20">
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[1.5fr_2fr]">
           <div className="flex min-h-[360px] flex-col">
             <a href="#" className="font-serif text-2xl tracking-[0.36em] text-white" aria-label={t.nav.brand}>{t.nav.brand}</a>
@@ -192,7 +177,10 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
               <div key={column.title}>
                 <h3 className="text-sm font-bold text-white">{column.title}</h3>
                 <ul className="mt-5 flex flex-col gap-5 text-sm text-white/80">
-                  {column.links.map((link) => <li key={link}><a href="#" className="hover:text-white">{link}</a></li>)}
+                  {column.links.map((link) => {
+                    const item = typeof link === "string" ? { label: link, url: "#" } : link;
+                    return <li key={`${item.label}-${item.url}`}><a href={item.url || "#"} className="hover:text-white">{item.label}</a></li>;
+                  })}
                 </ul>
               </div>
             ))}
