@@ -9,6 +9,7 @@ import { UserModule } from './user/user.module';
 import { SettingsModule } from './settings/settings.module';
 import { CollectionsModule } from './collections/collections.module';
 import { StoreModule } from './store/store.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { StoreModule } from './store/store.module';
     CollectionsModule,
     ImageUploadModule,
     StoreModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

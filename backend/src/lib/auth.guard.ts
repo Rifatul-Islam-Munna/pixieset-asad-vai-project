@@ -40,7 +40,7 @@ export class AuthGuard implements CanActivate {
     
       private async validateToken(request:ExpressRequest,token: string): Promise<boolean> {
         try {
-              const secret = this.configService.get<string>('ACCESS_TOKEN');
+              const secret = this.configService.get<string>('ACCESS_TOKEN') ?? 'dev-secret';
   this.logger.log('🔑 Regular Login SECRET in Auh:', secret); // Debug
        
           const decoded = await this.jwtService.verifyAsync<jwts>(token,{secret:secret}); 

@@ -1,6 +1,5 @@
 
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException, Inject } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { ExpressRequest } from './auth.guard';
 import { ROLES_KEY } from './roles.decorator';
 
@@ -22,7 +21,10 @@ export class RolesGuard implements CanActivate {
         if (!user) {
             throw new UnauthorizedException('You need to be authenticated to access this resource.');
           }
-          const requiredRoles:UserType[] = this.reflector.get<UserType[]>(ROLES_KEY, context.getHandler());
+          const requiredRoles = this.reflector.getAllAndOverride<UserType[]>(ROLES_KEY, [
+            context.getHandler(),
+            context.getClass(),
+          ]);
           if (!requiredRoles) {
             return true; 
           }

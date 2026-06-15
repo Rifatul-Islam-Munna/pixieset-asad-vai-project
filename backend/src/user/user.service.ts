@@ -17,16 +17,28 @@ export class UserService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    const adminPhone = this.configService.get<string>('ADMIN_USER');
-    const adminPassword = this.configService.get<string>('ADMIN_PASSWORD');
-    if (!adminPhone || !adminPassword) return;
+    const adminEmail = this.configService.get<string>('ADMIN_EMAIL') ?? 'test@gmail.com';
+    const adminPassword = this.configService.get<string>('ADMIN_PASSWORD') ?? '11111111';
 
-    const existing = await this.userModel.findOne({ phoneNumber: adminPhone }).lean();
-    if (existing) return;
+    const existing = await this.userModel.findOne({
+      $or: [{ email: adminEmail }, { phoneNumber: adminEmail }],
+    });
+
+    if (existing) {
+      existing.name = existing.name || 'admin';
+      existing.email = adminEmail;
+      existing.phoneNumber = adminEmail;
+      existing.password = await bcrypt.hash(adminPassword, 10);
+      existing.role = UserType.ADMIN;
+      existing.isOtpVerified = true;
+      await existing.save();
+      return;
+    }
 
     await this.userModel.create({
       name: 'admin',
-      phoneNumber: adminPhone,
+      email: adminEmail,
+      phoneNumber: adminEmail,
       password: await bcrypt.hash(adminPassword, 10),
       role: UserType.ADMIN,
       isOtpVerified: true,

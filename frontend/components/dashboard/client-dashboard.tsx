@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type PointerEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
@@ -30,6 +30,7 @@ import {
   LayoutGrid,
   Link2,
   ListFilter,
+  LogOut,
   Mail,
   MailCheck,
   Megaphone,
@@ -97,6 +98,7 @@ import {
   type CollectionRecord,
 } from "@/api-hooks/use-collections";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
+import { logOutUser } from "@/actions/auth";
 import { CoverPreview, coverOptions } from "@/components/dashboard/cover-designs";
 import {
   useStorePriceSheet,
@@ -289,6 +291,7 @@ export function ClientDashboard({
   collectionId?: string;
   priceSheetId?: string;
 }) {
+  const router = useRouter();
   const active = dashboardCopy[section];
   const activeSwitcher = switcherItems.find((item) => item.key === section);
   const {
@@ -307,6 +310,13 @@ export function ClientDashboard({
     page === "collections" || (section === "store-gallery" && page === "products");
   const isCollectionDetail = page === "collections" && Boolean(collectionId);
   const isPriceSheetDetail = page === "products" && Boolean(priceSheetId);
+  const [logoutPending, startLogoutTransition] = useTransition();
+  const logout = () => {
+    startLogoutTransition(async () => {
+      await logOutUser();
+      router.push("/login");
+    });
+  };
 
   return (
     <main className="min-h-screen bg-white text-[#151515]">
@@ -361,6 +371,14 @@ export function ClientDashboard({
             <Avatar className="size-7">
               <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
             </Avatar>
+            <button
+              aria-label="Logout"
+              className="text-[#555] hover:text-red-600 disabled:opacity-50"
+              disabled={logoutPending}
+              onClick={logout}
+            >
+              <LogOut className="size-5" />
+            </button>
           </div>
         </div>
 
@@ -451,6 +469,17 @@ export function ClientDashboard({
               </Link>
             )}
             <button
+              className={cn(
+                "mb-4 flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50",
+                collapsed && "justify-center"
+              )}
+              onClick={logout}
+              disabled={logoutPending}
+            >
+              <LogOut className="size-5" />
+              {!collapsed && "Logout"}
+            </button>
+            <button
               className="mb-4 mt-8 flex items-center text-[#333]"
               onClick={toggleCollapsed}
               aria-label="Toggle sidebar"
@@ -484,6 +513,9 @@ export function ClientDashboard({
           <Avatar className="size-7">
             <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
           </Avatar>
+          <button aria-label="Logout" onClick={logout} disabled={logoutPending}>
+            <LogOut className="size-5" />
+          </button>
         </div>}
 
         <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : "max-w-[1220px] px-5 py-16 md:py-20")}>

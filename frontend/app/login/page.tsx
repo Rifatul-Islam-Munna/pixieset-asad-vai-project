@@ -23,7 +23,7 @@ export default function LoginPage() {
         setError(result.error.message);
         return;
       }
-      router.push("/dashboard/client-gallery/homepage");
+      router.push(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery/homepage");
     });
   };
 
@@ -45,13 +45,13 @@ export default function LoginPage() {
 
               <div className="mt-10 grid gap-5">
                 <label className="grid gap-2">
-                  <span className="text-sm font-bold">Phone Number</span>
+                  <span className="text-sm font-bold">Email or Phone Number</span>
                   <div className="flex h-12 items-center border bg-white px-4 focus-within:border-[#22bda7]">
                     <UserRound className="mr-3 size-4 text-[#777]" />
                     <Input
                       value={form.phoneNumber}
                       onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })}
-                      placeholder="01712345678"
+                      placeholder="test@gmail.com"
                       className="h-11 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
                       required
                     />
