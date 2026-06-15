@@ -442,14 +442,15 @@ export function ClientDashboard({
             </div>
           )}
 
-          <div className="mt-auto">
+          <div className="mt-auto grid gap-4 pt-8">
             {section === "client-gallery" && (
               <Link
                 href={`/dashboard/${section}/storage`}
                 className={cn(
-                  "mx-auto flex items-center gap-3 bg-[#f3faf6] p-4 text-left",
-                  collapsed ? "w-12 justify-center" : "w-[235px]"
+                  "flex items-center gap-3 bg-[#f3faf6] text-left",
+                  collapsed ? "mx-auto size-12 justify-center p-0" : "w-full p-4"
                 )}
+                title="Storage"
               >
                 <div className="flex size-10 items-center justify-center rounded-full bg-[#dff6ef] text-[#19bba7]">
                   <Database className="size-5" />
@@ -466,7 +467,7 @@ export function ClientDashboard({
             )}
             <button
               className={cn(
-                "mb-4 flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50",
+                "flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50",
                 collapsed && "justify-center"
               )}
               onClick={logout}
@@ -476,7 +477,7 @@ export function ClientDashboard({
               {!collapsed && "Logout"}
             </button>
             <button
-              className="mb-4 mt-8 flex items-center text-[#333]"
+              className={cn("flex items-center text-[#333]", collapsed && "justify-center")}
               onClick={toggleCollapsed}
               aria-label="Toggle sidebar"
             >
@@ -676,7 +677,12 @@ function StoragePlanPanel() {
 
   return (
     <div>
-      <PageHeader title="Storage & Plan" action="Monthly Plan" />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <PageHeader title="Storage & Plan" action="Monthly Plan" />
+        <Button asChild className="h-11 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]">
+          <Link href="/pricing">View Pricing Plans</Link>
+        </Button>
+      </div>
       {error && <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">{error}</p>}
       <div className="mt-10 grid gap-5 lg:grid-cols-2">
         <UsagePanel
