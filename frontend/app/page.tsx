@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SiteNav } from "@/components/home/site-nav";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getUser } from "@/actions/auth";
+import { UserType } from "@/@types/user";
 import { mergeHomeCms, type HomeCmsData, type HomeLanguage } from "@/lib/home-cms";
 
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
@@ -26,8 +28,14 @@ function lines(text: string) {
   ));
 }
 
+async function getDashboardHref() {
+  const user = await getUser();
+  if (!user) return undefined;
+  return user.role === UserType.ADMIN ? "/admin" : "/dashboard/client-gallery/homepage";
+}
+
 export default async function Home({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
-  const cms = await getHomeCms();
+  const [cms, dashboardHref] = await Promise.all([getHomeCms(), getDashboardHref()]);
   const params = await searchParams;
   const lang: HomeLanguage = params?.lang === "gr" ? "gr" : cms.defaultLanguage;
   const t = cms.content[lang] ?? cms.content.en;
@@ -45,7 +53,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         <div className="absolute inset-0 bg-black/55" />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.68),rgba(0,0,0,0.18)_55%,rgba(0,0,0,0.5))]" />
 
-        <SiteNav nav={t.nav} lang={lang} />
+        <SiteNav nav={t.nav} lang={lang} dashboardHref={dashboardHref} />
 
         <div className="relative z-10 mx-auto flex min-h-[620px] w-full max-w-[1240px] items-center px-5 pt-6 md:min-h-[720px] md:px-7 lg:px-8">
           <div className="max-w-[760px] pt-10 md:pt-16">

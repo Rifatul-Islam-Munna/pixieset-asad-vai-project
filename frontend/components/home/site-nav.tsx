@@ -14,7 +14,7 @@ type NavCopy = {
   cta: string;
 };
 
-export function SiteNav({ nav, lang }: { nav: NavCopy; lang: "en" | "gr" }) {
+export function SiteNav({ nav, lang, dashboardHref }: { nav: NavCopy; lang: "en" | "gr"; dashboardHref?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -34,9 +34,9 @@ export function SiteNav({ nav, lang }: { nav: NavCopy; lang: "en" | "gr" }) {
       <div className="hidden items-center gap-3 md:flex">
         <Link href="/?lang=en" className={lang === "en" ? "text-sm font-bold" : "text-sm text-white/75"}>EN</Link>
         <Link href="/?lang=gr" className={lang === "gr" ? "text-sm font-bold" : "text-sm text-white/75"}>GR</Link>
-        <Link href="/login" className="text-sm font-semibold">{nav.login}</Link>
+        {!dashboardHref && <Link href="/login" className="text-sm font-semibold">{nav.login}</Link>}
         <Button asChild className="h-11 min-w-36 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]">
-          <Link href="/register">{nav.cta}</Link>
+          <Link href={dashboardHref ?? "/register"}>{dashboardHref ? "Dashboard" : nav.cta}</Link>
         </Button>
       </div>
 
@@ -58,14 +58,14 @@ export function SiteNav({ nav, lang }: { nav: NavCopy; lang: "en" | "gr" }) {
             <Link href="#" onClick={() => setOpen(false)}>{nav.products}</Link>
             <Link href="#" onClick={() => setOpen(false)}>{nav.examples}</Link>
             <Link href="/pricing" onClick={() => setOpen(false)}>{nav.pricing}</Link>
-            <Link href="/login" onClick={() => setOpen(false)}>{nav.login}</Link>
+            {!dashboardHref && <Link href="/login" onClick={() => setOpen(false)}>{nav.login}</Link>}
           </nav>
           <div className="mt-10 flex items-center gap-4 text-sm font-bold">
             <Link href="/?lang=en" onClick={() => setOpen(false)} className={lang === "en" ? "text-[#22bda7]" : "text-white/70"}>EN</Link>
             <Link href="/?lang=gr" onClick={() => setOpen(false)} className={lang === "gr" ? "text-[#22bda7]" : "text-white/70"}>GR</Link>
           </div>
           <Button asChild className="mt-10 h-12 w-full rounded-none bg-[#22bda7] text-base font-bold text-white hover:bg-[#19a995]">
-            <Link href="/register" onClick={() => setOpen(false)}>{nav.cta}</Link>
+            <Link href={dashboardHref ?? "/register"} onClick={() => setOpen(false)}>{dashboardHref ? "Dashboard" : nav.cta}</Link>
           </Button>
         </div>
       )}
