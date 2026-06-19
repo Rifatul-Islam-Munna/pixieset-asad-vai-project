@@ -6,7 +6,15 @@ const nextConfig: NextConfig = {
   output:"standalone",
   typescript:{
     ignoreBuildErrors:true
-  }
+  },
+   experimental: {
+    serverActions: {
+      bodySizeLimit: "40mb",
+    },
+  },
+  images: {
+    unoptimized: true,
+  },
   
 };
 
