@@ -5,19 +5,8 @@ import { SiteNav } from "@/components/home/site-nav";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getUser } from "@/actions/auth";
 import { UserType } from "@/@types/user";
-import { mergeHomeCms, type HomeCmsData, type HomeLanguage } from "@/lib/home-cms";
-
-const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-
-async function getHomeCms() {
-  try {
-    const response = await fetch(`${baseUrl}/home-cms`, { cache: "no-store" });
-    const payload = await response.json();
-    return mergeHomeCms(payload?.data as Partial<HomeCmsData>);
-  } catch {
-    return mergeHomeCms();
-  }
-}
+import { type HomeLanguage } from "@/lib/home-cms";
+import { getHomeCms } from "@/lib/home-cms-server";
 
 function lines(text: string) {
   return text.split("\n").map((line, index) => (

@@ -186,8 +186,10 @@ export async function updateHomeCms(payload: HomeCmsData) {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   revalidatePath("/admin");
+  revalidatePath("/login");
+  revalidatePath("/register");
   return mergeHomeCms(data);
 }
 

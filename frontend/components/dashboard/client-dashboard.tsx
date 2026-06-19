@@ -232,7 +232,7 @@ const libraryFilters = [
     items: ["Filename", "Title", "Caption", "Headline", "Keyword", "Orientation", "Rating", "Color Label", "Color Space"],
   },
   {
-    title: "Pixieset",
+    title: "Nikoset",
     items: ["Starred"],
   },
 ];
@@ -807,7 +807,7 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
           <FieldGroup className="gap-8">
             <Field>
               <FieldLabel className="font-bold">Sender Name</FieldLabel>
-              <Input className="h-12 rounded-none bg-white" placeholder="Pixieset Studio" />
+              <Input className="h-12 rounded-none bg-white" placeholder="Nikoset Studio" />
             </Field>
             <Field>
               <FieldLabel className="font-bold">Reply-to Email</FieldLabel>
@@ -2581,7 +2581,7 @@ function PresetStorePanel({
       <div className="mt-8 bg-[#eef7f9] p-6">
         <p className="font-bold">Activate Store</p>
         <p className="mt-4 text-sm leading-7 text-[#222]">
-          Setup Pixieset Store to start selling prints, digital downloads, and
+          Setup Nikoset Store to start selling prints, digital downloads, and
           more directly from your collections.
         </p>
         <button className="mt-3 text-sm font-semibold text-[#00a997]">
@@ -3454,7 +3454,7 @@ function HomepageSettings() {
           <section className="mt-12">
             <p className="text-sm font-bold">Homepage URL</p>
             <div className="mt-4 flex min-h-14 flex-wrap items-center justify-between gap-3 bg-[#f6f6f6] px-4 py-3 sm:px-5">
-              <span className="truncate text-sm font-medium">https://rifat39.pixieset.com</span>
+              <span className="truncate text-sm font-medium">https://rifat39.nikoset.com</span>
               <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
                 <Copy className="size-4" />
                 Copy
@@ -3539,7 +3539,7 @@ function HomepageSettings() {
             </div>
             <div className="mt-6 text-center">
               <p className="text-sm font-bold tracking-wide">RIFAT</p>
-              <p className="mt-3 text-[10px] font-semibold">email@pixieset.com</p>
+              <p className="mt-3 text-[10px] font-semibold">email@nikoset.com</p>
               <p className="mt-1 text-[10px] font-semibold">101 Main Street</p>
               <p className="mt-1 text-[10px] font-semibold">123-456-7890</p>
             </div>
@@ -4371,7 +4371,7 @@ const defaultStoreSettings: StoreSettingsRecord = {
     stripe: { enabled: false, accountLink: "", publishableKey: "", secretKey: "" },
   },
   links: [],
-  domain: { hostname: "", dnsTarget: "store.pixieset.local", verified: false },
+  domain: { hostname: "", dnsTarget: "store.nikoset.local", verified: false },
   giftCardSharingEmail: "",
   termsOfSale: "",
   digitalImageLicense: "",
@@ -6703,7 +6703,7 @@ const metadataGroups = [
     ],
   },
   {
-    title: "Pixieset",
+    title: "Nikoset",
     items: [["starred", "Starred"]],
   },
 ] as const;

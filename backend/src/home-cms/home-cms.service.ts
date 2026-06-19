@@ -11,7 +11,7 @@ export class HomeCmsService {
   async getHomeCms() {
     const cms = await this.homeCmsModel.findOneAndUpdate(
       { key: 'home' },
-      { $setOnInsert: { key: 'home', content: {}, media: { heroMediaType: 'image', heroMediaUrl: '' }, defaultLanguage: 'en' } },
+      { $setOnInsert: { key: 'home', content: {}, seo: {}, auth: {}, media: { heroMediaType: 'image', heroMediaUrl: '' }, defaultLanguage: 'en' } },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
     return cms.toObject();
@@ -23,6 +23,8 @@ export class HomeCmsService {
       {
         $set: {
           content: dto.content ?? {},
+          seo: dto.seo ?? {},
+          auth: dto.auth ?? {},
           media: dto.media ?? { heroMediaType: 'image', heroMediaUrl: '' },
           defaultLanguage: dto.defaultLanguage ?? 'en',
         },

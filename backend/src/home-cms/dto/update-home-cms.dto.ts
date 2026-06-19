@@ -7,6 +7,14 @@ export class UpdateHomeCmsDto {
 
   @IsOptional()
   @IsObject()
+  seo?: Record<string, any>;
+
+  @IsOptional()
+  @IsObject()
+  auth?: Record<string, any>;
+
+  @IsOptional()
+  @IsObject()
   media?: {
     heroMediaType?: 'image' | 'video';
     heroMediaUrl?: string;

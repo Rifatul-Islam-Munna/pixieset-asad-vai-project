@@ -85,7 +85,7 @@ export class StoreService {
             stripe: { enabled: false, publishableKey: '', secretKey: '', accountLink: '' },
           },
           links: [],
-          domain: { hostname: '', dnsTarget: 'store.pixieset.local', verified: false },
+          domain: { hostname: '', dnsTarget: 'store.nikoset.local', verified: false },
           giftCardSharingEmail: '',
           termsOfSale: '',
           digitalImageLicense: '',

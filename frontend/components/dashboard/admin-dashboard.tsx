@@ -325,7 +325,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
         <aside className="hidden border-r bg-white px-5 py-6 lg:block">
           <div className="flex items-center gap-3 text-sm font-bold">
             <span className="size-5 rounded-full bg-[#0dc6b5]" />
-            Pixieset Admin
+            Nikoset Admin
           </div>
           <AdminNav tab={tab} setTab={setTab} />
           <Button onClick={logout} variant="outline" className="mt-10 h-10 w-full rounded-none" disabled={pending}>
@@ -338,7 +338,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
           <div className="mb-5 flex items-center justify-between bg-white px-4 py-3 lg:hidden">
             <div className="flex items-center gap-3 text-sm font-bold">
               <span className="size-5 rounded-full bg-[#0dc6b5]" />
-              Pixieset Admin
+              Nikoset Admin
             </div>
             <button className="flex size-10 items-center justify-center bg-[#111] text-white" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu">
               <Menu />
@@ -351,7 +351,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 text-sm font-bold">
                     <span className="size-5 rounded-full bg-[#0dc6b5]" />
-                    Pixieset Admin
+                    Nikoset Admin
                   </div>
                   <button className="flex size-10 items-center justify-center bg-[#f3f3f3]" onClick={() => setAdminMenuOpen(false)} aria-label="Close admin menu">
                     <X className="size-5" />
@@ -1000,6 +1000,55 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
       </div>
 
       <div className="grid gap-5">
+        <CmsSection title="SEO and auth" defaultOpen>
+          <div className="grid gap-5">
+            <CmsRepeater title="Site SEO">
+              <div className="grid gap-4 md:grid-cols-2">
+                <CmsInput label="Site title" value={form.seo.siteTitle} onChange={(siteTitle) => setForm({ ...form, seo: { ...form.seo, siteTitle } })} />
+                <CmsTextarea label="Site description" value={form.seo.siteDescription} onChange={(siteDescription) => setForm({ ...form, seo: { ...form.seo, siteDescription } })} wide />
+                <CmsImageInput label="Favicon PNG" value={form.seo.faviconUrl} onChange={(faviconUrl) => setForm({ ...form, seo: { ...form.seo, faviconUrl } })} onUpload={onUpload} busy={busy} accept="image/png" wide />
+              </div>
+            </CmsRepeater>
+            <CmsRepeater title="Login SEO">
+              <div className="grid gap-4 md:grid-cols-2">
+                <CmsInput label="Login title" value={form.seo.loginTitle} onChange={(loginTitle) => setForm({ ...form, seo: { ...form.seo, loginTitle } })} />
+                <CmsTextarea label="Login description" value={form.seo.loginDescription} onChange={(loginDescription) => setForm({ ...form, seo: { ...form.seo, loginDescription } })} wide />
+              </div>
+            </CmsRepeater>
+            <CmsRepeater title="Register SEO">
+              <div className="grid gap-4 md:grid-cols-2">
+                <CmsInput label="Register title" value={form.seo.registerTitle} onChange={(registerTitle) => setForm({ ...form, seo: { ...form.seo, registerTitle } })} />
+                <CmsTextarea label="Register description" value={form.seo.registerDescription} onChange={(registerDescription) => setForm({ ...form, seo: { ...form.seo, registerDescription } })} wide />
+              </div>
+            </CmsRepeater>
+            <CmsRepeater title="Login and register screens">
+              <div className="grid gap-4 md:grid-cols-2">
+                <CmsInput label="Auth brand" value={form.auth.brand} onChange={(brand) => setForm({ ...form, auth: { ...form.auth, brand } })} />
+                <label className="grid gap-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Login image side</span>
+                  <select value={form.auth.loginImageSide} onChange={(event) => setForm({ ...form, auth: { ...form.auth, loginImageSide: event.target.value as "left" | "right" } })} className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none">
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
+                <CmsInput label="Login form title" value={form.auth.loginTitle} onChange={(loginTitle) => setForm({ ...form, auth: { ...form.auth, loginTitle } })} />
+                <CmsInput label="Login subtitle" value={form.auth.loginSubtitle} onChange={(loginSubtitle) => setForm({ ...form, auth: { ...form.auth, loginSubtitle } })} />
+                <CmsImageInput label="Login side image" value={form.auth.loginImageUrl} onChange={(loginImageUrl) => setForm({ ...form, auth: { ...form.auth, loginImageUrl } })} onUpload={onUpload} busy={busy} wide />
+                <label className="grid gap-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Register image side</span>
+                  <select value={form.auth.registerImageSide} onChange={(event) => setForm({ ...form, auth: { ...form.auth, registerImageSide: event.target.value as "left" | "right" } })} className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none">
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
+                <CmsInput label="Register form title" value={form.auth.registerTitle} onChange={(registerTitle) => setForm({ ...form, auth: { ...form.auth, registerTitle } })} />
+                <CmsInput label="Register subtitle" value={form.auth.registerSubtitle} onChange={(registerSubtitle) => setForm({ ...form, auth: { ...form.auth, registerSubtitle } })} />
+                <CmsImageInput label="Register side image" value={form.auth.registerImageUrl} onChange={(registerImageUrl) => setForm({ ...form, auth: { ...form.auth, registerImageUrl } })} onUpload={onUpload} busy={busy} wide />
+              </div>
+            </CmsRepeater>
+          </div>
+        </CmsSection>
+
         <CmsSection eyebrow={lang.toUpperCase()} title="Navigation" defaultOpen>
           <div className="grid gap-4 md:grid-cols-2">
             <CmsInput label="Brand" value={content.nav.brand} onChange={(brand) => patchObject("nav", { brand })} />
@@ -1185,13 +1234,14 @@ function CmsInput({ label, value, onChange, wide, dark }: {
   );
 }
 
-function CmsImageInput({ label, value, onChange, onUpload, busy, wide }: {
+function CmsImageInput({ label, value, onChange, onUpload, busy, wide, accept = "image/*" }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   onUpload: (file: File) => Promise<string>;
   busy: boolean;
   wide?: boolean;
+  accept?: string;
 }) {
   const [uploading, setUploading] = useState(false);
 
@@ -1208,7 +1258,7 @@ function CmsImageInput({ label, value, onChange, onUpload, busy, wide }: {
           {uploading ? "Uploading" : "Upload"}
           <input
             type="file"
-            accept="image/*"
+            accept={accept}
             disabled={busy || uploading}
             className="hidden"
             onChange={async (event) => {

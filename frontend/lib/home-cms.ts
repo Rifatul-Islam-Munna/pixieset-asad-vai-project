@@ -1,12 +1,36 @@
 export type HomeLanguage = "en" | "gr";
 
 export type HomeCmsData = {
+  seo: SiteSeo;
+  auth: AuthCms;
   content: Record<HomeLanguage, HomeContent>;
   media: {
     heroMediaType: "image" | "video";
     heroMediaUrl: string;
   };
   defaultLanguage: HomeLanguage;
+};
+
+export type SiteSeo = {
+  siteTitle: string;
+  siteDescription: string;
+  faviconUrl: string;
+  loginTitle: string;
+  loginDescription: string;
+  registerTitle: string;
+  registerDescription: string;
+};
+
+export type AuthCms = {
+  brand: string;
+  loginTitle: string;
+  loginSubtitle: string;
+  loginImageUrl: string;
+  loginImageSide: "left" | "right";
+  registerTitle: string;
+  registerSubtitle: string;
+  registerImageUrl: string;
+  registerImageSide: "left" | "right";
 };
 
 export type HomeContent = {
@@ -28,15 +52,35 @@ const image = "https://images.unsplash.com/photo-1529636798458-92182e662485?auto
 
 export const defaultHomeCms: HomeCmsData = {
   defaultLanguage: "en",
+  seo: {
+    siteTitle: "Nikoset",
+    siteDescription: "An all-in-one platform for modern photographers with client galleries, websites, stores, and studio tools.",
+    faviconUrl: "",
+    loginTitle: "Log in | Nikoset",
+    loginDescription: "Log in to your Nikoset workspace.",
+    registerTitle: "Create account | Nikoset",
+    registerDescription: "Create your Nikoset photography workspace.",
+  },
+  auth: {
+    brand: "Nikoset",
+    loginTitle: "Log in to your workspace",
+    loginSubtitle: "Client Gallery",
+    loginImageUrl: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80",
+    loginImageSide: "right",
+    registerTitle: "Create your account",
+    registerSubtitle: "Start workspace",
+    registerImageUrl: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80",
+    registerImageSide: "left",
+  },
   media: {
     heroMediaType: "image",
     heroMediaUrl: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=2400&q=80",
   },
   content: {
     en: {
-      nav: { brand: "PIXIESET", products: "Products", examples: "Examples", pricing: "Pricing", login: "Log In", cta: "Get Started" },
+      nav: { brand: "NIKOSET", products: "Products", examples: "Examples", pricing: "Pricing", login: "Log In", cta: "Get Started" },
       hero: {
-        eyebrow: "PIXIESET PHOTOGRAPHER PLATFORM",
+        eyebrow: "NIKOSET PHOTOGRAPHER PLATFORM",
         title: "Designed for photographers.\nBuilt to help you grow.",
         subtitle: "Industry-leading photo galleries, website and business tools to streamline your workflow and grow your photography business.",
         cta: "Get Started",
@@ -61,7 +105,7 @@ export const defaultHomeCms: HomeCmsData = {
       workflow: {
         eyebrow: "DESIGNED FOR EVERY WORKFLOW",
         title: "Made for all photographers.",
-        subtitle: "From weddings to landscapes and everything in between, Pixieset is built to elevate your business - and make your work look its best.",
+        subtitle: "From weddings to landscapes and everything in between, Nikoset is built to elevate your business - and make your work look its best.",
         cardText: "Booking, payment, and client details in one polished flow.",
         tabs: [
           { value: "wedding", label: "Wedding", image: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1300&q=80" },
@@ -79,13 +123,13 @@ export const defaultHomeCms: HomeCmsData = {
         title: "\"Truly the go-to photographer platform\"",
         subtitle: "Become part of a growing community of photographers, artists, entrepreneurs, creators, makers and movers - you're in good company here.",
         items: [
-          { name: "Reem Photography", site: "dreemteamweddings.com", image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80", quote: "The four main Pixieset tools we currently use are essential in providing a seamless and professional experience for our clients." },
-          { name: "Bek Rogers", site: "bekrogersphoto.com", image: "https://images.unsplash.com/photo-1534751516642-a1af1ef26a56?auto=format&fit=crop&w=120&q=80", quote: "Pixieset has given me the ease of delivering galleries through the same platform that houses my website." },
+          { name: "Reem Photography", site: "dreemteamweddings.com", image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80", quote: "The four main Nikoset tools we currently use are essential in providing a seamless and professional experience for our clients." },
+          { name: "Bek Rogers", site: "bekrogersphoto.com", image: "https://images.unsplash.com/photo-1534751516642-a1af1ef26a56?auto=format&fit=crop&w=120&q=80", quote: "Nikoset has given me the ease of delivering galleries through the same platform that houses my website." },
           { name: "Chris Joubert", site: "chrisjoubert.com", image: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=120&q=80", quote: "I started with client galleries, then created my website on it, then the print store, and now invoices and documents are on it too." },
         ],
       },
       cta: {
-        title: "Start using Pixieset today for free",
+        title: "Start using Nikoset today for free",
         subtitle: "Free forever. Upgrade when you need to.",
         button: "Get Started",
         desktopName: "MORGAN WELLS",
@@ -104,10 +148,10 @@ export const defaultHomeCms: HomeCmsData = {
       },
       footer: {
         description: "An all-in-one platform for modern photographers, offering client photo galleries, websites, online stores and studio management software tools.",
-        copyright: "Copyright 2026 Pixieset. Made with love in Vancity.",
+        copyright: "Copyright 2026 Nikoset. Made with love in Vancity.",
         columns: [
           { title: "Products", links: ["Client Gallery", "Website", "Studio Manager", "Store", "Mobile Gallery App", "Photo Editor", "Examples", "Pricing"] },
-          { title: "Resources", links: ["Help & Support", "Pixieset Blog", "Apps & Plugins", "Service Status"] },
+          { title: "Resources", links: ["Help & Support", "Nikoset Blog", "Apps & Plugins", "Service Status"] },
           { title: "Company", links: ["About", "Careers", "Terms Of Service", "Privacy Policy"] },
         ],
       },
@@ -122,9 +166,16 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
   const media = { ...defaultHomeCms.media, ...(data?.media ?? {}) };
   if (!media.heroMediaUrl?.trim()) media.heroMediaUrl = defaultHomeCms.media.heroMediaUrl;
   if (media.heroMediaType !== "video") media.heroMediaType = "image";
+  const auth = { ...defaultHomeCms.auth, ...(data?.auth ?? {}) };
+  if (auth.loginImageSide !== "left") auth.loginImageSide = "right";
+  if (auth.registerImageSide !== "right") auth.registerImageSide = "left";
+  if (!auth.loginImageUrl?.trim()) auth.loginImageUrl = defaultHomeCms.auth.loginImageUrl;
+  if (!auth.registerImageUrl?.trim()) auth.registerImageUrl = defaultHomeCms.auth.registerImageUrl;
 
   return {
     defaultLanguage: data?.defaultLanguage === "gr" ? "gr" : "en",
+    seo: { ...defaultHomeCms.seo, ...(data?.seo ?? {}) },
+    auth,
     media,
     content: {
       en: { ...defaultHomeCms.content.en, ...(data?.content?.en ?? {}) },
