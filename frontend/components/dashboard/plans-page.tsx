@@ -19,20 +19,37 @@ const featureLabels: Record<string, string> = {
   marketingEmails: "Marketing email",
 };
 
+function safePlan(plan: Partial<AdminPlan> | null | undefined, index: number): AdminPlan {
+  return {
+    _id: String(plan?._id ?? index),
+    name: String(plan?.name ?? "Untitled plan"),
+    storageGb: Number(plan?.storageGb ?? 0),
+    monthlyEmails: Number(plan?.monthlyEmails ?? 0),
+    priceMonthly: Number(plan?.priceMonthly ?? 0),
+    features: plan?.features ?? {},
+    active: plan?.active ?? true,
+    createdAt: plan?.createdAt,
+  };
+}
+
 export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadError?: string }) {
   const [query, setQuery] = useState("");
   const [pendingId, setPendingId] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
+  const safePlans = useMemo(() => {
+    return Array.isArray(plans) ? plans.map((plan, index) => safePlan(plan, index)) : [];
+  }, [plans]);
+
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return plans;
-    return plans.filter((plan) =>
+    if (!term) return safePlans;
+    return safePlans.filter((plan) =>
       [plan.name, String(plan.storageGb), String(plan.monthlyEmails), String(plan.priceMonthly)]
         .some((item) => item.toLowerCase().includes(term)),
     );
-  }, [plans, query]);
+  }, [safePlans, query]);
 
   const recommendedId = useMemo(() => {
     const pro = filtered.find((plan) => plan.name.toLowerCase().includes("pro"));

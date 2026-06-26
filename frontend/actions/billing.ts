@@ -15,6 +15,20 @@ export type BillingUser = {
   monthlyEmailsUsed?: number;
 };
 
+function normalizePlans(value: unknown): AdminPlan[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((plan: Partial<AdminPlan> & { _id?: string }, index) => ({
+    _id: String(plan?._id ?? index),
+    name: String(plan?.name ?? "Untitled plan"),
+    storageGb: Number(plan?.storageGb ?? 0),
+    monthlyEmails: Number(plan?.monthlyEmails ?? 0),
+    priceMonthly: Number(plan?.priceMonthly ?? 0),
+    features: plan?.features ?? {},
+    active: plan?.active ?? true,
+    createdAt: plan?.createdAt,
+  }));
+}
+
 async function authedRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = (await cookies()).get("access_token")?.value;
   const response = await fetch(`${baseUrl}${path}`, {
@@ -49,7 +63,7 @@ export async function getPublicPlans() {
         error: payload?.message ?? `Plan route failed (${response.status})`,
       };
     }
-    return { plans: (payload?.data ?? []) as AdminPlan[], error: "" };
+    return { plans: normalizePlans(payload?.data), error: "" };
   } catch (error) {
     return {
       plans: [],
