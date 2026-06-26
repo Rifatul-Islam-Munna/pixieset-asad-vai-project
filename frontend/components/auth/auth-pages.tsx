@@ -2,7 +2,6 @@
 
 import { useState, useTransition, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, Mail, Phone, UserRound, VenusAndMars } from "lucide-react";
 import { loginUser, registerUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,6 @@ import type { AuthCms } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 export function LoginPageClient({ auth }: { auth: AuthCms }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [form, setForm] = useState({ phoneNumber: "", password: "" });
@@ -26,7 +24,7 @@ export function LoginPageClient({ auth }: { auth: AuthCms }) {
         setError(result.error.message);
         return;
       }
-      router.push(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery/homepage");
+      window.location.assign(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery");
     });
   };
 
@@ -79,7 +77,6 @@ export function LoginPageClient({ auth }: { auth: AuthCms }) {
 }
 
 export function RegisterPageClient({ auth }: { auth: AuthCms }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [form, setForm] = useState({ name: "", email: "", phoneNumber: "", password: "", gender: "" });
@@ -93,7 +90,7 @@ export function RegisterPageClient({ auth }: { auth: AuthCms }) {
         setError(result.error.message);
         return;
       }
-      router.push("/dashboard/client-gallery/homepage");
+      window.location.assign("/dashboard/client-gallery");
     });
   };
 
