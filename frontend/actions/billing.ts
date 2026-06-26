@@ -40,10 +40,22 @@ export async function getBillingOverview() {
 }
 
 export async function getPublicPlans() {
-  const response = await fetch(`${baseUrl}/billing/public/plans`, { cache: "no-store" });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) return [];
-  return (payload?.data ?? []) as AdminPlan[];
+  try {
+    const response = await fetch(`${baseUrl}/billing/public/plans`, { cache: "no-store" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      return {
+        plans: [],
+        error: payload?.message ?? `Plan route failed (${response.status})`,
+      };
+    }
+    return { plans: (payload?.data ?? []) as AdminPlan[], error: "" };
+  } catch (error) {
+    return {
+      plans: [],
+      error: error instanceof Error ? error.message : "Plan route unreachable",
+    };
+  }
 }
 
 export async function checkoutPlan(planId: string) {

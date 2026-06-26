@@ -19,7 +19,7 @@ const featureLabels: Record<string, string> = {
   marketingEmails: "Marketing email",
 };
 
-export function PlansPage({ plans }: { plans: AdminPlan[] }) {
+export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadError?: string }) {
   const [query, setQuery] = useState("");
   const [pendingId, setPendingId] = useState("");
   const [pending, startTransition] = useTransition();
@@ -72,7 +72,11 @@ export function PlansPage({ plans }: { plans: AdminPlan[] }) {
           </div>
         </header>
 
-        {error && <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">{error}</p>}
+        {(loadError || error) && (
+          <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">
+            {error || `Could not load plans from /billing/public/plans: ${loadError}`}
+          </p>
+        )}
 
         {!filtered.length ? (
           <div className="mt-8 border bg-white p-8 text-sm font-semibold text-[#777]">No plans found.</div>
