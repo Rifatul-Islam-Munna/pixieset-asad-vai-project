@@ -26,7 +26,7 @@ import { logOutUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { mergeHomeCms, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type Testimonial } from "@/lib/home-cms";
+import { mergeHomeCms, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 type UserForm = {
@@ -940,6 +940,12 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
     patchObject("footer", { columns });
   };
 
+  const patchMetaTag = (index: number, value: Partial<SeoMetaTag>) => {
+    const extraMetaTags = [...form.seo.extraMetaTags];
+    extraMetaTags[index] = { ...extraMetaTags[index], ...value };
+    setForm({ ...form, seo: { ...form.seo, extraMetaTags } });
+  };
+
   return (
     <div className="mt-6 grid gap-5">
       <div className="bg-white p-5 shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
@@ -1006,19 +1012,56 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
               <div className="grid gap-4 md:grid-cols-2">
                 <CmsInput label="Site title" value={form.seo.siteTitle} onChange={(siteTitle) => setForm({ ...form, seo: { ...form.seo, siteTitle } })} />
                 <CmsTextarea label="Site description" value={form.seo.siteDescription} onChange={(siteDescription) => setForm({ ...form, seo: { ...form.seo, siteDescription } })} wide />
+                <CmsTextarea label="Keywords (comma separated)" value={form.seo.siteKeywords} onChange={(siteKeywords) => setForm({ ...form, seo: { ...form.seo, siteKeywords } })} wide />
+                <CmsInput label="Canonical URL" value={form.seo.siteCanonicalUrl} onChange={(siteCanonicalUrl) => setForm({ ...form, seo: { ...form.seo, siteCanonicalUrl } })} />
+                <CmsImageInput label="Social share image" value={form.seo.siteImageUrl} onChange={(siteImageUrl) => setForm({ ...form, seo: { ...form.seo, siteImageUrl } })} onUpload={onUpload} busy={busy} />
+                <CmsInput label="Google Tag Manager ID" value={form.seo.googleTagManagerId} onChange={(googleTagManagerId) => setForm({ ...form, seo: { ...form.seo, googleTagManagerId } })} />
+                <CmsInput label="Robots" value={form.seo.robots} onChange={(robots) => setForm({ ...form, seo: { ...form.seo, robots } })} />
+                <label className="grid gap-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Twitter card</span>
+                  <select value={form.seo.twitterCard} onChange={(event) => setForm({ ...form, seo: { ...form.seo, twitterCard: event.target.value } })} className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none">
+                    <option value="summary_large_image">summary_large_image</option>
+                    <option value="summary">summary</option>
+                  </select>
+                </label>
                 <CmsImageInput label="Favicon PNG" value={form.seo.faviconUrl} onChange={(faviconUrl) => setForm({ ...form, seo: { ...form.seo, faviconUrl } })} onUpload={onUpload} busy={busy} accept="image/png" wide />
+                <CmsTextarea label="JSON-LD (valid JSON)" value={form.seo.jsonLd} onChange={(jsonLd) => setForm({ ...form, seo: { ...form.seo, jsonLd } })} wide />
               </div>
+            </CmsRepeater>
+            <CmsRepeater title="Extra meta tags">
+              {form.seo.extraMetaTags.map((tag, index) => (
+                <div key={`${tag.key}-${index}`} className="grid gap-3 border p-3 md:grid-cols-[150px_1fr_1fr_auto]">
+                  <label className="grid gap-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Type</span>
+                    <select value={tag.type} onChange={(event) => patchMetaTag(index, { type: event.target.value as SeoMetaTag["type"] })} className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none">
+                      <option value="name">name</option>
+                      <option value="property">property</option>
+                      <option value="httpEquiv">httpEquiv</option>
+                    </select>
+                  </label>
+                  <CmsInput label="Key" value={tag.key} onChange={(key) => patchMetaTag(index, { key })} />
+                  <CmsInput label="Content" value={tag.value} onChange={(value) => patchMetaTag(index, { value })} />
+                  <button type="button" className="self-end bg-red-50 px-3 py-3 text-sm font-bold text-red-600" onClick={() => setForm({ ...form, seo: { ...form.seo, extraMetaTags: form.seo.extraMetaTags.filter((_, itemIndex) => itemIndex !== index) } })}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => setForm({ ...form, seo: { ...form.seo, extraMetaTags: [...form.seo.extraMetaTags, { type: "name", key: "", value: "" }] } })}>
+                Add meta tag
+              </Button>
             </CmsRepeater>
             <CmsRepeater title="Login SEO">
               <div className="grid gap-4 md:grid-cols-2">
                 <CmsInput label="Login title" value={form.seo.loginTitle} onChange={(loginTitle) => setForm({ ...form, seo: { ...form.seo, loginTitle } })} />
                 <CmsTextarea label="Login description" value={form.seo.loginDescription} onChange={(loginDescription) => setForm({ ...form, seo: { ...form.seo, loginDescription } })} wide />
+                <CmsTextarea label="Login keywords" value={form.seo.loginKeywords} onChange={(loginKeywords) => setForm({ ...form, seo: { ...form.seo, loginKeywords } })} wide />
               </div>
             </CmsRepeater>
             <CmsRepeater title="Register SEO">
               <div className="grid gap-4 md:grid-cols-2">
                 <CmsInput label="Register title" value={form.seo.registerTitle} onChange={(registerTitle) => setForm({ ...form, seo: { ...form.seo, registerTitle } })} />
                 <CmsTextarea label="Register description" value={form.seo.registerDescription} onChange={(registerDescription) => setForm({ ...form, seo: { ...form.seo, registerDescription } })} wide />
+                <CmsTextarea label="Register keywords" value={form.seo.registerKeywords} onChange={(registerKeywords) => setForm({ ...form, seo: { ...form.seo, registerKeywords } })} wide />
               </div>
             </CmsRepeater>
             <CmsRepeater title="Login and register screens">

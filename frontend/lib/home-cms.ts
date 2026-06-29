@@ -14,11 +14,27 @@ export type HomeCmsData = {
 export type SiteSeo = {
   siteTitle: string;
   siteDescription: string;
+  siteKeywords: string;
+  siteCanonicalUrl: string;
+  siteImageUrl: string;
+  googleTagManagerId: string;
+  robots: string;
+  twitterCard: string;
+  extraMetaTags: SeoMetaTag[];
+  jsonLd: string;
   faviconUrl: string;
   loginTitle: string;
   loginDescription: string;
+  loginKeywords: string;
   registerTitle: string;
   registerDescription: string;
+  registerKeywords: string;
+};
+
+export type SeoMetaTag = {
+  type: "name" | "property" | "httpEquiv";
+  key: string;
+  value: string;
 };
 
 export type AuthCms = {
@@ -55,11 +71,21 @@ export const defaultHomeCms: HomeCmsData = {
   seo: {
     siteTitle: "Nikoset",
     siteDescription: "An all-in-one platform for modern photographers with client galleries, websites, stores, and studio tools.",
+    siteKeywords: "photography platform, client galleries, photo store, photographer website, studio tools",
+    siteCanonicalUrl: "",
+    siteImageUrl: "",
+    googleTagManagerId: "",
+    robots: "index, follow",
+    twitterCard: "summary_large_image",
+    extraMetaTags: [],
+    jsonLd: "",
     faviconUrl: "",
     loginTitle: "Log in | Nikoset",
     loginDescription: "Log in to your Nikoset workspace.",
+    loginKeywords: "Nikoset login, photographer workspace login",
     registerTitle: "Create account | Nikoset",
     registerDescription: "Create your Nikoset photography workspace.",
+    registerKeywords: "create photography website, client gallery account, photographer store",
   },
   auth: {
     brand: "Nikoset",
@@ -172,9 +198,13 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
   if (!auth.loginImageUrl?.trim()) auth.loginImageUrl = defaultHomeCms.auth.loginImageUrl;
   if (!auth.registerImageUrl?.trim()) auth.registerImageUrl = defaultHomeCms.auth.registerImageUrl;
 
+  const seo = { ...defaultHomeCms.seo, ...(data?.seo ?? {}) };
+  if (!Array.isArray(seo.extraMetaTags)) seo.extraMetaTags = [];
+  if (seo.twitterCard !== "summary") seo.twitterCard = "summary_large_image";
+
   return {
     defaultLanguage: data?.defaultLanguage === "gr" ? "gr" : "en",
-    seo: { ...defaultHomeCms.seo, ...(data?.seo ?? {}) },
+    seo,
     auth,
     media,
     content: {
