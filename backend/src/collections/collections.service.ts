@@ -8,6 +8,7 @@ import { cwd } from 'process';
 import sharp, { type Metadata } from 'sharp';
 import * as exifr from 'exifr';
 import { MinioService } from 'src/lib/minio.service';
+import { FaceSearchService } from 'src/face-search/face-search.service';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
@@ -37,6 +38,7 @@ export class CollectionsService {
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly minioService: MinioService,
+    private readonly faceSearchService: FaceSearchService,
   ) {}
 
   async create(userId: string, dto: CreateCollectionDto) {
@@ -255,6 +257,9 @@ export class CollectionsService {
       { $inc: { storageUsedBytes: files.reduce((sum, file) => sum + (file.size ?? 0), 0) } },
     );
 
+    void Promise.all(uploaded.map((image) => this.faceSearchService.indexImage(image)))
+      .catch((error) => console.warn('Face indexing failed:', error?.message ?? error));
+
     return uploaded;
   }
 
@@ -264,6 +269,7 @@ export class CollectionsService {
     const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
 
     await this.imageModel.deleteOne({ _id: imageId, userId, collectionId });
+    void this.faceSearchService.deleteImageFaces(collectionId, imageId);
     if (image.sizeBytes) {
       await this.userModel.updateOne(
         { _id: userId },

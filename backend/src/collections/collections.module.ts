@@ -13,6 +13,7 @@ import {
   CollectionImageSchema,
 } from './entities/collection-image.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
+import { FaceSearchModule } from 'src/face-search/face-search.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { User, UserSchema } from 'src/user/entities/user.entity';
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: User.name, schema: UserSchema },
     ]),
+    FaceSearchModule,
   ],
   controllers: [CollectionsController, PublicCollectionsController],
   providers: [CollectionsService, MinioService],

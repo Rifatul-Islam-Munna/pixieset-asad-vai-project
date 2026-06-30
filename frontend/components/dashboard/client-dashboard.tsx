@@ -41,9 +41,11 @@ import {
   PanelTop,
   PlusCircle,
   Lock,
+  QrCode,
   RefreshCw,
   Save,
   Settings,
+  Share2,
   ShoppingBag,
   ShoppingCart,
   Search,
@@ -771,11 +773,21 @@ function bytesToGb(value: number) {
 function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
   const {
     campaignSearch,
+    hydrateDashboardSettings,
     setCampaignSearch,
     setShowCampaignTemplates,
     showCampaignTemplates,
     startCampaignBuilder,
   } = useDashboardStore();
+  const emailTemplateSettings = useDashboardSettings("email-template").query;
+
+  useEffect(() => {
+    const settings = emailTemplateSettings.data?.data ?? [];
+
+    if (settings.length) {
+      hydrateDashboardSettings(settings);
+    }
+  }, [emailTemplateSettings.data, hydrateDashboardSettings]);
 
   if (marketingPage === "contacts") {
     return (
@@ -831,7 +843,10 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
         onQueryChange={setCampaignSearch}
       />
       {showCampaignTemplates ? (
-        <TemplateGrid onSelect={startCampaignBuilder} />
+        <TemplateGrid
+          isLoading={emailTemplateSettings.isLoading}
+          onSelect={startCampaignBuilder}
+        />
       ) : (
         <CampaignTable
           query={campaignSearch}
@@ -956,8 +971,34 @@ function CampaignTable({
   );
 }
 
-function TemplateGrid({ onSelect }: { onSelect: (template?: string) => void }) {
+function TemplateGrid({
+  isLoading,
+  onSelect,
+}: {
+  isLoading: boolean;
+  onSelect: (template?: string) => void;
+}) {
   const { emailTemplates } = useDashboardStore();
+
+  if (isLoading && !emailTemplates.length) {
+    return (
+      <div className="mt-12 flex min-h-[280px] items-center justify-center text-sm font-semibold text-[#777]">
+        Loading templates...
+      </div>
+    );
+  }
+
+  if (!emailTemplates.length) {
+    return (
+      <div className="mt-12 flex min-h-[280px] flex-col items-center justify-center text-center">
+        <Mail className="size-10 text-[#999]" />
+        <h2 className="mt-5 text-lg font-bold">No email templates yet</h2>
+        <p className="mt-3 max-w-[420px] text-sm leading-6 text-[#666]">
+          Create templates in Settings, then use them for new campaigns.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -5870,7 +5911,14 @@ function CollectionDetailView({
   const router = useRouter();
   const presetSettings = useDashboardSettings("preset").query;
   const watermarkSettings = useDashboardSettings("watermark").query;
-  const { hydrateDashboardSettings, presetItems, watermarkItems } = useDashboardStore();
+  const emailTemplateSettings = useDashboardSettings("email-template").query;
+  const {
+    emailTemplates,
+    hydrateDashboardSettings,
+    presetItems,
+    startCampaignBuilder,
+    watermarkItems,
+  } = useDashboardStore();
   const { starImage } = useImageActions();
   const { collectionsQuery } = useCollections();
   const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage } = useCollectionDetail(collectionId);
@@ -5886,12 +5934,16 @@ function CollectionDetailView({
   const [addSetOpen, setAddSetOpen] = useState(false);
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareTemplateSearch, setShareTemplateSearch] = useState("");
+  const [selectedShareTemplateId, setSelectedShareTemplateId] = useState("");
   const [imagePage, setImagePage] = useState(1);
   const [newSetName, setNewSetName] = useState("");
   const [editingSetId, setEditingSetId] = useState("");
   const [editingSetName, setEditingSetName] = useState("");
   const [pageOrigin, setPageOrigin] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [uploadingFileCount, setUploadingFileCount] = useState(0);
   const [form, setForm] = useState(() => collectionForm(collection));
   const activeImage =
     images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
@@ -5903,6 +5955,15 @@ function CollectionDetailView({
     imagePage * imagePageSize,
   );
   const activeSet = form.sets.find((set) => set.id === activeSetId) ?? form.sets[0];
+  const filteredShareTemplates = emailTemplates.filter((template) =>
+    [template.name, template.subject, template.previewText]
+      .join(" ")
+      .toLowerCase()
+      .includes(shareTemplateSearch.toLowerCase()),
+  );
+  const selectedShareTemplate =
+    emailTemplates.find((template) => template.id === selectedShareTemplateId) ??
+    emailTemplates[0];
   const uploadWatermarkId =
     activeSet?.watermarkId ||
     (form.general.defaultWatermark === "No watermark" ? undefined : form.general.defaultWatermark);
@@ -5913,6 +5974,7 @@ function CollectionDetailView({
   );
   const publicPath = `/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collection?.slug ?? collectionId)}`;
   const publicLink = `${pageOrigin}${publicPath}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicLink)}`;
 
   useEffect(() => {
     setPageOrigin(window.location.origin);
@@ -5922,13 +5984,20 @@ function CollectionDetailView({
     const settings = [
       ...(presetSettings.data?.data ?? []),
       ...(watermarkSettings.data?.data ?? []),
+      ...(emailTemplateSettings.data?.data ?? []),
     ];
     if (settings.length) hydrateDashboardSettings(settings);
-  }, [hydrateDashboardSettings, presetSettings.data, watermarkSettings.data]);
+  }, [emailTemplateSettings.data, hydrateDashboardSettings, presetSettings.data, watermarkSettings.data]);
 
   useEffect(() => {
     if (collection) setForm(collectionForm(collection));
   }, [collection]);
+
+  useEffect(() => {
+    if (!selectedShareTemplateId && emailTemplates[0]) {
+      setSelectedShareTemplateId(emailTemplates[0].id);
+    }
+  }, [emailTemplates, selectedShareTemplateId]);
 
   useEffect(() => {
     if (!sets.some((set) => set.id === activeSetId)) {
@@ -6034,6 +6103,25 @@ function CollectionDetailView({
     setLinkCopied(true);
     window.setTimeout(() => setLinkCopied(false), 1600);
   };
+  const shareByEmail = (templateId: string) => {
+    startCampaignBuilder(templateId, publicLink);
+    setShareOpen(false);
+  };
+  const handleImageUpload = (files: FileList | null) => {
+    if (!files?.length || uploadImages.isPending) return;
+    const selectedFiles = Array.from(files);
+    setUploadingFileCount(selectedFiles.length);
+    uploadImages.mutate(
+      {
+        files: selectedFiles,
+        setId: activeSetId,
+        watermarkId: uploadWatermarkId,
+      },
+      {
+        onSettled: () => setUploadingFileCount(0),
+      },
+    );
+  };
   if (!collection) {
     return (
       <div className="flex min-h-[420px] items-center justify-center text-sm text-[#666]">
@@ -6079,24 +6167,25 @@ function CollectionDetailView({
             <Store data-icon="inline-start" />
             Store
           </Button>
-          <label className="inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white">
-            <Upload className="size-4" />
-            Add Media
+          <Button
+            variant="outline"
+            className="h-10 rounded-none"
+            onClick={() => setShareOpen(true)}
+          >
+            <Share2 data-icon="inline-start" />
+            Share
+          </Button>
+          <label className={cn("inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white", uploadImages.isPending && "pointer-events-none opacity-70")}>
+            {uploadImages.isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            {uploadImages.isPending ? "Uploading..." : "Add Media"}
             <input
               type="file"
               accept="image/*"
               multiple
+              disabled={uploadImages.isPending}
               className="hidden"
               onChange={(event) => {
-                const files = event.target.files;
-                if (files?.length) {
-                  const selectedFiles = Array.from(files);
-                  uploadImages.mutate({
-                    files: selectedFiles,
-                    setId: activeSetId,
-                    watermarkId: uploadWatermarkId,
-                  });
-                }
+                handleImageUpload(event.target.files);
                 event.currentTarget.value = "";
               }}
             />
@@ -6104,10 +6193,130 @@ function CollectionDetailView({
         </div>
       </div>
 
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="max-h-[88vh] overflow-hidden rounded-none sm:max-w-[980px]">
+          <DialogHeader>
+            <DialogTitle>Share Collection</DialogTitle>
+            <DialogDescription>
+              Send gallery by email, copy direct link, or share QR code.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid min-h-0 gap-5 md:grid-cols-[minmax(0,1.35fr)_360px]">
+            <section className="min-h-0 border bg-white p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex size-10 items-center justify-center bg-[#e3f6f1] text-[#00a997]">
+                    <Mail className="size-5" />
+                  </div>
+                  <h3 className="mt-4 font-bold">Send by Email</h3>
+                </div>
+                <span className="bg-[#f4f4f4] px-2 py-1 text-xs font-bold text-[#666]">
+                  {emailTemplates.length} templates
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-[#666]">
+                Search, select, then send. Button URL becomes gallery link.
+              </p>
+              {emailTemplateSettings.isLoading ? (
+                <p className="mt-4 text-sm font-semibold text-[#777]">Loading templates...</p>
+              ) : emailTemplates.length ? (
+                <>
+                  <div className="mt-4 flex h-10 items-center gap-2 border px-3">
+                    <Search className="size-4 text-[#777]" />
+                    <Input
+                      value={shareTemplateSearch}
+                      onChange={(event) => setShareTemplateSearch(event.target.value)}
+                      placeholder="Find template"
+                      className="h-9 rounded-none border-0 px-0 text-sm focus-visible:ring-0"
+                    />
+                  </div>
+                  <div className="mt-3 max-h-[360px] overflow-y-auto border">
+                    {filteredShareTemplates.map((template) => (
+                      <button
+                        key={template.id}
+                        className={cn(
+                          "block w-full border-b px-4 py-3 text-left text-sm last:border-b-0 hover:bg-[#f7fbfa]",
+                          selectedShareTemplate?.id === template.id && "bg-[#e3f6f1]",
+                        )}
+                        onClick={() => setSelectedShareTemplateId(template.id)}
+                      >
+                        <span className="block truncate font-bold">{template.name || "Untitled Template"}</span>
+                        <span className="mt-1 block truncate text-xs text-[#666]">
+                          {template.subject || "No subject"}
+                        </span>
+                      </button>
+                    ))}
+                    {!filteredShareTemplates.length && (
+                      <p className="px-3 py-6 text-center text-sm font-semibold text-[#777]">
+                        No match.
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    className="mt-4 h-10 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"
+                    disabled={!selectedShareTemplate}
+                    onClick={() => selectedShareTemplate && shareByEmail(selectedShareTemplate.id)}
+                  >
+                    <Send className="size-4" />
+                    Use Selected Template
+                  </Button>
+                </>
+              ) : (
+                  <p className="text-sm leading-6 text-[#666]">
+                    No templates yet. Create one in Settings.
+                  </p>
+              )}
+            </section>
+
+            <aside className="grid gap-4">
+              <section className="border bg-[#fafafa] p-5">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 items-center justify-center bg-white text-[#333]">
+                    <Link2 className="size-5" />
+                  </span>
+                  <h3 className="font-bold">Direct Link</h3>
+                </div>
+                <p className="mt-4 break-all bg-white p-3 text-sm leading-6 text-[#666]">{publicLink}</p>
+                <Button variant="outline" className="mt-4 h-10 w-full rounded-none bg-white" onClick={copyPublicLink}>
+                  <Copy data-icon="inline-start" />
+                  {linkCopied ? "Copied" : "Copy Link"}
+                </Button>
+              </section>
+
+              <section className="border bg-[#111] p-5 text-white">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 items-center justify-center bg-white text-[#111]">
+                    <QrCode className="size-5" />
+                  </span>
+                  <h3 className="font-bold">QR Code</h3>
+                </div>
+                <div className="mt-4 flex justify-center bg-white p-5">
+                  <img src={qrCodeUrl} alt={`QR code for ${collection.name}`} className="size-[220px]" />
+                </div>
+                <a
+                  href={qrCodeUrl}
+                  download={`${collection.slug || collection._id}-qr-code.png`}
+                  className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 border border-white/25 px-4 text-sm font-bold text-white"
+                >
+                  <Download className="size-4" />
+                  Download QR
+                </a>
+              </section>
+            </aside>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {uploadImages.isPending && (
-        <p className="mt-4 text-sm font-semibold text-[#00a997]">
-          Uploading and applying watermark...
-        </p>
+        <div className="mt-4 flex items-center gap-4 border border-[#bdeee8] bg-[#f2fffd] px-4 py-3 text-sm text-[#096f64]">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#d9fbf6]">
+            <Loader2 className="size-5 animate-spin" />
+          </span>
+          <div>
+            <p className="font-bold">Uploading {uploadingFileCount || "selected"} media...</p>
+            <p className="mt-1 text-xs font-semibold text-[#3f8179]">Please keep this page open while files and watermark processing finish.</p>
+          </div>
+        </div>
       )}
       {uploadImages.error && (
         <p className="mt-4 text-sm font-semibold text-red-600">
@@ -6241,25 +6450,18 @@ function CollectionDetailView({
         <div className="min-w-0 overflow-y-auto p-5 md:p-6">
           {activeTab === "photos" && (
             !activeSetImages.length ? (
-              <label className="flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center">
-                <Upload className="size-10 text-[#bbb]" />
-                <p className="mt-5 font-bold">Drag photos and videos here to upload</p>
-                <p className="mt-3 text-sm text-[#00a997]">or Browse files</p>
+              <label className={cn("flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center", uploadImages.isPending && "pointer-events-none opacity-75")}>
+                {uploadImages.isPending ? <Loader2 className="size-10 animate-spin text-[#22bda7]" /> : <Upload className="size-10 text-[#bbb]" />}
+                <p className="mt-5 font-bold">{uploadImages.isPending ? "Uploading media..." : "Drag photos and videos here to upload"}</p>
+                <p className="mt-3 text-sm text-[#00a997]">{uploadImages.isPending ? "Processing files and watermark" : "or Browse files"}</p>
                 <input
                   type="file"
                   accept="image/*"
                   multiple
+                  disabled={uploadImages.isPending}
                   className="hidden"
                   onChange={(event) => {
-                    const files = event.target.files;
-                    if (files?.length) {
-                      const selectedFiles = Array.from(files);
-                      uploadImages.mutate({
-                        files: selectedFiles,
-                        setId: activeSetId,
-                        watermarkId: uploadWatermarkId,
-                      });
-                    }
+                    handleImageUpload(event.target.files);
                     event.currentTarget.value = "";
                   }}
                 />
@@ -6275,6 +6477,14 @@ function CollectionDetailView({
                   </Button>
                 </div>
                 <div className={cn("grid gap-2", form.design.gridStyle === "Horizontal" ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-3 md:grid-cols-5 xl:grid-cols-6", form.design.thumbnailSize === "Large" && "md:grid-cols-4 xl:grid-cols-5")}>
+                  {uploadImages.isPending && Array.from({ length: Math.min(uploadingFileCount || 3, 6) }).map((_, index) => (
+                    <div key={`uploading-${index}`} className="relative flex aspect-square items-center justify-center overflow-hidden bg-[#eef9f7]">
+                      <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-[#d3f2ee]">
+                        <div className="h-full w-1/2 animate-pulse bg-[#22bda7]" />
+                      </div>
+                      <Loader2 className="size-6 animate-spin text-[#22bda7]" />
+                    </div>
+                  ))}
                   {visibleSetImages.map((image) => (
                     <div
                       key={image._id}

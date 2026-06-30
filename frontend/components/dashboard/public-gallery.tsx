@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Eye, Grid2X2, Lock, ShoppingBag, X } from "lucide-react";
+import { Camera, Download, Eye, Grid2X2, Lock, Search, ShoppingBag, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import { cn } from "@/lib/utils";
@@ -12,6 +11,16 @@ type PublicImage = {
   _id: string;
   url: string;
   originalName?: string;
+  faceScore?: number;
+};
+
+type PublicFace = {
+  id: string;
+  label: string;
+  imageId?: string;
+  imageUrl?: string;
+  box?: { x: number; y: number; width: number; height: number };
+  photoCount: number;
 };
 
 type PublicCollection = {
@@ -120,6 +129,12 @@ export function PublicGallery({
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
   const [downloadCount, setDownloadCount] = useState(0);
+  const [faceBusy, setFaceBusy] = useState(false);
+  const [faceError, setFaceError] = useState("");
+  const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
+  const [faces, setFaces] = useState<PublicFace[]>([]);
+  const [faceSheetOpen, setFaceSheetOpen] = useState(false);
+  const visibleImages = faceResults ?? images;
   const [bg, fg, accent] =
     themeMap[design.color as keyof typeof themeMap] ?? themeMap.Rose;
   const fontFamily =
@@ -135,6 +150,52 @@ export function PublicGallery({
   const canDownload = download.photoDownload && pinOk && limitOk;
   const buttonStyle = { backgroundColor: fg, color: bg };
   const onDownload = () => setDownloadCount((count) => count + 1);
+  const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  const loadFaces = async () => {
+    setFaceSheetOpen(true);
+    if (faces.length || faceBusy) return;
+    setFaceBusy(true);
+    setFaceError("");
+    const response = await fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces`).catch(() => null);
+    const payload = response ? await response.json().catch(() => null) : null;
+    setFaceBusy(false);
+    if (!response?.ok) {
+      setFaceError(payload?.message ?? "Face list failed.");
+      return;
+    }
+    setFaces(payload?.data?.faces ?? []);
+  };
+  const filterBySavedFace = async (faceId: string) => {
+    setFaceBusy(true);
+    setFaceError("");
+    const response = await fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces/${encodeURIComponent(faceId)}`).catch(() => null);
+    const payload = response ? await response.json().catch(() => null) : null;
+    setFaceBusy(false);
+    if (!response?.ok) {
+      setFaceError(payload?.message ?? "Face filter failed.");
+      return;
+    }
+    setFaceResults(payload?.data?.images ?? []);
+    setFaceSheetOpen(false);
+  };
+  const searchByFace = async (file?: File) => {
+    if (!file) return;
+    setFaceBusy(true);
+    setFaceError("");
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}`, {
+      method: "POST",
+      body: formData,
+    }).catch(() => null);
+    const payload = response ? await response.json().catch(() => null) : null;
+    setFaceBusy(false);
+    if (!response?.ok) {
+      setFaceError(payload?.message ?? "Face search failed.");
+      return;
+    }
+    setFaceResults(payload?.data?.images ?? []);
+  };
 
   return (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen">
@@ -181,29 +242,41 @@ export function PublicGallery({
             </p>
             <h1 className="mt-3 text-3xl font-semibold">{title}</h1>
           </div>
-          <div className="flex flex-wrap gap-3">
-            {storeStatus && (
-              <Button id="store" className="rounded-none" style={buttonStyle} asChild>
-                <a href={storeHref}>
-                  <ShoppingBag data-icon="inline-start" />
-                  Store
-                </a>
-              </Button>
+          <div className="flex flex-wrap items-center gap-2 rounded-full border border-black/10 bg-white/75 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur">
+            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:opacity-90" style={buttonStyle}>
+              {faceBusy ? <Search className="size-4 animate-pulse" /> : <Camera className="size-4" />}
+              <span>{faceBusy ? "Searching" : "Find me"}</span>
+              <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
+                void searchByFace(event.target.files?.[0]);
+                event.target.value = "";
+              }} />
+            </label>
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={loadFaces} type="button">
+              <Search className="size-4" />
+              Faces
+            </button>
+            {faceResults && (
+              <button className="inline-flex h-10 items-center rounded-full border border-black/10 px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => setFaceResults(null)} type="button">
+                Show all
+              </button>
             )}
-            {download.photoDownload && (
-              canDownload ? (
-                <Button className="rounded-none" style={buttonStyle} asChild>
-                  <a href={imageSrc(images[0]?.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
-                    <Download data-icon="inline-start" />
-                    Download
-                  </a>
-                </Button>
-              ) : (
-                <Button className="rounded-none opacity-50" style={buttonStyle} disabled>
-                  <Download data-icon="inline-start" />
-                  Download
-                </Button>
-              )
+            {storeStatus && (
+              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5">
+                <ShoppingBag className="size-4" />
+                Store
+              </a>
+            )}
+            {download.photoDownload && canDownload && (
+              <a className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" href={imageSrc(images[0]?.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
+                <Download className="size-4" />
+                Download
+              </a>
+            )}
+            {download.photoDownload && !canDownload && (
+              <span className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold opacity-40">
+                <Download className="size-4" />
+                Download
+              </span>
             )}
           </div>
         </div>
@@ -230,6 +303,13 @@ export function PublicGallery({
           </p>
         )}
 
+        {faceError && <p className="mt-5 text-sm font-semibold text-red-600">{faceError}</p>}
+        {faceResults && (
+          <p className="mt-5 text-sm" style={{ color: accent }}>
+            {faceResults.length} matching photos found
+          </p>
+        )}
+
         <div
           id="gallery"
           className={cn(
@@ -239,7 +319,7 @@ export function PublicGallery({
             design.gridStyle === "Horizontal" && "md:grid-cols-2"
           )}
         >
-          {images.map((photo) => (
+          {visibleImages.map((photo) => (
             <div key={photo._id} className="group relative overflow-hidden bg-white text-left">
               <button className="block w-full" onClick={() => setActiveImage(photo)}>
                 <img
@@ -282,6 +362,47 @@ export function PublicGallery({
             alt={activeImage.originalName ?? ""}
             className="max-h-full max-w-full object-contain"
           />
+        </div>
+      )}
+
+      {faceSheetOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/30">
+          <aside className="h-full w-full max-w-[360px] overflow-y-auto bg-white p-6 text-[#111] shadow-[-18px_0_40px_rgba(0,0,0,0.18)]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#777]">Face filter</p>
+                <h2 className="mt-2 text-2xl font-semibold">People in album</h2>
+              </div>
+              <button onClick={() => setFaceSheetOpen(false)} aria-label="Close face filter">
+                <X className="size-5" />
+              </button>
+            </div>
+            {faceBusy && <p className="mt-8 text-sm text-[#666]">Loading faces...</p>}
+            {!faceBusy && !faces.length && (
+              <p className="mt-8 text-sm leading-6 text-[#666]">
+                No indexed faces yet. New uploads index in background.
+              </p>
+            )}
+            <div className="mt-8 grid grid-cols-3 gap-5">
+              {faces.map((face) => (
+                <button key={face.id} className="grid justify-items-center gap-2 text-center" onClick={() => void filterBySavedFace(face.id)}>
+                  <span className="block size-20 overflow-hidden rounded-full bg-[#eee] ring-2 ring-[#111]/10">
+                    {face.imageUrl ? (
+                      <img
+                        src={imageSrc(face.imageUrl)}
+                        alt={face.label}
+                        className="h-full w-full object-cover"
+                        style={face.box ? { objectPosition: `${face.box.x + face.box.width / 2}% ${face.box.y + face.box.height / 2}%` } : undefined}
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-xs font-bold">Face</span>
+                    )}
+                  </span>
+                  <span className="text-xs font-bold">{face.photoCount} photos</span>
+                </button>
+              ))}
+            </div>
+          </aside>
         </div>
       )}
     </main>

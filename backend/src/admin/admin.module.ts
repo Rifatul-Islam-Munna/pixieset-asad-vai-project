@@ -9,6 +9,7 @@ import { BillingController } from './billing.controller';
 import { AdminStripeSetting, AdminStripeSettingSchema } from './entities/admin-stripe-setting.entity';
 import { Plan, PlanSchema } from './entities/plan.entity';
 import { StoreOrder, StoreOrderSchema } from 'src/store/entities/store-order.entity';
+import { FaceSearchModule } from 'src/face-search/face-search.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { StoreOrder, StoreOrderSchema } from 'src/store/entities/store-order.ent
       { name: AdminStripeSetting.name, schema: AdminStripeSettingSchema },
       { name: StoreOrder.name, schema: StoreOrderSchema },
     ]),
+    FaceSearchModule,
   ],
   controllers: [AdminController, BillingController],
   providers: [AdminService],

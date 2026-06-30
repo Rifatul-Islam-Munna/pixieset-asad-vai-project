@@ -169,7 +169,7 @@ type DashboardState = {
   setEventDate: (value: string) => void;
   setCoverDesign: (value: string) => void;
   setLibraryQuery: (value: string) => void;
-  startCampaignBuilder: (template?: string) => void;
+  startCampaignBuilder: (template?: string, buttonLink?: string) => void;
   setCampaignTemplate: (value: string) => void;
   setCampaignSubject: (value: string) => void;
   setCampaignPreviewText: (value: string) => void;
@@ -352,7 +352,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
   setEventDate: (value) => set({ eventDate: value }),
   setCoverDesign: (value) => set({ coverDesign: value }),
   setLibraryQuery: (value) => set({ libraryQuery: value }),
-  startCampaignBuilder: (template = "New Campaign") =>
+  startCampaignBuilder: (template = "New Campaign", buttonLink) =>
     set((state) => {
       const savedTemplate = state.emailTemplates.find(
         (item) => item.id === template || item.name === template,
@@ -366,7 +366,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
           campaignPreviewText: savedTemplate.previewText,
           campaignMessage: savedTemplate.message,
           campaignButtonText: savedTemplate.buttonText,
-          campaignButtonLink: savedTemplate.buttonLink,
+          campaignButtonLink: buttonLink ?? savedTemplate.buttonLink,
           campaignButtonColor: savedTemplate.buttonColor,
           campaignFooterText: savedTemplate.footerText,
           campaignImage: savedTemplate.image,
@@ -382,7 +382,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
       campaignPreviewText: "",
       campaignMessage: "",
       campaignButtonText: "Open Gallery",
-      campaignButtonLink: "Collection URL",
+      campaignButtonLink: buttonLink ?? "Collection URL",
       campaignButtonColor: "#444444",
       campaignFooterText: defaultFooterText,
       campaignImage: "",

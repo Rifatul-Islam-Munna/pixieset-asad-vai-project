@@ -12,6 +12,7 @@ import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
 import { AdminStripeSetting, AdminStripeSettingDocument } from './entities/admin-stripe-setting.entity';
 import { Plan, PlanDocument } from './entities/plan.entity';
 import { StoreOrder, StoreOrderDocument } from 'src/store/entities/store-order.entity';
+import { FaceSearchService } from 'src/face-search/face-search.service';
 
 @Injectable()
 export class AdminService {
@@ -23,6 +24,7 @@ export class AdminService {
     @InjectModel(AdminStripeSetting.name)
     private readonly stripeSettingModel: Model<AdminStripeSettingDocument>,
     @InjectModel(StoreOrder.name) private readonly orderModel: Model<StoreOrderDocument>,
+    private readonly faceSearchService: FaceSearchService,
   ) {}
 
   async dashboard() {
@@ -344,6 +346,7 @@ export class AdminService {
     const collection = await this.collectionModel.findByIdAndDelete(id).lean();
     if (!collection) throw new NotFoundException('Collection not found');
     await this.imageModel.deleteMany({ collectionId: id });
+    void this.faceSearchService.deleteCollectionFaces(id);
     return collection;
   }
 
