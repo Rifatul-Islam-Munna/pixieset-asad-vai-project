@@ -224,6 +224,7 @@ export class FaceSearchService implements OnModuleInit {
 
   private async initQdrant() {
     const url = this.configService.get<string>('QDRANT_URL')?.trim();
+    this.logger.log(url)
     if (!url) {
       this.logger.error('QDRANT_URL not found. Face search disabled until QDRANT_URL is set.');
       return;
