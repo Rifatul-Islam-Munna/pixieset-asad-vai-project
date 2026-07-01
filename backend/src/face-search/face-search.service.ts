@@ -312,27 +312,48 @@ export class FaceSearchService implements OnModuleInit {
     this.logger.log(`Face model files found in ${this.modelDir}`);
   }
 
-  private async extractFaces(buffer: Buffer): Promise<DetectedFace[]> {
-    if (!this.faceApi) return [];
-    const { input, width, height } = await this.imageTensor(buffer);
-    try {
-      const detections = await this.faceApi
-        .detectAllFaces(input, new this.faceApi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
-        .withFaceLandmarks(true)
-        .withFaceDescriptors();
-      return detections.map((item) => ({
-        vector: Array.from(item.descriptor),
-        box: {
-          x: (item.detection.box.x / width) * 100,
-          y: (item.detection.box.y / height) * 100,
-          width: (item.detection.box.width / width) * 100,
-          height: (item.detection.box.height / height) * 100,
-        },
-      }));
-    } finally {
-      input.dispose();
-    }
+ private async extractFaces(buffer: Buffer): Promise<DetectedFace[]> {
+  if (!this.faceApi) return [];
+
+  const { input, width, height } = await this.imageTensor(buffer);
+
+  try {
+    const inputSize = Number(
+      this.configService.get<string>('FACE_DETECTOR_INPUT_SIZE') ?? 416,
+    );
+
+    const scoreThreshold = Number(
+      this.configService.get<string>('FACE_DETECTOR_SCORE_THRESHOLD') ?? 0.30,
+    );
+
+    const detections = await this.faceApi
+      .detectAllFaces(
+        input,
+        new this.faceApi.TinyFaceDetectorOptions({
+          inputSize,
+          scoreThreshold,
+        }),
+      )
+      .withFaceLandmarks(true)
+      .withFaceDescriptors();
+
+    this.logger.log(
+      `Detected ${detections.length} face(s) from ${width}x${height} image`,
+    );
+
+    return detections.map((item) => ({
+      vector: Array.from(item.descriptor),
+      box: {
+        x: (item.detection.box.x / width) * 100,
+        y: (item.detection.box.y / height) * 100,
+        width: (item.detection.box.width / width) * 100,
+        height: (item.detection.box.height / height) * 100,
+      },
+    }));
+  } finally {
+    input.dispose();
   }
+}
 
   private async imageTensor(buffer: Buffer) {
     if (!this.faceApi) throw new Error('Face API not ready');
