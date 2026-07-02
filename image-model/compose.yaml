@@ -1,0 +1,41 @@
+services:
+  insightface-vector-api:
+    build: .
+    container_name: insightface-vector-api
+    restart: unless-stopped
+    environment:
+      # Choose buffalo_s for a 2-core VPS. buffalo_l is slower and needs more RAM.
+      MODEL_NAME: buffalo_s
+      MODEL_ROOT: /models
+
+      # 640 works well as the global pass. Tiled scanning improves small-group faces.
+      DETECTION_SIZE: "640"
+      DETECTION_THRESHOLD: "0.35"
+      GROUP_SCAN: "true"
+      TILE_SIZE: "1024"
+      TILE_OVERLAP: "224"
+      MAX_TILES: "12"
+      MAX_IMAGE_SIDE: "2400"
+      MIN_FACE_SIZE: "14"
+      MAX_UPLOAD_MB: "20"
+
+      # Set a long random value. NestJS must send this in the x-api-key header.
+      API_KEY: change-this-to-a-long-random-secret
+
+      # Keep CPU libraries from oversubscribing a 2-core VPS.
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    volumes:
+      # Persists downloaded model files across container restarts.
+      - insightface_models:/models
+    ports:
+      # Safe default: only this VPS can access the API.
+      # Your NestJS process on the same VPS calls http://127.0.0.1:8010.
+      - "127.0.0.1:8010:8010"
+    mem_limit: 2g
+    cpus: 2.0
+
+volumes:
+  insightface_models:
