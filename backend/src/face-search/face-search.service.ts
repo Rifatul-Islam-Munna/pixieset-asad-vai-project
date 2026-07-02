@@ -200,9 +200,8 @@ export class FaceSearchService implements OnModuleInit {
 
   private async searchByVector(collectionId: string, vector: number[]) {
     if (!this.qdrant) throw new BadRequestException('Face search is not ready');
-    const results = await this.qdrant.search(COLLECTION, {
-      vector,
-      limit: 160,
+    const response = await this.qdrant.scroll(COLLECTION, {
+      limit: Number(this.configService.get<string>('FACE_SEARCH_SCAN_LIMIT') ?? 10000),
       with_payload: true,
       with_vector: true,
       filter: {
@@ -211,26 +210,36 @@ export class FaceSearchService implements OnModuleInit {
         ],
       },
     });
-    const maxDistance = Number(this.configService.get<string>('FACE_MATCH_DISTANCE') ?? 0.6);
-    const matched = (results as FacePoint[])
-      .filter((item) => {
+    const maxDistance = Number(this.configService.get<string>('FACE_MATCH_DISTANCE') ?? 0.72);
+    const matched = ((response.points ?? []) as FacePoint[])
+      .map((item) => {
         const candidate = this.pointVector(item);
-        return candidate ? this.euclidean(vector, candidate) <= maxDistance : false;
-      });
+        const distance = candidate ? this.euclidean(vector, candidate) : Number.POSITIVE_INFINITY;
+        return { item, distance };
+      })
+      .filter(({ distance }) => distance <= maxDistance)
+      .sort((a, b) => a.distance - b.distance);
 
-    const imageIds = [...new Set(matched.map((item) => String(item.payload?.imageId)).filter(Boolean))];
+    const imageIds = [...new Set(matched.map(({ item }) => String(item.payload?.imageId)).filter(Boolean))];
     const images = imageIds.length
       ? await this.imageModel.find({ _id: { $in: imageIds }, collectionId }).lean()
       : [];
-    const scoreMap = new Map(matched.map((item) => [String(item.payload?.imageId), item.score ?? 0]));
+    const distanceMap = new Map<string, number>();
+    for (const { item, distance } of matched) {
+      const imageId = String(item.payload?.imageId);
+      if (!imageId) continue;
+      distanceMap.set(imageId, Math.min(distanceMap.get(imageId) ?? Number.POSITIVE_INFINITY, distance));
+    }
 
     return {
       collectionId,
       count: images.length,
-      images: images.map((image) => ({
-        ...image,
-        faceScore: scoreMap.get(image._id.toString()) ?? 0,
-      })),
+      images: images
+        .map((image) => ({
+          ...image,
+          faceScore: 1 - Math.min(distanceMap.get(image._id.toString()) ?? 1, 1),
+        }))
+        .sort((a, b) => b.faceScore - a.faceScore),
     };
   }
 
