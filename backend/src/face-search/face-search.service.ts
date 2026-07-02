@@ -205,7 +205,7 @@ export class FaceSearchService implements OnModuleInit {
     const groups: { representative: FacePoint; points: FacePoint[] }[] = [];
     const maxDistance = this.configNumber(
       'FACE_CLUSTER_DISTANCE',
-      this.configNumber('FACE_CLUSTER_THRESHOLD', 0.55, 0.1, 2),
+      this.configNumber('FACE_CLUSTER_THRESHOLD', 0.95, 0.1, 2),
       0.1,
       2,
     );

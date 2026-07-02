@@ -407,7 +407,9 @@ export function PublicGallery({
                       <span className="flex h-full w-full items-center justify-center text-xs font-bold">Face</span>
                     )}
                   </span>
-                  <span className="text-xs font-bold">{face.photoCount} photos</span>
+                  <span className="text-xs font-bold">
+                    {face.photoCount} {face.photoCount === 1 ? "photo" : "photos"}
+                  </span>
                 </button>
               ))}
             </div>

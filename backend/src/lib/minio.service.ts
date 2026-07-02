@@ -3,6 +3,8 @@ import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from "@ne
 import { ConfigService } from "@nestjs/config";
 import { createReadStream, } from "fs";
 
+const BUCKET_NAME = 'niqha-public-bukcet';
+
 @Injectable()
 export class MinioService implements OnModuleInit { 
     private logger = new Logger(MinioService.name)
@@ -38,8 +40,8 @@ export class MinioService implements OnModuleInit {
       },
       forcePathStyle: true,
     });
-    await this.createBucketIfNotExists('niqha-public-bukcet');
-    await this.makeBucketPublic('niqha-public-bukcet');
+    await this.createBucketIfNotExists(BUCKET_NAME);
+    await this.makeBucketPublic(BUCKET_NAME);
   }
 
   async createBucketIfNotExists(bucketName: string) {
@@ -100,7 +102,7 @@ export class MinioService implements OnModuleInit {
 
       
       const command = new PutObjectCommand({
-        Bucket: "niqha-public-bukcet",
+        Bucket: BUCKET_NAME,
         Key:filePath.filename , 
         Body: fileContent,
         ContentType:filePath.mimetype ,
@@ -110,17 +112,18 @@ export class MinioService implements OnModuleInit {
       // Upload to MinIO
      const s =  await this.s3.send(command);
       this.logger.debug(s)
-      this.logger.debug(`${this.configService.get('MINIO_URL')}/niqha-public-bukcet/${filePath.filename}`)
+      this.logger.debug(`${this.configService.get('MINIO_URL')}/${BUCKET_NAME}/${filePath.filename}`)
       // Return the public URL
-      return `${this.configService.get('MINIO_URL')}/niqha-public-bukcet/${filePath.filename}`;
+      return `${this.configService.get('MINIO_URL')}/${BUCKET_NAME}/${filePath.filename}`;
     } catch (err) {
       console.error('Error uploading file:', err);
       throw new HttpException('Failed to upload file',HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
-  async deleteService(fileName:string){
-    if (!fileName || typeof fileName !== 'string') {
+  async deleteService(fileReference:string){
+    const fileName = this.objectKey(fileReference);
+    if (!fileName) {
     throw new HttpException('Invalid file name', HttpStatus.BAD_REQUEST);
   }
     try {
@@ -128,7 +131,7 @@ export class MinioService implements OnModuleInit {
         return true;
       }
       const command = new DeleteObjectCommand({
-        Bucket: "niqha-public-bukcet",
+        Bucket: BUCKET_NAME,
        Key:fileName,
       });
       await this.s3.send(command);
@@ -139,6 +142,26 @@ export class MinioService implements OnModuleInit {
       throw new HttpException('Can not Delete File',HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+  }
+
+  private objectKey(fileReference: string) {
+    if (!fileReference || typeof fileReference !== 'string') return '';
+
+    const trimmed = fileReference.trim();
+    try {
+      const url = new URL(trimmed);
+      const parts = url.pathname.split('/').filter(Boolean);
+      const bucketIndex = parts.indexOf(BUCKET_NAME);
+      const keyParts = bucketIndex >= 0 ? parts.slice(bucketIndex + 1) : parts.slice(-1);
+      return decodeURIComponent(keyParts.join('/'));
+    } catch {
+      const withoutQuery = trimmed.split(/[?#]/)[0].replace(/^\/+/, '');
+      const bucketPrefix = `${BUCKET_NAME}/`;
+      const key = withoutQuery.startsWith(bucketPrefix)
+        ? withoutQuery.slice(bucketPrefix.length)
+        : withoutQuery;
+      return decodeURIComponent(key);
+    }
   }
 
 

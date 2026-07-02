@@ -280,8 +280,9 @@ export class CollectionsService {
     if (!image) throw new NotFoundException('Image not found');
     const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
 
+    await this.deleteStoredImageFiles(image);
     await this.imageModel.deleteOne({ _id: imageId, userId, collectionId });
-    void this.faceSearchService.deleteImageFaces(collectionId, imageId);
+    await this.faceSearchService.deleteImageFaces(collectionId, imageId);
     if (image.sizeBytes) {
       await this.userModel.updateOne(
         { _id: userId },
@@ -299,10 +300,6 @@ export class CollectionsService {
     }
     await this.collectionModel.updateOne({ _id: collectionId, userId }, update);
 
-    const filename = image.filename || image.url?.split('/').pop();
-    if (filename) await this.minioService.deleteService(filename).catch(() => false);
-    const thumbnailFilename = image.thumbnailUrl?.split('/').pop();
-    if (thumbnailFilename) await this.minioService.deleteService(thumbnailFilename).catch(() => false);
     return image.toObject();
   }
 
@@ -610,6 +607,18 @@ export class CollectionsService {
       await unlink(path);
     } catch {
       return;
+    }
+  }
+
+  private async deleteStoredImageFiles(image: CollectionImageDocument) {
+    const references = [
+      image.url,
+      image.thumbnailUrl,
+      image.filename,
+    ].filter(Boolean) as string[];
+
+    for (const reference of [...new Set(references)]) {
+      await this.minioService.deleteService(reference);
     }
   }
 
