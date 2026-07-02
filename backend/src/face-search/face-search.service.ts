@@ -132,7 +132,7 @@ export class FaceSearchService implements OnModuleInit {
     const faces = await this.extractFaces(file.buffer);
     if (!faces.length) throw new BadRequestException('No face found in uploaded image');
 
-    return this.searchByVector(collection._id.toString(), faces[0].vector);
+    return this.searchByVectors(collection._id.toString(), faces.map((face) => face.vector));
   }
 
   async listCollectionFaces(collectionIdOrSlug: string) {
@@ -154,7 +154,7 @@ export class FaceSearchService implements OnModuleInit {
     const maxDistance = Number(
       this.configService.get<string>('FACE_CLUSTER_DISTANCE')
         ?? this.configService.get<string>('FACE_CLUSTER_THRESHOLD')
-        ?? 0.5,
+        ?? 0.82,
     );
 
     for (const point of points) {
@@ -195,10 +195,10 @@ export class FaceSearchService implements OnModuleInit {
     if (!vector || point?.payload?.collectionId !== collection._id.toString()) {
       throw new BadRequestException('Face not found');
     }
-    return this.searchByVector(collection._id.toString(), vector);
+    return this.searchByVectors(collection._id.toString(), [vector]);
   }
 
-  private async searchByVector(collectionId: string, vector: number[]) {
+  private async searchByVectors(collectionId: string, vectors: number[][]) {
     if (!this.qdrant) throw new BadRequestException('Face search is not ready');
     const response = await this.qdrant.scroll(COLLECTION, {
       limit: Number(this.configService.get<string>('FACE_SEARCH_SCAN_LIMIT') ?? 10000),
@@ -210,11 +210,14 @@ export class FaceSearchService implements OnModuleInit {
         ],
       },
     });
-    const maxDistance = Number(this.configService.get<string>('FACE_MATCH_DISTANCE') ?? 0.72);
-    const matched = ((response.points ?? []) as FacePoint[])
+    const points = (response.points ?? []) as FacePoint[];
+    const maxDistance = Number(this.configService.get<string>('FACE_MATCH_DISTANCE') ?? 0.95);
+    const matched = points
       .map((item) => {
         const candidate = this.pointVector(item);
-        const distance = candidate ? this.euclidean(vector, candidate) : Number.POSITIVE_INFINITY;
+        const distance = candidate
+          ? Math.min(...vectors.map((vector) => this.euclidean(vector, candidate)))
+          : Number.POSITIVE_INFINITY;
         return { item, distance };
       })
       .filter(({ distance }) => distance <= maxDistance)
@@ -230,6 +233,9 @@ export class FaceSearchService implements OnModuleInit {
       if (!imageId) continue;
       distanceMap.set(imageId, Math.min(distanceMap.get(imageId) ?? Number.POSITIVE_INFINITY, distance));
     }
+    this.logger.log(
+      `Face match scan collection=${collectionId} queryFaces=${vectors.length} indexedFaces=${points.length} matchedFaces=${matched.length} matchedImages=${images.length} threshold=${maxDistance}`,
+    );
 
     return {
       collectionId,
