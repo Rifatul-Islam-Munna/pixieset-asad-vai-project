@@ -246,7 +246,7 @@ export function PublicGallery({
       </section>
 
       <section className="px-0 py-0">
-        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-y border-black/10 bg-white/95 px-4 py-4 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] backdrop-blur md:px-8">
+        <div className="z-20 flex flex-wrap items-center justify-between gap-4 border-y border-black/10 bg-white px-4 py-4 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] md:px-8">
           <div>
             <p className="text-xs uppercase tracking-[0.26em] text-black/45">
               Masonry gallery

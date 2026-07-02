@@ -53,8 +53,10 @@ type TensorflowRuntime = {
   getBackend?: () => string;
 };
 
-const VECTOR_SIZE = 128;
-const COLLECTION = 'album_faces';
+const LOCAL_VECTOR_SIZE = 128;
+const INSIGHT_VECTOR_SIZE = 512;
+const LOCAL_COLLECTION = 'album_faces';
+const INSIGHT_COLLECTION = 'album_faces_insight';
 
 /**
  * CPU-friendly face indexing/search service.
@@ -123,7 +125,7 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     await this.qdrant
-      .upsert(COLLECTION, {
+      .upsert(this.vectorCollection(), {
         // Face points are eventually visible; the Mongo record is still updated
         // immediately so the image is not needlessly reprocessed.
         wait: false,
@@ -155,7 +157,7 @@ export class FaceSearchService implements OnModuleInit {
     if (!this.ready || !this.qdrant) return;
 
     await this.qdrant
-      .delete(COLLECTION, {
+      .delete(this.vectorCollection(), {
         wait: true,
         filter: {
           must: [
@@ -171,7 +173,7 @@ export class FaceSearchService implements OnModuleInit {
     if (!this.ready || !this.qdrant) return;
 
     await this.qdrant
-      .delete(COLLECTION, {
+      .delete(this.vectorCollection(), {
         wait: true,
         filter: {
           must: [{ key: 'collectionId', match: { value: collectionId } }],
@@ -223,7 +225,7 @@ export class FaceSearchService implements OnModuleInit {
     const collection = await this.findCollection(collectionIdOrSlug);
     const collectionId = collection._id.toString();
 
-    const response = await this.qdrant.scroll(COLLECTION, {
+    const response = await this.qdrant.scroll(this.vectorCollection(), {
       limit: 10000,
       with_payload: true,
       with_vector: true,
@@ -291,7 +293,7 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     const collection = await this.findCollection(collectionIdOrSlug);
-    const points = await this.qdrant.retrieve(COLLECTION, {
+    const points = await this.qdrant.retrieve(this.vectorCollection(), {
       ids: [faceId],
       with_vector: true,
       with_payload: true,
@@ -324,7 +326,7 @@ export class FaceSearchService implements OnModuleInit {
       throw new BadRequestException('Face search is not ready');
     }
 
-    const response = await this.qdrant.scroll(COLLECTION, {
+    const response = await this.qdrant.scroll(this.vectorCollection(), {
       limit: this.configNumber('FACE_SEARCH_SCAN_LIMIT', 10000, 1, 100000),
       with_payload: true,
       with_vector: true,
@@ -386,6 +388,18 @@ export class FaceSearchService implements OnModuleInit {
     };
   }
 
+  private vectorCollection() {
+    return this.imageModelUrl() ? INSIGHT_COLLECTION : LOCAL_COLLECTION;
+  }
+
+  private vectorSize() {
+    return this.imageModelUrl() ? INSIGHT_VECTOR_SIZE : LOCAL_VECTOR_SIZE;
+  }
+
+  private imageModelUrl() {
+    return this.configService.get<string>('IMAGE_MODEL_URL')?.trim();
+  }
+
   private async initQdrant() {
     const url = this.configService.get<string>('QDRANT_URL')?.trim();
 
@@ -400,7 +414,8 @@ export class FaceSearchService implements OnModuleInit {
       checkCompatibility: false,
     });
 
-    const exists = await this.qdrant.collectionExists(COLLECTION).catch((error) => {
+    const collection = this.vectorCollection();
+    const exists = await this.qdrant.collectionExists(collection).catch((error) => {
       this.qdrant = undefined;
       this.logger.error(`Qdrant connection failed: ${error?.message ?? error}`);
       return null;
@@ -409,12 +424,12 @@ export class FaceSearchService implements OnModuleInit {
     if (!exists) return;
 
     if (!exists.exists) {
-      await this.qdrant.createCollection(COLLECTION, {
-        vectors: { size: VECTOR_SIZE, distance: 'Cosine' },
+      await this.qdrant.createCollection(collection, {
+        vectors: { size: this.vectorSize(), distance: 'Cosine' },
       });
 
       await this.qdrant
-        .createPayloadIndex(COLLECTION, {
+        .createPayloadIndex(collection, {
           field_name: 'collectionId',
           field_schema: 'keyword',
           wait: true,
@@ -422,7 +437,7 @@ export class FaceSearchService implements OnModuleInit {
         .catch(() => undefined);
     }
 
-    this.logger.log(`Qdrant connected; collection ready: ${COLLECTION}`);
+    this.logger.log(`Qdrant connected; collection ready: ${collection}`);
   }
 
   private async initFaceApi() {
@@ -550,7 +565,47 @@ export class FaceSearchService implements OnModuleInit {
    * can cause Node memory spikes.
    */
   private async extractFaces(buffer: Buffer): Promise<DetectedFace[]> {
+    const external = await this.extractFacesWithImageModel(buffer).catch((error) => {
+      this.logger.warn(`Image model face scan failed; using local fallback: ${error?.message ?? error}`);
+      return null;
+    });
+    if (external) return external;
     return this.runExclusive(() => this.extractFacesUnlocked(buffer));
+  }
+
+  private async extractFacesWithImageModel(buffer: Buffer): Promise<DetectedFace[] | null> {
+    const url = this.imageModelUrl();
+    if (!url) return null;
+
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(buffer)]), 'image.jpg');
+    const headers: Record<string, string> = {};
+    const apiKey = this.configService.get<string>('IMAGE_MODEL_API_KEY')?.trim();
+    if (apiKey) headers['x-api-key'] = apiKey;
+
+    const response = await fetch(`${url.replace(/\/$/, '')}/v1/faces`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.detail ?? payload?.message ?? `Image model HTTP ${response.status}`);
+    }
+
+    const faces = Array.isArray(payload?.faces) ? payload.faces : [];
+    this.logger.log(`Image model detected ${faces.length} face(s)`);
+    return faces
+      .map((face: any) => ({
+        vector: Array.isArray(face.embedding) ? face.embedding.map(Number) : [],
+        box: {
+          x: Number(face.boxPercent?.x ?? 0),
+          y: Number(face.boxPercent?.y ?? 0),
+          width: Number(face.boxPercent?.width ?? 0),
+          height: Number(face.boxPercent?.height ?? 0),
+        },
+      }))
+      .filter((face: DetectedFace) => face.vector.length === INSIGHT_VECTOR_SIZE);
   }
 
   private async extractFacesUnlocked(buffer: Buffer): Promise<DetectedFace[]> {
