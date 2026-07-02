@@ -154,7 +154,7 @@ export class FaceSearchService implements OnModuleInit {
     const maxDistance = Number(
       this.configService.get<string>('FACE_CLUSTER_DISTANCE')
         ?? this.configService.get<string>('FACE_CLUSTER_THRESHOLD')
-        ?? 0.82,
+        ?? 0.55,
     );
 
     for (const point of points) {
@@ -362,7 +362,7 @@ export class FaceSearchService implements OnModuleInit {
           minConfidence: Number(
             this.configService.get<string>('FACE_DETECTOR_MIN_CONFIDENCE')
               ?? this.configService.get<string>('FACE_DETECTOR_SCORE_THRESHOLD')
-              ?? 0.18,
+              ?? 0.10,
           ),
           maxResults: Number(this.configService.get<string>('FACE_DETECTOR_MAX_RESULTS') ?? 100),
         });

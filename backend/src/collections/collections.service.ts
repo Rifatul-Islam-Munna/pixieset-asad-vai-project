@@ -259,10 +259,20 @@ export class CollectionsService {
       { $inc: { storageUsedBytes: files.reduce((sum, file) => sum + (file.size ?? 0), 0) } },
     );
 
-    void Promise.all(uploaded.map((image) => this.faceSearchService.indexImage(image)))
-      .catch((error) => console.warn('Face indexing failed:', error?.message ?? error));
+    setTimeout(() => {
+      void this.indexFacesInBackground(uploaded);
+    }, 1500);
 
     return uploaded;
+  }
+
+  private async indexFacesInBackground(images: Array<CollectionImage & { _id?: unknown }>) {
+    for (const image of images) {
+      await this.faceSearchService.indexImage(image).catch((error) => {
+        console.warn('Face indexing failed:', error?.message ?? error);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   }
 
   async removeImage(userId: string, collectionId: string, imageId: string) {
