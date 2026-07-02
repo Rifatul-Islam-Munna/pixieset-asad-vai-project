@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Camera, Download, Eye, Grid2X2, Lock, Search, ShoppingBag, X } from "lucide-react";
 
+import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import { cn } from "@/lib/utils";
 
@@ -128,6 +129,7 @@ export function PublicGallery({
   const galleryImages = coverImage
     ? [coverImage, ...images.filter((image) => imageSrc(image.url) !== imageSrc(coverImage.url))]
     : images;
+  const coverPhoto = imageSrc(collection?.coverImage || images[0]?.url);
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
   const [downloadCount, setDownloadCount] = useState(0);
@@ -217,6 +219,18 @@ export function PublicGallery({
           )}
         </div>
       </nav>
+
+      <section className="px-5 pb-10 md:px-10">
+        <CoverPreview
+          design={{
+            ...design,
+            coverTitle: design.coverTitle || title,
+            coverSmallTitle: design.coverSmallTitle || decodeURIComponent(name),
+          }}
+          image={coverPhoto}
+          className="mx-auto max-w-[1180px]"
+        />
+      </section>
 
       <section className="px-0 py-0">
         <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-y border-white/10 bg-[#2f3336]/95 px-4 py-4 text-white shadow-[0_14px_35px_rgba(0,0,0,0.18)] backdrop-blur md:px-8">
