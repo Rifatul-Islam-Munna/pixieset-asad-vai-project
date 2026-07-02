@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Camera, Download, Eye, Grid2X2, Lock, Search, ShoppingBag, X } from "lucide-react";
 
-import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import { cn } from "@/lib/utils";
 
@@ -125,7 +124,6 @@ export function PublicGallery({
   const images = collection?.images?.length
     ? collection.images
     : fallbackPhotos.map((url, index) => ({ _id: `sample-${index}`, url }));
-  const coverPhoto = imageSrc(collection?.coverImage || images[0]?.url);
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
   const [downloadCount, setDownloadCount] = useState(0);
@@ -139,16 +137,10 @@ export function PublicGallery({
     themeMap[design.color as keyof typeof themeMap] ?? themeMap.Rose;
   const fontFamily =
     typeMap[design.typography as keyof typeof typeMap] ?? typeMap.Classic;
-  const gridGap = design.gridSpacing === "Large" ? "gap-8" : "gap-3";
-  const gridCols =
-    design.thumbnailSize === "Large"
-      ? "grid-cols-1 md:grid-cols-2"
-      : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
   const storeHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`;
   const pinOk = !download.downloadPin || enteredPin === download.downloadPinCode;
   const limitOk = !download.limitDownloads || maxDownloads <= 0 || downloadCount < maxDownloads;
   const canDownload = download.photoDownload && pinOk && limitOk;
-  const buttonStyle = { backgroundColor: fg, color: bg };
   const onDownload = () => setDownloadCount((count) => count + 1);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
   const loadFaces = async () => {
@@ -222,28 +214,16 @@ export function PublicGallery({
         </div>
       </nav>
 
-      <section className="px-5 pb-10 md:px-10">
-        <CoverPreview
-          design={{
-            ...design,
-            coverTitle: design.coverTitle || title,
-            coverSmallTitle: design.coverSmallTitle || decodeURIComponent(name),
-          }}
-          image={coverPhoto}
-          className="mx-auto max-w-[1180px]"
-        />
-      </section>
-
-      <section className="mx-auto max-w-[1180px] px-5 py-14 md:px-10">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <section className="px-0 py-0">
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-y border-white/10 bg-[#2f3336]/95 px-4 py-4 text-white shadow-[0_14px_35px_rgba(0,0,0,0.18)] backdrop-blur md:px-8">
           <div>
-            <p className="text-xs uppercase tracking-[0.26em]" style={{ color: accent }}>
-              {design.gridStyle} grid
+            <p className="text-xs uppercase tracking-[0.26em] text-white/55">
+              Masonry gallery
             </p>
-            <h1 className="mt-3 text-3xl font-semibold">{title}</h1>
+            <h1 className="mt-2 text-2xl font-semibold md:text-3xl">{title}</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2 rounded-full border border-black/10 bg-white/75 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur">
-            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:opacity-90" style={buttonStyle}>
+          <div className="flex flex-wrap items-center gap-2 rounded-full border border-white/10 bg-white/10 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.14)] backdrop-blur">
+            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#202326] transition hover:opacity-90">
               {faceBusy ? <Search className="size-4 animate-pulse" /> : <Camera className="size-4" />}
               <span>{faceBusy ? "Searching" : "Find me"}</span>
               <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
@@ -251,23 +231,23 @@ export function PublicGallery({
                 event.target.value = "";
               }} />
             </label>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={loadFaces} type="button">
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-white/10" onClick={loadFaces} type="button">
               <Search className="size-4" />
               Faces
             </button>
             {faceResults && (
-              <button className="inline-flex h-10 items-center rounded-full border border-black/10 px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => setFaceResults(null)} type="button">
+              <button className="inline-flex h-10 items-center rounded-full border border-white/15 px-4 text-sm font-bold transition hover:bg-white/10" onClick={() => setFaceResults(null)} type="button">
                 Show all
               </button>
             )}
             {storeStatus && (
-              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5">
+              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-white/10">
                 <ShoppingBag className="size-4" />
                 Store
               </a>
             )}
             {download.photoDownload && canDownload && (
-              <a className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" href={imageSrc(images[0]?.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
+              <a className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-white/10" href={imageSrc(images[0]?.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
                 <Download className="size-4" />
                 Download
               </a>
@@ -282,7 +262,7 @@ export function PublicGallery({
         </div>
 
         {download.downloadPin && (
-          <div className="mt-5 flex max-w-[320px] flex-col gap-2">
+          <div className="mx-4 mt-5 flex max-w-[320px] flex-col gap-2 md:mx-8">
             <label className="inline-flex items-center gap-2 text-sm font-semibold">
               <Lock className="size-4" />
               Enter download PIN
@@ -298,37 +278,29 @@ export function PublicGallery({
         )}
 
         {download.limitDownloads && maxDownloads > 0 && (
-          <p className="mt-4 text-sm" style={{ color: accent }}>
+          <p className="mx-4 mt-4 text-sm md:mx-8" style={{ color: accent }}>
             {Math.max(0, maxDownloads - downloadCount)} downloads remaining
           </p>
         )}
 
-        {faceError && <p className="mt-5 text-sm font-semibold text-red-600">{faceError}</p>}
+        {faceError && <p className="mx-4 mt-5 text-sm font-semibold text-red-600 md:mx-8">{faceError}</p>}
         {faceResults && (
-          <p className="mt-5 text-sm" style={{ color: accent }}>
+          <p className="mx-4 mt-5 text-sm md:mx-8" style={{ color: accent }}>
             {faceResults.length} matching photos found
           </p>
         )}
 
         <div
           id="gallery"
-          className={cn(
-            "mt-10 grid",
-            gridGap,
-            gridCols,
-            design.gridStyle === "Horizontal" && "md:grid-cols-2"
-          )}
+          className="mt-0 grid auto-rows-[minmax(180px,22vw)] grid-cols-1 gap-[15px] bg-[#303437] p-[15px] sm:grid-cols-2 lg:grid-cols-3"
         >
-          {visibleImages.map((photo) => (
-            <div key={photo._id} className="group relative overflow-hidden bg-white text-left">
-              <button className="block w-full" onClick={() => setActiveImage(photo)}>
+          {visibleImages.map((photo, index) => (
+            <div key={photo._id} className={cn("group relative overflow-hidden bg-[#f4f4f2] text-left", masonryTileClass(index))}>
+              <button className="block h-full w-full" onClick={() => setActiveImage(photo)}>
                 <img
                   src={imageSrc(photo.url)}
                   alt={photo.originalName ?? ""}
-                  className={cn(
-                    "w-full object-cover transition-transform duration-500 group-hover:scale-105",
-                    design.gridStyle === "Horizontal" ? "aspect-[1.6]" : "aspect-[0.82]"
-                  )}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
                 />
               </button>
               <div className="absolute right-3 top-3 flex gap-2">
@@ -422,6 +394,18 @@ function coverTextOrDefault(value: string | undefined, fallback: string) {
   return value && !["Avery Studio", "Sarah & Daniel", "June 14, 2026", "View Gallery"].includes(value)
     ? value
     : fallback;
+}
+
+function masonryTileClass(index: number) {
+  const pattern = [
+    "lg:row-span-2",
+    "",
+    "lg:row-span-2",
+    "lg:row-span-2",
+    "lg:row-span-2",
+    "",
+  ];
+  return pattern[index % pattern.length];
 }
 
 function formatPublicDate(value: string) {

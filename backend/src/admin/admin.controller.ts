@@ -56,6 +56,12 @@ export class AdminController {
     return { message: 'Collection deleted', data };
   }
 
+  @Post('collections/:id/reindex-faces')
+  async reindexCollectionFaces(@Param('id') id: string) {
+    const data = await this.adminService.reindexCollectionFaces(id);
+    return { message: 'Collection faces reindexed', data };
+  }
+
   @Get('plans')
   async plans() {
     const data = await this.adminService.findPlans();

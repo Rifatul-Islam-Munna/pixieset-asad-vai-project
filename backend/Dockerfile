@@ -26,6 +26,8 @@ RUN npm ci
 
 # Copy face-api models into the runtime model directory
 RUN mkdir -p /app/models/face-api \
+    && cp /app/node_modules/@vladmandic/face-api/model/ssd_mobilenetv1_model* \
+    /app/models/face-api/ \
     && cp /app/node_modules/@vladmandic/face-api/model/tiny_face_detector_model* \
     /app/models/face-api/ \
     && cp /app/node_modules/@vladmandic/face-api/model/face_landmark_68_tiny_model* \

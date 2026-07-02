@@ -350,6 +350,12 @@ export class AdminService {
     return collection;
   }
 
+  async reindexCollectionFaces(id: string) {
+    const collection = await this.collectionModel.findById(id).select('_id').lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    return this.faceSearchService.reindexCollectionFaces(id);
+  }
+
   private async ensureUnique(phoneNumber: string, excludeId?: string) {
     const existing = await this.userModel.findOne({ phoneNumber }).lean();
     if (existing && existing._id.toString() !== excludeId) {

@@ -58,18 +58,18 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   async indexImage(image: IndexedImage) {
-    if (!this.ready || !this.qdrant) return;
+    if (!this.ready || !this.qdrant) return 0;
     const imageId = image._id?.toString();
-    if (!imageId || !image.url) return;
+    if (!imageId || !image.url) return 0;
 
     const buffer = await this.readImage(image.url).catch(() => null);
-    if (!buffer) return;
+    if (!buffer) return 0;
 
     const faces = await this.extractFaces(buffer).catch((error) => {
       this.logger.warn(`Face indexing skipped for ${imageId}: ${error?.message ?? error}`);
       return [];
     });
-    if (!faces.length) return;
+    if (!faces.length) return 0;
 
     await this.qdrant.upsert(COLLECTION, {
       wait: false,
@@ -85,12 +85,13 @@ export class FaceSearchService implements OnModuleInit {
         },
       })),
     }).catch((error) => this.logger.warn(`Qdrant upsert failed: ${error?.message ?? error}`));
+    return faces.length;
   }
 
   async deleteImageFaces(collectionId: string, imageId: string) {
     if (!this.ready || !this.qdrant) return;
     await this.qdrant.delete(COLLECTION, {
-      wait: false,
+      wait: true,
       filter: {
         must: [
           { key: 'collectionId', match: { value: collectionId } },
@@ -103,13 +104,24 @@ export class FaceSearchService implements OnModuleInit {
   async deleteCollectionFaces(collectionId: string) {
     if (!this.ready || !this.qdrant) return;
     await this.qdrant.delete(COLLECTION, {
-      wait: false,
+      wait: true,
       filter: {
         must: [
           { key: 'collectionId', match: { value: collectionId } },
         ],
       },
     }).catch((error) => this.logger.warn(`Qdrant collection face delete failed: ${error?.message ?? error}`));
+  }
+
+  async reindexCollectionFaces(collectionId: string) {
+    if (!this.ready || !this.qdrant) throw new BadRequestException('Face search is not ready');
+    const images = await this.imageModel.find({ collectionId }).lean();
+    await this.deleteCollectionFaces(collectionId);
+    let faces = 0;
+    for (const image of images) {
+      faces += await this.indexImage(image as IndexedImage);
+    }
+    return { collectionId, images: images.length, faces };
   }
 
   async searchCollection(collectionIdOrSlug: string, file?: Express.Multer.File) {
@@ -264,6 +276,7 @@ export class FaceSearchService implements OnModuleInit {
       };
       await tf.setBackend('cpu');
       await tf.ready();
+      await this.faceApi.nets.ssdMobilenetv1.loadFromDisk(this.modelDir);
       await this.faceApi.nets.tinyFaceDetector.loadFromDisk(this.modelDir);
       await this.faceApi.nets.faceLandmark68TinyNet.loadFromDisk(this.modelDir);
       await this.faceApi.nets.faceRecognitionNet.loadFromDisk(this.modelDir);
@@ -296,6 +309,8 @@ export class FaceSearchService implements OnModuleInit {
     const needed = [
       'tiny_face_detector_model-weights_manifest.json',
       'tiny_face_detector_model.bin',
+      'ssd_mobilenetv1_model-weights_manifest.json',
+      'ssd_mobilenetv1_model.bin',
       'face_landmark_68_tiny_model-weights_manifest.json',
       'face_landmark_68_tiny_model.bin',
       'face_recognition_model-weights_manifest.json',
@@ -312,54 +327,62 @@ export class FaceSearchService implements OnModuleInit {
     this.logger.log(`Face model files found in ${this.modelDir}`);
   }
 
- private async extractFaces(buffer: Buffer): Promise<DetectedFace[]> {
-  if (!this.faceApi) return [];
+  private async extractFaces(buffer: Buffer): Promise<DetectedFace[]> {
+    if (!this.faceApi) return [];
 
-  const { input, width, height } = await this.imageTensor(buffer);
+    const { input, width, height } = await this.imageTensor(buffer);
 
-  try {
-    const inputSize = Number(
-      this.configService.get<string>('FACE_DETECTOR_INPUT_SIZE') ?? 416,
-    );
+    try {
+      const detector = (this.configService.get<string>('FACE_DETECTOR_MODEL') ?? 'ssd')
+        .trim()
+        .toLowerCase();
+      const options = detector === 'tiny'
+        ? new this.faceApi.TinyFaceDetectorOptions({
+          inputSize: Number(this.configService.get<string>('FACE_DETECTOR_INPUT_SIZE') ?? 608),
+          scoreThreshold: Number(this.configService.get<string>('FACE_DETECTOR_SCORE_THRESHOLD') ?? 0.15),
+        })
+        : new this.faceApi.SsdMobilenetv1Options({
+          minConfidence: Number(
+            this.configService.get<string>('FACE_DETECTOR_MIN_CONFIDENCE')
+              ?? this.configService.get<string>('FACE_DETECTOR_SCORE_THRESHOLD')
+              ?? 0.18,
+          ),
+          maxResults: Number(this.configService.get<string>('FACE_DETECTOR_MAX_RESULTS') ?? 100),
+        });
 
-    const scoreThreshold = Number(
-      this.configService.get<string>('FACE_DETECTOR_SCORE_THRESHOLD') ?? 0.30,
-    );
+      const detections = await this.faceApi
+        .detectAllFaces(input, options)
+        .withFaceLandmarks(true)
+        .withFaceDescriptors();
 
-    const detections = await this.faceApi
-      .detectAllFaces(
-        input,
-        new this.faceApi.TinyFaceDetectorOptions({
-          inputSize,
-          scoreThreshold,
-        }),
-      )
-      .withFaceLandmarks(true)
-      .withFaceDescriptors();
+      this.logger.log(
+        `Detected ${detections.length} face(s) from ${width}x${height} image using ${detector}`,
+      );
 
-    this.logger.log(
-      `Detected ${detections.length} face(s) from ${width}x${height} image`,
-    );
-
-    return detections.map((item) => ({
-      vector: Array.from(item.descriptor),
-      box: {
-        x: (item.detection.box.x / width) * 100,
-        y: (item.detection.box.y / height) * 100,
-        width: (item.detection.box.width / width) * 100,
-        height: (item.detection.box.height / height) * 100,
-      },
-    }));
-  } finally {
-    input.dispose();
+      return detections.map((item) => ({
+        vector: Array.from(item.descriptor),
+        box: {
+          x: (item.detection.box.x / width) * 100,
+          y: (item.detection.box.y / height) * 100,
+          width: (item.detection.box.width / width) * 100,
+          height: (item.detection.box.height / height) * 100,
+        },
+      }));
+    } finally {
+      input.dispose();
+    }
   }
-}
 
   private async imageTensor(buffer: Buffer) {
     if (!this.faceApi) throw new Error('Face API not ready');
     const { data, info } = await sharp(buffer)
       .rotate()
-      .resize({ width: 960, height: 960, fit: 'inside', withoutEnlargement: true })
+      .resize({
+        width: Number(this.configService.get<string>('FACE_IMAGE_MAX_SIZE') ?? 1600),
+        height: Number(this.configService.get<string>('FACE_IMAGE_MAX_SIZE') ?? 1600),
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
       .removeAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
