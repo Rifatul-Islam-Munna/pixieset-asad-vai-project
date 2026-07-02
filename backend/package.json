@@ -37,8 +37,6 @@
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^11.1.26",
     "@qdrant/js-client-rest": "^1.18.0",
-    "@tensorflow/tfjs": "^4.22.0",
-    "@vladmandic/face-api": "^1.7.15",
     "axios": "^1.17.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.78.1",
@@ -103,8 +101,5 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
-  },
-  "optionalDependencies": {
-    "@tensorflow/tfjs-node": "^4.22.0"
   }
 }

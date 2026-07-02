@@ -7,6 +7,7 @@ This container exposes one private HTTP endpoint that receives an image and retu
 - Default host URL: `http://127.0.0.1:8010`
 - Auth header: `x-api-key: <API_KEY>`
 - Default model: `buffalo_s` (better suited to a 2-core VPS than `buffalo_l`)
+- Recommended collection: `album_faces_insightface`
 
 ## Deploy
 
@@ -56,7 +57,15 @@ Use a new collection, for example `album_faces_insightface`, with cosine distanc
 
 ## NestJS
 
-See `nestjs-client.example.ts`. In your old `FaceSearchService`, replace the body of `extractFaces(buffer)` with a call to this endpoint, then use each returned `embedding` as the Qdrant vector and `boxPercent` as your payload box.
+Set these in NestJS:
+
+```env
+IMAGE_MODEL_URL=http://127.0.0.1:8010
+IMAGE_MODEL_API_KEY=replace-with-your-api-key
+IMAGE_MODEL_QDRANT_COLLECTION=album_faces_insightface
+```
+
+Use each returned `embedding` as the Qdrant vector and `boxPercent` as your payload box.
 
 ## Safety / exposure
 
