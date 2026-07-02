@@ -124,6 +124,10 @@ export function PublicGallery({
   const images = collection?.images?.length
     ? collection.images
     : fallbackPhotos.map((url, index) => ({ _id: `sample-${index}`, url }));
+  const coverImage = collection?.coverImage ? { _id: "cover-photo", url: collection.coverImage, originalName: "Cover photo" } : null;
+  const galleryImages = coverImage
+    ? [coverImage, ...images.filter((image) => imageSrc(image.url) !== imageSrc(coverImage.url))]
+    : images;
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
   const [downloadCount, setDownloadCount] = useState(0);
@@ -132,7 +136,7 @@ export function PublicGallery({
   const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
   const [faces, setFaces] = useState<PublicFace[]>([]);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
-  const visibleImages = faceResults ?? images;
+  const visibleImages = faceResults ?? galleryImages;
   const [bg, fg, accent] =
     themeMap[design.color as keyof typeof themeMap] ?? themeMap.Rose;
   const fontFamily =
