@@ -233,15 +233,15 @@ export function PublicGallery({
       </section>
 
       <section className="px-0 py-0">
-        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-y border-white/10 bg-[#2f3336]/95 px-4 py-4 text-white shadow-[0_14px_35px_rgba(0,0,0,0.18)] backdrop-blur md:px-8">
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-y border-black/10 bg-white/95 px-4 py-4 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] backdrop-blur md:px-8">
           <div>
-            <p className="text-xs uppercase tracking-[0.26em] text-white/55">
+            <p className="text-xs uppercase tracking-[0.26em] text-black/45">
               Masonry gallery
             </p>
             <h1 className="mt-2 text-2xl font-semibold md:text-3xl">{title}</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2 rounded-full border border-white/10 bg-white/10 p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.14)] backdrop-blur">
-            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#202326] transition hover:opacity-90">
+          <div className="flex flex-wrap items-center gap-2 rounded-full border border-black/10 bg-[#f4f4f2] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur">
+            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90">
               {faceBusy ? <Search className="size-4 animate-pulse" /> : <Camera className="size-4" />}
               <span>{faceBusy ? "Searching" : "Find me"}</span>
               <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
@@ -249,23 +249,23 @@ export function PublicGallery({
                 event.target.value = "";
               }} />
             </label>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-white/10" onClick={loadFaces} type="button">
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={loadFaces} type="button">
               <Search className="size-4" />
               Faces
             </button>
             {faceResults && (
-              <button className="inline-flex h-10 items-center rounded-full border border-white/15 px-4 text-sm font-bold transition hover:bg-white/10" onClick={() => setFaceResults(null)} type="button">
+              <button className="inline-flex h-10 items-center rounded-full border border-black/10 px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => setFaceResults(null)} type="button">
                 Show all
               </button>
             )}
             {storeStatus && (
-              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-white/10">
+              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5">
                 <ShoppingBag className="size-4" />
                 Store
               </a>
             )}
             {download.photoDownload && canDownload && (
-              <a className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-white/10" href={imageSrc(images[0]?.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
+              <a className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" href={imageSrc(images[0]?.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
                 <Download className="size-4" />
                 Download
               </a>
@@ -310,7 +310,7 @@ export function PublicGallery({
 
         <div
           id="gallery"
-          className="mt-0 grid auto-rows-[minmax(180px,22vw)] grid-cols-1 gap-[15px] bg-[#303437] p-[15px] sm:grid-cols-2 lg:grid-cols-3"
+          className="mt-0 grid auto-rows-[minmax(180px,22vw)] grid-cols-1 gap-[15px] bg-white p-[15px] sm:grid-cols-2 lg:grid-cols-3"
         >
           {visibleImages.map((photo, index) => (
             <div key={photo._id} className={cn("group relative overflow-hidden bg-[#f4f4f2] text-left", masonryTileClass(index))}>
