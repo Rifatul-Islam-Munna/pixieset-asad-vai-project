@@ -29,7 +29,7 @@ class Settings:
     max_tiles: int = int(os.getenv("MAX_TILES", "12"))
     max_image_side: int = int(os.getenv("MAX_IMAGE_SIDE", "2400"))
     min_face_size: int = int(os.getenv("MIN_FACE_SIZE", "14"))
-    max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "20"))
+    max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "80"))
     api_key: str = os.getenv("API_KEY", "")
 
 
@@ -262,6 +262,7 @@ def health() -> dict[str, Any]:
         "provider": "CPUExecutionProvider",
         "groupScan": SETTINGS.group_scan,
         "detectionSize": SETTINGS.detection_size,
+        "maxUploadMb": SETTINGS.max_upload_mb,
     }
 
 

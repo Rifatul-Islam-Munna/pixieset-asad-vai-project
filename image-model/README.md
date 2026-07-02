@@ -8,6 +8,7 @@ This container exposes one private HTTP endpoint that receives an image and retu
 - Auth header: `x-api-key: <API_KEY>`
 - Default model: `buffalo_s` (better suited to a 2-core VPS than `buffalo_l`)
 - Recommended collection: `album_faces_insightface`
+- Default upload cap: `80 MB` (`MAX_UPLOAD_MB`)
 
 ## Deploy
 

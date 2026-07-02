@@ -17,7 +17,7 @@ services:
       MAX_TILES: "20"
       MAX_IMAGE_SIDE: "2400"
       MIN_FACE_SIZE: "14"
-      MAX_UPLOAD_MB: "20"
+      MAX_UPLOAD_MB: "80"
 
       # Set a long random value. NestJS must send this in the x-api-key header.
       API_KEY: change-this-to-a-long-random-secret
