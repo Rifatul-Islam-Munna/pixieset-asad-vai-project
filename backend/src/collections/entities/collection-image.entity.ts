@@ -18,6 +18,12 @@ export class CollectionImage {
   url: string;
 
   @Prop()
+  thumbnailUrl?: string;
+
+  @Prop()
+  blurDataUrl?: string;
+
+  @Prop()
   originalName?: string;
 
   @Prop()

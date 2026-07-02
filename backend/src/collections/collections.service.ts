@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { existsSync } from 'fs';
-import { unlink } from 'fs/promises';
+import { readFile, unlink } from 'fs/promises';
 import { Model } from 'mongoose';
 import { join } from 'path';
 import { cwd } from 'process';
-import sharp, { type Metadata } from 'sharp';
+import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
 import { MinioService } from 'src/lib/minio.service';
 import { FaceSearchService } from 'src/face-search/face-search.service';
@@ -84,6 +84,7 @@ export class CollectionsService {
       .find({ collectionId: id, userId })
       .sort({ createdAt: -1 })
       .lean();
+    void this.ensureCollectionPreviews(id);
 
     return { ...collection, images };
   }
@@ -103,6 +104,7 @@ export class CollectionsService {
       .find({ collectionId: collection._id.toString() })
       .sort({ createdAt: -1 })
       .lean();
+    void this.ensureCollectionPreviews(collection._id.toString());
     const preset = collection.presetId
       ? await this.settingModel
           .findOne({
@@ -289,6 +291,8 @@ export class CollectionsService {
 
     const filename = image.filename || image.url?.split('/').pop();
     if (filename) await this.minioService.deleteService(filename).catch(() => false);
+    const thumbnailFilename = image.thumbnailUrl?.split('/').pop();
+    if (thumbnailFilename) await this.minioService.deleteService(thumbnailFilename).catch(() => false);
     return image.toObject();
   }
 
@@ -315,7 +319,10 @@ export class CollectionsService {
     const isImage = file.mimetype?.startsWith('image/');
     let uploadFile = file;
     let processedPath = '';
+    let previewPath = '';
     let watermarked = false;
+    let thumbnailUrl = '';
+    let blurDataUrl = '';
 
     if (isImage && watermark) {
       const processed = await this.applyWatermark(file, watermark);
@@ -328,10 +335,22 @@ export class CollectionsService {
 
     let url = '';
     try {
+      if (isImage) {
+        const preview = await this.createImagePreview(uploadFile);
+        previewPath = preview.path;
+        blurDataUrl = preview.blurDataUrl;
+        thumbnailUrl = await this.minioService.uploadFile({
+          ...file,
+          path: preview.path,
+          filename: preview.filename,
+          mimetype: 'image/jpeg',
+        });
+      }
       url = await this.minioService.uploadFile(uploadFile);
     } finally {
       await this.safeUnlink(file.path);
       if (processedPath) await this.safeUnlink(processedPath);
+      if (previewPath) await this.safeUnlink(previewPath);
     }
 
     const image = await this.imageModel.create({
@@ -339,6 +358,8 @@ export class CollectionsService {
       collectionId,
       setId,
       url,
+      thumbnailUrl,
+      blurDataUrl,
       originalName: file.originalname,
       filename: uploadFile.filename,
       mimetype: file.mimetype,
@@ -348,6 +369,72 @@ export class CollectionsService {
     });
 
     return image.toObject();
+  }
+
+  private async createImagePreview(file: Express.Multer.File) {
+    return this.createImagePreviewFromSharp(sharp(file.path).rotate());
+  }
+
+  private async createImagePreviewFromSharp(image: Sharp) {
+    const filename = `thumb-${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
+    const outputPath = join(cwd(), 'uploads', filename);
+    const blurDataUrl = await image
+      .clone()
+      .resize({ width: 24, height: 24, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 35 })
+      .toBuffer()
+      .then((buffer) => `data:image/jpeg;base64,${buffer.toString('base64')}`)
+      .catch(() => '');
+
+    await image
+      .resize({ width: 900, height: 900, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 74, mozjpeg: true })
+      .toFile(outputPath);
+
+    return { path: outputPath, filename, blurDataUrl };
+  }
+
+  private async ensureCollectionPreviews(collectionId: string) {
+    const images = await this.imageModel
+      .find({ collectionId, thumbnailUrl: { $in: [null, ''] } })
+      .limit(30)
+      .lean()
+      .catch(() => []);
+
+    for (const image of images) {
+      const buffer = await this.readImageBuffer(image.url).catch(() => null);
+      if (!buffer) continue;
+      let previewPath = '';
+      try {
+        const preview = await this.createImagePreviewFromSharp(sharp(buffer).rotate());
+        previewPath = preview.path;
+        const thumbnailUrl = await this.minioService.uploadFile({
+          path: preview.path,
+          filename: preview.filename,
+          mimetype: 'image/jpeg',
+          originalname: preview.filename,
+          size: 0,
+        } as Express.Multer.File);
+        await this.imageModel.updateOne(
+          { _id: image._id },
+          { $set: { thumbnailUrl, blurDataUrl: preview.blurDataUrl } },
+        );
+      } catch {
+        continue;
+      } finally {
+        if (previewPath) await this.safeUnlink(previewPath);
+      }
+    }
+  }
+
+  private async readImageBuffer(url: string) {
+    if (url.startsWith('/uploads/')) {
+      const localPath = join(cwd(), url.replace(/^\/uploads\//, 'uploads/'));
+      return existsSync(localPath) ? readFile(localPath) : null;
+    }
+    const response = await fetch(url).catch(() => null);
+    if (!response?.ok) return null;
+    return Buffer.from(await response.arrayBuffer());
   }
 
   private async extractMetadata(file: Express.Multer.File) {

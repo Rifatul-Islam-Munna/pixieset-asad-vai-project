@@ -5946,6 +5946,8 @@ function CollectionDetailView({
   const [pageOrigin, setPageOrigin] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [uploadingFileCount, setUploadingFileCount] = useState(0);
+  const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [form, setForm] = useState(() => collectionForm(collection));
   const activeImage =
     images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
@@ -6024,6 +6026,10 @@ function CollectionDetailView({
   useEffect(() => {
     if (imagePage > totalImagePages) setImagePage(totalImagePages);
   }, [imagePage, totalImagePages]);
+
+  useEffect(() => {
+    setSelectedImageIds((ids) => ids.filter((id) => images.some((image) => image._id === id)));
+  }, [images]);
 
   const presetName = (id?: string) =>
     presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
@@ -6120,16 +6126,57 @@ function CollectionDetailView({
         watermarkId: uploadWatermarkId,
       },
       {
+        onSuccess: () => {
+          void collectionQuery.refetch();
+          window.setTimeout(() => void collectionQuery.refetch(), 4000);
+          window.setTimeout(() => void collectionQuery.refetch(), 12000);
+        },
         onSettled: () => setUploadingFileCount(0),
       },
     );
+  };
+  const deletingImages = deleteImage.isPending || bulkDeleting;
+  const toggleImageSelection = (imageId: string) => {
+    if (deletingImages) return;
+    setSelectedImageIds((ids) =>
+      ids.includes(imageId) ? ids.filter((id) => id !== imageId) : [...ids, imageId],
+    );
+  };
+  const clearSelection = () => {
+    if (!deletingImages) setSelectedImageIds([]);
+  };
+  const deleteSingleImage = (image: CollectionImageRecord) => {
+    if (deletingImages) return;
+    if (form.coverImage === image.url) {
+      setForm((value) => ({ ...value, coverImage: "" }));
+    }
+    deleteImage.mutate(image._id, {
+      onSuccess: () => setSelectedImageIds((ids) => ids.filter((id) => id !== image._id)),
+    });
+  };
+  const deleteSelectedImages = async () => {
+    if (!selectedImageIds.length || deletingImages) return;
+    setBulkDeleting(true);
+    try {
+      const selectedImages = images.filter((image) => selectedImageIds.includes(image._id));
+      if (selectedImages.some((image) => image.url === form.coverImage)) {
+        setForm((value) => ({ ...value, coverImage: "" }));
+      }
+      for (const image of selectedImages) {
+        await deleteImage.mutateAsync(image._id);
+      }
+      setSelectedImageIds([]);
+      await collectionQuery.refetch();
+    } finally {
+      setBulkDeleting(false);
+    }
   };
   if (!collection) {
     return <CollectionDetailSkeleton />;
   }
 
   return (
-    <div className="flex h-[100dvh] min-w-0 flex-col overflow-hidden px-4 py-5 md:px-6">
+    <div className="flex h-[100dvh] min-w-0 flex-col overflow-hidden px-4 py-5 transition-colors duration-300 md:px-6">
       <button
         className="mb-4 inline-flex w-fit items-center gap-2 text-sm text-[#666] hover:text-[#222]"
         onClick={() => router.push(`/dashboard/${section}`)}
@@ -6138,7 +6185,7 @@ function CollectionDetailView({
         Back to Collections
       </button>
 
-      <div className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 border-b pb-5 transition-all duration-300 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-[28px] font-medium leading-none tracking-normal">
             {collection.name}
@@ -6322,8 +6369,8 @@ function CollectionDetailView({
         </p>
       )}
 
-      <div className={cn("mt-6 grid min-h-0 flex-1 overflow-hidden border", detailCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[250px_minmax(0,1fr)]")}>
-        <aside className="flex flex-col border-r bg-[#fafafa]">
+      <div className={cn("mt-6 grid min-h-0 flex-1 overflow-hidden border transition-[grid-template-columns] duration-300 ease-out", detailCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[250px_minmax(0,1fr)]")}>
+        <aside className="flex flex-col border-r bg-[#fafafa] transition-colors duration-300">
           {!detailCollapsed && <div className="aspect-[1.45] bg-[#e8e8e8]">
             {form.coverImage ? (
               <DashboardImageWithSkeleton
@@ -6476,13 +6523,33 @@ function CollectionDetailView({
                   <p className="text-xs font-bold uppercase tracking-wide text-[#777]">
                     {collection.name} / {activeSet?.name ?? "Set"} / Images
                   </p>
-                  <Button variant="outline" className="h-9 rounded-none" onClick={() => setMetadataOpen(true)}>
-                    Show Metadata
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {selectedImageIds.length > 0 && (
+                      <>
+                        <span className="text-xs font-bold text-[#777]">{selectedImageIds.length} selected</span>
+                        <Button variant="outline" className="h-9 rounded-none" disabled={deletingImages} onClick={clearSelection}>
+                          Clear
+                        </Button>
+                        <Button className="h-9 rounded-none bg-red-600 text-white hover:bg-red-700" disabled={deletingImages} onClick={() => void deleteSelectedImages()}>
+                          {deletingImages ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                          Delete Selected
+                        </Button>
+                      </>
+                    )}
+                    <Button variant="outline" className="h-9 rounded-none" disabled={deletingImages} onClick={() => setMetadataOpen(true)}>
+                      Show Metadata
+                    </Button>
+                  </div>
                 </div>
+                {deletingImages && (
+                  <div className="mb-4 flex items-center gap-3 border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <Loader2 className="size-4 animate-spin" />
+                    Deleting images...
+                  </div>
+                )}
                 <div className={cn("grid gap-2", form.design.gridStyle === "Horizontal" ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-3 md:grid-cols-5 xl:grid-cols-6", form.design.thumbnailSize === "Large" && "md:grid-cols-4 xl:grid-cols-5")}>
                   {uploadImages.isPending && Array.from({ length: Math.min(uploadingFileCount || 3, 6) }).map((_, index) => (
-                    <div key={`uploading-${index}`} className="relative flex aspect-square items-center justify-center overflow-hidden bg-[#eef9f7]">
+                    <div key={`uploading-${index}`} className="relative flex aspect-square animate-in fade-in zoom-in-95 items-center justify-center overflow-hidden bg-[#eef9f7] duration-300">
                       <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-[#d3f2ee]">
                         <div className="h-full w-1/2 animate-pulse bg-[#22bda7]" />
                       </div>
@@ -6492,17 +6559,24 @@ function CollectionDetailView({
                   {visibleSetImages.map((image) => (
                     <div
                       key={image._id}
-                      className={cn("group relative text-left", activeImage?._id === image._id && "outline outline-2 outline-[#22bda7]")}
+                      className={cn(
+                        "group relative animate-in fade-in zoom-in-95 text-left transition-all duration-300 ease-out",
+                        activeImage?._id === image._id && "outline outline-2 outline-[#22bda7]",
+                        selectedImageIds.includes(image._id) && "outline outline-2 outline-red-500",
+                        deletingImages && "pointer-events-none opacity-55",
+                      )}
                     >
                       <button
                         className="relative block w-full overflow-hidden bg-[#f2f2f2]"
+                        disabled={deletingImages}
                         onClick={() => setActiveImageId(image._id)}
                       >
                         <DashboardImageWithSkeleton
-                          src={imageSrc(image.url)}
+                          src={imageSrc(image.thumbnailUrl || image.url)}
                           alt={image.originalName ?? ""}
+                          placeholder={image.blurDataUrl}
                           className={cn(
-                            "w-full object-cover transition-transform group-hover:scale-105",
+                            "w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105",
                             form.design.gridStyle === "Horizontal" ? "aspect-[1.45]" : "aspect-square",
                           )}
                         />
@@ -6511,19 +6585,27 @@ function CollectionDetailView({
                         )}
                       </button>
                       <button
-                        className="absolute right-2 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-red-600 group-hover:flex"
-                        onClick={() => {
-                          if (form.coverImage === image.url) {
-                            setForm((value) => ({ ...value, coverImage: "" }));
-                          }
-                          deleteImage.mutate(image._id);
-                        }}
-                        aria-label="Delete image"
+                        className={cn(
+                          "absolute left-2 top-2 flex size-8 items-center justify-center border bg-white/95 shadow-sm transition-all duration-200 hover:scale-105",
+                          selectedImageIds.includes(image._id) ? "border-red-500 text-red-600" : "border-white text-[#777]",
+                        )}
+                        disabled={deletingImages}
+                        onClick={() => toggleImageSelection(image._id)}
+                        aria-label="Select image"
                       >
-                        <Trash2 className="size-4" />
+                        <Check className={cn("size-4", !selectedImageIds.includes(image._id) && "opacity-0")} />
                       </button>
                       <button
-                        className="absolute right-12 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997] group-hover:flex"
+                        className="absolute right-2 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-red-600 group-hover:flex"
+                        disabled={deletingImages}
+                        onClick={() => deleteSingleImage(image)}
+                        aria-label="Delete image"
+                      >
+                        {deletingImages ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                      </button>
+                      <button
+                        className="absolute right-12 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#00a997] group-hover:flex"
+                        disabled={deletingImages}
                         onClick={() => {
                           setActiveImageId(image._id);
                           setPreviewOpen(true);
@@ -6533,7 +6615,8 @@ function CollectionDetailView({
                         <Eye className="size-4" />
                       </button>
                       <button
-                        className="absolute right-[5.5rem] top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997] group-hover:flex"
+                        className="absolute right-[5.5rem] top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#00a997] group-hover:flex"
+                        disabled={deletingImages}
                         onClick={() =>
                           starImage.mutate({
                             collectionId: image.collectionId,
@@ -6546,7 +6629,8 @@ function CollectionDetailView({
                         <Star className={cn("size-4", image.metadata?.starred === true && "fill-[#00a997] text-[#00a997]")} />
                       </button>
                       <button
-                        className="absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm hover:text-[#00a997] group-hover:block"
+                        className="absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block"
+                        disabled={deletingImages}
                         onClick={() => setForm((value) => ({ ...value, coverImage: image.url }))}
                       >
                         Make Cover
@@ -6779,23 +6863,33 @@ function DashboardImageWithSkeleton({
   src,
   alt,
   className,
+  placeholder,
 }: {
   src: string;
   alt: string;
   className?: string;
+  placeholder?: string;
 }) {
   const [loaded, setLoaded] = useState(false);
 
   return (
     <span className="relative block h-full w-full overflow-hidden bg-[#f3f3f1]">
-      {!loaded && <Skeleton className="absolute inset-0 h-full w-full rounded-none bg-[#eeeeec]" />}
+      {placeholder && !loaded && (
+        <img
+          src={placeholder}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
+        />
+      )}
+      {!placeholder && !loaded && <Skeleton className="absolute inset-0 h-full w-full rounded-none bg-[#eeeeec]" />}
       <img
         src={src}
         alt={alt}
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
-        className={cn(className, "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
+        className={cn(className, "transition-[opacity,transform] duration-500 ease-out", loaded ? "scale-100 opacity-100" : "scale-[1.015] opacity-0")}
       />
     </span>
   );

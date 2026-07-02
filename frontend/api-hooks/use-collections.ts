@@ -33,6 +33,8 @@ export type CollectionImageRecord = {
   collectionId: string;
   setId?: string;
   url: string;
+  thumbnailUrl?: string;
+  blurDataUrl?: string;
   originalName?: string;
   watermarked?: boolean;
   metadata?: Record<string, any>;

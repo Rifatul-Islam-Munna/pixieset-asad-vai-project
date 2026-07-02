@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Camera, Download, Eye, Grid2X2, Lock, Search, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 type PublicImage = {
   _id: string;
   url: string;
+  thumbnailUrl?: string;
+  blurDataUrl?: string;
   originalName?: string;
   faceScore?: number;
 };
@@ -316,11 +318,11 @@ export function PublicGallery({
           {visibleImages.map((photo, index) => (
             <div key={photo._id} className={cn("group relative overflow-hidden bg-[#f4f4f2] text-left", masonryTileClass(index))}>
               <button className="block h-full w-full" onClick={() => setActiveImage(photo)}>
-                <img
-                  src={imageSrc(photo.url)}
+                <BlurImage
+                  src={imageSrc(displayImageUrl(photo))}
+                  placeholder={photo.blurDataUrl}
                   alt={photo.originalName ?? ""}
                   loading={index < 6 ? "eager" : "lazy"}
-                  decoding="async"
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
                 />
               </button>
@@ -381,11 +383,10 @@ export function PublicGallery({
                 <button key={face.id} className="grid justify-items-center gap-2 text-center" onClick={() => void filterBySavedFace(face.id)}>
                   <span className="block size-20 overflow-hidden rounded-full bg-[#eee] ring-2 ring-[#111]/10">
                     {face.imageUrl ? (
-                      <img
+                      <BlurImage
                         src={imageSrc(face.imageUrl)}
                         alt={face.label}
                         loading="lazy"
-                        decoding="async"
                         className="h-full w-full object-cover"
                         style={face.box ? { objectPosition: `${face.box.x + face.box.width / 2}% ${face.box.y + face.box.height / 2}%` } : undefined}
                       />
@@ -411,6 +412,51 @@ function imageSrc(url?: string) {
     return `${baseUrl}${url}`;
   }
   return url;
+}
+
+function displayImageUrl(image: PublicImage) {
+  return image.thumbnailUrl || image.url;
+}
+
+function BlurImage({
+  src,
+  alt,
+  className,
+  placeholder,
+  loading = "lazy",
+  style,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  placeholder?: string;
+  loading?: "lazy" | "eager";
+  style?: CSSProperties;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <span className="relative block h-full w-full overflow-hidden bg-[#f1f0ee]">
+      {placeholder && !loaded && (
+        <img
+          src={placeholder}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
+          style={style}
+        />
+      )}
+      {!placeholder && !loaded && <span className="absolute inset-0 animate-pulse bg-[#eceae6]" />}
+      <img
+        src={src}
+        alt={alt}
+        loading={loading}
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        className={cn(className, "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
+        style={style}
+      />
+    </span>
+  );
 }
 
 function coverTextOrDefault(value: string | undefined, fallback: string) {

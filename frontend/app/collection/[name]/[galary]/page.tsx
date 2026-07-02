@@ -8,6 +8,7 @@ const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "htt
 async function getCollection(identifier: string) {
   const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}`, {
     cache: "no-store",
+    signal: AbortSignal.timeout(8000),
   }).catch(() => null);
   const payload = response?.ok ? await response.json() : null;
   return payload?.data ?? null;

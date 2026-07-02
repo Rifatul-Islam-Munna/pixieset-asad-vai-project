@@ -161,8 +161,10 @@ export class FaceSearchService implements OnModuleInit {
       const vector = this.pointVector(point);
       if (!vector) continue;
       const match = groups.find((group) => {
-        const repVector = this.pointVector(group.representative);
-        return repVector ? this.euclidean(vector, repVector) <= maxDistance : false;
+        return group.points.some((groupPoint) => {
+          const groupVector = this.pointVector(groupPoint);
+          return groupVector ? this.euclidean(vector, groupVector) <= maxDistance : false;
+        });
       });
       if (match) match.points.push(point);
       else groups.push({ representative: point, points: [point] });
@@ -393,8 +395,8 @@ export class FaceSearchService implements OnModuleInit {
     const { data, info } = await sharp(buffer)
       .rotate()
       .resize({
-        width: Number(this.configService.get<string>('FACE_IMAGE_MAX_SIZE') ?? 1600),
-        height: Number(this.configService.get<string>('FACE_IMAGE_MAX_SIZE') ?? 1600),
+        width: Number(this.configService.get<string>('FACE_IMAGE_MAX_SIZE') ?? 1280),
+        height: Number(this.configService.get<string>('FACE_IMAGE_MAX_SIZE') ?? 1280),
         fit: 'inside',
         withoutEnlargement: true,
       })

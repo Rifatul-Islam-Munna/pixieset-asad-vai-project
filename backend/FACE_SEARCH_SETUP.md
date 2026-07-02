@@ -34,7 +34,7 @@ FACE_SEARCH_SCAN_LIMIT=10000
 FACE_DETECTOR_MODEL=ssd
 FACE_DETECTOR_MIN_CONFIDENCE=0.18
 FACE_DETECTOR_MAX_RESULTS=100
-FACE_IMAGE_MAX_SIZE=1600
+FACE_IMAGE_MAX_SIZE=1280
 ```
 
 Production Docker image uses Node Debian slim, not Alpine, because native TensorFlow CPU packages need glibc. Dockerfile copies models into `/app/models/face-api`.
