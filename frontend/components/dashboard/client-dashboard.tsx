@@ -5951,7 +5951,6 @@ function CollectionDetailView({
   const [form, setForm] = useState(() => collectionForm(collection));
   const activeImage =
     images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
-  const refreshingCollection = collectionQuery.isFetching && Boolean(detail);
   const activeSetImages = images.filter((image) => (image.setId || "highlights") === activeSetId);
   const imagePageSize = 24;
   const totalImagePages = Math.max(1, Math.ceil(activeSetImages.length / imagePageSize));
@@ -6129,8 +6128,6 @@ function CollectionDetailView({
       {
         onSuccess: () => {
           void collectionQuery.refetch();
-          window.setTimeout(() => void collectionQuery.refetch(), 4000);
-          window.setTimeout(() => void collectionQuery.refetch(), 12000);
         },
         onSettled: () => setUploadingFileCount(0),
       },
@@ -6364,12 +6361,6 @@ function CollectionDetailView({
           </div>
         </div>
       )}
-      {!uploadImages.isPending && refreshingCollection && (
-        <div className="mt-4 flex items-center gap-3 border border-[#e7e7e7] bg-white px-4 py-3 text-sm font-semibold text-[#555]">
-          <Loader2 className="size-4 animate-spin text-[#22bda7]" />
-          Refreshing collection...
-        </div>
-      )}
       {uploadImages.error && (
         <p className="mt-4 text-sm font-semibold text-red-600">
           {uploadImages.error.message}
@@ -6504,12 +6495,6 @@ function CollectionDetailView({
         </aside>
 
         <div className="min-w-0 overflow-y-auto p-5 md:p-6">
-          {refreshingCollection && (
-            <div className="pointer-events-none sticky top-0 z-10 mb-4 flex items-center gap-3 bg-white/90 px-3 py-2 text-sm font-semibold text-[#555] shadow-sm backdrop-blur">
-              <Loader2 className="size-4 animate-spin text-[#22bda7]" />
-              Fetching latest images...
-            </div>
-          )}
           {activeTab === "photos" && (
             imagesLoading ? (
               <CollectionImagesSkeleton />

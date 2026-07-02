@@ -331,7 +331,6 @@ export function PublicGallery({
                 <BlurImage
                   src={imageSrc(displayImageUrl(photo))}
                   fallbackSrc={imageSrc(photo.url)}
-                  placeholder={photo.blurDataUrl}
                   alt={photo.originalName ?? ""}
                   loading={index < 6 ? "eager" : "lazy"}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
@@ -439,7 +438,6 @@ function BlurImage({
   fallbackSrc,
   alt,
   className,
-  placeholder,
   loading = "lazy",
   style,
 }: {
@@ -447,7 +445,6 @@ function BlurImage({
   fallbackSrc?: string;
   alt: string;
   className?: string;
-  placeholder?: string;
   loading?: "lazy" | "eager";
   style?: CSSProperties;
 }) {
@@ -459,16 +456,6 @@ function BlurImage({
   }, [src]);
   return (
     <span className="relative block h-full w-full overflow-hidden bg-[#f1f0ee]">
-      {placeholder && !loaded && (
-        <img
-          src={placeholder}
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
-          style={style}
-        />
-      )}
-      {!placeholder && !loaded && <span className="absolute inset-0 animate-pulse bg-[#eceae6]" />}
       <img
         src={currentSrc}
         alt={alt}
@@ -482,7 +469,7 @@ function BlurImage({
           }
           setLoaded(true);
         }}
-        className={cn(className, "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
+        className={cn(className, "transition-opacity duration-150", loaded ? "opacity-100" : "opacity-0")}
         style={style}
       />
     </span>
