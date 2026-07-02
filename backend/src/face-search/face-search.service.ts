@@ -69,7 +69,10 @@ export class FaceSearchService implements OnModuleInit {
       this.logger.warn(`Face indexing skipped for ${imageId}: ${error?.message ?? error}`);
       return [];
     });
-    if (!faces.length) return 0;
+    if (!faces.length) {
+      await this.imageModel.updateOne({ _id: imageId }, { $set: { faceIndexedAt: new Date(), faceCount: 0 } }).catch(() => undefined);
+      return 0;
+    }
 
     await this.qdrant.upsert(COLLECTION, {
       wait: false,
@@ -85,6 +88,7 @@ export class FaceSearchService implements OnModuleInit {
         },
       })),
     }).catch((error) => this.logger.warn(`Qdrant upsert failed: ${error?.message ?? error}`));
+    await this.imageModel.updateOne({ _id: imageId }, { $set: { faceIndexedAt: new Date(), faceCount: faces.length } }).catch(() => undefined);
     return faces.length;
   }
 
@@ -150,6 +154,15 @@ export class FaceSearchService implements OnModuleInit {
       },
     });
     const points = (response.points ?? []) as FacePoint[];
+    const missingImages = await this.imageModel
+      .find({ collectionId, faceIndexedAt: { $exists: false } })
+      .limit(50)
+      .lean();
+    if (missingImages.length) {
+      setTimeout(() => {
+        void this.indexMissingFaces(missingImages as IndexedImage[]);
+      }, 250);
+    }
     const groups: { representative: FacePoint; points: FacePoint[] }[] = [];
     const maxDistance = Number(
       this.configService.get<string>('FACE_CLUSTER_DISTANCE')
@@ -173,6 +186,8 @@ export class FaceSearchService implements OnModuleInit {
     return {
       collectionId,
       count: groups.length,
+      indexing: missingImages.length > 0,
+      missingImages: missingImages.length,
       faces: groups.map((group, index) => ({
         id: String(group.representative.id),
         label: `Face ${index + 1}`,
@@ -182,6 +197,15 @@ export class FaceSearchService implements OnModuleInit {
         photoCount: new Set(group.points.map((point) => point.payload?.imageId).filter(Boolean)).size,
       })),
     };
+  }
+
+  private async indexMissingFaces(images: IndexedImage[]) {
+    for (const image of images) {
+      await this.indexImage(image).catch((error) => {
+        this.logger.warn(`Missing face index failed: ${error?.message ?? error}`);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
   }
 
   async searchCollectionByFaceId(collectionIdOrSlug: string, faceId: string) {
@@ -362,7 +386,7 @@ export class FaceSearchService implements OnModuleInit {
           minConfidence: Number(
             this.configService.get<string>('FACE_DETECTOR_MIN_CONFIDENCE')
               ?? this.configService.get<string>('FACE_DETECTOR_SCORE_THRESHOLD')
-              ?? 0.10,
+              ?? 0.05,
           ),
           maxResults: Number(this.configService.get<string>('FACE_DETECTOR_MAX_RESULTS') ?? 100),
         });

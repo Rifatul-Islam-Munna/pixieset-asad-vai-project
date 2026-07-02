@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Camera, Download, Eye, Grid2X2, Lock, Search, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
@@ -139,6 +139,7 @@ export function PublicGallery({
   const [faceError, setFaceError] = useState("");
   const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
   const [faces, setFaces] = useState<PublicFace[]>([]);
+  const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
   const visibleImages = faceResults ?? galleryImages;
   const [bg, fg, accent] =
@@ -151,9 +152,9 @@ export function PublicGallery({
   const canDownload = download.photoDownload && pinOk && limitOk;
   const onDownload = () => setDownloadCount((count) => count + 1);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-  const loadFaces = async () => {
+  const loadFaces = async (force = false) => {
     setFaceSheetOpen(true);
-    if (faces.length || faceBusy) return;
+    if (((!force && faces.length) || faceBusy)) return;
     setFaceBusy(true);
     setFaceError("");
     const response = await fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces`).catch(() => null);
@@ -164,6 +165,7 @@ export function PublicGallery({
       return;
     }
     setFaces(payload?.data?.faces ?? []);
+    setFacesIndexing(Boolean(payload?.data?.indexing));
   };
   const filterBySavedFace = async (faceId: string) => {
     setFaceBusy(true);
@@ -197,6 +199,14 @@ export function PublicGallery({
     }
     setFaceResults(payload?.data?.images ?? []);
   };
+
+  useEffect(() => {
+    if (!faceSheetOpen || !facesIndexing) return;
+    const timer = window.setTimeout(() => {
+      void loadFaces(true);
+    }, 3500);
+    return () => window.clearTimeout(timer);
+  }, [faceSheetOpen, facesIndexing]);
 
   return (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen">
@@ -252,7 +262,7 @@ export function PublicGallery({
                 event.target.value = "";
               }} />
             </label>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={loadFaces} type="button">
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => void loadFaces()} type="button">
               <Search className="size-4" />
               Faces
             </button>
@@ -320,6 +330,7 @@ export function PublicGallery({
               <button className="block h-full w-full" onClick={() => setActiveImage(photo)}>
                 <BlurImage
                   src={imageSrc(displayImageUrl(photo))}
+                  fallbackSrc={imageSrc(photo.url)}
                   placeholder={photo.blurDataUrl}
                   alt={photo.originalName ?? ""}
                   loading={index < 6 ? "eager" : "lazy"}
@@ -373,6 +384,11 @@ export function PublicGallery({
               </button>
             </div>
             {faceBusy && <p className="mt-8 text-sm text-[#666]">Loading faces...</p>}
+            {facesIndexing && !faceBusy && (
+              <p className="mt-6 rounded bg-[#f6f6f4] px-3 py-2 text-sm font-semibold text-[#666]">
+                Detecting remaining faces...
+              </p>
+            )}
             {!faceBusy && !faces.length && (
               <p className="mt-8 text-sm leading-6 text-[#666]">
                 No indexed faces yet. New uploads index in background.
@@ -420,6 +436,7 @@ function displayImageUrl(image: PublicImage) {
 
 function BlurImage({
   src,
+  fallbackSrc,
   alt,
   className,
   placeholder,
@@ -427,6 +444,7 @@ function BlurImage({
   style,
 }: {
   src: string;
+  fallbackSrc?: string;
   alt: string;
   className?: string;
   placeholder?: string;
@@ -434,6 +452,11 @@ function BlurImage({
   style?: CSSProperties;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(src);
+  useEffect(() => {
+    setLoaded(false);
+    setCurrentSrc(src);
+  }, [src]);
   return (
     <span className="relative block h-full w-full overflow-hidden bg-[#f1f0ee]">
       {placeholder && !loaded && (
@@ -447,11 +470,18 @@ function BlurImage({
       )}
       {!placeholder && !loaded && <span className="absolute inset-0 animate-pulse bg-[#eceae6]" />}
       <img
-        src={src}
+        src={currentSrc}
         alt={alt}
         loading={loading}
         decoding="async"
         onLoad={() => setLoaded(true)}
+        onError={() => {
+          if (fallbackSrc && currentSrc !== fallbackSrc) {
+            setCurrentSrc(fallbackSrc);
+            return;
+          }
+          setLoaded(true);
+        }}
         className={cn(className, "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
         style={style}
       />

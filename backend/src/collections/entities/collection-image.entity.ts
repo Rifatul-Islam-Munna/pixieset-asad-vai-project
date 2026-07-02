@@ -38,6 +38,12 @@ export class CollectionImage {
   @Prop({ default: false })
   watermarked: boolean;
 
+  @Prop()
+  faceIndexedAt?: Date;
+
+  @Prop({ default: 0 })
+  faceCount?: number;
+
   @Prop({ type: Object, default: {} })
   metadata: Record<string, unknown>;
 }
