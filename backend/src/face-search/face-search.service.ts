@@ -561,8 +561,8 @@ export class FaceSearchService implements OnModuleInit {
 
     try {
       const primaryDetector = this.detectorName(
-        this.configService.get<string>('FACE_DETECTOR_MODEL') ?? 'ssd',
-        'ssd',
+        this.configService.get<string>('FACE_DETECTOR_MODEL') ?? 'tiny',
+        'tiny',
       );
 
       let candidates = await this.detectCandidates(input, primaryDetector, 'full');
@@ -698,8 +698,8 @@ export class FaceSearchService implements OnModuleInit {
 
     try {
       const detector = this.detectorName(
-        this.configService.get<string>('FACE_DESCRIPTOR_DETECTOR') ?? 'ssd',
-        'ssd',
+        this.configService.get<string>('FACE_DESCRIPTOR_DETECTOR') ?? 'tiny',
+        'tiny',
       );
 
       const result = await this.faceApi

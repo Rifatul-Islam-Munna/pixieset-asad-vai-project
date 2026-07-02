@@ -328,11 +328,10 @@ export function PublicGallery({
           {visibleImages.map((photo, index) => (
             <div key={photo._id} className={cn("group relative overflow-hidden bg-[#f4f4f2] text-left", masonryTileClass(index))}>
               <button className="block h-full w-full" onClick={() => setActiveImage(photo)}>
-                <BlurImage
+                <GalleryImage
                   src={imageSrc(displayImageUrl(photo))}
                   fallbackSrc={imageSrc(photo.url)}
                   alt={photo.originalName ?? ""}
-                  loading={index < 6 ? "eager" : "lazy"}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
                 />
               </button>
@@ -398,10 +397,9 @@ export function PublicGallery({
                 <button key={face.id} className="grid justify-items-center gap-2 text-center" onClick={() => void filterBySavedFace(face.id)}>
                   <span className="block size-20 overflow-hidden rounded-full bg-[#eee] ring-2 ring-[#111]/10">
                     {face.imageUrl ? (
-                      <BlurImage
+                      <GalleryImage
                         src={imageSrc(face.imageUrl)}
                         alt={face.label}
-                        loading="lazy"
                         className="h-full w-full object-cover"
                         style={face.box ? { objectPosition: `${face.box.x + face.box.width / 2}% ${face.box.y + face.box.height / 2}%` } : undefined}
                       />
@@ -433,43 +431,37 @@ function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
 }
 
-function BlurImage({
+function GalleryImage({
   src,
   fallbackSrc,
   alt,
   className,
-  loading = "lazy",
   style,
 }: {
   src: string;
   fallbackSrc?: string;
   alt: string;
   className?: string;
-  loading?: "lazy" | "eager";
   style?: CSSProperties;
 }) {
-  const [loaded, setLoaded] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(src);
   useEffect(() => {
-    setLoaded(false);
     setCurrentSrc(src);
   }, [src]);
   return (
-    <span className="relative block h-full w-full overflow-hidden bg-[#f1f0ee]">
+    <span className="relative block h-full w-full overflow-hidden bg-transparent">
       <img
         src={currentSrc}
         alt={alt}
-        loading={loading}
+        loading="eager"
+        fetchPriority="high"
         decoding="async"
-        onLoad={() => setLoaded(true)}
         onError={() => {
           if (fallbackSrc && currentSrc !== fallbackSrc) {
             setCurrentSrc(fallbackSrc);
-            return;
           }
-          setLoaded(true);
         }}
-        className={cn(className, "transition-opacity duration-150", loaded ? "opacity-100" : "opacity-0")}
+        className={className}
         style={style}
       />
     </span>

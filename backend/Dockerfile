@@ -30,6 +30,8 @@ RUN mkdir -p /app/models/face-api \
     /app/models/face-api/ \
     && cp /app/node_modules/@vladmandic/face-api/model/tiny_face_detector_model* \
     /app/models/face-api/ \
+    && cp /app/node_modules/@vladmandic/face-api/model/face_landmark_68_model* \
+    /app/models/face-api/ \
     && cp /app/node_modules/@vladmandic/face-api/model/face_landmark_68_tiny_model* \
     /app/models/face-api/ \
     && cp /app/node_modules/@vladmandic/face-api/model/face_recognition_model* \
