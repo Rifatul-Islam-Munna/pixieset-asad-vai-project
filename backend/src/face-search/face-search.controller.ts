@@ -22,7 +22,7 @@ export class FaceSearchController {
   @Post(':collectionId')
   @UseInterceptors(FileInterceptor('file', {
     storage: memoryStorage(),
-    limits: { fileSize: 1024 * 1024 * 8 },
+    limits: { fileSize: 1024 * 1024 * 40 },
   }))
   async search(
     @Param('collectionId') collectionId: string,

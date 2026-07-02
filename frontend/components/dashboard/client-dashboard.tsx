@@ -89,6 +89,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -5925,6 +5926,7 @@ function CollectionDetailView({
   const collections = collectionsQuery.data?.data ?? [];
   const collection = collectionQuery.data?.data ?? collections.find((item) => item._id === collectionId);
   const detail = collectionQuery.data?.data;
+  const imagesLoading = collectionQuery.isLoading && !detail;
   const images = detail?.images ?? [];
   const sets = detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }];
   const [activeImageId, setActiveImageId] = useState("");
@@ -6123,11 +6125,7 @@ function CollectionDetailView({
     );
   };
   if (!collection) {
-    return (
-      <div className="flex min-h-[420px] items-center justify-center text-sm text-[#666]">
-        Loading collection...
-      </div>
-    );
+    return <CollectionDetailSkeleton />;
   }
 
   return (
@@ -6328,7 +6326,11 @@ function CollectionDetailView({
         <aside className="flex flex-col border-r bg-[#fafafa]">
           {!detailCollapsed && <div className="aspect-[1.45] bg-[#e8e8e8]">
             {form.coverImage ? (
-              <img src={imageSrc(form.coverImage)} alt="" className="h-full w-full object-cover" />
+              <DashboardImageWithSkeleton
+                src={imageSrc(form.coverImage)}
+                alt=""
+                className="h-full w-full object-cover"
+              />
             ) : (
               <div className="flex h-full items-center justify-center">
                 <Images className="size-9 text-[#bbb]" />
@@ -6449,7 +6451,9 @@ function CollectionDetailView({
 
         <div className="min-w-0 overflow-y-auto p-5 md:p-6">
           {activeTab === "photos" && (
-            !activeSetImages.length ? (
+            imagesLoading ? (
+              <CollectionImagesSkeleton />
+            ) : !activeSetImages.length ? (
               <label className={cn("flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center", uploadImages.isPending && "pointer-events-none opacity-75")}>
                 {uploadImages.isPending ? <Loader2 className="size-10 animate-spin text-[#22bda7]" /> : <Upload className="size-10 text-[#bbb]" />}
                 <p className="mt-5 font-bold">{uploadImages.isPending ? "Uploading media..." : "Drag photos and videos here to upload"}</p>
@@ -6494,7 +6498,7 @@ function CollectionDetailView({
                         className="relative block w-full overflow-hidden bg-[#f2f2f2]"
                         onClick={() => setActiveImageId(image._id)}
                       >
-                        <img
+                        <DashboardImageWithSkeleton
                           src={imageSrc(image.url)}
                           alt={image.originalName ?? ""}
                           className={cn(
@@ -6706,6 +6710,94 @@ function CollectionDetailView({
         </div>
       </div>
     </div>
+  );
+}
+
+function CollectionDetailSkeleton() {
+  return (
+    <div className="flex h-[100dvh] min-w-0 flex-col overflow-hidden px-4 py-5 md:px-6">
+      <Skeleton className="mb-4 h-5 w-40 rounded-none" />
+      <div className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
+        <div className="w-full max-w-[520px]">
+          <Skeleton className="h-8 w-64 rounded-none" />
+          <Skeleton className="mt-3 h-4 w-80 rounded-none" />
+          <Skeleton className="mt-3 h-4 w-full rounded-none" />
+        </div>
+        <div className="flex gap-3">
+          <Skeleton className="h-10 w-24 rounded-none" />
+          <Skeleton className="h-10 w-24 rounded-none" />
+          <Skeleton className="h-10 w-32 rounded-none" />
+        </div>
+      </div>
+      <div className="mt-6 grid min-h-0 flex-1 overflow-hidden border md:grid-cols-[250px_minmax(0,1fr)]">
+        <aside className="border-r bg-[#fafafa]">
+          <Skeleton className="aspect-[1.45] w-full rounded-none" />
+          <div className="grid grid-cols-3 border-b bg-white">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={index} className="m-4 h-6 rounded-none" />
+            ))}
+          </div>
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Skeleton key={index} className="h-10 rounded-none" />
+            ))}
+          </div>
+        </aside>
+        <section className="overflow-hidden p-5 md:p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <Skeleton className="h-4 w-56 rounded-none" />
+            <Skeleton className="h-9 w-32 rounded-none" />
+          </div>
+          <div className="grid grid-cols-3 gap-2 md:grid-cols-5 xl:grid-cols-6">
+            {Array.from({ length: 24 }).map((_, index) => (
+              <Skeleton key={index} className="aspect-square rounded-none bg-[#eeeeec]" />
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function CollectionImagesSkeleton() {
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <Skeleton className="h-4 w-64 rounded-none" />
+        <Skeleton className="h-9 w-32 rounded-none" />
+      </div>
+      <div className="grid grid-cols-3 gap-2 md:grid-cols-5 xl:grid-cols-6">
+        {Array.from({ length: 24 }).map((_, index) => (
+          <Skeleton key={index} className="aspect-square rounded-none bg-[#eeeeec]" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DashboardImageWithSkeleton({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <span className="relative block h-full w-full overflow-hidden bg-[#f3f3f1]">
+      {!loaded && <Skeleton className="absolute inset-0 h-full w-full rounded-none bg-[#eeeeec]" />}
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        className={cn(className, "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
+      />
+    </span>
   );
 }
 

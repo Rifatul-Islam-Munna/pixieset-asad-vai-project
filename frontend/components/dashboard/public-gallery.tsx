@@ -180,8 +180,9 @@ export function PublicGallery({
     if (!file) return;
     setFaceBusy(true);
     setFaceError("");
+    const uploadFile = await compressFaceSearchImage(file).catch(() => file);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", uploadFile);
     const response = await fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}`, {
       method: "POST",
       body: formData,
@@ -318,6 +319,8 @@ export function PublicGallery({
                 <img
                   src={imageSrc(photo.url)}
                   alt={photo.originalName ?? ""}
+                  loading={index < 6 ? "eager" : "lazy"}
+                  decoding="async"
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
                 />
               </button>
@@ -381,6 +384,8 @@ export function PublicGallery({
                       <img
                         src={imageSrc(face.imageUrl)}
                         alt={face.label}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                         style={face.box ? { objectPosition: `${face.box.x + face.box.width / 2}% ${face.box.y + face.box.height / 2}%` } : undefined}
                       />
@@ -424,6 +429,25 @@ function masonryTileClass(index: number) {
     "",
   ];
   return pattern[index % pattern.length];
+}
+
+async function compressFaceSearchImage(file: File) {
+  if (!file.type.startsWith("image/") || file.size <= 1024 * 1024 * 2) return file;
+  const bitmap = await createImageBitmap(file);
+  const maxSize = 1280;
+  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return file;
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  if (!blob || blob.size >= file.size) return file;
+  return new File([blob], "face-search.jpg", { type: "image/jpeg" });
 }
 
 function formatPublicDate(value: string) {
