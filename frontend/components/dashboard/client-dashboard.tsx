@@ -626,13 +626,6 @@ export function ClientDashboard({
         </div>
       </section>
 
-      {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <button
-        className="fixed bottom-6 right-6 flex size-12 items-center justify-center rounded-full bg-[#2b2b2b] text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)]"
-        onClick={() => setActiveNav("Support")}
-        aria-label="Support"
-      >
-        <CircleUserRound className="size-5" />
-      </button>}
     </main>
   );
 }
@@ -1389,26 +1382,58 @@ type FavoriteImageRecord = {
   galleryUrl?: string;
 };
 
+type FavoriteCollectionRecord = {
+  _id: string;
+  collectionId: string;
+  name: string;
+  slug?: string;
+  coverImage?: string;
+  eventDate?: string;
+  url?: string;
+};
+
 function FavoriteCollectionsPanel() {
-  const [favorites, setFavorites] = useState<FavoriteImageRecord[]>([]);
+  const [photoFavorites, setPhotoFavorites] = useState<FavoriteImageRecord[]>([]);
+  const [collectionFavorites, setCollectionFavorites] = useState<FavoriteCollectionRecord[]>([]);
   const [previewImage, setPreviewImage] = useState<FavoriteImageRecord | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [photosLoading, setPhotosLoading] = useState(true);
+  const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    setPhotosLoading(true);
     fetch("/api/collection-image-favorites", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(payload?.message ?? "Favorite photos failed");
-        if (active) setFavorites(payload?.data ?? []);
+        if (active) setPhotoFavorites(payload?.data ?? []);
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : "Favorite photos failed");
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setPhotosLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setCollectionsLoading(true);
+    fetch("/api/collection-favorites", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.message ?? "Favorite collections failed");
+        if (active) setCollectionFavorites(payload?.data ?? []);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "Favorite collections failed");
+      })
+      .finally(() => {
+        if (active) setCollectionsLoading(false);
       });
     return () => {
       active = false;
@@ -1417,46 +1442,104 @@ function FavoriteCollectionsPanel() {
 
   return (
     <div>
-      <h1 className="text-[28px] font-medium leading-none">Favorite Photos</h1>
-      {loading ? (
-        <p className="mt-8 text-sm font-semibold text-[#777]">Loading favorites...</p>
-      ) : error ? (
-        <p className="mt-8 text-sm font-semibold text-red-600">{error}</p>
-      ) : favorites.length ? (
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-          {favorites.map((favorite) => (
-            <button
-              key={favorite._id}
-              className="group text-left"
-              onClick={() => setPreviewImage(favorite)}
-              type="button"
-            >
-              <span className="relative block overflow-hidden bg-[#f3f3f3]">
-                {favorite.url ? (
-                  <img src={imageSrc(favorite.thumbnailUrl || favorite.url)} alt={favorite.originalName ?? ""} className="aspect-square w-full object-cover transition-transform group-hover:scale-105" />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center">
-                    <Heart className="size-9 text-[#bbb]" />
+      <h1 className="text-[28px] font-medium leading-none">Favorites</h1>
+      {error ? <p className="mt-8 text-sm font-semibold text-red-600">{error}</p> : null}
+      <Tabs defaultValue="albums" className="mt-8 gap-0">
+        <TabsList className="h-auto gap-8 bg-transparent p-0">
+          <TabsTrigger
+            value="albums"
+            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
+          >
+            Albums
+          </TabsTrigger>
+          <TabsTrigger
+            value="photos"
+            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
+          >
+            Photos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="albums" className="mt-12">
+          {collectionsLoading ? (
+            <p className="text-sm font-semibold text-[#777]">Loading favorite albums...</p>
+          ) : collectionFavorites.length ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {collectionFavorites.map((favorite) => (
+                <button
+                  key={favorite._id}
+                  className="group text-left"
+                  onClick={() => favorite.url && window.open(favorite.url, "_blank", "noopener,noreferrer")}
+                  type="button"
+                >
+                  <span className="relative block overflow-hidden bg-[#f3f3f3]">
+                    {favorite.coverImage ? (
+                      <img src={imageSrc(favorite.coverImage)} alt={favorite.name} className="aspect-[1.35] w-full object-cover transition-transform group-hover:scale-105" />
+                    ) : (
+                      <span className="flex aspect-[1.35] items-center justify-center bg-[#f3f3f3]">
+                        <Images className="size-8 text-[#bbb]" />
+                      </span>
+                    )}
+                    <Heart className="absolute right-3 top-3 size-5 fill-red-500 text-red-500 drop-shadow" />
                   </span>
-                )}
-                <Heart className="absolute right-3 top-3 size-5 fill-red-500 text-red-500 drop-shadow" />
-              </span>
-              <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
-                {favorite.originalName ?? "Favorite photo"}
-              </span>
-              <span className="mt-1 block truncate text-xs text-[#777]">
-                {favorite.collectionName ?? "Collection"}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="mx-auto mt-16 flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
-          <Heart className="size-10 text-[#22bda7]" />
-          <h2 className="mt-5 text-xl font-semibold">No favorite photos yet</h2>
-          <p className="mt-3 text-sm leading-6 text-[#666]">Favorite photos from public collection galleries.</p>
-        </div>
-      )}
+                  <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
+                    {favorite.name}
+                  </span>
+                  <span className="mt-1 block truncate text-xs text-[#777]">
+                    {favorite.eventDate ? format(parseISO(favorite.eventDate), "MMM d, yyyy") : "Favorite album"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mx-auto flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
+              <Heart className="size-10 text-[#22bda7]" />
+              <h2 className="mt-5 text-xl font-semibold">No favorite albums yet</h2>
+              <p className="mt-3 text-sm leading-6 text-[#666]">Favorite albums from public collection galleries.</p>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="photos" className="mt-12">
+          {photosLoading ? (
+            <p className="text-sm font-semibold text-[#777]">Loading favorite photos...</p>
+          ) : photoFavorites.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+              {photoFavorites.map((favorite) => (
+                <button
+                  key={favorite._id}
+                  className="group text-left"
+                  onClick={() => setPreviewImage(favorite)}
+                  type="button"
+                >
+                  <span className="relative block overflow-hidden bg-[#f3f3f3]">
+                    {favorite.url ? (
+                      <img src={imageSrc(favorite.thumbnailUrl || favorite.url)} alt={favorite.originalName ?? ""} className="aspect-square w-full object-cover transition-transform group-hover:scale-105" />
+                    ) : (
+                      <span className="flex aspect-square items-center justify-center">
+                        <Heart className="size-9 text-[#bbb]" />
+                      </span>
+                    )}
+                    <Heart className="absolute right-3 top-3 size-5 fill-red-500 text-red-500 drop-shadow" />
+                  </span>
+                  <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
+                    {favorite.originalName ?? "Favorite photo"}
+                  </span>
+                  <span className="mt-1 block truncate text-xs text-[#777]">
+                    {favorite.collectionName ?? "Collection"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mx-auto flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
+              <Heart className="size-10 text-[#22bda7]" />
+              <h2 className="mt-5 text-xl font-semibold">No favorite photos yet</h2>
+              <p className="mt-3 text-sm leading-6 text-[#666]">Favorite photos from public collection galleries.</p>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
       <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-h-[94dvh] overflow-y-auto rounded-none border-0 p-0 sm:max-w-[92vw]">
           {previewImage && (
