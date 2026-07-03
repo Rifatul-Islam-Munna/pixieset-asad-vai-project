@@ -90,7 +90,7 @@ const defaultDownload: PresetDownloadSettings = {
   webSize: true,
   webSizePx: "1024px",
   videoDownload: false,
-  downloadPin: true,
+  downloadPin: false,
   downloadPinCode: "1234",
   restrictDownloads: false,
   limitDownloads: false,
@@ -120,10 +120,10 @@ export function PublicGallery({
   design.coverButtonText = coverTextOrDefault(design.coverButtonText, "View Gallery");
   const download = {
     ...defaultDownload,
-    ...(collection?.settings?.download ?? fallback.presetDownload),
+    ...(collection ? (collection.settings?.download ?? {}) : fallback.presetDownload),
   };
   const storeStatus = collection?.settings?.store?.storeStatus ?? fallback.presetStore.storeStatus;
-  const maxDownloads = download.limitDownloads ? Number(download.limitPinUsage) || 0 : 0;
+  const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images = collection?.images?.length
     ? collection.images
     : fallbackPhotos.map((url, index) => ({ _id: `sample-${index}`, url }));
@@ -152,15 +152,15 @@ export function PublicGallery({
   const fontFamily =
     typeMap[design.typography as keyof typeof typeMap] ?? typeMap.Classic;
   const storeHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`;
-  const downloadsEnabled = Boolean(download.photoDownload);
-  const pinRequired = downloadsEnabled && Boolean(download.downloadPin);
+  const downloadsEnabled = boolSetting(download.photoDownload);
+  const pinRequired = downloadsEnabled && boolSetting(download.downloadPin);
   const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
-  const limitOk = !download.limitDownloads || maxDownloads <= 0 || downloadCount < maxDownloads;
+  const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
   const canDownload = downloadsEnabled && pinOk && limitOk;
   const onDownload = () => setDownloadCount((count) => count + 1);
   const downloadAllImages = () => {
     if (!canDownload) return;
-    const remaining = download.limitDownloads && maxDownloads > 0
+    const remaining = boolSetting(download.limitDownloads) && maxDownloads > 0
       ? Math.max(0, maxDownloads - downloadCount)
       : galleryImages.length;
     const downloadable = galleryImages.slice(0, remaining || galleryImages.length);
@@ -383,7 +383,7 @@ export function PublicGallery({
           </div>
         )}
 
-        {downloadsEnabled && download.limitDownloads && maxDownloads > 0 && (
+        {downloadsEnabled && boolSetting(download.limitDownloads) && maxDownloads > 0 && (
           <p className="mx-4 mt-4 text-sm md:mx-8" style={{ color: accent }}>
             {Math.max(0, maxDownloads - downloadCount)} downloads remaining
           </p>
@@ -409,8 +409,14 @@ export function PublicGallery({
           {visibleImages.map((photo) => (
             <div
               key={photo._id}
-              className="group relative mb-[15px] inline-block w-full break-inside-avoid overflow-hidden bg-[#f4f4f2] text-left align-top transition-[transform,box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
-              style={{ aspectRatio: imageShapes[photo._id] ? undefined : "1 / 1" }}
+              className={cn(
+                "group relative mb-[15px] inline-block w-full break-inside-avoid overflow-hidden bg-[#f4f4f2] text-left align-top transition-[transform,box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]",
+                imageShapes[photo._id] === "landscape" && "sm:block",
+              )}
+              style={{
+                aspectRatio: imageShapes[photo._id] ? undefined : "1 / 1",
+                columnSpan: imageShapes[photo._id] === "landscape" ? "all" : undefined,
+              } as CSSProperties}
             >
               <button className="block w-full" onClick={() => setActiveImage(photo)}>
                 <GalleryImage
@@ -615,6 +621,11 @@ function coverTextOrDefault(value: string | undefined, fallback: string) {
   return value && !["Avery Studio", "Sarah & Daniel", "June 14, 2026", "View Gallery"].includes(value)
     ? value
     : fallback;
+}
+
+function boolSetting(value: unknown) {
+  if (typeof value === "string") return value.toLowerCase() !== "false" && value !== "0";
+  return Boolean(value);
 }
 
 async function compressFaceSearchImage(file: File) {
