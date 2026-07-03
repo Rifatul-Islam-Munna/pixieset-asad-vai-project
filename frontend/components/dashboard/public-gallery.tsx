@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { Camera, Download, Eye, Grid2X2, Lock, Search, ShoppingBag, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
@@ -141,7 +141,12 @@ export function PublicGallery({
   const [faces, setFaces] = useState<PublicFace[]>([]);
   const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
+  const [imageShapes, setImageShapes] = useState<Record<string, "portrait" | "landscape" | "square">>({});
+  const [shareNotice, setShareNotice] = useState("");
+  const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const visibleImages = faceResults ?? galleryImages;
+  const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
+  const slideshowPosition = slideshowIndex ?? 0;
   const [bg, fg, accent] =
     themeMap[design.color as keyof typeof themeMap] ?? themeMap.Rose;
   const fontFamily =
@@ -152,6 +157,34 @@ export function PublicGallery({
   const canDownload = download.photoDownload && pinOk && limitOk;
   const onDownload = () => setDownloadCount((count) => count + 1);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  const collectionUrl = () => window.location.href;
+  const shareItem = async (share: { title: string; text?: string; url: string }, notice: string) => {
+    if (navigator.share) {
+      await navigator.share(share).catch(() => null);
+      setShareNotice(notice);
+      return;
+    }
+    await navigator.clipboard?.writeText(share.url).catch(() => null);
+    setShareNotice("Link copied");
+  };
+  const shareCollection = () =>
+    shareItem(
+      { title, text: `View ${title}`, url: collectionUrl() },
+      "Collection shared"
+    );
+  const sharePhoto = (photo: PublicImage) =>
+    shareItem(
+      { title: photo.originalName || title, text: title, url: imageSrc(photo.url) },
+      "Photo shared"
+    );
+  const startSlideshow = () => {
+    if (!visibleImages.length) return;
+    setActiveImage(null);
+    setSlideshowIndex(0);
+  };
+  const closeSlideshow = () => setSlideshowIndex(null);
+  const showNextSlide = () => setSlideshowIndex((index) => !visibleImages.length || index === null ? 0 : (index + 1) % visibleImages.length);
+  const showPreviousSlide = () => setSlideshowIndex((index) => !visibleImages.length || index === null ? 0 : (index - 1 + visibleImages.length) % visibleImages.length);
   const loadFaces = async (force = false) => {
     setFaceSheetOpen(true);
     if (((!force && faces.length) || faceBusy)) return;
@@ -208,8 +241,20 @@ export function PublicGallery({
     return () => window.clearTimeout(timer);
   }, [faceSheetOpen, facesIndexing]);
 
+  useEffect(() => {
+    if (!shareNotice) return;
+    const timer = window.setTimeout(() => setShareNotice(""), 1800);
+    return () => window.clearTimeout(timer);
+  }, [shareNotice]);
+
+  useEffect(() => {
+    if (slideshowIndex === null || visibleImages.length <= 1) return;
+    const timer = window.setTimeout(showNextSlide, 3200);
+    return () => window.clearTimeout(timer);
+  }, [slideshowIndex, visibleImages.length]);
+
   return (
-    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen">
+    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen scroll-smooth">
       <nav className="flex h-16 items-center justify-between px-5 md:px-10">
         <p className="text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
         <div className="flex items-center gap-4">
@@ -217,6 +262,9 @@ export function PublicGallery({
             <>
               <button className="flex items-center gap-2 text-sm">
                 <Grid2X2 className="size-4" /> Gallery
+              </button>
+              <button className="flex items-center gap-2 text-sm" onClick={() => void shareCollection()} type="button">
+                <Share2 className="size-4" /> Share
               </button>
               {storeStatus && (
                 <a href={storeHref} className="flex items-center gap-2 text-sm">
@@ -227,6 +275,9 @@ export function PublicGallery({
           ) : (
             <>
               <Grid2X2 className="size-5" />
+              <button onClick={() => void shareCollection()} type="button" aria-label="Share collection">
+                <Share2 className="size-5" />
+              </button>
               {storeStatus && <a href={storeHref} aria-label="Store"><ShoppingBag className="size-5" /></a>}
             </>
           )}
@@ -246,7 +297,7 @@ export function PublicGallery({
       </section>
 
       <section className="px-0 py-0">
-        <div className="z-20 flex flex-wrap items-center justify-between gap-4 border-y border-black/10 bg-white px-4 py-4 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] md:px-8">
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-y border-black/10 bg-white/95 px-4 py-4 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] backdrop-blur md:px-8">
           <div>
             <p className="text-xs uppercase tracking-[0.26em] text-black/45">
               Masonry gallery
@@ -271,6 +322,14 @@ export function PublicGallery({
                 Show all
               </button>
             )}
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={startSlideshow} type="button">
+              <Play className="size-4" />
+              Slideshow
+            </button>
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => void shareCollection()} type="button">
+              <Share2 className="size-4" />
+              Share
+            </button>
             {storeStatus && (
               <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5">
                 <ShoppingBag className="size-4" />
@@ -315,6 +374,12 @@ export function PublicGallery({
         )}
 
         {faceError && <p className="mx-4 mt-5 text-sm font-semibold text-red-600 md:mx-8">{faceError}</p>}
+        {shareNotice && (
+          <p className="mx-4 mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white md:mx-8">
+            <Check className="size-4" />
+            {shareNotice}
+          </p>
+        )}
         {faceResults && (
           <p className="mx-4 mt-5 text-sm md:mx-8" style={{ color: accent }}>
             {faceResults.length} matching photos found
@@ -323,21 +388,29 @@ export function PublicGallery({
 
         <div
           id="gallery"
-          className="mt-0 grid auto-rows-[minmax(180px,22vw)] grid-cols-1 gap-[15px] bg-white p-[15px] sm:grid-cols-2 lg:grid-cols-3"
+          className="mt-0 grid auto-rows-[8px] grid-flow-dense grid-cols-1 gap-[15px] bg-white p-[15px] sm:grid-cols-2 lg:grid-cols-3"
         >
-          {visibleImages.map((photo, index) => (
-            <div key={photo._id} className={cn("group relative overflow-hidden bg-[#f4f4f2] text-left", masonryTileClass(index))}>
+          {visibleImages.map((photo) => (
+            <div key={photo._id} className={cn("group relative overflow-hidden bg-[#f4f4f2] text-left transition-[transform,box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]", masonryTileClass(imageShapes[photo._id]))}>
               <button className="block h-full w-full" onClick={() => setActiveImage(photo)}>
                 <GalleryImage
                   src={imageSrc(displayImageUrl(photo))}
                   fallbackSrc={imageSrc(photo.url)}
                   alt={photo.originalName ?? ""}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
+                  className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
+                  onShape={(shape) =>
+                    setImageShapes((current) =>
+                      current[photo._id] === shape ? current : { ...current, [photo._id]: shape }
+                    )
+                  }
                 />
               </button>
               <div className="absolute right-3 top-3 flex gap-2">
                 <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => setActiveImage(photo)} aria-label="View image">
                   <Eye className="size-4" />
+                </button>
+                <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => void sharePhoto(photo)} aria-label="Share image" type="button">
+                  <Share2 className="size-4" />
                 </button>
                 {canDownload && (
                   <a className="rounded-full bg-white/90 p-2 shadow-sm" href={imageSrc(photo.url)} download target="_blank" rel="noreferrer" aria-label="Download image" onClick={onDownload}>
@@ -355,16 +428,57 @@ export function PublicGallery({
           <button className="absolute right-5 top-5 rounded-full bg-white p-3 text-black" onClick={() => setActiveImage(null)} aria-label="Close image">
             <X className="size-5" />
           </button>
-          {canDownload && (
-            <a className="absolute bottom-5 right-5 inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" href={imageSrc(activeImage.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
-              <Download className="size-4" />
-              Download
-            </a>
-          )}
+          <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
+            <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(activeImage)} type="button">
+              <Share2 className="size-4" />
+              Share
+            </button>
+            {canDownload && (
+              <a className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" href={imageSrc(activeImage.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
+                <Download className="size-4" />
+                Download
+              </a>
+            )}
+          </div>
           <img
             src={imageSrc(activeImage.url)}
             alt={activeImage.originalName ?? ""}
             className="max-h-full max-w-full object-contain"
+          />
+        </div>
+      )}
+
+      {slideshowImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black p-4" onDoubleClick={closeSlideshow}>
+          <button className="absolute right-5 top-5 rounded-full bg-white p-3 text-black" onClick={closeSlideshow} aria-label="Close slideshow">
+            <X className="size-5" />
+          </button>
+          <div className="absolute left-5 top-5 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white backdrop-blur">
+            {slideshowPosition + 1} / {visibleImages.length}
+          </div>
+          <button className="absolute left-5 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-3 text-black shadow" onClick={showPreviousSlide} aria-label="Previous slide" type="button">
+            <ChevronLeft className="size-6" />
+          </button>
+          <button className="absolute right-5 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-3 text-black shadow" onClick={showNextSlide} aria-label="Next slide" type="button">
+            <ChevronRight className="size-6" />
+          </button>
+          <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
+            <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(slideshowImage)} type="button">
+              <Share2 className="size-4" />
+              Share
+            </button>
+            {canDownload && (
+              <a className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" href={imageSrc(slideshowImage.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
+                <Download className="size-4" />
+                Download
+              </a>
+            )}
+          </div>
+          <img
+            key={slideshowImage._id}
+            src={imageSrc(slideshowImage.url)}
+            alt={slideshowImage.originalName ?? ""}
+            className="max-h-full max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
           />
         </div>
       )}
@@ -439,12 +553,14 @@ function GalleryImage({
   alt,
   className,
   style,
+  onShape,
 }: {
   src: string;
   fallbackSrc?: string;
   alt: string;
   className?: string;
   style?: CSSProperties;
+  onShape?: (shape: "portrait" | "landscape" | "square") => void;
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
   useEffect(() => {
@@ -458,6 +574,11 @@ function GalleryImage({
         loading="eager"
         fetchPriority="high"
         decoding="async"
+        onLoad={(event) => {
+          const image = event.currentTarget;
+          const ratio = image.naturalWidth / Math.max(1, image.naturalHeight);
+          onShape?.(ratio > 1.12 ? "landscape" : ratio < 0.9 ? "portrait" : "square");
+        }}
         onError={() => {
           if (fallbackSrc && currentSrc !== fallbackSrc) {
             setCurrentSrc(fallbackSrc);
@@ -476,16 +597,11 @@ function coverTextOrDefault(value: string | undefined, fallback: string) {
     : fallback;
 }
 
-function masonryTileClass(index: number) {
-  const pattern = [
-    "lg:row-span-2",
-    "",
-    "lg:row-span-2",
-    "lg:row-span-2",
-    "lg:row-span-2",
-    "",
-  ];
-  return pattern[index % pattern.length];
+function masonryTileClass(shape?: "portrait" | "landscape" | "square") {
+  if (shape === "portrait") return "row-span-[46] sm:row-span-[52]";
+  if (shape === "landscape") return "row-span-[28] sm:col-span-2 sm:row-span-[30] lg:col-span-2";
+  if (shape === "square") return "row-span-[36]";
+  return "row-span-[34]";
 }
 
 async function compressFaceSearchImage(file: File) {
