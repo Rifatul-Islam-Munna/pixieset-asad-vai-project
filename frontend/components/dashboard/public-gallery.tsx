@@ -511,13 +511,13 @@ export function PublicGallery({
 
         <div
           id="gallery"
-          className="mt-0 bg-white p-px"
+          className="mt-0 bg-white p-0"
         >
           <ResponsiveMasonry
             columnsCountBreakPoints={{ 0: 1, 640: 2, 1024: 3 }}
-            gutterBreakPoints={{ 0: 1, 640: 1, 1024: 1 }}
+            gutterBreakPoints={{ 0: 0, 640: 0, 1024: 0 }}
           >
-            <Masonry gutter="1px" itemStyle={{ overflow: "visible" }}>
+            <Masonry gutter="0px" itemStyle={{ overflow: "visible" }}>
               {visibleImages.map((photo) => (
                 <div
                   id={`photo-${photo._id}`}
