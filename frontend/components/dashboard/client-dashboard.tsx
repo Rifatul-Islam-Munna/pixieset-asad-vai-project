@@ -141,6 +141,7 @@ export type DashboardPage =
   | "collections"
   | "collection-new"
   | "library"
+  | "favorites"
   | "starred"
   | "homepage"
   | "settings"
@@ -185,6 +186,7 @@ const sidebarItems = {
   "client-gallery": [
     { label: "Collections", icon: Images, page: "collections" },
     { label: "Library", icon: LayoutGrid, page: "library" },
+    { label: "Favorite", icon: Heart, page: "favorites" },
     { label: "Starred", icon: Star, page: "starred" },
     { label: "Homepage", icon: PanelTop, page: "homepage" },
     { label: "Settings", icon: Settings, page: "settings" },
@@ -582,6 +584,8 @@ export function ClientDashboard({
             <CollectionWizard />
           ) : page === "library" ? (
             <LibraryPanel onNewCollection={startWizard} />
+          ) : page === "favorites" ? (
+            <FavoriteCollectionsPanel />
           ) : page === "starred" ? (
             <StarredPanel />
           ) : section === "store-gallery" && page === "settings" ? (
@@ -1370,6 +1374,86 @@ function ContactGrid() {
           </p>
         </div>
       ))}
+    </div>
+  );
+}
+
+type FavoriteCollectionRecord = {
+  _id: string;
+  collectionId: string;
+  name: string;
+  slug?: string;
+  coverImage?: string;
+  eventDate?: string;
+  url: string;
+};
+
+function FavoriteCollectionsPanel() {
+  const [favorites, setFavorites] = useState<FavoriteCollectionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetch("/api/collection-favorites", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.message ?? "Favorite collections failed");
+        if (active) setFavorites(payload?.data ?? []);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "Favorite collections failed");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <div>
+      <h1 className="text-[28px] font-medium leading-none">Favorite Collections</h1>
+      {loading ? (
+        <p className="mt-8 text-sm font-semibold text-[#777]">Loading favorites...</p>
+      ) : error ? (
+        <p className="mt-8 text-sm font-semibold text-red-600">{error}</p>
+      ) : favorites.length ? (
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {favorites.map((favorite) => (
+            <button
+              key={favorite._id}
+              className="group overflow-hidden border bg-white text-left transition hover:shadow-[0_18px_45px_rgba(0,0,0,0.12)]"
+              onClick={() => window.open(favorite.url, "_blank", "noopener,noreferrer")}
+              type="button"
+            >
+              <span className="block aspect-[1.35] bg-[#eee]">
+                {favorite.coverImage ? (
+                  <img src={imageSrc(favorite.coverImage)} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center">
+                    <Heart className="size-9 text-[#bbb]" />
+                  </span>
+                )}
+              </span>
+              <span className="block p-4">
+                <span className="block truncate text-base font-bold">{favorite.name}</span>
+                <span className="mt-2 block text-sm text-[#666]">
+                  {favorite.eventDate ? formatDate(favorite.eventDate) : favorite.slug ?? favorite.collectionId}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="mx-auto mt-16 flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
+          <Heart className="size-10 text-[#22bda7]" />
+          <h2 className="mt-5 text-xl font-semibold">No favorite collections yet</h2>
+          <p className="mt-3 text-sm leading-6 text-[#666]">Favorite public collections from their gallery page.</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ const pages = [
   "collections",
   "collection-new",
   "library",
+  "favorites",
   "starred",
   "homepage",
   "settings",

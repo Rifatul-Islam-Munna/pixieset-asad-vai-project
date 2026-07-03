@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Heart, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
@@ -34,6 +34,7 @@ type PublicCollection = {
   images?: PublicImage[];
   design?: Partial<PresetDesignSettings>;
   settings?: {
+    general?: { slideshow?: boolean | string };
     download?: Partial<PresetDownloadSettings>;
     store?: { storeStatus?: boolean };
   };
@@ -123,6 +124,9 @@ export function PublicGallery({
     ...(collection ? (collection.settings?.download ?? {}) : fallback.presetDownload),
   };
   const storeStatus = collection?.settings?.store?.storeStatus ?? fallback.presetStore.storeStatus;
+  const slideshowEnabled = collection
+    ? boolSetting(collection.settings?.general?.slideshow ?? true)
+    : boolSetting(fallback.presetGeneral.slideshow);
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images = collection?.images?.length
     ? collection.images
@@ -144,6 +148,8 @@ export function PublicGallery({
   const [imageShapes, setImageShapes] = useState<Record<string, "portrait" | "landscape" | "square">>({});
   const [shareNotice, setShareNotice] = useState("");
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
+  const [collectionFavorited, setCollectionFavorited] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
   const visibleImages = faceResults ?? galleryImages;
   const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
   const slideshowPosition = slideshowIndex ?? 0;
@@ -181,6 +187,10 @@ export function PublicGallery({
       }, index * 180);
     });
   };
+
+  useEffect(() => {
+    if (!slideshowEnabled) setSlideshowIndex(null);
+  }, [slideshowEnabled]);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
   const collectionUrl = () => window.location.href;
   const shareItem = async (share: { title: string; text?: string; url: string }, notice: string) => {
@@ -202,6 +212,27 @@ export function PublicGallery({
       { title: photo.originalName || title, text: title, url: imageSrc(photo.url) },
       "Photo shared"
     );
+  const toggleCollectionFavorite = async () => {
+    if (favoriteBusy) return;
+    setFavoriteBusy(true);
+    const response = await fetch("/api/collection-favorites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ identifier: collection?.slug ?? galary }),
+    }).catch(() => null);
+    setFavoriteBusy(false);
+    if (response?.status === 401) {
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+    const payload = response ? await response.json().catch(() => null) : null;
+    if (!response?.ok) {
+      setShareNotice(payload?.message ?? "Favorite failed");
+      return;
+    }
+    setCollectionFavorited(Boolean(payload?.data?.favorited));
+    setShareNotice(payload?.data?.favorited ? "Collection favorited" : "Collection removed");
+  };
   const startSlideshow = () => {
     if (!visibleImages.length) return;
     setActiveImage(null);
@@ -271,6 +302,22 @@ export function PublicGallery({
     const timer = window.setTimeout(() => setShareNotice(""), 1800);
     return () => window.clearTimeout(timer);
   }, [shareNotice]);
+
+  useEffect(() => {
+    const identifier = collection?.slug ?? galary;
+    fetch("/api/collection-favorites", { cache: "no-store" })
+      .then(async (response) => {
+        if (response.status === 401) return null;
+        return response.ok ? response.json() : null;
+      })
+      .then((payload) => {
+        const items = Array.isArray(payload?.data) ? payload.data : [];
+        setCollectionFavorited(items.some((item: any) =>
+          item.collectionId === collection?._id || item.slug === identifier,
+        ));
+      })
+      .catch(() => undefined);
+  }, [collection?._id, collection?.slug, galary]);
 
   useEffect(() => {
     if (slideshowIndex === null || visibleImages.length <= 1) return;
@@ -347,13 +394,19 @@ export function PublicGallery({
                 Show all
               </button>
             )}
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={startSlideshow} type="button">
-              <Play className="size-4" />
-              Slideshow
-            </button>
+            {slideshowEnabled && (
+              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={startSlideshow} type="button">
+                <Play className="size-4" />
+                Slideshow
+              </button>
+            )}
             <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => void shareCollection()} type="button">
               <Share2 className="size-4" />
               Share
+            </button>
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button">
+              <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
+              Favorite
             </button>
             {storeStatus && (
               <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5">

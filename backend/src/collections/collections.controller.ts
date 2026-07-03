@@ -72,6 +72,18 @@ export class CollectionsController {
     return { data };
   }
 
+  @Get('favorites')
+  async favorites(@Req() req: ExpressRequest) {
+    const data = await this.collectionsService.listFavoriteCollections(req.user.id);
+    return { data };
+  }
+
+  @Post('favorites/:identifier')
+  async favorite(@Param('identifier') identifier: string, @Req() req: ExpressRequest) {
+    const data = await this.collectionsService.toggleFavoriteCollection(req.user.id, identifier);
+    return { message: data.favorited ? 'Collection favorited' : 'Collection unfavorited', data };
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string, @Req() req: ExpressRequest) {
     const data = await this.collectionsService.findOne(req.user.id, id);

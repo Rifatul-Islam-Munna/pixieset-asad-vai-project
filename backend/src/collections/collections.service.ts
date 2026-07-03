@@ -15,6 +15,7 @@ import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { Collection, CollectionDocument } from './entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from './entities/collection-image.entity';
+import { CollectionFavorite, CollectionFavoriteDocument } from './entities/collection-favorite.entity';
 
 type WatermarkData = {
   id: string;
@@ -35,6 +36,7 @@ export class CollectionsService {
   constructor(
     @InjectModel(Collection.name) private readonly collectionModel: Model<CollectionDocument>,
     @InjectModel(CollectionImage.name) private readonly imageModel: Model<CollectionImageDocument>,
+    @InjectModel(CollectionFavorite.name) private readonly favoriteModel: Model<CollectionFavoriteDocument>,
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly minioService: MinioService,
@@ -90,15 +92,7 @@ export class CollectionsService {
   }
 
   async findPublic(identifier: string) {
-    const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];
-    if (identifier.match(/^[a-f\d]{24}$/i)) query.unshift({ _id: identifier });
-    const collection = await this.collectionModel
-      .findOne({
-        $or: query,
-      })
-      .sort({ createdAt: -1 })
-      .lean();
-    if (!collection) throw new NotFoundException('Collection not found');
+    const collection = await this.findCollectionByIdentifier(identifier);
 
     const images = await this.imageModel
       .find({ collectionId: collection._id.toString() })
@@ -142,6 +136,49 @@ export class CollectionsService {
       },
       images,
     };
+  }
+
+  async listFavoriteCollections(userId: string) {
+    const favorites = await this.favoriteModel.find({ userId }).sort({ createdAt: -1 }).lean();
+    const collectionIds = favorites.map((favorite) => favorite.collectionId);
+    const collections = collectionIds.length
+      ? await this.collectionModel.find({ _id: { $in: collectionIds } }).lean()
+      : [];
+    const collectionMap = new Map(collections.map((collection) => [collection._id.toString(), collection]));
+
+    return favorites
+      .map((favorite) => {
+        const collection = collectionMap.get(favorite.collectionId);
+        if (!collection) return null;
+        return {
+          _id: favorite._id,
+          collectionId: collection._id.toString(),
+          name: collection.name,
+          slug: collection.slug,
+          coverImage: collection.coverImage,
+          eventDate: collection.eventDate,
+          url: `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id.toString())}`,
+          createdAt: favorite.createdAt,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  async toggleFavoriteCollection(userId: string, identifier: string) {
+    const collection = await this.findCollectionByIdentifier(identifier);
+    const collectionId = collection._id.toString();
+    const existing = await this.favoriteModel.findOne({ userId, collectionId }).lean();
+    if (existing) {
+      await this.favoriteModel.deleteOne({ _id: existing._id });
+      return { favorited: false, collectionId };
+    }
+
+    await this.favoriteModel.updateOne(
+      { userId, collectionId },
+      { $setOnInsert: { userId, collectionId } },
+      { upsert: true },
+    );
+    return { favorited: true, collectionId };
   }
 
   async findAllImages(userId: string) {
@@ -628,6 +665,17 @@ export class CollectionsService {
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
+  }
+
+  private async findCollectionByIdentifier(identifier: string) {
+    const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];
+    if (identifier.match(/^[a-f\d]{24}$/i)) query.unshift({ _id: identifier });
+    const collection = await this.collectionModel
+      .findOne({ $or: query })
+      .sort({ createdAt: -1 })
+      .lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    return collection;
   }
 
   private escapeSvg(value: string) {

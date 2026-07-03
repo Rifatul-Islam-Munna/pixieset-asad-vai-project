@@ -12,6 +12,10 @@ import {
   CollectionImage,
   CollectionImageSchema,
 } from './entities/collection-image.entity';
+import {
+  CollectionFavorite,
+  CollectionFavoriteSchema,
+} from './entities/collection-favorite.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
 
@@ -20,6 +24,7 @@ import { FaceSearchModule } from 'src/face-search/face-search.module';
     MongooseModule.forFeature([
       { name: Collection.name, schema: CollectionSchema },
       { name: CollectionImage.name, schema: CollectionImageSchema },
+      { name: CollectionFavorite.name, schema: CollectionFavoriteSchema },
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: User.name, schema: UserSchema },
     ]),
