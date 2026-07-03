@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { existsSync } from 'fs';
 import { readFile, unlink } from 'fs/promises';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { join } from 'path';
 import { cwd } from 'process';
 import sharp, { type Metadata, type Sharp } from 'sharp';
@@ -16,6 +16,7 @@ import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { Collection, CollectionDocument } from './entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from './entities/collection-image.entity';
 import { CollectionFavorite, CollectionFavoriteDocument } from './entities/collection-favorite.entity';
+import { CollectionImageFavorite, CollectionImageFavoriteDocument } from './entities/collection-image-favorite.entity';
 
 type WatermarkData = {
   id: string;
@@ -37,6 +38,7 @@ export class CollectionsService {
     @InjectModel(Collection.name) private readonly collectionModel: Model<CollectionDocument>,
     @InjectModel(CollectionImage.name) private readonly imageModel: Model<CollectionImageDocument>,
     @InjectModel(CollectionFavorite.name) private readonly favoriteModel: Model<CollectionFavoriteDocument>,
+    @InjectModel(CollectionImageFavorite.name) private readonly imageFavoriteModel: Model<CollectionImageFavoriteDocument>,
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly minioService: MinioService,
@@ -164,6 +166,43 @@ export class CollectionsService {
       .filter(Boolean);
   }
 
+  async listFavoriteImages(userId: string) {
+    const favorites = await this.imageFavoriteModel.find({ userId }).sort({ createdAt: -1 }).lean();
+    const imageIds = favorites.map((favorite) => favorite.imageId);
+    const images = imageIds.length
+      ? await this.imageModel.find({ _id: { $in: imageIds } }).lean()
+      : [];
+    const imageMap = new Map(images.map((image) => [image._id.toString(), image]));
+    const collectionIds = [...new Set(images.map((image) => image.collectionId))];
+    const collections = collectionIds.length
+      ? await this.collectionModel.find({ _id: { $in: collectionIds } }).select('_id name slug').lean()
+      : [];
+    const collectionMap = new Map(collections.map((collection) => [collection._id.toString(), collection]));
+
+    return favorites
+      .map((favorite) => {
+        const image = imageMap.get(favorite.imageId);
+        if (!image) return null;
+        const collection = collectionMap.get(image.collectionId);
+        return {
+          _id: favorite._id,
+          imageId: image._id.toString(),
+          collectionId: image.collectionId,
+          url: image.url,
+          thumbnailUrl: image.thumbnailUrl,
+          blurDataUrl: image.blurDataUrl,
+          originalName: image.originalName,
+          collectionName: collection?.name ?? 'Collection',
+          collectionSlug: collection?.slug,
+          galleryUrl: collection
+            ? `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id.toString())}`
+            : '',
+          createdAt: favorite.createdAt,
+        };
+      })
+      .filter(Boolean);
+  }
+
   async toggleFavoriteCollection(userId: string, identifier: string) {
     const collection = await this.findCollectionByIdentifier(identifier);
     const collectionId = collection._id.toString();
@@ -179,6 +218,24 @@ export class CollectionsService {
       { upsert: true },
     );
     return { favorited: true, collectionId };
+  }
+
+  async toggleFavoriteImage(userId: string, imageId: string) {
+    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
+    const image = await this.imageModel.findOne({ _id: imageId }).lean();
+    if (!image) throw new NotFoundException('Image not found');
+    const existing = await this.imageFavoriteModel.findOne({ userId, imageId }).lean();
+    if (existing) {
+      await this.imageFavoriteModel.deleteOne({ _id: existing._id });
+      return { favorited: false, imageId, collectionId: image.collectionId };
+    }
+
+    await this.imageFavoriteModel.updateOne(
+      { userId, imageId },
+      { $setOnInsert: { userId, imageId, collectionId: image.collectionId } },
+      { upsert: true },
+    );
+    return { favorited: true, imageId, collectionId: image.collectionId };
   }
 
   async findAllImages(userId: string) {
@@ -319,6 +376,7 @@ export class CollectionsService {
 
     await this.deleteStoredImageFiles(image);
     await this.imageModel.deleteOne({ _id: imageId, userId, collectionId });
+    await this.imageFavoriteModel.deleteMany({ imageId });
     await this.faceSearchService.deleteImageFaces(collectionId, imageId);
     if (image.sizeBytes) {
       await this.userModel.updateOne(

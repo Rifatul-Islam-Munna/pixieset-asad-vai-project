@@ -131,7 +131,13 @@ export function PublicGallery({
   const images = collection?.images?.length
     ? collection.images
     : fallbackPhotos.map((url, index) => ({ _id: `sample-${index}`, url }));
-  const coverImage = collection?.coverImage ? { _id: "cover-photo", url: collection.coverImage, originalName: "Cover photo" } : null;
+  const collectionCoverImage = collection?.coverImage;
+  const coverMatch = collectionCoverImage
+    ? images.find((image) => imageSrc(image.url) === imageSrc(collectionCoverImage))
+    : null;
+  const coverImage = collectionCoverImage
+    ? { ...(coverMatch ?? {}), _id: coverMatch?._id ?? "cover-photo", url: collectionCoverImage, originalName: coverMatch?.originalName ?? "Cover photo" }
+    : null;
   const galleryImages = coverImage
     ? [coverImage, ...images.filter((image) => imageSrc(image.url) !== imageSrc(coverImage.url))]
     : images;
@@ -149,7 +155,9 @@ export function PublicGallery({
   const [shareNotice, setShareNotice] = useState("");
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [collectionFavorited, setCollectionFavorited] = useState(false);
+  const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
   const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [favoriteImageBusy, setFavoriteImageBusy] = useState("");
   const visibleImages = faceResults ?? galleryImages;
   const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
   const slideshowPosition = slideshowIndex ?? 0;
@@ -233,6 +241,34 @@ export function PublicGallery({
     setCollectionFavorited(Boolean(payload?.data?.favorited));
     setShareNotice(payload?.data?.favorited ? "Collection favorited" : "Collection removed");
   };
+  const toggleImageFavorite = async (photo: PublicImage) => {
+    if (!isPersistedImageId(photo._id)) return;
+    if (favoriteImageBusy === photo._id) return;
+    setFavoriteImageBusy(photo._id);
+    const response = await fetch("/api/collection-image-favorites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ imageId: photo._id }),
+    }).catch(() => null);
+    setFavoriteImageBusy("");
+    if (response?.status === 401) {
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+    const payload = response ? await response.json().catch(() => null) : null;
+    if (!response?.ok) {
+      setShareNotice(payload?.message ?? "Favorite failed");
+      return;
+    }
+    const favorited = Boolean(payload?.data?.favorited);
+    setFavoriteImageIds((current) => {
+      const next = new Set(current);
+      if (favorited) next.add(photo._id);
+      else next.delete(photo._id);
+      return next;
+    });
+    setShareNotice(favorited ? "Photo favorited" : "Photo removed");
+  };
   const startSlideshow = () => {
     if (!visibleImages.length) return;
     setActiveImage(null);
@@ -315,6 +351,18 @@ export function PublicGallery({
         setCollectionFavorited(items.some((item: any) =>
           item.collectionId === collection?._id || item.slug === identifier,
         ));
+      })
+      .catch(() => undefined);
+    fetch("/api/collection-image-favorites", { cache: "no-store" })
+      .then(async (response) => {
+        if (response.status === 401) return null;
+        return response.ok ? response.json() : null;
+      })
+      .then((payload) => {
+        const ids = Array.isArray(payload?.data)
+          ? payload.data.map((item: any) => item.imageId).filter(Boolean)
+          : [];
+        setFavoriteImageIds(new Set(ids));
       })
       .catch(() => undefined);
   }, [collection?._id, collection?.slug, galary]);
@@ -488,6 +536,11 @@ export function PublicGallery({
                 />
               </button>
               <div className="absolute right-3 top-3 flex gap-2">
+                {isPersistedImageId(photo._id) && (
+                  <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => void toggleImageFavorite(photo)} disabled={favoriteImageBusy === photo._id} aria-label="Favorite image" type="button">
+                    <Heart className={cn("size-4", favoriteImageIds.has(photo._id) && "fill-red-500 text-red-500")} />
+                  </button>
+                )}
                 <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => setActiveImage(photo)} aria-label="View image">
                   <Eye className="size-4" />
                 </button>
@@ -511,6 +564,12 @@ export function PublicGallery({
             <X className="size-5" />
           </button>
           <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
+            {isPersistedImageId(activeImage._id) && (
+              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void toggleImageFavorite(activeImage)} type="button">
+                <Heart className={cn("size-4", favoriteImageIds.has(activeImage._id) && "fill-red-500 text-red-500")} />
+                Favorite
+              </button>
+            )}
             <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(activeImage)} type="button">
               <Share2 className="size-4" />
               Share
@@ -545,6 +604,12 @@ export function PublicGallery({
             <ChevronRight className="size-6" />
           </button>
           <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
+            {isPersistedImageId(slideshowImage._id) && (
+              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void toggleImageFavorite(slideshowImage)} type="button">
+                <Heart className={cn("size-4", favoriteImageIds.has(slideshowImage._id) && "fill-red-500 text-red-500")} />
+                Favorite
+              </button>
+            )}
             <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(slideshowImage)} type="button">
               <Share2 className="size-4" />
               Share
@@ -623,6 +688,10 @@ function imageSrc(url?: string) {
     return `${baseUrl}${url}`;
   }
   return url;
+}
+
+function isPersistedImageId(value: string) {
+  return /^[a-f\d]{24}$/i.test(value);
 }
 
 function displayImageUrl(image: PublicImage) {

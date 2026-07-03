@@ -1378,32 +1378,34 @@ function ContactGrid() {
   );
 }
 
-type FavoriteCollectionRecord = {
+type FavoriteImageRecord = {
   _id: string;
+  imageId: string;
   collectionId: string;
-  name: string;
-  slug?: string;
-  coverImage?: string;
-  eventDate?: string;
   url: string;
+  thumbnailUrl?: string;
+  originalName?: string;
+  collectionName?: string;
+  galleryUrl?: string;
 };
 
 function FavoriteCollectionsPanel() {
-  const [favorites, setFavorites] = useState<FavoriteCollectionRecord[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteImageRecord[]>([]);
+  const [previewImage, setPreviewImage] = useState<FavoriteImageRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch("/api/collection-favorites", { cache: "no-store" })
+    fetch("/api/collection-image-favorites", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.message ?? "Favorite collections failed");
+        if (!response.ok) throw new Error(payload?.message ?? "Favorite photos failed");
         if (active) setFavorites(payload?.data ?? []);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Favorite collections failed");
+        if (active) setError(err instanceof Error ? err.message : "Favorite photos failed");
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -1415,34 +1417,35 @@ function FavoriteCollectionsPanel() {
 
   return (
     <div>
-      <h1 className="text-[28px] font-medium leading-none">Favorite Collections</h1>
+      <h1 className="text-[28px] font-medium leading-none">Favorite Photos</h1>
       {loading ? (
         <p className="mt-8 text-sm font-semibold text-[#777]">Loading favorites...</p>
       ) : error ? (
         <p className="mt-8 text-sm font-semibold text-red-600">{error}</p>
       ) : favorites.length ? (
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
           {favorites.map((favorite) => (
             <button
               key={favorite._id}
-              className="group overflow-hidden border bg-white text-left transition hover:shadow-[0_18px_45px_rgba(0,0,0,0.12)]"
-              onClick={() => window.open(favorite.url, "_blank", "noopener,noreferrer")}
+              className="group text-left"
+              onClick={() => setPreviewImage(favorite)}
               type="button"
             >
-              <span className="block aspect-[1.35] bg-[#eee]">
-                {favorite.coverImage ? (
-                  <img src={imageSrc(favorite.coverImage)} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
+              <span className="relative block overflow-hidden bg-[#f3f3f3]">
+                {favorite.url ? (
+                  <img src={imageSrc(favorite.thumbnailUrl || favorite.url)} alt={favorite.originalName ?? ""} className="aspect-square w-full object-cover transition-transform group-hover:scale-105" />
                 ) : (
                   <span className="flex h-full w-full items-center justify-center">
                     <Heart className="size-9 text-[#bbb]" />
                   </span>
                 )}
+                <Heart className="absolute right-3 top-3 size-5 fill-red-500 text-red-500 drop-shadow" />
               </span>
-              <span className="block p-4">
-                <span className="block truncate text-base font-bold">{favorite.name}</span>
-                <span className="mt-2 block text-sm text-[#666]">
-                  {favorite.eventDate ? formatDate(favorite.eventDate) : favorite.slug ?? favorite.collectionId}
-                </span>
+              <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
+                {favorite.originalName ?? "Favorite photo"}
+              </span>
+              <span className="mt-1 block truncate text-xs text-[#777]">
+                {favorite.collectionName ?? "Collection"}
               </span>
             </button>
           ))}
@@ -1450,10 +1453,62 @@ function FavoriteCollectionsPanel() {
       ) : (
         <div className="mx-auto mt-16 flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
           <Heart className="size-10 text-[#22bda7]" />
-          <h2 className="mt-5 text-xl font-semibold">No favorite collections yet</h2>
-          <p className="mt-3 text-sm leading-6 text-[#666]">Favorite public collections from their gallery page.</p>
+          <h2 className="mt-5 text-xl font-semibold">No favorite photos yet</h2>
+          <p className="mt-3 text-sm leading-6 text-[#666]">Favorite photos from public collection galleries.</p>
         </div>
       )}
+      <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogContent className="max-h-[94dvh] overflow-y-auto rounded-none border-0 p-0 sm:max-w-[92vw]">
+          {previewImage && (
+            <div className="grid bg-white lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="flex min-h-[62dvh] items-center justify-center bg-[#111] p-4 lg:min-h-[86dvh]">
+                <img
+                  src={imageSrc(previewImage.url)}
+                  alt={previewImage.originalName ?? ""}
+                  className="max-h-[84dvh] max-w-full object-contain"
+                />
+              </div>
+              <div className="flex flex-col justify-between gap-8 p-6">
+                <div>
+                  <DialogHeader className="text-left">
+                    <DialogTitle className="truncate text-2xl">
+                      {previewImage.originalName ?? "Favorite photo"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {previewImage.collectionName ?? "Collection"}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="mt-8 rounded-none border border-[#e7e7e2] bg-[#fafafa] p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#777]">
+                      Source
+                    </p>
+                    <p className="mt-2 truncate text-sm font-semibold text-[#222]">
+                      {previewImage.collectionName ?? "Collection"}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-3">
+                  <Button
+                    className="h-11 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"
+                    onClick={() => previewImage.galleryUrl && window.open(previewImage.galleryUrl, "_blank", "noopener,noreferrer")}
+                    disabled={!previewImage.galleryUrl}
+                  >
+                    <Images data-icon="inline-start" />
+                    Open Collection
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-11 rounded-none"
+                    onClick={() => setPreviewImage(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

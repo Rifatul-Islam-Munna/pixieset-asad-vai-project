@@ -16,6 +16,10 @@ import {
   CollectionFavorite,
   CollectionFavoriteSchema,
 } from './entities/collection-favorite.entity';
+import {
+  CollectionImageFavorite,
+  CollectionImageFavoriteSchema,
+} from './entities/collection-image-favorite.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
 
@@ -25,6 +29,7 @@ import { FaceSearchModule } from 'src/face-search/face-search.module';
       { name: Collection.name, schema: CollectionSchema },
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: CollectionFavorite.name, schema: CollectionFavoriteSchema },
+      { name: CollectionImageFavorite.name, schema: CollectionImageFavoriteSchema },
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: User.name, schema: UserSchema },
     ]),

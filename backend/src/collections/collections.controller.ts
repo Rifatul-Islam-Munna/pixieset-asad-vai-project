@@ -78,10 +78,22 @@ export class CollectionsController {
     return { data };
   }
 
+  @Get('image-favorites')
+  async imageFavorites(@Req() req: ExpressRequest) {
+    const data = await this.collectionsService.listFavoriteImages(req.user.id);
+    return { data };
+  }
+
   @Post('favorites/:identifier')
   async favorite(@Param('identifier') identifier: string, @Req() req: ExpressRequest) {
     const data = await this.collectionsService.toggleFavoriteCollection(req.user.id, identifier);
     return { message: data.favorited ? 'Collection favorited' : 'Collection unfavorited', data };
+  }
+
+  @Post('image-favorites/:imageId')
+  async favoriteImage(@Param('imageId') imageId: string, @Req() req: ExpressRequest) {
+    const data = await this.collectionsService.toggleFavoriteImage(req.user.id, imageId);
+    return { message: data.favorited ? 'Photo favorited' : 'Photo unfavorited', data };
   }
 
   @Get(':id')
