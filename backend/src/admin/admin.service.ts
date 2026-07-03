@@ -105,16 +105,18 @@ export class AdminService {
 
   async createUser(dto: AdminCreateUserDto) {
     await this.ensureUnique(dto.phoneNumber);
+    const { planId, ...userDto } = dto;
     const user = await this.userModel.create({
-      ...dto,
-      email: dto.email?.trim().toLowerCase(),
-      role: dto.role ?? UserType.USER,
+      ...userDto,
+      email: userDto.email?.trim().toLowerCase(),
+      role: userDto.role ?? UserType.USER,
       password: await bcrypt.hash(dto.password, 10),
       isOtpVerified: true,
       otpNumber: '000000',
     });
+    if (planId) await this.assignPlanToUser(user._id.toString(), planId);
     const { password, ...safeUser } = user.toObject();
-    return safeUser;
+    return (await this.userModel.findById(user._id).select('-password').lean()) ?? safeUser;
   }
 
   async updateUser(id: string, dto: AdminUpdateUserDto) {
@@ -130,8 +132,11 @@ export class AdminService {
     if (dto.password) user.password = await bcrypt.hash(dto.password, 10);
 
     await user.save();
-    const { password, ...safeUser } = user.toObject();
-    return safeUser;
+    if (dto.planId !== undefined) {
+      if (dto.planId) await this.assignPlanToUser(id, dto.planId);
+      else await this.clearUserPlan(id);
+    }
+    return this.userModel.findById(id).select('-password').lean();
   }
 
   async deleteUser(id: string, currentAdminId: string) {
@@ -314,6 +319,26 @@ export class AdminService {
       },
     );
     return plan;
+  }
+
+  async clearUserPlan(userId: string) {
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        $set: {
+          planName: 'Free',
+          storageLimitGb: 0,
+          monthlyEmailLimit: 0,
+          planFeatures: {},
+          monthlyEmailsUsed: 0,
+          monthlyUsageKey: this.currentMonthKey(),
+        },
+        $unset: {
+          planId: '',
+          planActivatedAt: '',
+        },
+      },
+    );
   }
 
   async userCapabilities(userId: string) {

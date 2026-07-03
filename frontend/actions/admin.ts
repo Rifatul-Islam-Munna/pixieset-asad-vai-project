@@ -15,6 +15,7 @@ export type AdminUser = {
   role: "admin" | "editor" | "user";
   gender?: string;
   collectionCount?: number;
+  planId?: string;
   planName?: string;
   createdAt?: string;
 };
@@ -118,6 +119,7 @@ export async function createAdminUser(payload: {
   email?: string;
   role: AdminUser["role"];
   gender?: string;
+  planId?: string;
 }) {
   const data = await adminRequest<AdminUser>("/admin/users", {
     method: "POST",

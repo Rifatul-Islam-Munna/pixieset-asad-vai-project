@@ -264,7 +264,7 @@ const emptyPresetDownload: PresetDownloadSettings = {
   webSize: true,
   webSizePx: "1024px",
   videoDownload: false,
-  downloadPin: true,
+  downloadPin: false,
   downloadPinCode: "1234",
   restrictDownloads: false,
   limitDownloads: false,

@@ -25,6 +25,10 @@ export class AdminCreateUserDto {
   @IsOptional()
   @IsString()
   gender?: string;
+
+  @IsOptional()
+  @IsString()
+  planId?: string;
 }
 
 export class AdminUpdateUserDto {
@@ -54,4 +58,8 @@ export class AdminUpdateUserDto {
   @IsOptional()
   @IsString()
   gender?: string;
+
+  @IsOptional()
+  @IsString()
+  planId?: string;
 }

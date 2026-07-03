@@ -158,6 +158,17 @@ export function PublicGallery({
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
   const canDownload = downloadsEnabled && pinOk && limitOk;
   const onDownload = () => setDownloadCount((count) => count + 1);
+  const downloadPhoto = (photo: PublicImage, index = 0) => {
+    if (!canDownload) return;
+    const url = `/api/public-download?url=${encodeURIComponent(imageSrc(photo.url))}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    onDownload();
+  };
   const downloadAllImages = () => {
     if (!canDownload) return;
     const remaining = boolSetting(download.limitDownloads) && maxDownloads > 0
@@ -166,17 +177,9 @@ export function PublicGallery({
     const downloadable = galleryImages.slice(0, remaining || galleryImages.length);
     downloadable.forEach((photo, index) => {
       window.setTimeout(() => {
-        const link = document.createElement("a");
-        link.href = imageSrc(photo.url);
-        link.download = photo.originalName || `photo-${index + 1}`;
-        link.target = "_blank";
-        link.rel = "noreferrer";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        downloadPhoto(photo, index);
       }, index * 180);
     });
-    setDownloadCount((count) => count + downloadable.length);
   };
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
   const collectionUrl = () => window.location.href;
@@ -410,7 +413,7 @@ export function PublicGallery({
             <div
               key={photo._id}
               className={cn(
-                "group relative mb-[15px] inline-block w-full break-inside-avoid overflow-hidden bg-[#f4f4f2] text-left align-top transition-[transform,box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]",
+                "group relative mb-[15px] inline-block w-full break-inside-avoid bg-[#f4f4f2] text-left align-top transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]",
                 imageShapes[photo._id] === "landscape" && "sm:block",
               )}
               style={{
@@ -423,7 +426,7 @@ export function PublicGallery({
                   src={imageSrc(displayImageUrl(photo))}
                   fallbackSrc={imageSrc(photo.url)}
                   alt={photo.originalName ?? ""}
-                  className="h-auto w-full object-contain transition-transform duration-700 ease-out group-hover:scale-[1.025]"
+                  className="block h-auto w-full object-contain"
                   onShape={(shape) =>
                     setImageShapes((current) =>
                       current[photo._id] === shape ? current : { ...current, [photo._id]: shape }
@@ -439,9 +442,9 @@ export function PublicGallery({
                   <Share2 className="size-4" />
                 </button>
                 {canDownload && (
-                  <a className="rounded-full bg-white/90 p-2 shadow-sm" href={imageSrc(photo.url)} download target="_blank" rel="noreferrer" aria-label="Download image" onClick={onDownload}>
+                  <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => downloadPhoto(photo)} aria-label="Download image" type="button">
                     <Download className="size-4" />
-                  </a>
+                  </button>
                 )}
               </div>
             </div>
@@ -460,10 +463,10 @@ export function PublicGallery({
               Share
             </button>
             {canDownload && (
-              <a className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" href={imageSrc(activeImage.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
+              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => downloadPhoto(activeImage)} type="button">
                 <Download className="size-4" />
                 Download
-              </a>
+              </button>
             )}
           </div>
           <img
@@ -494,10 +497,10 @@ export function PublicGallery({
               Share
             </button>
             {canDownload && (
-              <a className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" href={imageSrc(slideshowImage.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
+              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button">
                 <Download className="size-4" />
                 Download
-              </a>
+              </button>
             )}
           </div>
           <img
@@ -593,7 +596,7 @@ function GalleryImage({
     setCurrentSrc(src);
   }, [src]);
   return (
-    <span className="relative block h-full w-full overflow-hidden bg-transparent">
+    <span className={cn("relative block w-full bg-transparent", className?.includes("h-full") && "h-full overflow-hidden")}>
       <img
         src={currentSrc}
         alt={alt}

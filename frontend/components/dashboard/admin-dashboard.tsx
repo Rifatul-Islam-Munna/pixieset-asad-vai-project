@@ -37,6 +37,7 @@ type UserForm = {
   password: string;
   role: AdminUser["role"];
   gender: string;
+  planId: string;
 };
 
 type PlanForm = {
@@ -58,6 +59,7 @@ const emptyForm: UserForm = {
   password: "",
   role: "user",
   gender: "",
+  planId: "",
 };
 
 const emptyPlanForm: PlanForm = {
@@ -189,6 +191,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       password: "",
       role: user.role ?? "user",
       gender: user.gender ?? "",
+      planId: user.planId ?? "",
     });
   };
 
@@ -485,6 +488,15 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
                   <option value="admin">Admin</option>
                 </select>
               </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Plan</span>
+                <select value={form.planId} onChange={(event) => setForm({ ...form, planId: event.target.value })} className="h-11 border px-3 text-sm outline-none">
+                  <option value="">Free / No plan</option>
+                  {plans.map((plan) => (
+                    <option key={plan._id} value={plan._id}>{plan.name}</option>
+                  ))}
+                </select>
+              </label>
               <InputField label="Gender" value={form.gender} onChange={(value) => setForm({ ...form, gender: value })} />
             </div>
             <div className="mt-5 flex justify-end gap-2">
@@ -622,12 +634,13 @@ function UserTable({ users, onEdit, onDelete, busy }: {
 }) {
   return (
     <div className="overflow-x-auto bg-white">
-      <table className="w-full min-w-[720px] text-sm">
+      <table className="w-full min-w-[820px] text-sm">
         <thead className="border-b text-left text-xs uppercase tracking-[0.14em] text-[#777]">
           <tr>
             <th className="px-4 py-3">User</th>
             <th className="px-4 py-3">Login</th>
             <th className="px-4 py-3">Role</th>
+            <th className="px-4 py-3">Plan</th>
             <th className="px-4 py-3">Collections</th>
             <th className="px-4 py-3 text-right">Action</th>
           </tr>
@@ -641,6 +654,7 @@ function UserTable({ users, onEdit, onDelete, busy }: {
               </td>
               <td className="px-4 py-4">{user.phoneNumber}</td>
               <td className="px-4 py-4 capitalize">{user.role}</td>
+              <td className="px-4 py-4">{user.planName ?? "Free"}</td>
               <td className="px-4 py-4">{user.collectionCount ?? 0}</td>
               <td className="px-4 py-4">
                 <div className="flex justify-end gap-2">

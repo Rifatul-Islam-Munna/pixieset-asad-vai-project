@@ -173,7 +173,7 @@ export class CollectionsService {
   async update(userId: string, id: string, dto: UpdateCollectionDto) {
     const collection = await this.collectionModel.findOne({ _id: id, userId });
     if (!collection) throw new NotFoundException('Collection not found');
-    await this.assertCollectionCapabilities(userId, dto);
+    dto = await this.sanitizeCollectionCapabilities(userId, dto);
 
     if (dto.name !== undefined) {
       collection.name = dto.name;
@@ -665,23 +665,29 @@ export class CollectionsService {
     }
   }
 
-  private async assertCollectionCapabilities(userId: string, dto: UpdateCollectionDto) {
+  private async sanitizeCollectionCapabilities(userId: string, dto: UpdateCollectionDto) {
     const user = await this.userModel.findById(userId).select('planFeatures').lean();
     const features = user?.planFeatures ?? {};
-    const settings = (dto.settings ?? {}) as any;
-    const download = settings.download ?? {};
+    const next = { ...dto };
+    const settings = { ...((next.settings ?? {}) as any) };
+    const download = { ...(settings.download ?? {}) };
 
-    if (dto.coverImage && !features.coverImage) {
-      throw new BadRequestException('Current plan does not allow custom cover image.');
+    if (next.coverImage && !features.coverImage) {
+      delete next.coverImage;
     }
-    if (dto.design && !features.advancedDesign) {
-      throw new BadRequestException('Current plan does not allow advanced design changes.');
+    if (next.design && !features.advancedDesign) {
+      delete next.design;
     }
     if ((download.limitDownloads || download.restrictDownloads) && !features.downloadLimit) {
-      throw new BadRequestException('Current plan does not allow download limits.');
+      download.limitDownloads = false;
+      download.restrictDownloads = false;
+      download.limitPinUsage = '';
     }
     if (download.downloadPin && !features.pinSet) {
-      throw new BadRequestException('Current plan does not allow download PIN.');
+      download.downloadPin = false;
+      download.downloadPinCode = '';
     }
+    if (next.settings) next.settings = { ...settings, download };
+    return next;
   }
 }
