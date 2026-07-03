@@ -8,25 +8,28 @@ services:
       MODEL_NAME: buffalo_s
       MODEL_ROOT: /models
 
-      # 800 + lower threshold catches more small/side faces. Tiled scanning improves group photos.
-      DETECTION_SIZE: "800"
-      DETECTION_THRESHOLD: "0.25"
+      # Bigger detector + mirror/tile scans catch more small and side faces in group photos.
+      DETECTION_SIZE: "960"
+      DETECTION_THRESHOLD: "0.28"
+      WORKER_COUNT: "2"
       GROUP_SCAN: "true"
-      TILE_SIZE: "768"
-      TILE_OVERLAP: "256"
-      MAX_TILES: "20"
-      MAX_IMAGE_SIDE: "2400"
-      MIN_FACE_SIZE: "14"
+      MIRROR_SCAN: "true"
+      TILE_SIZE: "896"
+      TILE_OVERLAP: "320"
+      MAX_TILES: "24"
+      MAX_IMAGE_SIDE: "3200"
+      MIN_FACE_SIZE: "10"
       MAX_UPLOAD_MB: "80"
 
       # Set a long random value. NestJS must send this in the x-api-key header.
       API_KEY: change-this-to-a-long-random-secret
 
       # Keep CPU libraries from oversubscribing a 2-core VPS.
-      OMP_NUM_THREADS: "2"
+      OMP_NUM_THREADS: "1"
       OPENBLAS_NUM_THREADS: "1"
       MKL_NUM_THREADS: "1"
       NUMEXPR_NUM_THREADS: "1"
+      ORT_NUM_THREADS: "1"
     volumes:
       # Persists downloaded model files across container restarts.
       - insightface_models:/models

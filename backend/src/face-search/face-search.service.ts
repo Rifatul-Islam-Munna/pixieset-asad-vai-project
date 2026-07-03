@@ -24,6 +24,11 @@ type DetectedFace = {
   vector: number[];
   box: { x: number; y: number; width: number; height: number };
 };
+type FaceGroup = {
+  representative: FacePoint;
+  points: FacePoint[];
+  centroid: number[];
+};
 
 const INSIGHT_VECTOR_SIZE = 512;
 const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
@@ -64,6 +69,8 @@ export class FaceSearchService implements OnModuleInit {
       this.logger.warn(`Face indexing skipped for ${imageId}: image download failed`);
       return 0;
     }
+
+    await this.deleteImageFaces(String(image.collectionId), imageId);
 
     const faces = await this.extractFaces(buffer).catch((error) => {
       this.logger.warn(`Face indexing skipped for ${imageId}: ${error?.message ?? error}`);
@@ -202,27 +209,43 @@ export class FaceSearchService implements OnModuleInit {
       }, 250);
     }
 
-    const groups: { representative: FacePoint; points: FacePoint[] }[] = [];
-    const maxDistance = this.configNumber(
-      'FACE_CLUSTER_DISTANCE',
-      this.configNumber('FACE_CLUSTER_THRESHOLD', 0.95, 0.1, 2),
-      0.1,
-      2,
-    );
+    const minSimilarity = this.configNumber('FACE_CLUSTER_SIMILARITY', 0.58, 0.1, 0.99);
+    const minPairSimilarity = this.configNumber('FACE_CLUSTER_PAIR_SIMILARITY', 0.52, 0.1, 0.99);
+    const sortedPoints = [...points].sort((a, b) => {
+      const aImage = String(a.payload?.imageId ?? '');
+      const bImage = String(b.payload?.imageId ?? '');
+      return aImage.localeCompare(bImage) || String(a.id).localeCompare(String(b.id));
+    });
 
-    for (const point of points) {
+    const groups: FaceGroup[] = [];
+    for (const point of sortedPoints) {
       const vector = this.pointVector(point);
       if (!vector) continue;
 
-      const match = groups.find((group) =>
-        group.points.some((groupPoint) => {
-          const groupVector = this.pointVector(groupPoint);
-          return groupVector ? this.euclidean(vector, groupVector) <= maxDistance : false;
-        }),
-      );
+      const normalized = this.normalizeVector(vector);
+      if (!normalized) continue;
 
-      if (match) match.points.push(point);
-      else groups.push({ representative: point, points: [point] });
+      const match = groups
+        .map((group) => ({
+          group,
+          similarity: this.cosine(normalized, group.centroid),
+        }))
+        .filter(({ group, similarity }) =>
+          similarity >= minSimilarity
+          && group.points.every((groupPoint) => {
+            const groupVector = this.pointVector(groupPoint);
+            const normalizedGroupVector = groupVector ? this.normalizeVector(groupVector) : undefined;
+            return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) >= minPairSimilarity : false;
+          }),
+        )
+        .sort((a, b) => b.similarity - a.similarity)[0]?.group;
+
+      if (match) {
+        match.points.push(point);
+        match.centroid = this.centroid(match.points);
+      } else {
+        groups.push({ representative: point, points: [point], centroid: normalized });
+      }
     }
 
     return {
@@ -271,8 +294,7 @@ export class FaceSearchService implements OnModuleInit {
         this.logger.warn(`Missing face index failed: ${error?.message ?? error}`);
       });
 
-      // Yield to the event loop between images. The queue still ensures that
-      // no two face-extraction jobs run together.
+      // Yield to the event loop between images so public requests can still run.
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
@@ -292,19 +314,26 @@ export class FaceSearchService implements OnModuleInit {
     });
 
     const points = (response.points ?? []) as FacePoint[];
-    const maxDistance = this.configNumber('FACE_MATCH_DISTANCE', 0.95, 0.1, 2);
+    const minSimilarity = this.configNumber('FACE_MATCH_SIMILARITY', 0.52, 0.1, 0.99);
+    const normalizedQueries = vectors
+      .map((vector) => this.normalizeVector(vector))
+      .filter((vector): vector is number[] => Boolean(vector));
+    if (!normalizedQueries.length) {
+      return { collectionId, count: 0, images: [] };
+    }
 
     const matched = points
       .map((item) => {
         const candidate = this.pointVector(item);
-        const distance = candidate
-          ? Math.min(...vectors.map((vector) => this.euclidean(vector, candidate)))
-          : Number.POSITIVE_INFINITY;
+        const normalizedCandidate = candidate ? this.normalizeVector(candidate) : undefined;
+        const similarity = normalizedCandidate
+          ? Math.max(...normalizedQueries.map((vector) => this.cosine(vector, normalizedCandidate)))
+          : Number.NEGATIVE_INFINITY;
 
-        return { item, distance };
+        return { item, similarity };
       })
-      .filter(({ distance }) => distance <= maxDistance)
-      .sort((a, b) => a.distance - b.distance);
+      .filter(({ similarity }) => similarity >= minSimilarity)
+      .sort((a, b) => b.similarity - a.similarity);
 
     const imageIds = [
       ...new Set(
@@ -318,18 +347,18 @@ export class FaceSearchService implements OnModuleInit {
       ? await this.imageModel.find({ _id: { $in: imageIds }, collectionId }).lean()
       : [];
 
-    const distanceMap = new Map<string, number>();
-    for (const { item, distance } of matched) {
+    const similarityMap = new Map<string, number>();
+    for (const { item, similarity } of matched) {
       const imageId = String(item.payload?.imageId ?? '');
       if (!imageId) continue;
-      distanceMap.set(
+      similarityMap.set(
         imageId,
-        Math.min(distanceMap.get(imageId) ?? Number.POSITIVE_INFINITY, distance),
+        Math.max(similarityMap.get(imageId) ?? Number.NEGATIVE_INFINITY, similarity),
       );
     }
 
     this.logger.log(
-      `Face match scan collection=${collectionId} queryFaces=${vectors.length} indexedFaces=${points.length} matchedFaces=${matched.length} matchedImages=${images.length} threshold=${maxDistance}`,
+      `Face match scan collection=${collectionId} queryFaces=${vectors.length} indexedFaces=${points.length} matchedFaces=${matched.length} matchedImages=${images.length} minSimilarity=${minSimilarity}`,
     );
 
     return {
@@ -338,7 +367,7 @@ export class FaceSearchService implements OnModuleInit {
       images: images
         .map((image) => ({
           ...image,
-          faceScore: 1 - Math.min(distanceMap.get(image._id.toString()) ?? 1, 1),
+          faceScore: Math.max(0, similarityMap.get(image._id.toString()) ?? 0),
         }))
         .sort((a, b) => b.faceScore - a.faceScore),
     };
@@ -529,16 +558,37 @@ export class FaceSearchService implements OnModuleInit {
     return undefined;
   }
 
-  private euclidean(a: number[], b: number[]) {
+  private normalizeVector(vector: number[]) {
+    let sum = 0;
+    for (const value of vector) sum += value * value;
+    const norm = Math.sqrt(sum);
+    if (!Number.isFinite(norm) || norm <= 0) return undefined;
+    return vector.map((value) => value / norm);
+  }
+
+  private centroid(points: FacePoint[]) {
+    const vectors = points
+      .map((point) => {
+        const vector = this.pointVector(point);
+        return vector ? this.normalizeVector(vector) : undefined;
+      })
+      .filter((vector): vector is number[] => Boolean(vector));
+    const length = vectors[0]?.length ?? 0;
+    const centroid = Array.from({ length }, (_, index) =>
+      vectors.reduce((sum, vector) => sum + vector[index], 0) / vectors.length,
+    );
+    return this.normalizeVector(centroid) ?? centroid;
+  }
+
+  private cosine(a: number[], b: number[]) {
     let sum = 0;
     const length = Math.min(a.length, b.length);
 
     for (let index = 0; index < length; index += 1) {
-      const difference = a[index] - b[index];
-      sum += difference * difference;
+      sum += a[index] * b[index];
     }
 
-    return Math.sqrt(sum);
+    return sum;
   }
 
 }

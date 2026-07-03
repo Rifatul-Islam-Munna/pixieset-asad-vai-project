@@ -10,6 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("ORT_NUM_THREADS", "1")
+
 import cv2
 import numpy as np
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
@@ -21,21 +26,23 @@ from insightface.app import FaceAnalysis
 class Settings:
     model_name: str = os.getenv("MODEL_NAME", "buffalo_s")
     model_root: str = os.getenv("MODEL_ROOT", "/models")
-    detection_size: int = int(os.getenv("DETECTION_SIZE", "640"))
-    detection_threshold: float = float(os.getenv("DETECTION_THRESHOLD", "0.35"))
+    detection_size: int = int(os.getenv("DETECTION_SIZE", "960"))
+    detection_threshold: float = float(os.getenv("DETECTION_THRESHOLD", "0.28"))
+    worker_count: int = int(os.getenv("WORKER_COUNT", "2"))
     group_scan: bool = os.getenv("GROUP_SCAN", "true").lower() in {"1", "true", "yes"}
-    tile_size: int = int(os.getenv("TILE_SIZE", "1024"))
-    tile_overlap: int = int(os.getenv("TILE_OVERLAP", "224"))
-    max_tiles: int = int(os.getenv("MAX_TILES", "12"))
-    max_image_side: int = int(os.getenv("MAX_IMAGE_SIDE", "2400"))
-    min_face_size: int = int(os.getenv("MIN_FACE_SIZE", "14"))
+    mirror_scan: bool = os.getenv("MIRROR_SCAN", "true").lower() in {"1", "true", "yes"}
+    tile_size: int = int(os.getenv("TILE_SIZE", "896"))
+    tile_overlap: int = int(os.getenv("TILE_OVERLAP", "320"))
+    max_tiles: int = int(os.getenv("MAX_TILES", "24"))
+    max_image_side: int = int(os.getenv("MAX_IMAGE_SIDE", "3200"))
+    min_face_size: int = int(os.getenv("MIN_FACE_SIZE", "10"))
     max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "80"))
     api_key: str = os.getenv("API_KEY", "")
 
 
 SETTINGS = Settings()
-face_app: FaceAnalysis | None = None
-inference_lock = asyncio.Lock()
+face_apps: list[FaceAnalysis] = []
+worker_queue: asyncio.Queue[FaceAnalysis] | None = None
 
 
 @dataclass
@@ -79,15 +86,25 @@ def normalize_embedding(value: Any) -> np.ndarray | None:
     return embedding / norm
 
 
-def read_faces(image: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> list[Candidate]:
-    if face_app is None:
-        raise RuntimeError("Face model is not ready")
-
+def read_faces(
+    app: FaceAnalysis,
+    image: np.ndarray,
+    offset_x: int = 0,
+    offset_y: int = 0,
+    mirrored: bool = False,
+) -> list[Candidate]:
     output: list[Candidate] = []
-    for face in face_app.get(image):
+    source_width = image.shape[1]
+    for face in app.get(image):
         bbox = np.asarray(face.bbox, dtype=np.float32).copy()
         if bbox.shape[0] < 4:
             continue
+
+        if mirrored:
+            x1 = float(bbox[0])
+            x2 = float(bbox[2])
+            bbox[0] = source_width - x2
+            bbox[2] = source_width - x1
 
         width = float(bbox[2] - bbox[0])
         height = float(bbox[3] - bbox[1])
@@ -106,6 +123,8 @@ def read_faces(image: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> list[
         if raw_kps is not None:
             kps = np.asarray(raw_kps, dtype=np.float32).copy()
             if kps.ndim == 2 and kps.shape[1] >= 2:
+                if mirrored:
+                    kps[:, 0] = source_width - kps[:, 0]
                 kps[:, 0] += offset_x
                 kps[:, 1] += offset_y
             else:
@@ -169,8 +188,16 @@ def deduplicate(candidates: list[Candidate]) -> list[Candidate]:
     return unique
 
 
-def analyze_image(image: np.ndarray) -> list[Candidate]:
-    candidates = read_faces(image)
+def read_with_mirror(app: FaceAnalysis, image: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> list[Candidate]:
+    candidates = read_faces(app, image, offset_x=offset_x, offset_y=offset_y)
+    if SETTINGS.mirror_scan:
+        mirrored = cv2.flip(image, 1)
+        candidates.extend(read_faces(app, mirrored, offset_x=offset_x, offset_y=offset_y, mirrored=True))
+    return candidates
+
+
+def analyze_image(app: FaceAnalysis, image: np.ndarray) -> list[Candidate]:
+    candidates = read_with_mirror(app, image)
     image_height, image_width = image.shape[:2]
 
     # A full-image pass catches large faces. Sequential tiles keep small faces visible
@@ -178,7 +205,7 @@ def analyze_image(image: np.ndarray) -> list[Candidate]:
     if SETTINGS.group_scan and (image_width > SETTINGS.tile_size or image_height > SETTINGS.tile_size):
         for x, y, width, height in selected_tiles(image_width, image_height):
             tile = image[y : y + height, x : x + width]
-            candidates.extend(read_faces(tile, offset_x=x, offset_y=y))
+            candidates.extend(read_with_mirror(app, tile, offset_x=x, offset_y=y))
 
     return deduplicate(candidates)
 
@@ -230,21 +257,28 @@ async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global face_app
+    global face_apps, worker_queue
     Path(SETTINGS.model_root).mkdir(parents=True, exist_ok=True)
-    face_app = FaceAnalysis(
-        name=SETTINGS.model_name,
-        root=SETTINGS.model_root,
-        allowed_modules=["detection", "recognition"],
-        providers=["CPUExecutionProvider"],
-    )
-    face_app.prepare(
-        ctx_id=-1,
-        det_thresh=SETTINGS.detection_threshold,
-        det_size=(SETTINGS.detection_size, SETTINGS.detection_size),
-    )
+    worker_total = max(1, min(4, SETTINGS.worker_count))
+    face_apps = []
+    worker_queue = asyncio.Queue(maxsize=worker_total)
+    for _ in range(worker_total):
+        app = FaceAnalysis(
+            name=SETTINGS.model_name,
+            root=SETTINGS.model_root,
+            allowed_modules=["detection", "recognition"],
+            providers=["CPUExecutionProvider"],
+        )
+        app.prepare(
+            ctx_id=-1,
+            det_thresh=SETTINGS.detection_threshold,
+            det_size=(SETTINGS.detection_size, SETTINGS.detection_size),
+        )
+        face_apps.append(app)
+        worker_queue.put_nowait(app)
     yield
-    face_app = None
+    face_apps = []
+    worker_queue = None
 
 
 app = FastAPI(
@@ -257,11 +291,17 @@ app = FastAPI(
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
-        "ok": face_app is not None,
+        "ok": bool(face_apps),
         "model": SETTINGS.model_name,
         "provider": "CPUExecutionProvider",
+        "workers": len(face_apps),
         "groupScan": SETTINGS.group_scan,
+        "mirrorScan": SETTINGS.mirror_scan,
         "detectionSize": SETTINGS.detection_size,
+        "detectionThreshold": SETTINGS.detection_threshold,
+        "tileSize": SETTINGS.tile_size,
+        "tileOverlap": SETTINGS.tile_overlap,
+        "maxTiles": SETTINGS.max_tiles,
         "maxUploadMb": SETTINGS.max_upload_mb,
     }
 
@@ -275,8 +315,14 @@ async def faces(file: UploadFile = File(...)) -> dict[str, Any]:
         raise HTTPException(status_code=413, detail=f"Image exceeds {SETTINGS.max_upload_mb} MB limit")
 
     image, original_width, original_height, scale_x, scale_y = decode_image(content)
-    async with inference_lock:
-        candidates = await asyncio.to_thread(analyze_image, image)
+    if worker_queue is None:
+        raise HTTPException(status_code=503, detail="Face model is not ready")
+
+    worker = await worker_queue.get()
+    try:
+        candidates = await asyncio.to_thread(analyze_image, worker, image)
+    finally:
+        worker_queue.put_nowait(worker)
 
     results = [
         candidate_response(candidate, original_width, original_height, scale_x, scale_y)

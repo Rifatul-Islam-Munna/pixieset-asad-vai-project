@@ -7,6 +7,7 @@ This container exposes one private HTTP endpoint that receives an image and retu
 - Default host URL: `http://127.0.0.1:8010`
 - Auth header: `x-api-key: <API_KEY>`
 - Default model: `buffalo_s` (better suited to a 2-core VPS than `buffalo_l`)
+- Default detector: `960x960`, tiled group scan, mirror scan for side-face recovery
 - Recommended collection: `album_faces_insightface`
 - Default upload cap: `80 MB` (`MAX_UPLOAD_MB`)
 
@@ -67,6 +68,16 @@ IMAGE_MODEL_QDRANT_COLLECTION=album_faces_insightface
 ```
 
 Use each returned `embedding` as the Qdrant vector and `boxPercent` as your payload box.
+
+For stricter same-person grouping in NestJS, these env vars are supported:
+
+```env
+FACE_CLUSTER_SIMILARITY=0.58
+FACE_CLUSTER_PAIR_SIMILARITY=0.52
+FACE_MATCH_SIMILARITY=0.52
+```
+
+Higher values reduce person mixups but can split the same person into more than one avatar. Lower values merge more aggressively.
 
 ## Safety / exposure
 

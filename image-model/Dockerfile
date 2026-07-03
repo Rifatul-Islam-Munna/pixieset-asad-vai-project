@@ -3,10 +3,11 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    OMP_NUM_THREADS=2 \
+    OMP_NUM_THREADS=1 \
     OPENBLAS_NUM_THREADS=1 \
     MKL_NUM_THREADS=1 \
-    NUMEXPR_NUM_THREADS=1
+    NUMEXPR_NUM_THREADS=1 \
+    ORT_NUM_THREADS=1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -33,5 +34,5 @@ RUN chown -R appuser:appuser /app
 USER appuser
 EXPOSE 8010
 
-# One process. The application itself serializes inference requests for a 2-core VPS.
+# One process. The app keeps a small internal worker pool for a 2-core VPS.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1", "--limit-concurrency", "4", "--timeout-keep-alive", "20"]
