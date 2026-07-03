@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Heart, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
+import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
@@ -151,7 +152,6 @@ export function PublicGallery({
   const [faces, setFaces] = useState<PublicFace[]>([]);
   const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
-  const [imageShapes, setImageShapes] = useState<Record<string, "portrait" | "landscape" | "square">>({});
   const [shareNotice, setShareNotice] = useState("");
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [collectionFavorited, setCollectionFavorited] = useState(false);
@@ -508,46 +508,45 @@ export function PublicGallery({
 
         <div
           id="gallery"
-          className="mt-0 columns-1 gap-[15px] bg-white p-[15px] sm:columns-2 lg:columns-3"
+          className="mt-0 bg-white p-[15px]"
         >
-          {visibleImages.map((photo) => (
-            <div
-              key={photo._id}
-              className="group relative mb-[15px] inline-block w-full break-inside-avoid bg-[#f4f4f2] text-left align-top transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
-            >
-              <button className="block w-full" onClick={() => setActiveImage(photo)}>
-                <GalleryImage
-                  src={imageSrc(displayImageUrl(photo))}
-                  fallbackSrc={imageSrc(photo.url)}
-                  alt={photo.originalName ?? ""}
-                  className="block h-auto w-full"
-                  onShape={(shape) =>
-                    setImageShapes((current) =>
-                      current[photo._id] === shape ? current : { ...current, [photo._id]: shape }
-                    )
-                  }
-                />
-              </button>
-              <div className="absolute right-3 top-3 flex gap-2">
-                {isPersistedImageId(photo._id) && (
-                  <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => void toggleImageFavorite(photo)} disabled={favoriteImageBusy === photo._id} aria-label="Favorite image" type="button">
-                    <Heart className={cn("size-4", favoriteImageIds.has(photo._id) && "fill-red-500 text-red-500")} />
+          <ResponsiveMasonry columnsCountBreakPoints={{ 0: 1, 640: 2, 1024: 3 }}>
+            <Masonry gutter="15px" itemStyle={{ overflow: "visible" }}>
+              {visibleImages.map((photo) => (
+                <div
+                  key={photo._id}
+                  className="group relative bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
+                >
+                  <button className="block w-full" onClick={() => setActiveImage(photo)}>
+                    <GalleryImage
+                      src={imageSrc(displayImageUrl(photo))}
+                      fallbackSrc={imageSrc(photo.url)}
+                      alt={photo.originalName ?? ""}
+                      className="block h-auto w-full"
+                    />
                   </button>
-                )}
-                <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => setActiveImage(photo)} aria-label="View image">
-                  <Eye className="size-4" />
-                </button>
-                <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => void sharePhoto(photo)} aria-label="Share image" type="button">
-                  <Share2 className="size-4" />
-                </button>
-                {canDownload && (
-                  <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => downloadPhoto(photo)} aria-label="Download image" type="button">
-                    <Download className="size-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+                  <div className="absolute right-3 top-3 flex gap-2">
+                    {isPersistedImageId(photo._id) && (
+                      <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => void toggleImageFavorite(photo)} disabled={favoriteImageBusy === photo._id} aria-label="Favorite image" type="button">
+                        <Heart className={cn("size-4", favoriteImageIds.has(photo._id) && "fill-red-500 text-red-500")} />
+                      </button>
+                    )}
+                    <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => setActiveImage(photo)} aria-label="View image">
+                      <Eye className="size-4" />
+                    </button>
+                    <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => void sharePhoto(photo)} aria-label="Share image" type="button">
+                      <Share2 className="size-4" />
+                    </button>
+                    {canDownload && (
+                      <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => downloadPhoto(photo)} aria-label="Download image" type="button">
+                        <Download className="size-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </Masonry>
+          </ResponsiveMasonry>
         </div>
       </section>
 
