@@ -511,15 +511,18 @@ export function PublicGallery({
 
         <div
           id="gallery"
-          className="mt-0 bg-white p-[2px]"
+          className="mt-0 bg-white p-px"
         >
-          <ResponsiveMasonry columnsCountBreakPoints={{ 0: 1, 640: 2, 1024: 3 }}>
-            <Masonry gutter="2px" itemStyle={{ overflow: "visible" }}>
+          <ResponsiveMasonry
+            columnsCountBreakPoints={{ 0: 1, 640: 2, 1024: 3 }}
+            gutterBreakPoints={{ 0: 1, 640: 1, 1024: 1 }}
+          >
+            <Masonry gutter="1px" itemStyle={{ overflow: "visible" }}>
               {visibleImages.map((photo) => (
                 <div
                   id={`photo-${photo._id}`}
                   key={photo._id}
-                  className="group relative bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
+                  className="group relative w-full bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
                 >
                   <button className="block w-full" onClick={() => setActiveImage(photo)}>
                     <GalleryImage
