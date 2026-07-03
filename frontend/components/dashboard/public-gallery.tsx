@@ -152,10 +152,32 @@ export function PublicGallery({
   const fontFamily =
     typeMap[design.typography as keyof typeof typeMap] ?? typeMap.Classic;
   const storeHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`;
-  const pinOk = !download.downloadPin || enteredPin === download.downloadPinCode;
+  const downloadsEnabled = Boolean(download.photoDownload);
+  const pinRequired = downloadsEnabled && Boolean(download.downloadPin);
+  const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
   const limitOk = !download.limitDownloads || maxDownloads <= 0 || downloadCount < maxDownloads;
-  const canDownload = download.photoDownload && pinOk && limitOk;
+  const canDownload = downloadsEnabled && pinOk && limitOk;
   const onDownload = () => setDownloadCount((count) => count + 1);
+  const downloadAllImages = () => {
+    if (!canDownload) return;
+    const remaining = download.limitDownloads && maxDownloads > 0
+      ? Math.max(0, maxDownloads - downloadCount)
+      : galleryImages.length;
+    const downloadable = galleryImages.slice(0, remaining || galleryImages.length);
+    downloadable.forEach((photo, index) => {
+      window.setTimeout(() => {
+        const link = document.createElement("a");
+        link.href = imageSrc(photo.url);
+        link.download = photo.originalName || `photo-${index + 1}`;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }, index * 180);
+    });
+    setDownloadCount((count) => count + downloadable.length);
+  };
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
   const collectionUrl = () => window.location.href;
   const shareItem = async (share: { title: string; text?: string; url: string }, notice: string) => {
@@ -336,22 +358,16 @@ export function PublicGallery({
                 Store
               </a>
             )}
-            {download.photoDownload && canDownload && (
-              <a className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" href={imageSrc(images[0]?.url)} download target="_blank" rel="noreferrer" onClick={onDownload}>
+            {canDownload && (
+              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={downloadAllImages} type="button">
                 <Download className="size-4" />
-                Download
-              </a>
-            )}
-            {download.photoDownload && !canDownload && (
-              <span className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold opacity-40">
-                <Download className="size-4" />
-                Download
-              </span>
+                Download all
+              </button>
             )}
           </div>
         </div>
 
-        {download.downloadPin && (
+        {pinRequired && !pinOk && (
           <div className="mx-4 mt-5 flex max-w-[320px] flex-col gap-2 md:mx-8">
             <label className="inline-flex items-center gap-2 text-sm font-semibold">
               <Lock className="size-4" />
@@ -367,7 +383,7 @@ export function PublicGallery({
           </div>
         )}
 
-        {download.limitDownloads && maxDownloads > 0 && (
+        {downloadsEnabled && download.limitDownloads && maxDownloads > 0 && (
           <p className="mx-4 mt-4 text-sm md:mx-8" style={{ color: accent }}>
             {Math.max(0, maxDownloads - downloadCount)} downloads remaining
           </p>
@@ -388,16 +404,20 @@ export function PublicGallery({
 
         <div
           id="gallery"
-          className="mt-0 grid auto-rows-[8px] grid-flow-dense grid-cols-1 gap-[15px] bg-white p-[15px] sm:grid-cols-2 lg:grid-cols-3"
+          className="mt-0 columns-1 gap-[15px] bg-white p-[15px] sm:columns-2 lg:columns-3"
         >
           {visibleImages.map((photo) => (
-            <div key={photo._id} className={cn("group relative overflow-hidden bg-[#f4f4f2] text-left transition-[transform,box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]", masonryTileClass(imageShapes[photo._id]))}>
-              <button className="block h-full w-full" onClick={() => setActiveImage(photo)}>
+            <div
+              key={photo._id}
+              className="group relative mb-[15px] inline-block w-full break-inside-avoid overflow-hidden bg-[#f4f4f2] text-left align-top transition-[transform,box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
+              style={{ aspectRatio: imageShapes[photo._id] ? undefined : "1 / 1" }}
+            >
+              <button className="block w-full" onClick={() => setActiveImage(photo)}>
                 <GalleryImage
                   src={imageSrc(displayImageUrl(photo))}
                   fallbackSrc={imageSrc(photo.url)}
                   alt={photo.originalName ?? ""}
-                  className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
+                  className="h-auto w-full object-contain transition-transform duration-700 ease-out group-hover:scale-[1.025]"
                   onShape={(shape) =>
                     setImageShapes((current) =>
                       current[photo._id] === shape ? current : { ...current, [photo._id]: shape }
@@ -595,13 +615,6 @@ function coverTextOrDefault(value: string | undefined, fallback: string) {
   return value && !["Avery Studio", "Sarah & Daniel", "June 14, 2026", "View Gallery"].includes(value)
     ? value
     : fallback;
-}
-
-function masonryTileClass(shape?: "portrait" | "landscape" | "square") {
-  if (shape === "portrait") return "row-span-[46] sm:row-span-[52]";
-  if (shape === "landscape") return "row-span-[28] sm:col-span-2 sm:row-span-[30] lg:col-span-2";
-  if (shape === "square") return "row-span-[36]";
-  return "row-span-[34]";
 }
 
 async function compressFaceSearchImage(file: File) {
