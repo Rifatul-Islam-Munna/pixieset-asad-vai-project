@@ -5995,8 +5995,9 @@ function CollectionDetailView({
   }, [emailTemplateSettings.data, hydrateDashboardSettings, presetSettings.data, watermarkSettings.data]);
 
   useEffect(() => {
-    if (collection) setForm(collectionForm(collection));
-  }, [collection]);
+    if (!collection || updateCollection.isPending) return;
+    setForm(collectionForm(collection));
+  }, [collection, updateCollection.isPending]);
 
   useEffect(() => {
     if (!selectedShareTemplateId && emailTemplates[0]) {
@@ -6036,7 +6037,7 @@ function CollectionDetailView({
     presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
   const saveCollection = () => {
     const selectedPreset = presetItems.find((preset) => preset.id === form.presetId);
-    updateCollection.mutate({
+    const payload = {
       name: form.name.trim() || collection?.name,
       presetId: form.presetId || undefined,
       coverImage: form.coverImage || undefined,
@@ -6050,6 +6051,15 @@ function CollectionDetailView({
         download: form.download,
         favorite: selectedPreset?.favorite ?? collection?.settings?.favorite,
         store: selectedPreset?.store ?? collection?.settings?.store,
+      },
+    };
+    updateCollection.mutate(payload, {
+      onSuccess: (response) => {
+        if (response?.data) setForm(collectionForm(response.data));
+        toast.success("Collection settings saved");
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : "Collection save failed");
       },
     });
   };
@@ -6944,7 +6954,7 @@ const collectionDefaultDownload: PresetDownloadSettings = {
   webSize: true,
   webSizePx: "1024px",
   videoDownload: false,
-  downloadPin: true,
+  downloadPin: false,
   downloadPinCode: "1234",
   restrictDownloads: false,
   limitDownloads: false,

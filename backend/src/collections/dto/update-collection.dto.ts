@@ -1,4 +1,4 @@
-import { IsArray, IsDateString, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsDateString, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateCollectionDto {
   @IsOptional()
@@ -36,8 +36,10 @@ export class UpdateCollectionDto {
   expiresAt?: string;
 
   @IsOptional()
+  @IsObject()
   design?: Record<string, unknown>;
 
   @IsOptional()
+  @IsObject()
   settings?: Record<string, unknown>;
 }
