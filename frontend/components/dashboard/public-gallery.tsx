@@ -200,7 +200,10 @@ export function PublicGallery({
     if (!slideshowEnabled) setSlideshowIndex(null);
   }, [slideshowEnabled]);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-  const collectionUrl = () => window.location.href;
+  const currentPublicUrl = (photoId?: string) => {
+    const url = `${window.location.origin}${window.location.pathname}`;
+    return photoId ? `${url}#photo-${encodeURIComponent(photoId)}` : url;
+  };
   const shareItem = async (share: { title: string; text?: string; url: string }, notice: string) => {
     if (navigator.share) {
       await navigator.share(share).catch(() => null);
@@ -212,12 +215,12 @@ export function PublicGallery({
   };
   const shareCollection = () =>
     shareItem(
-      { title, text: `View ${title}`, url: collectionUrl() },
+      { title, text: `View ${title}`, url: currentPublicUrl() },
       "Collection shared"
     );
   const sharePhoto = (photo: PublicImage) =>
     shareItem(
-      { title: photo.originalName || title, text: title, url: imageSrc(photo.url) },
+      { title: photo.originalName || title, text: title, url: currentPublicUrl(photo._id) },
       "Photo shared"
     );
   const toggleCollectionFavorite = async () => {
@@ -508,12 +511,13 @@ export function PublicGallery({
 
         <div
           id="gallery"
-          className="mt-0 bg-white p-[15px]"
+          className="mt-0 bg-white p-[2px]"
         >
           <ResponsiveMasonry columnsCountBreakPoints={{ 0: 1, 640: 2, 1024: 3 }}>
-            <Masonry gutter="15px" itemStyle={{ overflow: "visible" }}>
+            <Masonry gutter="2px" itemStyle={{ overflow: "visible" }}>
               {visibleImages.map((photo) => (
                 <div
+                  id={`photo-${photo._id}`}
                   key={photo._id}
                   className="group relative bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
                 >
