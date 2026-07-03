@@ -508,22 +508,19 @@ export function PublicGallery({
 
         <div
           id="gallery"
-          className="mt-0 grid grid-flow-row-dense auto-rows-[8px] grid-cols-1 gap-[15px] bg-white p-[15px] sm:grid-cols-2 lg:grid-cols-3"
+          className="mt-0 columns-1 gap-[15px] bg-white p-[15px] sm:columns-2 lg:columns-3"
         >
           {visibleImages.map((photo) => (
             <div
               key={photo._id}
-              className="group relative bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
-              style={{
-                gridRowEnd: `span ${masonrySpan(imageShapes[photo._id])}`,
-              } as CSSProperties}
+              className="group relative mb-[15px] inline-block w-full break-inside-avoid bg-[#f4f4f2] text-left align-top transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
             >
-              <button className="block h-full w-full" onClick={() => setActiveImage(photo)}>
+              <button className="block w-full" onClick={() => setActiveImage(photo)}>
                 <GalleryImage
                   src={imageSrc(displayImageUrl(photo))}
                   fallbackSrc={imageSrc(photo.url)}
                   alt={photo.originalName ?? ""}
-                  className="h-full w-full object-contain"
+                  className="block h-auto w-full"
                   onShape={(shape) =>
                     setImageShapes((current) =>
                       current[photo._id] === shape ? current : { ...current, [photo._id]: shape }
@@ -692,12 +689,6 @@ function isPersistedImageId(value: string) {
 
 function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
-}
-
-function masonrySpan(shape?: "portrait" | "landscape" | "square") {
-  if (shape === "portrait") return 19;
-  if (shape === "landscape") return 10;
-  return 14;
 }
 
 function GalleryImage({
