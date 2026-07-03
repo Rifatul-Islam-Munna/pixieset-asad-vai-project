@@ -377,17 +377,17 @@ export function PublicGallery({
             <h1 className="mt-2 text-2xl font-semibold md:text-3xl">{title}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-full border border-black/10 bg-[#f4f4f2] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur">
-            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90">
+            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90 md:w-10 md:justify-center md:px-0" title={faceBusy ? "Searching" : "Find me"}>
               {faceBusy ? <Search className="size-4 animate-pulse" /> : <Camera className="size-4" />}
-              <span>{faceBusy ? "Searching" : "Find me"}</span>
+              <span className="md:sr-only">{faceBusy ? "Searching" : "Find me"}</span>
               <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
                 void searchByFace(event.target.files?.[0]);
                 event.target.value = "";
               }} />
             </label>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => void loadFaces()} type="button">
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
               <Search className="size-4" />
-              Faces
+              <span className="md:sr-only">Faces</span>
             </button>
             {faceResults && (
               <button className="inline-flex h-10 items-center rounded-full border border-black/10 px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => setFaceResults(null)} type="button">
@@ -395,29 +395,29 @@ export function PublicGallery({
               </button>
             )}
             {slideshowEnabled && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={startSlideshow} type="button">
+              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
                 <Play className="size-4" />
-                Slideshow
+                <span className="md:sr-only">Slideshow</span>
               </button>
             )}
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => void shareCollection()} type="button">
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
               <Share2 className="size-4" />
-              Share
+              <span className="md:sr-only">Share</span>
             </button>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button">
+            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button" title="Favorite" aria-label="Favorite">
               <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
-              Favorite
+              <span className="md:sr-only">Favorite</span>
             </button>
             {storeStatus && (
-              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5">
+              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" title="Store" aria-label="Store">
                 <ShoppingBag className="size-4" />
-                Store
+                <span className="md:sr-only">Store</span>
               </a>
             )}
             {canDownload && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5" onClick={downloadAllImages} type="button">
+              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={downloadAllImages} type="button" title="Download all" aria-label="Download all">
                 <Download className="size-4" />
-                Download all
+                <span className="md:sr-only">Download all</span>
               </button>
             )}
           </div>
