@@ -146,6 +146,7 @@ export function PublicGallery({
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
   const [downloadCount, setDownloadCount] = useState(0);
+  const [zipDownloading, setZipDownloading] = useState(false);
   const [faceBusy, setFaceBusy] = useState(false);
   const [faceError, setFaceError] = useState("");
   const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
@@ -183,17 +184,45 @@ export function PublicGallery({
     link.remove();
     onDownload();
   };
-  const downloadAllImages = () => {
-    if (!canDownload) return;
+  const downloadAllImages = async () => {
+    if (!canDownload || zipDownloading) return;
     const remaining = boolSetting(download.limitDownloads) && maxDownloads > 0
       ? Math.max(0, maxDownloads - downloadCount)
       : galleryImages.length;
     const downloadable = galleryImages.slice(0, remaining || galleryImages.length);
-    downloadable.forEach((photo, index) => {
-      window.setTimeout(() => {
-        downloadPhoto(photo, index);
-      }, index * 180);
-    });
+    if (!downloadable.length) return;
+
+    setZipDownloading(true);
+    const response = await fetch("/api/public-download", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: title,
+        images: downloadable.map((photo, index) => ({
+          url: imageSrc(photo.url),
+          name: photo.originalName || `photo-${index + 1}`,
+        })),
+      }),
+    }).catch(() => null);
+    setZipDownloading(false);
+
+    if (!response?.ok) {
+      const payload = response ? await response.json().catch(() => null) : null;
+      setShareNotice(payload?.message ?? "Download failed");
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeDownloadName(title)}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setDownloadCount((count) => count + downloadable.length);
+    setShareNotice("ZIP download started");
   };
 
   useEffect(() => {
@@ -466,9 +495,9 @@ export function PublicGallery({
               </a>
             )}
             {canDownload && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={downloadAllImages} type="button" title="Download all" aria-label="Download all">
-                <Download className="size-4" />
-                <span className="md:sr-only">Download all</span>
+              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label="Download all">
+                <Download className={cn("size-4", zipDownloading && "animate-pulse")} />
+                <span className="md:sr-only">{zipDownloading ? "Preparing ZIP" : "Download all"}</span>
               </button>
             )}
           </div>
@@ -695,6 +724,14 @@ function isPersistedImageId(value: string) {
 
 function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
+}
+
+function safeDownloadName(value: string) {
+  return value
+    .replace(/\.[a-z0-9]{2,5}$/i, "")
+    .replace(/[^a-z0-9-_]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "collection";
 }
 
 function GalleryImage({
