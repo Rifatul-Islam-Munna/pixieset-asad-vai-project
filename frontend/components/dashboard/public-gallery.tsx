@@ -204,25 +204,31 @@ export function PublicGallery({
         })),
       }),
     }).catch(() => null);
-    setZipDownloading(false);
 
     if (!response?.ok) {
+      setZipDownloading(false);
       const payload = response ? await response.json().catch(() => null) : null;
       setShareNotice(payload?.message ?? "Download failed");
       return;
     }
 
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${safeDownloadName(title)}.zip`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    setDownloadCount((count) => count + downloadable.length);
-    setShareNotice("ZIP download started");
+    try {
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${safeDownloadName(title)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setDownloadCount((count) => count + downloadable.length);
+      setShareNotice("ZIP download started");
+    } catch {
+      setShareNotice("Download failed");
+    } finally {
+      setZipDownloading(false);
+    }
   };
 
   useEffect(() => {
@@ -495,9 +501,8 @@ export function PublicGallery({
               </a>
             )}
             {canDownload && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all as ZIP" aria-label="Download all as ZIP">
+              <button className="inline-flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
                 {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                <span>{zipDownloading ? "Preparing ZIP" : "Download ZIP"}</span>
               </button>
             )}
           </div>
