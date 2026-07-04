@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import JSZip from "jszip";
 
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-const textEncoder = new TextEncoder();
 
 type ZipImage = {
   url?: string;
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Image download failed" }, { status: 502 });
   }
 
-  return new NextResponse(createZip(files), {
+  return new NextResponse(await createZip(files), {
     headers: {
       "content-type": "application/zip",
       "content-disposition": `attachment; filename="${zipName}"`,
@@ -134,65 +134,10 @@ function extensionFromPath(pathname: string) {
   return match?.[0] ?? ".jpg";
 }
 
-function createZip(files: { name: string; data: Uint8Array }[]) {
-  const localParts: Uint8Array[] = [];
-  const centralParts: Uint8Array[] = [];
-  let offset = 0;
-
+async function createZip(files: { name: string; data: Uint8Array }[]) {
+  const zip = new JSZip();
   for (const file of files) {
-    const name = textEncoder.encode(file.name);
-    const crc = crc32(file.data);
-    const localHeader = zipHeader(30);
-    localHeader.writeUInt32LE(0x04034b50, 0);
-    localHeader.writeUInt16LE(20, 4);
-    localHeader.writeUInt16LE(0x0800, 6);
-    localHeader.writeUInt16LE(0, 8);
-    localHeader.writeUInt32LE(0, 10);
-    localHeader.writeUInt32LE(crc, 14);
-    localHeader.writeUInt32LE(file.data.length, 18);
-    localHeader.writeUInt32LE(file.data.length, 22);
-    localHeader.writeUInt16LE(name.length, 26);
-    localParts.push(localHeader, name, file.data);
-
-    const centralHeader = zipHeader(46);
-    centralHeader.writeUInt32LE(0x02014b50, 0);
-    centralHeader.writeUInt16LE(20, 4);
-    centralHeader.writeUInt16LE(20, 6);
-    centralHeader.writeUInt16LE(0x0800, 8);
-    centralHeader.writeUInt16LE(0, 10);
-    centralHeader.writeUInt32LE(0, 12);
-    centralHeader.writeUInt32LE(crc, 16);
-    centralHeader.writeUInt32LE(file.data.length, 20);
-    centralHeader.writeUInt32LE(file.data.length, 24);
-    centralHeader.writeUInt16LE(name.length, 28);
-    centralHeader.writeUInt32LE(offset, 42);
-    centralParts.push(centralHeader, name);
-
-    offset += localHeader.length + name.length + file.data.length;
+    zip.file(file.name, file.data);
   }
-
-  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
-  const endHeader = zipHeader(22);
-  endHeader.writeUInt32LE(0x06054b50, 0);
-  endHeader.writeUInt16LE(files.length, 8);
-  endHeader.writeUInt16LE(files.length, 10);
-  endHeader.writeUInt32LE(centralSize, 12);
-  endHeader.writeUInt32LE(offset, 16);
-
-  return Buffer.concat([...localParts, ...centralParts, endHeader]);
-}
-
-function zipHeader(size: number) {
-  return Buffer.alloc(size);
-}
-
-function crc32(data: Uint8Array) {
-  let crc = 0xffffffff;
-  for (const byte of data) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) {
-      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
+  return zip.generateAsync({ type: "uint8array" });
 }

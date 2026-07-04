@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Heart, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
@@ -495,9 +495,9 @@ export function PublicGallery({
               </a>
             )}
             {canDownload && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label="Download all">
-                <Download className={cn("size-4", zipDownloading && "animate-pulse")} />
-                <span className="md:sr-only">{zipDownloading ? "Preparing ZIP" : "Download all"}</span>
+              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all as ZIP" aria-label="Download all as ZIP">
+                {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                <span>{zipDownloading ? "Preparing ZIP" : "Download ZIP"}</span>
               </button>
             )}
           </div>
