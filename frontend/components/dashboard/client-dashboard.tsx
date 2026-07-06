@@ -7113,6 +7113,7 @@ function CollectionActivityPanel({
   downloads: CollectionDownloadActivityRecord[];
   collectionName: string;
 }) {
+  const [activityPage, setActivityPage] = useState<"download" | "favorite">("favorite");
   const downloadFavoritesCsv = (list?: CollectionFavoriteActivityRecord) => {
     const rows = (list ? [list] : favoriteLists).map((item) => ({
       email: item.email,
@@ -7137,6 +7138,52 @@ function CollectionActivityPanel({
       })),
     );
   };
+  const copyFilenames = async (list: CollectionFavoriteActivityRecord) => {
+    await navigator.clipboard.writeText(list.filenames.join("\n"));
+    toast.success("Filenames copied");
+  };
+  const sendAsDownload = async (list: CollectionFavoriteActivityRecord) => {
+    const subject = encodeURIComponent(`${collectionName} download`);
+    const body = encodeURIComponent(
+      [
+        `Hi,`,
+        ``,
+        `Here are your selected files from ${collectionName}:`,
+        ...(list.filenames.length ? list.filenames.map((name) => `- ${name}`) : ["- No filenames"]),
+      ].join("\n"),
+    );
+    await recordEmailUsage(1).catch(() => null);
+    window.location.href = `mailto:${encodeURIComponent(list.email)}?subject=${subject}&body=${body}`;
+  };
+  const downloadFavoriteImages = async (list: CollectionFavoriteActivityRecord) => {
+    const images = (list.images ?? []).filter((image) => image.url);
+    if (!images.length) {
+      toast.error("No favorite files to download");
+      return;
+    }
+    const response = await fetch("/api/public-download", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: `${collectionName}-${list.email}`,
+        images: images.map((image) => ({ url: imageSrc(image.url), name: image.name })),
+      }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      toast.error(payload?.message ?? "Download failed");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeCsvName(collectionName)}-${safeCsvName(list.email)}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   if (loading) {
     return (
@@ -7149,89 +7196,162 @@ function CollectionActivityPanel({
   }
 
   return (
-    <div className="grid gap-12">
-      <section>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-medium">Download Activity</h2>
-          <Button variant="outline" className="h-9 rounded-none" disabled={!downloads.length} onClick={downloadActivityCsv}>
-            <Download data-icon="inline-start" />
-            Download all CSV
-          </Button>
-        </div>
-        <div className="mt-5 overflow-x-auto border">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b bg-[#fafafa] text-xs font-bold uppercase text-[#777]">
-              <tr>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">File</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Count</th>
-                <th className="px-4 py-3">Date Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {downloads.map((item) => (
-                <tr key={item._id} className="border-b last:border-b-0">
-                  <td className="px-4 py-4 font-semibold">{item.email}</td>
-                  <td className="px-4 py-4">{item.imageName || item.imageId || "Collection download"}</td>
-                  <td className="px-4 py-4 capitalize">{item.downloadType}</td>
-                  <td className="px-4 py-4">{item.count}</td>
-                  <td className="px-4 py-4">{formatActivityDate(item.updatedAt)}</td>
-                </tr>
-              ))}
-              {!downloads.length && (
-                <tr>
-                  <td className="px-4 py-10 text-center text-[#777]" colSpan={5}>No downloads yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+    <div className="grid min-h-[620px] gap-0 md:grid-cols-[230px_minmax(0,1fr)]">
+      <aside className="border-r bg-[#fafafa]">
+        <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Activities</p>
+        <button
+          className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "download" && "bg-white font-bold")}
+          onClick={() => setActivityPage("download")}
+          type="button"
+        >
+          <Download className="size-4" />
+          Download Activity
+        </button>
+        <button
+          className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "favorite" && "bg-white font-bold")}
+          onClick={() => setActivityPage("favorite")}
+          type="button"
+        >
+          <Heart className="size-4" />
+          Favorite Activity
+        </button>
+      </aside>
 
-      <section>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-medium">Favorite Activity</h2>
-          <Button variant="outline" className="h-9 rounded-none" disabled={!favoriteLists.length} onClick={() => downloadFavoritesCsv()}>
-            <Download data-icon="inline-start" />
-            Download all CSV
-          </Button>
-        </div>
-        <div className="mt-5 overflow-x-auto border">
-          <table className="w-full min-w-[820px] text-left text-sm">
-            <thead className="border-b bg-[#fafafa] text-xs font-bold uppercase text-[#777]">
-              <tr>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Favorite List</th>
-                <th className="px-4 py-3">Photos</th>
-                <th className="px-4 py-3">Date Created</th>
-                <th className="px-4 py-3">Date Updated</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {favoriteLists.map((item) => (
-                <tr key={item.id} className="border-b last:border-b-0">
-                  <td className="px-4 py-4 font-semibold">{item.email}</td>
-                  <td className="px-4 py-4">{item.name}</td>
-                  <td className="px-4 py-4">{item.photos}</td>
-                  <td className="px-4 py-4">{formatActivityDate(item.createdAt)}</td>
-                  <td className="px-4 py-4">{formatActivityDate(item.updatedAt)}</td>
-                  <td className="px-4 py-4 text-right">
-                    <Button variant="outline" className="h-8 rounded-none px-3 text-xs" onClick={() => downloadFavoritesCsv(item)}>
-                      CSV
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {!favoriteLists.length && (
-                <tr>
-                  <td className="px-4 py-10 text-center text-[#777]" colSpan={6}>No favorites yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      <section className="min-w-0 px-7 py-6">
+        {activityPage === "download" ? (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-2xl font-medium">Download Activity</h2>
+              <Button variant="outline" className="h-9 rounded-none" disabled={!downloads.length} onClick={downloadActivityCsv}>
+                <Download data-icon="inline-start" />
+                Download all CSV
+              </Button>
+            </div>
+            <div className="mt-7 overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="border-b text-xs font-bold uppercase text-[#777]">
+                  <tr>
+                    <th className="px-1 py-3">Email</th>
+                    <th className="px-1 py-3">File</th>
+                    <th className="px-1 py-3">Type</th>
+                    <th className="px-1 py-3">Count</th>
+                    <th className="px-1 py-3">Date Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {downloads.map((item) => (
+                    <tr key={item._id} className="border-b">
+                      <td className="px-1 py-5 font-semibold">{item.email}</td>
+                      <td className="px-1 py-5">{item.imageName || item.imageId || "Collection download"}</td>
+                      <td className="px-1 py-5 capitalize">{item.downloadType}</td>
+                      <td className="px-1 py-5">{item.count}</td>
+                      <td className="px-1 py-5">{formatActivityDate(item.updatedAt)}</td>
+                    </tr>
+                  ))}
+                  {!downloads.length && (
+                    <tr>
+                      <td className="px-1 py-10 text-center text-[#777]" colSpan={5}>No downloads yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-2xl font-medium">Favorite Activity</h2>
+              <div className="flex items-center gap-4">
+                <button className="inline-flex items-center gap-2 text-sm font-bold text-[#777]" type="button">
+                  <ListFilter className="size-4" />
+                  Sort by email
+                </button>
+                <span className="h-5 w-px bg-[#ddd]" />
+                <button className="inline-flex items-center gap-2 text-sm font-bold text-[#00a997]" type="button">
+                  <PlusCircle className="size-4" />
+                  New Favorite List
+                </button>
+              </div>
+            </div>
+            <div className="mt-7 overflow-x-auto">
+              <table className="w-full min-w-[920px] text-left text-sm">
+                <thead className="border-b text-xs font-bold uppercase text-[#777]">
+                  <tr>
+                    <th className="px-1 py-3">Email</th>
+                    <th className="px-1 py-3">Favorite List</th>
+                    <th className="px-1 py-3">Photos</th>
+                    <th className="px-1 py-3">Date Created</th>
+                    <th className="px-1 py-3">Date Updated</th>
+                    <th className="px-1 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {favoriteLists.map((item) => (
+                    <tr key={item.id} className="border-b">
+                      <td className="px-1 py-5 font-semibold">{item.email}</td>
+                      <td className="px-1 py-5">
+                        <span className="inline-flex items-center gap-3">
+                          <span className="flex size-12 items-center justify-center bg-[#f3f3f3] text-[#888]">
+                            <Images className="size-4" />
+                          </span>
+                          <span className="font-bold">{item.name}</span>
+                        </span>
+                      </td>
+                      <td className="px-1 py-5">{item.photos}</td>
+                      <td className="px-1 py-5">{formatActivityDate(item.createdAt)}</td>
+                      <td className="px-1 py-5">{formatActivityDate(item.updatedAt)}</td>
+                      <td className="px-1 py-5 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 rounded-none px-2" aria-label="Favorite list actions">
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-60 rounded-none p-3 shadow-[0_18px_35px_rgba(0,0,0,0.12)]">
+                            <DropdownMenuGroup>
+                              <DropdownMenuItem onClick={() => downloadFavoritesCsv(item)}>
+                                <FileUp className="size-4" /> Export
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => void copyFilenames(item)}>
+                                <Copy className="size-4" /> Copy filenames
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Wrench className="size-4" /> Edit List
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Eye className="size-4" /> View in Gallery
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => void downloadFavoriteImages(item)}>
+                                <Download className="size-4" /> Download all
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => void sendAsDownload(item)}>
+                                <Mail className="size-4" /> Send as download
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled>
+                                <Copy className="size-4" /> Copy to new set
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled>
+                                <Copy className="size-4" /> Copy to new collection
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled>
+                                <Trash2 className="size-4" /> Delete info
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  ))}
+                  {!favoriteLists.length && (
+                    <tr>
+                      <td className="px-1 py-10 text-center text-[#777]" colSpan={6}>No favorites yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

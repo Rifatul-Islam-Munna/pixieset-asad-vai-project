@@ -285,6 +285,14 @@ export class CollectionsService {
         name: 'My Favorites',
         photos: listImages.length,
         filenames: listImages.map((favorite) => imageMap.get(favorite.imageId)?.originalName || favorite.imageId),
+        images: listImages.map((favorite) => {
+          const image = imageMap.get(favorite.imageId);
+          return {
+            imageId: favorite.imageId,
+            name: image?.originalName || favorite.imageId,
+            url: image?.url || '',
+          };
+        }),
         createdAt: minDate(createdDates),
         updatedAt: maxDate(updatedDates) ?? minDate(createdDates),
       };

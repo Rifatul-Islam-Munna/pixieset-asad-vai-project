@@ -49,6 +49,7 @@ export type CollectionFavoriteActivityRecord = {
   name: string;
   photos: number;
   filenames: string[];
+  images?: Array<{ imageId: string; name: string; url: string }>;
   createdAt?: string;
   updatedAt?: string;
 };
