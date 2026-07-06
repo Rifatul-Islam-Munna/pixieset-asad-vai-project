@@ -99,6 +99,27 @@ export class CollectionsController {
     return { data };
   }
 
+  @Delete(':id/activity/favorites/:favoriteUserId')
+  async deleteFavoriteInfo(
+    @Param('id') id: string,
+    @Param('favoriteUserId') favoriteUserId: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.deleteFavoriteInfo(req.user.id, id, favoriteUserId);
+    return { message: 'Favorite info deleted', data };
+  }
+
+  @Delete(':id/activity/favorites/:favoriteUserId/images/:imageId')
+  async deleteFavoriteImageInfo(
+    @Param('id') id: string,
+    @Param('favoriteUserId') favoriteUserId: string,
+    @Param('imageId') imageId: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.deleteFavoriteImageInfo(req.user.id, id, favoriteUserId, imageId);
+    return { message: 'Favorite image deleted', data };
+  }
+
   @Post('favorites/:identifier')
   async favorite(@Param('identifier') identifier: string, @Req() req: ExpressRequest) {
     const data = await this.collectionsService.toggleFavoriteCollection(req.user.id, identifier);

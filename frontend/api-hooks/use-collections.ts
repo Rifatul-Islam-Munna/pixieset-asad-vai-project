@@ -204,6 +204,37 @@ export function useCollectionActivity(collectionId?: string) {
   });
 }
 
+export function useCollectionActivityActions(collectionId?: string) {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["collections", collectionId, "activity"] });
+  };
+  const deleteFavoriteInfo = useMutation({
+    mutationFn: async (favoriteUserId: string) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await DeleteRequestAxios<{ data: { deleted: number }; message: string }>(
+        `/collections/${collectionId}/activity/favorites/${favoriteUserId}`,
+      );
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: refresh,
+  });
+  const deleteFavoriteImageInfo = useMutation({
+    mutationFn: async ({ favoriteUserId, imageId }: { favoriteUserId: string; imageId: string }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await DeleteRequestAxios<{ data: { deleted: number }; message: string }>(
+        `/collections/${collectionId}/activity/favorites/${favoriteUserId}/images/${imageId}`,
+      );
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: refresh,
+  });
+
+  return { deleteFavoriteInfo, deleteFavoriteImageInfo };
+}
+
 export function useCollectionImages() {
   return useQuery({
     queryKey: ["collection-images"],

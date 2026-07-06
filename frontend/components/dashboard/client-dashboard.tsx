@@ -98,6 +98,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useCollectionDetail,
   useCollectionActivity,
+  useCollectionActivityActions,
   useCollectionImages,
   useCollections,
   useImageActions,
@@ -6150,6 +6151,7 @@ function CollectionDetailView({
   const { collectionsQuery } = useCollections();
   const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
+  const activityActions = useCollectionActivityActions(collectionId);
   const collections = collectionsQuery.data?.data ?? [];
   const collection = collectionQuery.data?.data ?? collections.find((item) => item._id === collectionId);
   const detail = collectionQuery.data?.data;
@@ -6157,7 +6159,7 @@ function CollectionDetailView({
   const images = detail?.images ?? [];
   const sets = detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }];
   const [activeImageId, setActiveImageId] = useState("");
-  const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "activity">("photos");
+  const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "download">("photos");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
   const [addSetOpen, setAddSetOpen] = useState(false);
@@ -6638,7 +6640,7 @@ function CollectionDetailView({
               ["photos", Images],
               ["design", Palette],
               ["settings", Settings],
-              ["activity", Download],
+              ["download", Download],
             ] as const).map(([tab, Icon]) => (
               <button
                 key={String(tab)}
@@ -7042,12 +7044,15 @@ function CollectionDetailView({
             </div>
           )}
 
-          {activeTab === "activity" && (
+          {activeTab === "download" && (
             <CollectionActivityPanel
               loading={activityQuery.isLoading}
               favoriteLists={activityQuery.data?.data.favoriteLists ?? []}
               downloads={activityQuery.data?.data.downloads ?? []}
               collectionName={collection.name}
+              publicLink={publicLink}
+              deleteFavoriteInfo={activityActions.deleteFavoriteInfo.mutateAsync}
+              deleteFavoriteImageInfo={activityActions.deleteFavoriteImageInfo.mutateAsync}
             />
           )}
         </div>
@@ -7107,13 +7112,23 @@ function CollectionActivityPanel({
   favoriteLists,
   downloads,
   collectionName,
+  publicLink,
+  deleteFavoriteInfo,
+  deleteFavoriteImageInfo,
 }: {
   loading: boolean;
   favoriteLists: CollectionFavoriteActivityRecord[];
   downloads: CollectionDownloadActivityRecord[];
   collectionName: string;
+  publicLink: string;
+  deleteFavoriteInfo: (favoriteUserId: string) => Promise<unknown>;
+  deleteFavoriteImageInfo: (payload: { favoriteUserId: string; imageId: string }) => Promise<unknown>;
 }) {
   const [activityPage, setActivityPage] = useState<"download" | "favorite">("favorite");
+  const [editingList, setEditingList] = useState<CollectionFavoriteActivityRecord | null>(null);
+  const [mailList, setMailList] = useState<CollectionFavoriteActivityRecord | null>(null);
+  const [mailSubject, setMailSubject] = useState("");
+  const [mailMessage, setMailMessage] = useState("");
   const downloadFavoritesCsv = (list?: CollectionFavoriteActivityRecord) => {
     const rows = (list ? [list] : favoriteLists).map((item) => ({
       email: item.email,
@@ -7139,50 +7154,44 @@ function CollectionActivityPanel({
     );
   };
   const copyFilenames = async (list: CollectionFavoriteActivityRecord) => {
-    await navigator.clipboard.writeText(list.filenames.join("\n"));
+    const lines = (list.images?.length ? list.images : list.filenames.map((name) => ({ name, imageId: "", url: "" })))
+      .map((image) => `${collectionName} - ${image.name || image.imageId}`);
+    await navigator.clipboard.writeText(lines.join("\n"));
     toast.success("Filenames copied");
   };
-  const sendAsDownload = async (list: CollectionFavoriteActivityRecord) => {
-    const subject = encodeURIComponent(`${collectionName} download`);
-    const body = encodeURIComponent(
+  const openMailSender = (list: CollectionFavoriteActivityRecord) => {
+    setMailList(list);
+    setMailSubject(`${collectionName} download`);
+    setMailMessage(
       [
         `Hi,`,
         ``,
         `Here are your selected files from ${collectionName}:`,
         ...(list.filenames.length ? list.filenames.map((name) => `- ${name}`) : ["- No filenames"]),
+        ``,
+        publicLink,
       ].join("\n"),
     );
-    await recordEmailUsage(1).catch(() => null);
-    window.location.href = `mailto:${encodeURIComponent(list.email)}?subject=${subject}&body=${body}`;
   };
-  const downloadFavoriteImages = async (list: CollectionFavoriteActivityRecord) => {
-    const images = (list.images ?? []).filter((image) => image.url);
-    if (!images.length) {
-      toast.error("No favorite files to download");
-      return;
-    }
-    const response = await fetch("/api/public-download", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: `${collectionName}-${list.email}`,
-        images: images.map((image) => ({ url: imageSrc(image.url), name: image.name })),
-      }),
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      toast.error(payload?.message ?? "Download failed");
-      return;
-    }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${safeCsvName(collectionName)}-${safeCsvName(list.email)}.zip`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  const sendAsDownload = async () => {
+    if (!mailList) return;
+    await recordEmailUsage(1).catch(() => null);
+    window.location.href = `mailto:${encodeURIComponent(mailList.email)}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailMessage)}`;
+  };
+  const deleteFavoriteList = async (list: CollectionFavoriteActivityRecord) => {
+    await deleteFavoriteInfo(list.id);
+    setEditingList(null);
+    toast.success("Favorite info deleted");
+  };
+  const deleteFavoriteImage = async (list: CollectionFavoriteActivityRecord, imageId: string) => {
+    await deleteFavoriteImageInfo({ favoriteUserId: list.id, imageId });
+    setEditingList((current) => current ? {
+      ...current,
+      images: current.images?.filter((image) => image.imageId !== imageId),
+      filenames: current.filenames.filter((_, index) => current.images?.[index]?.imageId !== imageId),
+      photos: Math.max(0, current.photos - 1),
+    } : current);
+    toast.success("Photo removed");
   };
 
   if (loading) {
@@ -7196,6 +7205,7 @@ function CollectionActivityPanel({
   }
 
   return (
+    <>
     <div className="grid min-h-[620px] gap-0 md:grid-cols-[230px_minmax(0,1fr)]">
       <aside className="border-r bg-[#fafafa]">
         <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Activities</p>
@@ -7309,31 +7319,22 @@ function CollectionActivityPanel({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-60 rounded-none p-3 shadow-[0_18px_35px_rgba(0,0,0,0.12)]">
                             <DropdownMenuGroup>
-                              <DropdownMenuItem onClick={() => downloadFavoritesCsv(item)}>
-                                <FileUp className="size-4" /> Export
-                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => void copyFilenames(item)}>
                                 <Copy className="size-4" /> Copy filenames
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setEditingList(item)}>
                                 <Wrench className="size-4" /> Edit List
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => window.open(publicLink, "_blank", "noopener,noreferrer")}>
                                 <Eye className="size-4" /> View in Gallery
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => void downloadFavoriteImages(item)}>
+                              <DropdownMenuItem onClick={() => downloadFavoritesCsv(item)}>
                                 <Download className="size-4" /> Download all
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => void sendAsDownload(item)}>
+                              <DropdownMenuItem onClick={() => openMailSender(item)}>
                                 <Mail className="size-4" /> Send as download
                               </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <Copy className="size-4" /> Copy to new set
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <Copy className="size-4" /> Copy to new collection
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
+                              <DropdownMenuItem onClick={() => void deleteFavoriteList(item)}>
                                 <Trash2 className="size-4" /> Delete info
                               </DropdownMenuItem>
                             </DropdownMenuGroup>
@@ -7354,6 +7355,80 @@ function CollectionActivityPanel({
         )}
       </section>
     </div>
+    <Dialog open={Boolean(editingList)} onOpenChange={(open) => !open && setEditingList(null)}>
+      <DialogContent className="rounded-none sm:max-w-[620px]">
+        <DialogHeader>
+          <DialogTitle>Edit Favorite List</DialogTitle>
+          <DialogDescription>
+            Remove favorite files or delete this visitor info.
+          </DialogDescription>
+        </DialogHeader>
+        {editingList && (
+          <div className="grid gap-5">
+            <div className="grid gap-1 text-sm">
+              <span className="font-bold">{editingList.email}</span>
+              <span className="text-[#777]">{editingList.photos} photos in {editingList.name}</span>
+            </div>
+            <div className="max-h-[320px] overflow-y-auto border">
+              {(editingList.images?.length ? editingList.images : editingList.filenames.map((name) => ({ imageId: name, name, url: "" }))).map((image) => (
+                <div key={image.imageId || image.name} className="flex items-center justify-between gap-4 border-b px-4 py-3 last:border-b-0">
+                  <span className="min-w-0 truncate text-sm">{collectionName} - {image.name}</span>
+                  {image.imageId.match(/^[a-f\d]{24}$/i) && (
+                    <Button variant="outline" className="h-8 rounded-none px-3 text-xs" onClick={() => void deleteFavoriteImage(editingList, image.imageId)}>
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {!editingList.filenames.length && (
+                <p className="px-4 py-8 text-center text-sm text-[#777]">No favorite files.</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" className="rounded-none" onClick={() => setEditingList(null)}>
+                Close
+              </Button>
+              <Button className="rounded-none bg-red-600 text-white hover:bg-red-700" onClick={() => void deleteFavoriteList(editingList)}>
+                Delete info
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    <Dialog open={Boolean(mailList)} onOpenChange={(open) => !open && setMailList(null)}>
+      <DialogContent className="rounded-none sm:max-w-[620px]">
+        <DialogHeader>
+          <DialogTitle>Send as download</DialogTitle>
+          <DialogDescription>
+            Opens your mail app with this download message.
+          </DialogDescription>
+        </DialogHeader>
+        <FieldGroup>
+          <Field>
+            <FieldLabel>To</FieldLabel>
+            <Input value={mailList?.email ?? ""} readOnly className="h-11 rounded-none bg-white" />
+          </Field>
+          <Field>
+            <FieldLabel>Subject</FieldLabel>
+            <Input value={mailSubject} onChange={(event) => setMailSubject(event.target.value)} className="h-11 rounded-none bg-white" />
+          </Field>
+          <Field>
+            <FieldLabel>Message</FieldLabel>
+            <Textarea value={mailMessage} onChange={(event) => setMailMessage(event.target.value)} className="min-h-44 rounded-none bg-white" />
+          </Field>
+        </FieldGroup>
+        <DialogFooter>
+          <Button variant="outline" className="rounded-none" onClick={() => setMailList(null)}>
+            Cancel
+          </Button>
+          <Button className="rounded-none bg-[#22bda7] text-white" onClick={() => void sendAsDownload()}>
+            Send
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

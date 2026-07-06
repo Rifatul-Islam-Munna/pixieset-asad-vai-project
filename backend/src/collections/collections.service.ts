@@ -354,6 +354,30 @@ export class CollectionsService {
     return { saved: items.length };
   }
 
+  async deleteFavoriteInfo(userId: string, collectionId: string, favoriteUserId: string) {
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    const [collectionResult, imageResult] = await Promise.all([
+      this.favoriteModel.deleteMany({ collectionId, userId: favoriteUserId }),
+      this.imageFavoriteModel.deleteMany({ collectionId, userId: favoriteUserId }),
+    ]);
+    return {
+      deleted: (collectionResult.deletedCount ?? 0) + (imageResult.deletedCount ?? 0),
+    };
+  }
+
+  async deleteFavoriteImageInfo(userId: string, collectionId: string, favoriteUserId: string, imageId: string) {
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
+    const result = await this.imageFavoriteModel.deleteOne({
+      collectionId,
+      userId: favoriteUserId,
+      imageId,
+    });
+    return { deleted: result.deletedCount ?? 0 };
+  }
+
   async findAllImages(userId: string) {
     const images = await this.imageModel
       .find({ userId })
