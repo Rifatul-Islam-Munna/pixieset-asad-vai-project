@@ -6160,6 +6160,7 @@ function CollectionDetailView({
   const sets = detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }];
   const [activeImageId, setActiveImageId] = useState("");
   const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "download">("photos");
+  const [activityPage, setActivityPage] = useState<"download" | "favorite">("favorite");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
   const [addSetOpen, setAddSetOpen] = useState(false);
@@ -6739,6 +6740,27 @@ function CollectionDetailView({
               </Dialog>
             </div>
           )}
+          {activeTab === "download" && !detailCollapsed && (
+            <div className="min-h-0 bg-[#fafafa]">
+              <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Activities</p>
+              <button
+                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "download" && "bg-white font-bold")}
+                onClick={() => setActivityPage("download")}
+                type="button"
+              >
+                <Download className="size-4" />
+                Download Activity
+              </button>
+              <button
+                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "favorite" && "bg-white font-bold")}
+                onClick={() => setActivityPage("favorite")}
+                type="button"
+              >
+                <Heart className="size-4" />
+                Favorite Activity
+              </button>
+            </div>
+          )}
           <button
             className="mt-auto flex h-12 items-center justify-center border-t text-[#333]"
             onClick={() => setDetailCollapsed((value) => !value)}
@@ -7051,6 +7073,7 @@ function CollectionDetailView({
               downloads={activityQuery.data?.data.downloads ?? []}
               collectionName={collection.name}
               publicLink={publicLink}
+              activityPage={activityPage}
               deleteFavoriteInfo={activityActions.deleteFavoriteInfo.mutateAsync}
               deleteFavoriteImageInfo={activityActions.deleteFavoriteImageInfo.mutateAsync}
             />
@@ -7113,6 +7136,7 @@ function CollectionActivityPanel({
   downloads,
   collectionName,
   publicLink,
+  activityPage,
   deleteFavoriteInfo,
   deleteFavoriteImageInfo,
 }: {
@@ -7121,10 +7145,10 @@ function CollectionActivityPanel({
   downloads: CollectionDownloadActivityRecord[];
   collectionName: string;
   publicLink: string;
+  activityPage: "download" | "favorite";
   deleteFavoriteInfo: (favoriteUserId: string) => Promise<unknown>;
   deleteFavoriteImageInfo: (payload: { favoriteUserId: string; imageId: string }) => Promise<unknown>;
 }) {
-  const [activityPage, setActivityPage] = useState<"download" | "favorite">("favorite");
   const [editingList, setEditingList] = useState<CollectionFavoriteActivityRecord | null>(null);
   const [mailList, setMailList] = useState<CollectionFavoriteActivityRecord | null>(null);
   const [mailSubject, setMailSubject] = useState("");
@@ -7206,28 +7230,7 @@ function CollectionActivityPanel({
 
   return (
     <>
-    <div className="grid min-h-[620px] gap-0 md:grid-cols-[230px_minmax(0,1fr)]">
-      <aside className="border-r bg-[#fafafa]">
-        <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Activities</p>
-        <button
-          className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "download" && "bg-white font-bold")}
-          onClick={() => setActivityPage("download")}
-          type="button"
-        >
-          <Download className="size-4" />
-          Download Activity
-        </button>
-        <button
-          className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "favorite" && "bg-white font-bold")}
-          onClick={() => setActivityPage("favorite")}
-          type="button"
-        >
-          <Heart className="size-4" />
-          Favorite Activity
-        </button>
-      </aside>
-
-      <section className="min-w-0 px-7 py-6">
+    <section className="min-w-0">
         {activityPage === "download" ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -7353,8 +7356,7 @@ function CollectionActivityPanel({
             </div>
           </>
         )}
-      </section>
-    </div>
+    </section>
     <Dialog open={Boolean(editingList)} onOpenChange={(open) => !open && setEditingList(null)}>
       <DialogContent className="rounded-none sm:max-w-[620px]">
         <DialogHeader>
