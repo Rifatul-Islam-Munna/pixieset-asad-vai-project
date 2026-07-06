@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 
 type PublicImage = {
   _id: string;
+  setId?: string;
   url: string;
   thumbnailUrl?: string;
   blurDataUrl?: string;
@@ -32,6 +33,7 @@ type PublicCollection = {
   slug?: string;
   eventDate?: string;
   coverImage?: string;
+  sets?: Array<{ id: string; name: string }>;
   images?: PublicImage[];
   design?: Partial<PresetDesignSettings>;
   settings?: {
@@ -142,7 +144,12 @@ export function PublicGallery({
   const galleryImages = coverImage
     ? [coverImage, ...images.filter((image) => imageSrc(image.url) !== imageSrc(coverImage.url))]
     : images;
+  const gallerySets = (collection?.sets ?? []).filter((set) =>
+    galleryImages.some((image) => imageSetId(image) === set.id)
+  );
+  const showSetTabs = gallerySets.length > 1;
   const coverPhoto = imageSrc(collection?.coverImage || images[0]?.url);
+  const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
   const [downloadCount, setDownloadCount] = useState(0);
@@ -159,7 +166,11 @@ export function PublicGallery({
   const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [favoriteImageBusy, setFavoriteImageBusy] = useState("");
-  const visibleImages = faceResults ?? galleryImages;
+  const [downloadEmail, setDownloadEmail] = useState("");
+  const activeGalleryImages = showSetTabs
+    ? galleryImages.filter((image) => imageSetId(image) === activeSetId)
+    : galleryImages;
+  const visibleImages = faceResults ?? activeGalleryImages;
   const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
   const slideshowPosition = slideshowIndex ?? 0;
   const [bg, fg, accent] =
@@ -173,8 +184,52 @@ export function PublicGallery({
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
   const canDownload = downloadsEnabled && pinOk && limitOk;
   const onDownload = () => setDownloadCount((count) => count + 1);
-  const downloadPhoto = (photo: PublicImage, index = 0) => {
+  const ensureDownloadEmail = () => {
+    const saved = downloadEmail || window.localStorage.getItem("pixieset-download-email") || "";
+    const email = window.prompt("Enter your email to download", saved);
+    if (!email?.trim() || !email.includes("@")) {
+      setShareNotice("Email is required before download");
+      return "";
+    }
+    const clean = email.trim().toLowerCase();
+    setDownloadEmail(clean);
+    window.localStorage.setItem("pixieset-download-email", clean);
+    return clean;
+  };
+  const recordDownloadActivity = async (
+    email: string,
+    items: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>,
+    downloadType: "single" | "all",
+  ) => {
+    const identifier = collection?.slug ?? galary;
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(identifier)}/download-activity`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, items, downloadType }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      const payload = response ? await response.json().catch(() => null) : null;
+      throw new Error(payload?.message ?? "Download activity failed");
+    }
+  };
+  const downloadPhoto = async (photo: PublicImage, index = 0) => {
     if (!canDownload) return;
+    const email = ensureDownloadEmail();
+    if (!email) return;
+    try {
+      await recordDownloadActivity(
+        email,
+        [{
+          imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
+          imageName: photo.originalName || `photo-${index + 1}`,
+          imageUrl: imageSrc(photo.url),
+        }],
+        "single",
+      );
+    } catch (error) {
+      setShareNotice(error instanceof Error ? error.message : "Download activity failed");
+      return;
+    }
     const url = `/api/public-download?url=${encodeURIComponent(imageSrc(photo.url))}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
     const link = document.createElement("a");
     link.href = url;
@@ -188,11 +243,28 @@ export function PublicGallery({
     if (!canDownload || zipDownloading) return;
     const remaining = boolSetting(download.limitDownloads) && maxDownloads > 0
       ? Math.max(0, maxDownloads - downloadCount)
-      : galleryImages.length;
-    const downloadable = galleryImages.slice(0, remaining || galleryImages.length);
+      : visibleImages.length;
+    const downloadable = visibleImages.slice(0, remaining || visibleImages.length);
     if (!downloadable.length) return;
+    const email = ensureDownloadEmail();
+    if (!email) return;
 
     setZipDownloading(true);
+    try {
+      await recordDownloadActivity(
+        email,
+        downloadable.map((photo, index) => ({
+          imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
+          imageName: photo.originalName || `photo-${index + 1}`,
+          imageUrl: imageSrc(photo.url),
+        })),
+        "all",
+      );
+    } catch (error) {
+      setZipDownloading(false);
+      setShareNotice(error instanceof Error ? error.message : "Download activity failed");
+      return;
+    }
     const response = await fetch("/api/public-download", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -234,6 +306,18 @@ export function PublicGallery({
   useEffect(() => {
     if (!slideshowEnabled) setSlideshowIndex(null);
   }, [slideshowEnabled]);
+
+  useEffect(() => {
+    if (!showSetTabs) return;
+    if (!gallerySets.some((set) => set.id === activeSetId)) {
+      setActiveSetId(gallerySets[0]?.id ?? "highlights");
+    }
+  }, [activeSetId, gallerySets, showSetTabs]);
+
+  useEffect(() => {
+    setFaceResults(null);
+    setSlideshowIndex(null);
+  }, [activeSetId]);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
   const currentPublicUrl = (photoId?: string) => {
     const url = `${window.location.origin}${window.location.pathname}`;
@@ -543,6 +627,24 @@ export function PublicGallery({
           </p>
         )}
 
+        {showSetTabs && (
+          <div className="mx-4 mt-5 flex flex-wrap gap-2 md:mx-8">
+            {gallerySets.map((set) => (
+              <button
+                key={set.id}
+                className={cn(
+                  "border border-black/10 px-4 py-2 text-sm font-bold transition hover:bg-black/5",
+                  activeSetId === set.id && "bg-[#202326] text-white hover:bg-[#202326]",
+                )}
+                onClick={() => setActiveSetId(set.id)}
+                type="button"
+              >
+                {set.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div
           id="gallery"
           className="mt-0 bg-white p-0"
@@ -729,6 +831,10 @@ function isPersistedImageId(value: string) {
 
 function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
+}
+
+function imageSetId(image: PublicImage) {
+  return image.setId || "highlights";
 }
 
 function safeDownloadName(value: string) {

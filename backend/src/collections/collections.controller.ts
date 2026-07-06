@@ -47,6 +47,15 @@ export class PublicCollectionsController {
     const data = await this.collectionsService.findPublic(identifier);
     return { data };
   }
+
+  @Post(':identifier/download-activity')
+  async recordDownloadActivity(
+    @Param('identifier') identifier: string,
+    @Body() body: { email?: string; items?: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>; downloadType?: 'single' | 'all' },
+  ) {
+    const data = await this.collectionsService.recordPublicDownloadActivity(identifier, body);
+    return { message: 'Download activity saved', data };
+  }
 }
 
 @Controller('collections')
@@ -81,6 +90,12 @@ export class CollectionsController {
   @Get('image-favorites')
   async imageFavorites(@Req() req: ExpressRequest) {
     const data = await this.collectionsService.listFavoriteImages(req.user.id);
+    return { data };
+  }
+
+  @Get(':id/activity')
+  async collectionActivity(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.collectionsService.getCollectionActivity(req.user.id, id);
     return { data };
   }
 

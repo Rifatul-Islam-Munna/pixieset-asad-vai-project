@@ -97,9 +97,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCollectionDetail,
+  useCollectionActivity,
   useCollectionImages,
   useCollections,
   useImageActions,
+  type CollectionDownloadActivityRecord,
+  type CollectionFavoriteActivityRecord,
   type CollectionImageRecord,
   type CollectionRecord,
 } from "@/api-hooks/use-collections";
@@ -6146,6 +6149,7 @@ function CollectionDetailView({
   const { starImage } = useImageActions();
   const { collectionsQuery } = useCollections();
   const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage } = useCollectionDetail(collectionId);
+  const activityQuery = useCollectionActivity(collectionId);
   const collections = collectionsQuery.data?.data ?? [];
   const collection = collectionQuery.data?.data ?? collections.find((item) => item._id === collectionId);
   const detail = collectionQuery.data?.data;
@@ -6153,7 +6157,7 @@ function CollectionDetailView({
   const images = detail?.images ?? [];
   const sets = detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }];
   const [activeImageId, setActiveImageId] = useState("");
-  const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings">("photos");
+  const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "activity">("photos");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
   const [addSetOpen, setAddSetOpen] = useState(false);
@@ -6629,11 +6633,12 @@ function CollectionDetailView({
               </div>
             )}
           </div>}
-          <div className={cn("grid border-b bg-white", detailCollapsed ? "grid-cols-1" : "grid-cols-3")}>
+          <div className={cn("grid border-b bg-white", detailCollapsed ? "grid-cols-1" : "grid-cols-4")}>
             {([
               ["photos", Images],
               ["design", Palette],
               ["settings", Settings],
+              ["activity", Download],
             ] as const).map(([tab, Icon]) => (
               <button
                 key={String(tab)}
@@ -7036,6 +7041,15 @@ function CollectionDetailView({
               </Button>
             </div>
           )}
+
+          {activeTab === "activity" && (
+            <CollectionActivityPanel
+              loading={activityQuery.isLoading}
+              favoriteLists={activityQuery.data?.data.favoriteLists ?? []}
+              downloads={activityQuery.data?.data.downloads ?? []}
+              collectionName={collection.name}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -7084,6 +7098,141 @@ function CollectionDetailSkeleton() {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function CollectionActivityPanel({
+  loading,
+  favoriteLists,
+  downloads,
+  collectionName,
+}: {
+  loading: boolean;
+  favoriteLists: CollectionFavoriteActivityRecord[];
+  downloads: CollectionDownloadActivityRecord[];
+  collectionName: string;
+}) {
+  const downloadFavoritesCsv = (list?: CollectionFavoriteActivityRecord) => {
+    const rows = (list ? [list] : favoriteLists).map((item) => ({
+      email: item.email,
+      favoriteList: item.name,
+      photos: item.photos,
+      filenames: item.filenames.join("; "),
+      dateCreated: formatActivityDate(item.createdAt),
+      dateUpdated: formatActivityDate(item.updatedAt),
+    }));
+    downloadCsv(`${safeCsvName(collectionName)}-favorite-activity.csv`, rows);
+  };
+  const downloadActivityCsv = () => {
+    downloadCsv(
+      `${safeCsvName(collectionName)}-download-activity.csv`,
+      downloads.map((item) => ({
+        email: item.email,
+        filename: item.imageName || item.imageId || "Collection download",
+        downloadType: item.downloadType,
+        count: item.count,
+        dateCreated: formatActivityDate(item.createdAt),
+        dateUpdated: formatActivityDate(item.updatedAt),
+      })),
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="grid gap-8">
+        <Skeleton className="h-8 w-56 rounded-none" />
+        <Skeleton className="h-40 rounded-none" />
+        <Skeleton className="h-40 rounded-none" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-12">
+      <section>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-2xl font-medium">Download Activity</h2>
+          <Button variant="outline" className="h-9 rounded-none" disabled={!downloads.length} onClick={downloadActivityCsv}>
+            <Download data-icon="inline-start" />
+            Download all CSV
+          </Button>
+        </div>
+        <div className="mt-5 overflow-x-auto border">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="border-b bg-[#fafafa] text-xs font-bold uppercase text-[#777]">
+              <tr>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">File</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Count</th>
+                <th className="px-4 py-3">Date Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {downloads.map((item) => (
+                <tr key={item._id} className="border-b last:border-b-0">
+                  <td className="px-4 py-4 font-semibold">{item.email}</td>
+                  <td className="px-4 py-4">{item.imageName || item.imageId || "Collection download"}</td>
+                  <td className="px-4 py-4 capitalize">{item.downloadType}</td>
+                  <td className="px-4 py-4">{item.count}</td>
+                  <td className="px-4 py-4">{formatActivityDate(item.updatedAt)}</td>
+                </tr>
+              ))}
+              {!downloads.length && (
+                <tr>
+                  <td className="px-4 py-10 text-center text-[#777]" colSpan={5}>No downloads yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-2xl font-medium">Favorite Activity</h2>
+          <Button variant="outline" className="h-9 rounded-none" disabled={!favoriteLists.length} onClick={() => downloadFavoritesCsv()}>
+            <Download data-icon="inline-start" />
+            Download all CSV
+          </Button>
+        </div>
+        <div className="mt-5 overflow-x-auto border">
+          <table className="w-full min-w-[820px] text-left text-sm">
+            <thead className="border-b bg-[#fafafa] text-xs font-bold uppercase text-[#777]">
+              <tr>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Favorite List</th>
+                <th className="px-4 py-3">Photos</th>
+                <th className="px-4 py-3">Date Created</th>
+                <th className="px-4 py-3">Date Updated</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {favoriteLists.map((item) => (
+                <tr key={item.id} className="border-b last:border-b-0">
+                  <td className="px-4 py-4 font-semibold">{item.email}</td>
+                  <td className="px-4 py-4">{item.name}</td>
+                  <td className="px-4 py-4">{item.photos}</td>
+                  <td className="px-4 py-4">{formatActivityDate(item.createdAt)}</td>
+                  <td className="px-4 py-4">{formatActivityDate(item.updatedAt)}</td>
+                  <td className="px-4 py-4 text-right">
+                    <Button variant="outline" className="h-8 rounded-none px-3 text-xs" onClick={() => downloadFavoritesCsv(item)}>
+                      CSV
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {!favoriteLists.length && (
+                <tr>
+                  <td className="px-4 py-10 text-center text-[#777]" colSpan={6}>No favorites yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
@@ -7398,6 +7547,47 @@ function formatDate(value?: string) {
   } catch {
     return value;
   }
+}
+
+function formatActivityDate(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function safeCsvName(value: string) {
+  return value
+    .replace(/[^a-z0-9-_]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "collection";
+}
+
+function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
+  const headers = rows[0] ? Object.keys(rows[0]) : ["email"];
+  const csv = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value: unknown) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
 function imageSrc(url?: string) {

@@ -15,6 +15,7 @@ export class CollectionImageFavorite {
   imageId: string;
 
   createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export const CollectionImageFavoriteSchema =

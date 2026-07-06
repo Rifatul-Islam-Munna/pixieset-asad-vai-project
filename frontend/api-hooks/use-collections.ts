@@ -43,6 +43,28 @@ export type CollectionImageRecord = {
   setName?: string;
 };
 
+export type CollectionFavoriteActivityRecord = {
+  id: string;
+  email: string;
+  name: string;
+  photos: number;
+  filenames: string[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CollectionDownloadActivityRecord = {
+  _id: string;
+  email: string;
+  imageId?: string;
+  imageName: string;
+  imageUrl?: string;
+  downloadType: "single" | "all";
+  count: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 type ListResponse<T> = { data: T };
 
 export function useCollections() {
@@ -165,6 +187,20 @@ export function useCollectionDetail(collectionId?: string) {
   });
 
   return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage };
+}
+
+export function useCollectionActivity(collectionId?: string) {
+  return useQuery({
+    enabled: Boolean(collectionId),
+    queryKey: ["collections", collectionId, "activity"],
+    queryFn: () =>
+      GetRequestNormal<
+        ListResponse<{
+          favoriteLists: CollectionFavoriteActivityRecord[];
+          downloads: CollectionDownloadActivityRecord[];
+        }>
+      >(`/collections/${collectionId}/activity`),
+  });
 }
 
 export function useCollectionImages() {

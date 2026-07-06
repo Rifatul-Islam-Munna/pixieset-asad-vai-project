@@ -12,6 +12,7 @@ export class CollectionFavorite {
   collectionId: string;
 
   createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export const CollectionFavoriteSchema = SchemaFactory.createForClass(CollectionFavorite);

@@ -17,6 +17,7 @@ import { Collection, CollectionDocument } from './entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from './entities/collection-image.entity';
 import { CollectionFavorite, CollectionFavoriteDocument } from './entities/collection-favorite.entity';
 import { CollectionImageFavorite, CollectionImageFavoriteDocument } from './entities/collection-image-favorite.entity';
+import { CollectionDownloadActivity, CollectionDownloadActivityDocument } from './entities/collection-download-activity.entity';
 
 type WatermarkData = {
   id: string;
@@ -39,6 +40,7 @@ export class CollectionsService {
     @InjectModel(CollectionImage.name) private readonly imageModel: Model<CollectionImageDocument>,
     @InjectModel(CollectionFavorite.name) private readonly favoriteModel: Model<CollectionFavoriteDocument>,
     @InjectModel(CollectionImageFavorite.name) private readonly imageFavoriteModel: Model<CollectionImageFavoriteDocument>,
+    @InjectModel(CollectionDownloadActivity.name) private readonly downloadActivityModel: Model<CollectionDownloadActivityDocument>,
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly minioService: MinioService,
@@ -236,6 +238,112 @@ export class CollectionsService {
       { upsert: true },
     );
     return { favorited: true, imageId, collectionId: image.collectionId };
+  }
+
+  async getCollectionActivity(userId: string, collectionId: string) {
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const [collectionFavorites, imageFavorites, downloads, images] = await Promise.all([
+      this.favoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
+      this.imageFavoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
+      this.downloadActivityModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+      this.imageModel.find({ collectionId }).select('_id originalName url thumbnailUrl').lean(),
+    ]);
+    const userIds = [...new Set([
+      ...collectionFavorites.map((favorite) => favorite.userId),
+      ...imageFavorites.map((favorite) => favorite.userId),
+    ])];
+    const users = userIds.length
+      ? await this.userModel.find({ _id: { $in: userIds } }).select('_id email name').lean()
+      : [];
+    const userMap = new Map(users.map((user) => [user._id.toString(), user]));
+    const imageMap = new Map(images.map((image) => [image._id.toString(), image]));
+    const imageFavoritesByUser = new Map<string, any[]>();
+
+    for (const favorite of imageFavorites) {
+      imageFavoritesByUser.set(favorite.userId, [
+        ...(imageFavoritesByUser.get(favorite.userId) ?? []),
+        favorite,
+      ]);
+    }
+
+    const favoriteUserIds = [...new Set([
+      ...collectionFavorites.map((favorite) => favorite.userId),
+      ...imageFavorites.map((favorite) => favorite.userId),
+    ])];
+    const favoriteLists = favoriteUserIds.map((favoriteUserId) => {
+      const user = userMap.get(favoriteUserId);
+      const listImages = imageFavoritesByUser.get(favoriteUserId) ?? [];
+      const collectionFavorite = collectionFavorites.find((favorite) => favorite.userId === favoriteUserId);
+      const createdDates = [collectionFavorite?.createdAt, ...listImages.map((favorite) => favorite.createdAt)].filter(Boolean) as Date[];
+      const updatedDates = [collectionFavorite?.updatedAt, ...listImages.map((favorite: any) => favorite.updatedAt)].filter(Boolean) as Date[];
+
+      return {
+        id: favoriteUserId,
+        email: user?.email || user?.name || favoriteUserId,
+        name: 'My Favorites',
+        photos: listImages.length,
+        filenames: listImages.map((favorite) => imageMap.get(favorite.imageId)?.originalName || favorite.imageId),
+        createdAt: minDate(createdDates),
+        updatedAt: maxDate(updatedDates) ?? minDate(createdDates),
+      };
+    });
+
+    return {
+      favoriteLists,
+      downloads: downloads.map((download) => ({
+        _id: download._id,
+        email: download.email || 'Unknown',
+        imageId: download.imageId,
+        imageName: download.imageName,
+        imageUrl: download.imageUrl,
+        downloadType: download.downloadType,
+        count: download.count ?? 1,
+        createdAt: download.createdAt,
+        updatedAt: download.updatedAt,
+      })),
+    };
+  }
+
+  async recordPublicDownloadActivity(
+    identifier: string,
+    body: { email?: string; items?: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>; downloadType?: 'single' | 'all' },
+  ) {
+    const collection = await this.findCollectionByIdentifier(identifier);
+    const email = String(body?.email ?? '').trim().toLowerCase();
+    if (!email || !email.includes('@')) throw new BadRequestException('Email is required');
+    const items = Array.isArray(body?.items) ? body.items.slice(0, 250) : [];
+    if (!items.length) throw new BadRequestException('Download item is required');
+    const downloadType = body.downloadType === 'all' ? 'all' : 'single';
+    const collectionId = collection._id.toString();
+
+    for (const item of items) {
+      const imageId = item.imageId && Types.ObjectId.isValid(item.imageId) ? item.imageId : '';
+      await this.downloadActivityModel.updateOne(
+        {
+          collectionId,
+          email,
+          imageId: imageId ?? '',
+          imageName: String(item.imageName ?? ''),
+          downloadType,
+        },
+        {
+          $set: {
+            collectionId,
+            email,
+            imageId,
+            imageName: String(item.imageName ?? ''),
+            imageUrl: String(item.imageUrl ?? ''),
+            downloadType,
+          },
+          $inc: { count: 1 },
+        },
+        { upsert: true },
+      );
+    }
+
+    return { saved: items.length };
   }
 
   async findAllImages(userId: string) {
@@ -796,4 +904,14 @@ export class CollectionsService {
     if (next.settings) next.settings = { ...settings, download };
     return next;
   }
+}
+
+function minDate(values: Date[]) {
+  if (!values.length) return undefined;
+  return new Date(Math.min(...values.map((value) => new Date(value).getTime())));
+}
+
+function maxDate(values: Date[]) {
+  if (!values.length) return undefined;
+  return new Date(Math.max(...values.map((value) => new Date(value).getTime())));
 }

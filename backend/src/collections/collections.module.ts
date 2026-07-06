@@ -20,6 +20,10 @@ import {
   CollectionImageFavorite,
   CollectionImageFavoriteSchema,
 } from './entities/collection-image-favorite.entity';
+import {
+  CollectionDownloadActivity,
+  CollectionDownloadActivitySchema,
+} from './entities/collection-download-activity.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
 
@@ -30,6 +34,7 @@ import { FaceSearchModule } from 'src/face-search/face-search.module';
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: CollectionFavorite.name, schema: CollectionFavoriteSchema },
       { name: CollectionImageFavorite.name, schema: CollectionImageFavoriteSchema },
+      { name: CollectionDownloadActivity.name, schema: CollectionDownloadActivitySchema },
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: User.name, schema: UserSchema },
     ]),
