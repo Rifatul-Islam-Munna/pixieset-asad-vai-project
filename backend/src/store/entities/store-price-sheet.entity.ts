@@ -20,8 +20,8 @@ export class StorePriceSheet {
   @Prop({ default: 0 })
   minimumOrderAmount: number;
 
-  @Prop({ default: 'self-fulfilled' })
-  fulfillment: 'self-fulfilled';
+  @Prop({ default: 'self-fulfilled', enum: ['self-fulfilled', 'auto'] })
+  fulfillment: 'self-fulfilled' | 'auto';
 }
 
 export const StorePriceSheetSchema =

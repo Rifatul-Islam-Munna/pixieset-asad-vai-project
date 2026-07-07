@@ -13,6 +13,7 @@ import { ReactSortable } from "react-sortablejs";
 import {
   ArrowLeft,
   ArrowRight,
+  Bell,
   Calendar as CalendarIcon,
   Bold,
   ChevronDown,
@@ -83,6 +84,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -93,6 +95,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -101,6 +111,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useCollectionDetail,
   useCollectionActivity,
+  useCollectionActivities,
   useCollectionActivityActions,
   useCollectionImages,
   useCollections,
@@ -117,6 +128,9 @@ import type { AdminPlan } from "@/actions/admin";
 import { CoverPreview, coverOptions } from "@/components/dashboard/cover-designs";
 import {
   useStorePriceSheet,
+  useStorePriceSheetDetails,
+  useStoreProductDelete,
+  useStoreProductUpdate,
   useStorePriceSheets,
   useStoreCustomers,
   useStoreDashboard,
@@ -147,6 +161,7 @@ import {
   type PresetItem,
   type WatermarkItem,
 } from "@/lib/dashboard-store";
+import type { BrandSettings, CustomCoverTemplate, HomeCmsData } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
@@ -159,12 +174,14 @@ export type DashboardPage =
   | "homepage"
   | "settings"
   | "marketing"
+  | "pricing"
   | "products"
   | "orders"
   | "customers"
   | "taxes"
   | "shipping"
   | "coupons"
+  | "get-started"
   | "storefront"
   | "storage";
 export type MarketingPage = "email-campaigns" | "contacts" | "settings";
@@ -185,6 +202,7 @@ const switcherItems = [
     text: "Better way to share, deliver, proof and sell",
     href: "/dashboard/client-gallery",
     mark: "bg-[#0dc6b5]",
+    accent: "from-[#0dc6b5] to-[#9de7de]",
   },
   {
     key: "store-gallery",
@@ -192,6 +210,7 @@ const switcherItems = [
     text: "Your online store for prints and downloads",
     href: "/dashboard/store-gallery",
     mark: "bg-[#ff4f5d]",
+    accent: "from-[#ff4f5d] to-[#ffc7cd]",
   },
 ] as const;
 
@@ -205,9 +224,11 @@ const sidebarItems = {
     { label: "Settings", icon: Settings, page: "settings" },
   ],
   "store-gallery": [
+    { label: "Get Started", icon: Info, page: "get-started" },
+    { label: "Dashboard", icon: Store, page: "storefront" },
     { label: "Orders", icon: ShoppingBag, page: "orders" },
     { label: "Customers", icon: Users, page: "customers" },
-    { label: "Products", icon: Package, page: "products" },
+    { label: "Products", icon: CreditCard, page: "products" },
     { label: "Taxes", icon: ListFilter, page: "taxes" },
     { label: "Shipping", icon: Package, page: "shipping" },
     { label: "Coupons", icon: Copy, page: "coupons" },
@@ -306,6 +327,8 @@ export function ClientDashboard({
   settingsPage = "watermark",
   collectionId,
   priceSheetId,
+  productId,
+  productType,
 }: {
   section: DashboardSection;
   page: DashboardPage;
@@ -313,6 +336,8 @@ export function ClientDashboard({
   settingsPage?: SettingsPage;
   collectionId?: string;
   priceSheetId?: string;
+  productId?: string;
+  productType?: StoreProductType;
 }) {
   const router = useRouter();
   const active = dashboardCopy[section];
@@ -332,7 +357,11 @@ export function ClientDashboard({
   const isCollectionIndex =
     page === "collections" || (section === "store-gallery" && page === "products");
   const isCollectionDetail = page === "collections" && Boolean(collectionId);
-  const isPriceSheetDetail = page === "products" && Boolean(priceSheetId);
+  const isPriceSheetDetail =
+    (page === "products" && Boolean(priceSheetId)) ||
+    (section === "store-gallery" && page === "pricing" && Boolean(productId));
+  const dashboardChromeOpen = !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail;
+  const storeTopNavOpen = dashboardChromeOpen && section === "store-gallery";
   const [logoutPending, startLogoutTransition] = useTransition();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logout = () => {
@@ -344,7 +373,7 @@ export function ClientDashboard({
 
   return (
     <main className="min-h-screen bg-white text-[#151515]">
-      {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <aside
+      {dashboardChromeOpen && !storeTopNavOpen && <aside
         className={cn(
           "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
           collapsed ? "w-[76px]" : "w-[292px]"
@@ -359,12 +388,12 @@ export function ClientDashboard({
                 {!collapsed && <ChevronDown className="size-3 text-[#777]" />}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[310px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+            <DropdownMenuContent className="w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
               <DropdownMenuGroup className="p-5">
                 {switcherItems.map((item) => (
                   <DropdownMenuItem key={item.key} asChild className="p-0">
-                    <Link href={item.href} className="flex gap-4 py-3">
-                      <span className={cn("mt-1 size-8 shrink-0 rounded-full", item.mark)} />
+                    <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
+                      <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
                       <span className="flex flex-col gap-1">
                         <span className="font-bold text-[#151515]">{item.title}</span>
                         <span className="text-xs leading-5 text-[#777]">{item.text}</span>
@@ -383,6 +412,7 @@ export function ClientDashboard({
           </DropdownMenu>
 
           <div className={cn("flex items-center gap-4", collapsed && "hidden")}>
+            {section === "client-gallery" && <DashboardNotifications />}
             <Avatar className="size-7">
               <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
             </Avatar>
@@ -437,7 +467,7 @@ export function ClientDashboard({
                 />
                 {!collapsed && "Marketing"}
               </Link>
-              {!collapsed && page === "marketing" && (
+              {!collapsed && (
                 <div className="ml-7 flex flex-col border-l border-[#e8e8e8] pl-4">
                   {[
                     { label: "Email Campaigns", slug: "email-campaigns", icon: Mail },
@@ -506,8 +536,9 @@ export function ClientDashboard({
         </nav>
       </aside>}
 
-      <section className={cn("min-h-screen transition-all", campaignBuilderOpen || isCollectionDetail || isPriceSheetDetail ? "" : collapsed ? "md:pl-[76px]" : "md:pl-[292px]")}>
-        {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
+      <section className={cn("min-h-screen transition-all", dashboardChromeOpen && !storeTopNavOpen ? collapsed ? "md:pl-[76px]" : "md:pl-[292px]" : "")}>
+        {storeTopNavOpen && <StoreTopNavigation activePage={page} logout={logout} logoutPending={logoutPending} />}
+        {dashboardChromeOpen && !storeTopNavOpen && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
           <button className="flex size-10 items-center justify-center bg-[#111] text-white" onClick={() => setMobileMenuOpen(true)} aria-label="Open dashboard menu">
             <Menu className="size-5" />
           </button>
@@ -515,12 +546,15 @@ export function ClientDashboard({
             <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
             <span className="truncate">{active.title}</span>
           </div>
-          <button aria-label="Logout" onClick={logout} disabled={logoutPending} className="flex size-10 items-center justify-center bg-[#f4f4f4]">
-            <LogOut className="size-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {section === "client-gallery" && <DashboardNotifications mobile />}
+            <button aria-label="Logout" onClick={logout} disabled={logoutPending} className="flex size-10 items-center justify-center bg-[#f4f4f4]">
+              <LogOut className="size-5" />
+            </button>
+          </div>
         </div>}
 
-        {mobileMenuOpen && !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && (
+        {mobileMenuOpen && dashboardChromeOpen && !storeTopNavOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
             <aside className="h-full w-[84vw] max-w-[330px] overflow-y-auto bg-white px-5 py-5 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
               <div className="flex items-center justify-between border-b pb-4">
@@ -532,14 +566,30 @@ export function ClientDashboard({
                       <ChevronDown className="size-3" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[270px] rounded-none">
+                  <DropdownMenuContent className="w-[300px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
                     <DropdownMenuGroup>
                       {switcherItems.map((item) => (
-                        <DropdownMenuItem key={item.key} asChild>
-                          <Link href={item.href} onClick={() => setMobileMenuOpen(false)}>{item.title}</Link>
+                        <DropdownMenuItem key={item.key} asChild className="p-0">
+                          <Link
+                            href={item.href}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="flex gap-4 px-4 py-4"
+                          >
+                            <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
+                            <span className="flex flex-col gap-1">
+                              <span className="font-bold text-[#151515]">{item.title}</span>
+                              <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                            </span>
+                          </Link>
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuGroup>
+                    <div className="bg-[#f7f7f7] p-4 text-center">
+                      <Link href={`/dashboard/${section}`} onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center gap-2 text-sm text-[#333]">
+                        <LayoutGrid className="size-4 text-[#999]" />
+                        View Dashboard
+                      </Link>
+                    </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <button className="flex size-10 items-center justify-center bg-[#f4f4f4]" onClick={() => setMobileMenuOpen(false)} aria-label="Close dashboard menu">
@@ -570,6 +620,22 @@ export function ClientDashboard({
                       <Megaphone className={cn("size-5 text-[#333]", page === "marketing" && "text-[#00a997]")} />
                       Marketing
                     </Link>
+                    <div className="ml-9 grid gap-3">
+                      {[
+                        ["Email Campaigns", `/dashboard/${section}/marketing/email-campaigns`],
+                        ["Contacts", `/dashboard/${section}/marketing/contacts`],
+                        ["Settings", `/dashboard/${section}/marketing/settings`],
+                      ].map(([label, href]) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="text-sm text-[#555]"
+                        >
+                          {label}
+                        </Link>
+                      ))}
+                    </div>
                     <Link
                       href={`/dashboard/${section}/storage`}
                       onClick={() => setMobileMenuOpen(false)}
@@ -590,7 +656,7 @@ export function ClientDashboard({
           </div>
         )}
 
-        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20")}>
+        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : storeTopNavOpen ? "max-w-[1220px] px-4 py-10 sm:px-5 md:py-14" : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20")}>
           {campaignBuilderOpen ? (
             <CampaignBuilder onClose={closeCampaignBuilder} />
           ) : wizardOpen ? (
@@ -613,6 +679,8 @@ export function ClientDashboard({
             <MarketingPanel marketingPage={marketingPage} />
           ) : page === "collection-new" ? (
             <CollectionNewPanel section={section} />
+          ) : section === "store-gallery" && page === "get-started" ? (
+            <StoreGetStartedPanel />
           ) : section === "store-gallery" && page === "storefront" ? (
             <StoreDashboardPanel />
           ) : section === "store-gallery" && page === "orders" ? (
@@ -625,6 +693,16 @@ export function ClientDashboard({
             <StoreTaxesPanel />
           ) : section === "store-gallery" && page === "shipping" ? (
             <StoreShippingPanel />
+          ) : section === "store-gallery" && page === "pricing" && productId ? (
+            <StorePricingRouteEditor productId={productId} productType={productType} />
+          ) : section === "store-gallery" && page === "pricing" ? (
+            <StorePricingPanel />
+          ) : page === "products" && priceSheetId && productId ? (
+            <StoreProductRouteEditor
+              priceSheetId={priceSheetId}
+              productId={productId}
+              productType={productType}
+            />
           ) : page === "products" && priceSheetId ? (
             <StorePriceSheetDetail priceSheetId={priceSheetId} />
           ) : page === "collections" && collectionId ? (
@@ -640,6 +718,143 @@ export function ClientDashboard({
       </section>
 
     </main>
+  );
+}
+
+function StoreTopNavigation({
+  activePage,
+  logout,
+  logoutPending,
+}: {
+  activePage: DashboardPage;
+  logout: () => void;
+  logoutPending: boolean;
+}) {
+  const items = sidebarItems["store-gallery"];
+
+  return (
+    <header className="border-t-[5px] border-[#202020] bg-white text-[#1e1e1e]">
+      <div className="bg-[#f7f7f7] px-5 sm:px-8">
+        <div className="mx-auto flex h-[50px] max-w-[1220px] items-center justify-between">
+        <div className="flex min-w-0 items-center gap-5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex min-w-0 items-center gap-2 text-sm font-semibold outline-none">
+                <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]">
+                  <span className="h-[2px] w-3 bg-white" />
+                </span>
+                <span>Store</span>
+                <ChevronDown className="size-4 text-[#333]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+              <DropdownMenuGroup className="p-5">
+                {switcherItems.map((item) => (
+                  <DropdownMenuItem key={item.key} asChild className="p-0">
+                    <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
+                      <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
+                      <span className="flex flex-col gap-1">
+                        <span className="font-bold text-[#151515]">{item.title}</span>
+                        <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+              <div className="bg-[#f7f7f7] p-5 text-center">
+                <Link href="/dashboard/store-gallery" className="inline-flex items-center gap-2 text-sm text-[#333]">
+                  <LayoutGrid className="size-4 text-[#999]" />
+                  View Dashboard
+                </Link>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="flex items-center gap-4 text-[#8a8a8a]">
+          <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Help">
+            <Info className="size-5" />
+          </button>
+          <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Notifications">
+            <Bell className="size-5" />
+          </button>
+          <button
+            className="flex size-8 items-center justify-center rounded-full bg-white text-[#555] hover:text-red-600 disabled:opacity-50"
+            onClick={logout}
+            disabled={logoutPending}
+            aria-label="Logout"
+          >
+            <CircleUserRound className="size-5" />
+          </button>
+        </div>
+        </div>
+      </div>
+      <nav className="overflow-x-auto border-b border-[#ececec] bg-white px-5 sm:px-8">
+        <div className="mx-auto max-w-[1220px]">
+        <div className="flex min-w-max items-center gap-7">
+          {items.map((item) => (
+            <Link
+              key={item.label}
+              href={item.page === "storefront" ? "/dashboard/store-gallery" : `/dashboard/store-gallery/${item.page}`}
+              className={cn(
+                "flex h-10 items-center border-b-2 border-transparent text-sm text-[#777] transition-colors hover:text-[#111]",
+                activePage === item.page && "border-[#00a997] text-[#111]"
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+        </div>
+      </nav>
+    </header>
+  );
+}
+
+function StoreGetStartedPanel() {
+  const router = useRouter();
+  const steps = [
+    {
+      title: "1. Review Products",
+      text: "Manage your products and adjust pricing.",
+      icon: CreditCard,
+      href: "/dashboard/store-gallery/products",
+    },
+    {
+      title: "2. Setup Checkout",
+      text: "Connect Stripe or Paypal to start accepting online payments.",
+      icon: ShoppingCart,
+      href: "/dashboard/store-gallery/settings",
+    },
+  ];
+
+  return (
+    <div className="mx-auto max-w-[950px] pb-20 text-[#1f2933]">
+      <div className="border-b border-[#e8e8e8] pb-4">
+        <h1 className="text-[25px] font-normal tracking-wide">Launch your Store in 2 easy steps</h1>
+      </div>
+
+      <div className="mt-7 grid gap-3 md:grid-cols-2">
+        {steps.map((step) => (
+          <button
+            key={step.title}
+            onClick={() => router.push(step.href)}
+            className="flex h-40 flex-col items-center justify-center bg-[#f2f2f2] text-center transition-colors hover:bg-[#ebebeb]"
+          >
+            <step.icon className="size-9 stroke-[1.8] text-[#29313a]" />
+            <span className="mt-6 text-base font-semibold text-[#151515]">{step.title}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 grid gap-6 text-sm text-[#6a7280] md:grid-cols-2">
+        {steps.map((step) => (
+          <p key={step.title}>
+            {step.text} <button onClick={() => router.push(step.href)} className="text-[#00a997]">Learn more</button>
+          </p>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -775,6 +990,140 @@ function UsagePanel({
       </div>
       <Progress value={percent} className="mt-4 h-2 bg-[#e8e8e8]" />
     </div>
+  );
+}
+
+type DashboardNotificationItem = {
+  id: string;
+  title: string;
+  meta: string;
+  time?: string;
+};
+
+function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
+  const { collectionsQuery } = useCollections();
+  const { ordersQuery } = useStoreOrders();
+  const collections = collectionsQuery.data?.data ?? [];
+  const activities = useCollectionActivities(collections.map((collection) => collection._id));
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const recentItems = useMemo(() => {
+    const collectionMap = new Map(collections.map((collection) => [collection._id, collection]));
+    const items: Array<DashboardNotificationItem & { timestamp: number }> = [];
+
+    activities.forEach((query, index) => {
+      const collection = collections[index];
+      const data = query.data?.data;
+      if (!collection || !data) return;
+
+      data.downloads.forEach((download) => {
+        items.push({
+          id: `download-${collection._id}-${download._id}`,
+          title: `${collection.name}: download`,
+          meta: `${download.email || "Visitor"} downloaded ${download.imageName || "collection files"}`,
+          time: download.updatedAt,
+          timestamp: new Date(download.updatedAt ?? download.createdAt ?? 0).getTime(),
+        });
+      });
+
+      data.favoriteLists.forEach((favorite) => {
+        items.push({
+          id: `favorite-${collection._id}-${favorite.id}`,
+          title: `${collection.name}: favorites`,
+          meta: `${favorite.email || favorite.name || "Visitor"} saved ${favorite.photos} photo${favorite.photos === 1 ? "" : "s"}`,
+          time: favorite.updatedAt,
+          timestamp: new Date(favorite.updatedAt ?? favorite.createdAt ?? 0).getTime(),
+        });
+      });
+    });
+
+    (ordersQuery.data?.data ?? []).forEach((order) => {
+      const collection = order.collectionId ? collectionMap.get(order.collectionId) : null;
+      items.push({
+        id: `order-${order._id}`,
+        title: `${collection?.name ?? "Store"}: order`,
+        meta: `${order.customer?.name || order.customer?.email || "Customer"} placed ${order.orderNumber}`,
+        time: order.createdAt,
+        timestamp: new Date(order.createdAt ?? 0).getTime(),
+      });
+    });
+
+    return items
+      .filter((item) => Number.isFinite(item.timestamp) && item.timestamp > 0)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 10);
+  }, [activities, collections, ordersQuery.data?.data]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("dashboard-notification-read-ids");
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) setReadIds(parsed);
+    } catch {
+      window.localStorage.removeItem("dashboard-notification-read-ids");
+    }
+  }, []);
+
+  const unreadCount = recentItems.filter((item) => !readIds.includes(item.id)).length;
+  const markRead = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen || !recentItems.length) return;
+    setReadIds((current) => {
+      const next = [...new Set([...current, ...recentItems.map((item) => item.id)])].slice(-80);
+      window.localStorage.setItem("dashboard-notification-read-ids", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  return (
+    <DropdownMenu open={open} onOpenChange={markRead}>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-label="Notifications"
+          className={cn(
+            "relative flex items-center justify-center text-[#555]",
+            mobile ? "size-10 bg-[#f4f4f4]" : "size-8",
+          )}
+        >
+          <Bell className="size-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-[#22bda7] px-1 text-[10px] font-bold text-white">
+              {Math.min(unreadCount, 9)}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-[380px] rounded-xl p-0 shadow-[0_22px_55px_rgba(0,0,0,0.18)]">
+        <div className="flex items-start justify-between gap-4 border-b px-4 py-4">
+          <div>
+            <p className="text-sm font-bold text-[#222]">Notifications</p>
+            <p className="mt-1 text-xs text-[#777]">Recent collection and store activity</p>
+          </div>
+          <span className="rounded-full bg-[#eef8f6] px-2.5 py-1 text-[11px] font-bold text-[#008f80]">
+            {recentItems.length}
+          </span>
+        </div>
+        <ScrollArea className="h-[430px]">
+          {recentItems.length ? recentItems.map((item) => (
+            <div key={item.id} className="flex gap-3 border-b px-4 py-3.5 last:border-b-0">
+              <span className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eef8f6] text-[#009b8c]">
+                {item.id.startsWith("download") ? <Download /> : item.id.startsWith("favorite") ? <Heart /> : <ShoppingBag />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[#222]">{item.title}</p>
+                <p className="mt-1 text-xs leading-5 text-[#666]">{item.meta}</p>
+                <p className="mt-2 text-[11px] font-medium uppercase text-[#999]">
+                  {formatActivityDate(item.time)}
+                </p>
+              </div>
+            </div>
+          )) : (
+            <div className="px-4 py-8 text-center text-sm text-[#777]">No notifications yet.</div>
+          )}
+        </ScrollArea>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1670,6 +2019,8 @@ function StarredGrid({
   emptyText: string;
   emptySubtext: string;
 }) {
+  const router = useRouter();
+
   if (!items.length) {
     return (
       <div className="mx-auto flex min-h-[430px] max-w-[420px] flex-col items-center justify-center text-center">
@@ -1699,7 +2050,15 @@ function StarredGrid({
           : `${image.collectionName ?? "Collection"} / ${image.setName ?? "Highlights"}`;
 
         return (
-        <button key={`${kind}-${item._id}`} className="group text-left">
+        <button
+          key={`${kind}-${item._id}`}
+          className="group text-left"
+          onClick={() =>
+            isCollection
+              ? router.push(`/dashboard/client-gallery/collections/${collection._id}`)
+              : router.push(`/dashboard/client-gallery/collections/${image.collectionId}`)
+          }
+        >
           <span className="relative block overflow-hidden bg-[#f3f3f3]">
             {src ? (
               <img
@@ -2038,6 +2397,8 @@ function SettingsPanel({
       <div className="mt-9">
         {settingsPage === "watermark" ? (
           <WatermarkList section={section} />
+        ) : settingsPage === "branding" ? (
+          <BrandingSettings />
         ) : settingsPage === "watermark-editor" ? (
           <WatermarkSettings section={section} />
         ) : settingsPage === "presets" ? (
@@ -2056,6 +2417,91 @@ function SettingsPanel({
             </p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+const defaultBrandSettings: BrandSettings = {
+  logoUrl: "",
+  brandText: "Studio Brand",
+  brandImageUrl: "",
+  accentColor: "#22bda7",
+};
+
+function BrandingSettings() {
+  const { query, saveSetting } = useDashboardSettings<BrandSettings>("branding");
+  const saved = (query.data?.data?.[0]?.data as BrandSettings | undefined) ?? defaultBrandSettings;
+  const [form, setForm] = useState<BrandSettings>(saved);
+
+  useEffect(() => {
+    setForm(saved);
+  }, [saved.logoUrl, saved.brandText, saved.brandImageUrl, saved.accentColor]);
+
+  const readImage = (file: File | undefined, key: keyof Pick<BrandSettings, "logoUrl" | "brandImageUrl">) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setForm((current) => ({ ...current, [key]: String(reader.result ?? "") }));
+    reader.readAsDataURL(file);
+  };
+
+  const save = () => {
+    saveSetting.mutate({
+      localId: "branding",
+      name: "Branding",
+      data: form,
+    }, {
+      onSuccess: () => toast.success("Branding saved"),
+      onError: (error) => toast.error(error.message),
+    });
+  };
+
+  return (
+    <div className="grid gap-8 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <div className="bg-white">
+        <h2 className="text-2xl font-medium">Branding</h2>
+        <p className="mt-3 text-sm leading-6 text-[#666]">
+          Brand logo, text, color, and image can appear on custom admin cover templates.
+        </p>
+        <FieldGroup className="mt-8 gap-7">
+          <Field>
+            <FieldLabel className="font-bold">Brand Text</FieldLabel>
+            <Input value={form.brandText} onChange={(event) => setForm({ ...form, brandText: event.target.value })} className="h-12 rounded-none bg-white" />
+          </Field>
+          <Field>
+            <FieldLabel className="font-bold">Accent Color</FieldLabel>
+            <div className="flex gap-3">
+              <Input type="color" value={form.accentColor} onChange={(event) => setForm({ ...form, accentColor: event.target.value })} className="size-12 rounded-none p-1" />
+              <Input value={form.accentColor} onChange={(event) => setForm({ ...form, accentColor: event.target.value })} className="h-12 rounded-none bg-white" />
+            </div>
+          </Field>
+          <Field>
+            <FieldLabel className="font-bold">Brand Logo</FieldLabel>
+            <Input type="file" accept="image/*" onChange={(event) => readImage(event.target.files?.[0], "logoUrl")} className="h-12 rounded-none bg-white" />
+          </Field>
+          <Field>
+            <FieldLabel className="font-bold">Brand Image</FieldLabel>
+            <Input type="file" accept="image/*" onChange={(event) => readImage(event.target.files?.[0], "brandImageUrl")} className="h-12 rounded-none bg-white" />
+          </Field>
+        </FieldGroup>
+        <Button className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white" disabled={saveSetting.isPending} onClick={save}>
+          {saveSetting.isPending ? "Saving..." : "Save Branding"}
+        </Button>
+      </div>
+
+      <div className="flex min-h-[480px] items-center justify-center bg-[#f4f4f4] p-8">
+        <div className="relative aspect-[1.45] w-full max-w-[760px] overflow-hidden bg-[#151515] text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+          {form.brandImageUrl ? <img src={form.brandImageUrl} alt="" className="h-full w-full object-cover opacity-70" /> : <div className="h-full w-full bg-[#202326]" />}
+          <div className="absolute inset-0 bg-black/25" />
+          <div className="absolute left-8 top-8 flex items-center gap-4">
+            {form.logoUrl && <img src={form.logoUrl} alt="" className="size-16 object-contain" />}
+            <p className="text-xl font-semibold uppercase tracking-[0.22em]" style={{ color: form.accentColor }}>{form.brandText}</p>
+          </div>
+          <div className="absolute bottom-10 left-10 max-w-[70%]">
+            <p className="text-sm uppercase tracking-[0.28em]">Client Gallery</p>
+            <h3 className="mt-4 text-5xl font-semibold uppercase tracking-[0.12em]">Brand Preview</h3>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2466,6 +2912,7 @@ function PresetEditor({ section }: { section: DashboardSection }) {
     setPresetStore,
   } = useDashboardStore();
   const { saveSetting, deleteSetting } = useDashboardSettings("preset");
+  const [presetDesignPanel, setPresetDesignPanel] = useState<"cover" | "typography" | "color" | "grid">("cover");
   useEffect(() => {
     if (!activePresetId) addPresetDraft();
   }, [activePresetId, addPresetDraft]);
@@ -2582,10 +3029,31 @@ function PresetEditor({ section }: { section: DashboardSection }) {
           />
         )}
         {presetEditorPanel === "design" && (
-          <PresetDesignPanel
-            design={presetDesign}
-            onChange={setPresetDesign}
-          />
+          <div className="grid gap-8 lg:grid-cols-[160px_minmax(0,1fr)]">
+            <div className="flex flex-col gap-1 border-r pr-4">
+              {([
+                ["cover", PanelTop, "Cover"],
+                ["typography", Bold, "Typography"],
+                ["color", Palette, "Color"],
+                ["grid", LayoutGrid, "Grid"],
+              ] as const).map(([panel, Icon, label]) => (
+                <button
+                  key={panel}
+                  className={cn("flex h-12 items-center gap-3 px-3 text-left text-sm", presetDesignPanel === panel && "bg-[#f5f5f5] font-bold text-[#00a997]")}
+                  onClick={() => setPresetDesignPanel(panel)}
+                  type="button"
+                >
+                  <Icon className="size-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <PresetDesignPanel
+              design={presetDesign}
+              activePanel={presetDesignPanel}
+              onChange={setPresetDesign}
+            />
+          </div>
         )}
         {presetEditorPanel === "download" && (
           <PresetDownloadPanel
@@ -2688,31 +3156,6 @@ function PresetGeneralPanel({
             <Link href={`/dashboard/${section}/settings/watermark`} className="text-[#00a997]">
               App Settings
             </Link>.
-          </p>
-        </Field>
-
-        <Field>
-          <FieldLabel className="font-bold">
-            Auto Expiry Reminder Email
-          </FieldLabel>
-          <div className="bg-[#eef7f9] p-5">
-            <p className="font-bold">Upgrade for Premium Features</p>
-            <p className="mt-2 text-sm leading-6 text-[#333]">
-              Sending reminder emails to activity lists is only available for
-              upgraded accounts. Default settings for activity lists will not
-              apply until you have upgraded.
-            </p>
-            <button className="mt-3 text-sm font-semibold text-[#00a997]">
-              Upgrade
-            </button>
-          </div>
-          <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
-            <PlusCircle className="size-4" />
-            Add expiry reminder email
-          </button>
-          <p className="text-sm leading-6 text-[#666]">
-            Setup reminder emails that will send when you create a collection and
-            add an Auto Expiry date.
           </p>
         </Field>
 
@@ -3040,6 +3483,7 @@ function PresetDesignPanel({
   activePanel: "cover" | "typography" | "color" | "grid";
   onChange: (value: Partial<typeof design>) => void;
 }) {
+  const [adminCoverTemplates, setAdminCoverTemplates] = useState<CustomCoverTemplate[]>([]);
   const readCustomFont = (file?: File) => {
     if (!file) return;
     const reader = new FileReader();
@@ -3052,6 +3496,14 @@ function PresetDesignPanel({
     };
     reader.readAsDataURL(file);
   };
+
+  useEffect(() => {
+    const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+    fetch(`${base}/home-cms`)
+      .then((response) => response.json())
+      .then((payload: { data?: HomeCmsData }) => setAdminCoverTemplates(payload.data?.coverTemplates ?? []))
+      .catch(() => setAdminCoverTemplates([]));
+  }, []);
 
   return (
     <div className="min-w-0 border bg-white p-7">
@@ -3085,6 +3537,21 @@ function PresetDesignPanel({
             </OptionSection>
             <p className="mt-10 text-sm font-bold">Cover</p>
             <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8">
+              {adminCoverTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  className="text-center"
+                  onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}
+                  type="button"
+                >
+                  <span className={cn("block border p-1", design.cover === `custom:${template.id}` && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                    <span className="relative block aspect-[1.45] overflow-hidden bg-white">
+                      <CoverPreview design={{ ...design, cover: `custom:${template.id}`, customCoverTemplate: template }} compact className="min-h-0" />
+                    </span>
+                  </span>
+                  <span className="mt-3 block text-sm">{template.name}</span>
+                </button>
+              ))}
               {coverOptions.map(([name]) => (
                 <button key={name} className="text-center" onClick={() => onChange({ cover: name })} type="button">
                   <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
@@ -3184,6 +3651,7 @@ function CollectionDesignLivePreview({
   sets,
   favoriteEnabled,
   storeEnabled,
+  branding,
 }: {
   design: PresetDesignSettings;
   collectionName: string;
@@ -3193,6 +3661,7 @@ function CollectionDesignLivePreview({
   sets: { id: string; name: string }[];
   favoriteEnabled: boolean;
   storeEnabled: boolean;
+  branding?: Partial<BrandSettings>;
 }) {
   const previewImages = images.length ? images.slice(0, 6) : [];
   const firstSets = sets.slice(0, 5);
@@ -3206,21 +3675,42 @@ function CollectionDesignLivePreview({
   const fontFamily = customFontName
     ? `"${customFontName.replace(/"/g, "")}", ${fallbackFontFamily}`
     : fallbackFontFamily;
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
+  const isMobilePreview = previewDevice === "mobile";
 
   return (
-    <aside className="sticky top-0 hidden min-h-[calc(100dvh-9rem)] items-center justify-center bg-[#f4f4f4] px-8 py-10 xl:flex">
-      <div className="w-full max-w-[650px]">
+    <aside className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-hidden bg-[#f4f4f4] px-8 py-6 xl:block">
+      <div className="mb-4 flex items-center justify-center gap-4 text-[#777]">
+        <button
+          className={cn("flex size-9 items-center justify-center", !isMobilePreview && "bg-white text-[#111] shadow-sm")}
+          onClick={() => setPreviewDevice("desktop")}
+          aria-label="Desktop preview"
+          type="button"
+        >
+          <Monitor className="size-5" />
+        </button>
+        <button
+          className={cn("flex size-9 items-center justify-center", isMobilePreview && "bg-white text-[#111] shadow-sm")}
+          onClick={() => setPreviewDevice("mobile")}
+          aria-label="Mobile preview"
+          type="button"
+        >
+          <Smartphone className="size-5" />
+        </button>
+      </div>
+      <div className={cn("mx-auto w-full transition-all duration-300", isMobilePreview ? "max-w-[320px]" : "max-w-[650px]")}>
         {customFontName && design.customFontDataUrl && (
           <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
         )}
-        <div className="shadow-[0_28px_80px_rgba(0,0,0,0.18)]" style={{ backgroundColor: bg, color: fg, fontFamily }}>
+        <div className={cn("shadow-[0_28px_80px_rgba(0,0,0,0.18)]", isMobilePreview && "rounded-[28px] border-[10px] border-[#1d1d1d]")} style={{ backgroundColor: bg, color: fg, fontFamily }}>
           <div className="overflow-hidden border border-white" style={{ backgroundColor: bg }}>
-            <div className="h-[350px] overflow-hidden">
+            <div className={cn("overflow-hidden", isMobilePreview ? "h-[210px]" : "h-[260px]")}>
               <CoverPreview
                 design={{
                   ...design,
                   coverTitle: design.coverTitle || collectionName,
                   coverDate: design.coverDate || eventDate,
+                  branding,
                 }}
                 image={coverImage ? imageSrc(coverImage) : undefined}
                 className="min-h-full"
@@ -3244,7 +3734,7 @@ function CollectionDesignLivePreview({
                 <span key={set.id} className="shrink-0">{set.name}</span>
               )) : <span>Highlights</span>}
             </div>
-            <div className={masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
+            <div className={isMobilePreview ? "columns-2" : masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
               {previewImages.length ? previewImages.map((image, index) => (
                 <div key={image._id} className="break-inside-avoid overflow-hidden bg-[#ececec]" style={{ marginBottom: `${masonryGapPx}px` }}>
                   <img
@@ -3258,10 +3748,6 @@ function CollectionDesignLivePreview({
               ))}
             </div>
           </div>
-        </div>
-        <div className="mt-5 flex items-center justify-center gap-5 text-[#777]">
-          <Monitor className="size-5 text-[#111]" />
-          <Smartphone className="size-5" />
         </div>
       </div>
     </aside>
@@ -4161,6 +4647,64 @@ function StoreDashboardPanel() {
   );
 }
 
+function storeOrderImageSrc(url?: string) {
+  if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://")) return url;
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  return url.startsWith("/") ? `${base}${url}` : url;
+}
+
+async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], filename: string) {
+  const source = storeOrderImageSrc(item.imageUrl);
+  if (!source) return;
+
+  if (!item.crop) {
+    const link = document.createElement("a");
+    link.href = source;
+    link.download = `${filename}.jpg`;
+    link.click();
+    return;
+  }
+
+  try {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.src = source;
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Image could not be loaded"));
+    });
+
+    const [ratioW, ratioH] = String(item.crop.aspectRatio || "4:3").split(":").map(Number);
+    const width = 1600;
+    const height = ratioW > 0 && ratioH > 0 ? Math.round(width * (ratioH / ratioW)) : 1200;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable");
+
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, width, height);
+    context.translate(width / 2 + (width * Number(item.crop.x ?? 0)) / 100, height / 2 + (height * Number(item.crop.y ?? 0)) / 100);
+    context.rotate((Number(item.crop.rotation ?? 0) * Math.PI) / 180);
+    const scale = Math.max(width / image.width, height / image.height) * Number(item.crop.zoom ?? 1);
+    context.drawImage(image, -image.width * scale / 2, -image.height * scale / 2, image.width * scale, image.height * scale);
+
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${filename}-modified.png`;
+    link.click();
+  } catch {
+    toast.error("Unable to download the modified image.");
+  }
+}
+
+function storeCropRatio(value?: string) {
+  const [width, height] = String(value || "4:3").split(":").map(Number);
+  return width > 0 && height > 0 ? width / height : 4 / 3;
+}
+
 function StoreOrdersPanel() {
   const { ordersQuery, createOrder, updateOrder, deleteOrder } = useStoreOrders();
   const { rulesQuery: shippingQuery } = useStoreRules<StoreShippingRecord>("shipping");
@@ -4169,6 +4713,7 @@ function StoreOrdersPanel() {
   const orders = ordersQuery.data?.data ?? [];
   const shippingMethods = shippingQuery.data?.data ?? [];
   const [open, setOpen] = useState(false);
+  const [viewOrder, setViewOrder] = useState<StoreOrderRecord | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -4271,18 +4816,96 @@ function StoreOrdersPanel() {
             </select>,
             <StatusBadge key="payment" value={order.paymentStatus} />,
             money(order.total, currency),
-            <button
-              key="delete"
-              className="text-red-600"
-              onClick={() => deleteOrder.mutate(order._id)}
-              aria-label="Delete order"
-            >
-              <Trash2 className="size-4" />
-            </button>,
+            <div key="actions" className="flex items-center gap-3">
+              <button
+                className="text-[#555] hover:text-black"
+                onClick={() => setViewOrder(order)}
+                aria-label="View order"
+              >
+                <Eye className="size-4" />
+              </button>
+              <button
+                className="text-red-600"
+                onClick={() => deleteOrder.mutate(order._id)}
+                aria-label="Delete order"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>,
           ])}
           empty="No orders yet"
         />
       </div>
+      <Dialog open={Boolean(viewOrder)} onOpenChange={(next) => !next && setViewOrder(null)}>
+        <DialogContent className="rounded-none sm:max-w-[900px]">
+          <DialogHeader>
+            <DialogTitle>{viewOrder?.orderNumber ?? "Order details"}</DialogTitle>
+            <DialogDescription>
+              {viewOrder?.customer?.name} {viewOrder?.customer?.email ? `- ${viewOrder.customer.email}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {viewOrder && (
+            <div className="max-h-[70vh] overflow-y-auto pr-1">
+              <div className="grid gap-3 text-sm sm:grid-cols-3">
+                <div className="border p-3"><p className="text-xs text-[#777]">Status</p><StatusBadge value={viewOrder.status} /></div>
+                <div className="border p-3"><p className="text-xs text-[#777]">Payment</p><StatusBadge value={viewOrder.paymentStatus} /></div>
+                <div className="border p-3"><p className="text-xs text-[#777]">Total</p><p className="mt-1 font-semibold">{money(viewOrder.total, currency)}</p></div>
+              </div>
+              <div className="mt-5 grid gap-4">
+                {viewOrder.items.map((item, index) => (
+                  <article key={`${item.productId ?? item.name}-${index}`} className="grid gap-4 border p-4 md:grid-cols-[180px_1fr]">
+                    <div className="relative overflow-hidden bg-[#f1f1ef]" style={{ aspectRatio: storeCropRatio(item.crop?.aspectRatio) }}>
+                      {item.imageUrl ? (
+                        <img
+                          src={storeOrderImageSrc(item.imageUrl)}
+                          alt={item.name}
+                          className="absolute left-1/2 top-1/2 h-full w-full max-w-none object-cover"
+                          style={{
+                            transform: item.crop
+                              ? `translate(calc(-50% + ${item.crop.x}%), calc(-50% + ${item.crop.y}%)) scale(${item.crop.zoom}) rotate(${item.crop.rotation}deg)`
+                              : "translate(-50%, -50%)",
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-[#888]">No image</div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold">{item.name}</h3>
+                          <p className="mt-1 text-xs text-[#777]">{item.variantLabel || item.type}</p>
+                        </div>
+                        <p className="font-semibold">{money(item.total, currency)}</p>
+                      </div>
+                      <div className="mt-4 grid gap-2 text-sm text-[#555] sm:grid-cols-3">
+                        <p>Qty: {item.quantity}</p>
+                        <p>Unit: {money(item.unitPrice, currency)}</p>
+                        <p>Image: {item.imageId || "-"}</p>
+                      </div>
+                      {item.crop && (
+                        <p className="mt-3 text-xs text-[#777]">
+                          Crop: {item.crop.aspectRatio || "custom"} / zoom {Number(item.crop.zoom ?? 1).toFixed(2)}
+                        </p>
+                      )}
+                      {item.imageUrl && (
+                        <button
+                          className="mt-4 inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
+                          onClick={() => void downloadStoreOrderImage(item, `${viewOrder.orderNumber}-${index + 1}`)}
+                          type="button"
+                        >
+                          <Download className="size-4" />
+                          {item.crop ? "Download modified image" : "Download image"}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="rounded-none sm:max-w-[760px]">
           <DialogHeader>
@@ -5305,32 +5928,335 @@ function money(value: number, currency = "EUR") {
   return `${currency} ${Number(value || 0).toFixed(2)}`;
 }
 
+function getPricingProductCount(sheet?: (StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null) {
+  return (sheet?.products ?? []).length;
+}
+
+function pickPrimaryPricingSheet(
+  sheets: StorePriceSheetRecord[],
+  detailedSheets: Array<(StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null>,
+) {
+  if (!detailedSheets.length) return null;
+
+  return detailedSheets.reduce<(StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null>(
+    (best, current) => {
+      if (!current) return best;
+      if (!best) return current;
+
+      const currentCount = getPricingProductCount(current);
+      const bestCount = getPricingProductCount(best);
+
+      if (currentCount > bestCount) return current;
+      if (currentCount < bestCount) return best;
+
+      if (current.isDefault && !best.isDefault) return current;
+      if (!current.isDefault && best.isDefault) return best;
+
+      const currentIndex = sheets.findIndex((sheet) => sheet._id === current._id);
+      const bestIndex = sheets.findIndex((sheet) => sheet._id === best._id);
+      return currentIndex !== -1 && (bestIndex === -1 || currentIndex < bestIndex) ? current : best;
+    },
+    null,
+  );
+}
+
+function StorePricingPanel() {
+  const router = useRouter();
+  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
+  const deleteProduct = useStoreProductDelete();
+  const settingsQuery = useStoreSettings().settingsQuery;
+  const currency = settingsQuery.data?.data?.currency ?? "EUR";
+  const sheets = priceSheetsQuery.data?.data ?? [];
+  const priceSheetDetails = useStorePriceSheetDetails(sheets.map((sheet) => sheet._id));
+  const detailedSheets = priceSheetDetails
+    .map((query) => query.data?.data ?? null)
+    .filter((sheet): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } => Boolean(sheet));
+  const pricingSheet = pickPrimaryPricingSheet(sheets, detailedSheets);
+  const products = detailedSheets.flatMap((sheet) => sheet.products ?? []);
+  const creatingDefault = useRef(false);
+  const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
+  const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(null);
+
+  useEffect(() => {
+    if (priceSheetsQuery.isLoading || sheets.length || createPriceSheet.isPending || creatingDefault.current) {
+      return;
+    }
+    creatingDefault.current = true;
+    createPriceSheet.mutate(
+      {
+        name: "Default Print Store Pricing",
+        isDefault: true,
+        minimumOrderAmount: 0,
+      },
+      {
+        onSettled: () => {
+          creatingDefault.current = false;
+        },
+      },
+    );
+  }, [createPriceSheet, priceSheetsQuery.isLoading, sheets.length]);
+
+  const groupedProducts = products.reduce<Record<string, StoreProductRecord[]>>(
+    (groups, product) => {
+      const key = product.type === "digital-download" ? "Digital Downloads" : product.category || "Prints";
+      groups[key] = [...(groups[key] ?? []), product];
+      return groups;
+    },
+    {},
+  );
+  const orderedGroups = [
+    ...["Prints", "Wall Art", "Digital Downloads"].filter((category) => groupedProducts[category]?.length),
+    ...Object.keys(groupedProducts).filter((category) => !["Prints", "Wall Art", "Digital Downloads"].includes(category)),
+  ];
+
+  const goAdd = (type: StoreProductType) => {
+    if (!pricingSheet?._id) return;
+    router.push(`/dashboard/store-gallery/pricing/new?type=${type}`);
+  };
+
+  if (priceSheetsQuery.isLoading || createPriceSheet.isPending || pricingLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
+        Loading pricing...
+      </div>
+    );
+  }
+
+  if (!sheets.length) {
+    return (
+      <div className="mx-auto flex max-w-[855px] min-h-[420px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+        <CreditCard className="size-10 text-[#999]" />
+        <p className="mt-5 font-bold">Default pricing not ready</p>
+        <Button
+          className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white"
+          onClick={() =>
+            createPriceSheet.mutate({
+              name: "Default Print Store Pricing",
+              isDefault: true,
+              minimumOrderAmount: 0,
+            })
+          }
+        >
+          Create Default Pricing
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-[950px] px-5 py-8">
+      <div className="flex flex-wrap items-center justify-between gap-5 border-b pb-5">
+        <div>
+          <h1 className="text-[28px] font-medium leading-none">Pricing Sheet</h1>
+          <p className="mt-3 text-sm text-[#666]">
+            Update digital downloads, print items, and fulfillment products used by public galleries.
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white">
+              <PlusCircle data-icon="inline-start" />
+              Add Product
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
+            <DropdownMenuGroup className="flex flex-col gap-4">
+              <DropdownMenuItem
+                className="cursor-pointer items-start gap-4 rounded-none p-2"
+                onClick={() => goAdd("self-fulfilled")}
+              >
+                <Images className="mt-1 size-5 text-[#8a949e]" />
+                <span>
+                  <span className="block font-bold text-[#222]">Print / Wall Art Item</span>
+                  <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
+                    Add a product with image, prices, variants, and hide controls.
+                  </span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer items-start gap-4 rounded-none p-2"
+                onClick={() => goAdd("digital-download")}
+              >
+                <Download className="mt-1 size-5 text-[#8a949e]" />
+                <span>
+                  <span className="block font-bold text-[#222]">Digital Download</span>
+                  <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
+                    Sell downloadable files from the public gallery.
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {products.length ? (
+        <div className="mt-9 flex flex-col gap-12">
+          {orderedGroups.map((category) => (
+            <section key={category}>
+              <h2 className="text-lg font-medium">{category}</h2>
+              <div className="mt-5 grid gap-8 border-t pt-5 sm:grid-cols-2 md:grid-cols-4">
+                {groupedProducts[category].map((product) => (
+                  <ProductTile
+                    key={product._id}
+                    product={product}
+                    currency={currency}
+                    onEdit={() => router.push(`/dashboard/store-gallery/pricing/${product._id}`)}
+                    onDelete={() => setDeleteTarget(product)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-9 flex min-h-[260px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+          <Package className="size-10 text-[#aaa]" />
+          <p className="mt-5 font-bold">No pricing products yet</p>
+          <p className="mt-2 text-sm text-[#666]">Add digital downloads or fulfillment products.</p>
+        </div>
+      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete product"
+        description={deleteTarget ? `Delete "${deleteTarget.name}" from this pricing sheet?` : ""}
+        pending={deleteProduct.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget?.priceSheetId) return;
+          deleteProduct.mutate(
+            { priceSheetId: deleteTarget.priceSheetId, productId: deleteTarget._id },
+            { onSuccess: () => setDeleteTarget(null) },
+          );
+        }}
+      />
+    </div>
+  );
+}
+
+function StorePricingRouteEditor({
+  productId,
+  productType,
+}: {
+  productId: string;
+  productType?: StoreProductType;
+}) {
+  const router = useRouter();
+  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
+  const sheets = priceSheetsQuery.data?.data ?? [];
+  const priceSheetDetails = useStorePriceSheetDetails(sheets.map((sheet) => sheet._id));
+  const detailedSheets = priceSheetDetails
+    .map((query) => query.data?.data ?? null)
+    .filter((sheet): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } => Boolean(sheet));
+  const pricingSheet = pickPrimaryPricingSheet(sheets, detailedSheets);
+  const ownerSheet =
+    productId === "new"
+      ? pricingSheet
+      : detailedSheets.find((sheet) => (sheet.products ?? []).some((item) => item._id === productId)) ?? null;
+  const editingProduct =
+    productId === "new"
+      ? null
+      : ownerSheet?.products?.find((item) => item._id === productId) ?? null;
+  const type = editingProduct?.type ?? productType ?? "self-fulfilled";
+  const { createProduct, updateProduct, deleteProduct } = useStorePriceSheet(ownerSheet?._id);
+  const creatingDefault = useRef(false);
+  const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
+
+  useEffect(() => {
+    if (priceSheetsQuery.isLoading || sheets.length || createPriceSheet.isPending || creatingDefault.current) {
+      return;
+    }
+    creatingDefault.current = true;
+    createPriceSheet.mutate(
+      {
+        name: "Default Print Store Pricing",
+        isDefault: true,
+        minimumOrderAmount: 0,
+      },
+      {
+        onSettled: () => {
+          creatingDefault.current = false;
+        },
+      },
+    );
+  }, [createPriceSheet, priceSheetsQuery.isLoading, sheets.length]);
+
+  useEffect(() => {
+    if (productId !== "new" && !priceSheetsQuery.isLoading && !pricingLoading && !editingProduct) {
+      router.push("/dashboard/store-gallery/pricing");
+    }
+  }, [editingProduct, priceSheetsQuery.isLoading, pricingLoading, productId, router]);
+
+  if (priceSheetsQuery.isLoading || createPriceSheet.isPending || pricingLoading || !ownerSheet?._id) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
+        Loading pricing product...
+      </div>
+    );
+  }
+
+  return (
+    <ProductEditorDialog
+      open={true}
+      type={type}
+      product={editingProduct}
+      pending={createProduct.isPending || updateProduct.isPending}
+      onOpenChange={(open) => {
+        if (!open) router.push("/dashboard/store-gallery/pricing");
+      }}
+      onSave={(payload) =>
+        editingProduct
+          ? updateProduct.mutate(
+              { productId: editingProduct._id, payload },
+              {
+                onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
+              },
+            )
+          : createProduct.mutate(payload, {
+              onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
+            })
+      }
+      onHide={
+        editingProduct
+          ? () => {
+              deleteProduct.mutate(
+                editingProduct._id,
+                {
+                  onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
+                },
+              );
+            }
+          : undefined
+      }
+      hidePending={deleteProduct.isPending}
+    />
+  );
+}
+
 function StoreProductsPanel() {
   const router = useRouter();
-  const [collectionId, setCollectionId] = useState<string | undefined>();
-  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets(collectionId);
+  const { priceSheetsQuery, createPriceSheet, deletePriceSheet } = useStorePriceSheets();
   const sheets = priceSheetsQuery.data?.data ?? [];
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sheetName, setSheetName] = useState("My Price Sheet");
   const [minimumOrderAmount, setMinimumOrderAmount] = useState("0");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setCollectionId(params.get("collectionId") ?? undefined);
-  }, []);
+  const [fulfillment, setFulfillment] = useState<"self-fulfilled" | "auto">("self-fulfilled");
+  const [deleteSheet, setDeleteSheet] = useState<StorePriceSheetRecord | null>(null);
 
   const addSheet = () => {
     createPriceSheet.mutate(
       {
         name: sheetName.trim() || "My Price Sheet",
         isDefault: !sheets.length,
-        collectionIds: collectionId ? [collectionId] : [],
         minimumOrderAmount: Number(minimumOrderAmount) || 0,
+        fulfillment,
       },
       {
         onSuccess: (response) => {
+          setSettingsOpen(false);
           const id = response?.data?._id;
-          if (id) router.push(`/dashboard/store-gallery/products/${id}`);
+          if (!id) return;
+          router.push(`/dashboard/store-gallery/products/${id}`);
         },
       },
     );
@@ -5341,9 +6267,7 @@ function StoreProductsPanel() {
       <div className="flex items-center justify-between gap-5 border-b pb-4">
         <div>
           <h1 className="text-[26px] font-medium leading-none">Price Sheets</h1>
-          {collectionId && (
-            <p className="mt-3 text-sm text-[#777]">Showing sheets connected to this collection.</p>
-          )}
+          <p className="mt-3 text-sm text-[#777]">Manage store price sheets outside collection pages.</p>
         </div>
         <Button
           className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
@@ -5373,12 +6297,16 @@ function StoreProductsPanel() {
       ) : (
         <div className="mt-8 grid gap-7 sm:grid-cols-2">
           {sheets.map((sheet) => (
-            <button
+            <article
               key={sheet._id}
-              className="group text-left"
-              onClick={() => router.push(`/dashboard/store-gallery/products/${sheet._id}`)}
+              className="group relative text-left"
             >
-              <span className="relative flex aspect-[1.8] items-center justify-center bg-[#f4f4f4]">
+              <button
+                className="block w-full text-left"
+                onClick={() => router.push(`/dashboard/store-gallery/products/${sheet._id}`)}
+                type="button"
+              >
+                <span className="relative flex aspect-[1.8] items-center justify-center bg-[#f4f4f4]">
                 {sheet.isDefault && (
                   <span className="absolute left-3 top-3 bg-[#e7e7e7] px-2 py-1 text-[10px] font-bold uppercase">
                     Default
@@ -5386,14 +6314,23 @@ function StoreProductsPanel() {
                 )}
                 <CircleUserRound className="size-10 text-[#2f3438]" />
               </span>
-              <span className="mt-4 flex items-center justify-between gap-4">
+                <span className="mt-4 flex items-center justify-between gap-4">
                 <span className="font-bold uppercase">{sheet.name}</span>
                 <MoreHorizontal className="size-5 text-[#00a997]" />
               </span>
-              <span className="mt-2 block text-sm text-[#777]">
+                <span className="mt-2 block text-sm text-[#777]">
                 {sheet.productCount ?? 0} Products &nbsp; {sheet.collectionCount ?? 0} Collection
               </span>
-            </button>
+              </button>
+              <button
+                className="absolute right-3 top-3 flex size-9 items-center justify-center bg-white text-red-600 opacity-0 shadow-sm transition group-hover:opacity-100"
+                onClick={() => setDeleteSheet(sheet)}
+                type="button"
+                aria-label="Delete price sheet"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </article>
           ))}
         </div>
       )}
@@ -5423,7 +6360,25 @@ function StoreProductsPanel() {
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold">Fulfillment</FieldLabel>
-                  <p className="text-sm">Self Fulfillment</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {([
+                      ["self-fulfilled", "Self fulfillment", "Empty sheet. You add products manually."],
+                      ["auto", "Auto defaults", "Create sheet with default Print and Wall Art products."],
+                    ] as const).map(([value, label, text]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={cn(
+                          "border px-4 py-4 text-left",
+                          fulfillment === value && "border-[#22bda7] bg-[#f2fbf9]",
+                        )}
+                        onClick={() => setFulfillment(value)}
+                      >
+                        <span className="block text-sm font-bold">{label}</span>
+                        <span className="mt-1 block text-xs leading-5 text-[#777]">{text}</span>
+                      </button>
+                    ))}
+                  </div>
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold">Minimum Order Amount</FieldLabel>
@@ -5437,7 +6392,7 @@ function StoreProductsPanel() {
               </FieldGroup>
             </TabsContent>
             <TabsContent value="advanced" className="mt-7 text-sm leading-6 text-[#666]">
-              Connected collections: {collectionId ? "1 selected" : "All collections can be assigned later"}
+              Collections use the Store Gallery Pricing defaults unless changed by store settings.
             </TabsContent>
           </Tabs>
           <DialogFooter>
@@ -5454,25 +6409,37 @@ function StoreProductsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <DeleteConfirmDialog
+        open={Boolean(deleteSheet)}
+        title="Delete price sheet"
+        description={deleteSheet ? `Delete "${deleteSheet.name}" and all products inside it?` : ""}
+        pending={deletePriceSheet.isPending}
+        onCancel={() => setDeleteSheet(null)}
+        onConfirm={() => {
+          if (!deleteSheet) return;
+          deletePriceSheet.mutate(deleteSheet._id, {
+            onSuccess: () => setDeleteSheet(null),
+          });
+        }}
+      />
     </div>
   );
 }
 
 function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
   const router = useRouter();
-  const { priceSheetQuery, updatePriceSheet, createProduct, deleteProduct } =
+  const { priceSheetQuery, updatePriceSheet, deleteProduct } =
     useStorePriceSheet(priceSheetId);
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const sheet = priceSheetQuery.data?.data;
   const products = sheet?.products ?? [];
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [productOpen, setProductOpen] = useState(false);
-  const [productType, setProductType] = useState<StoreProductType>("self-fulfilled");
   const [settingsForm, setSettingsForm] = useState({
     name: "",
     minimumOrderAmount: "0",
   });
+  const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(null);
 
   useEffect(() => {
     if (!sheet) return;
@@ -5565,10 +6532,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                   <DropdownMenuItem
                     key={item.type}
                     className="cursor-pointer items-start gap-4 rounded-none p-2"
-                    onClick={() => {
-                      setProductType(item.type);
-                      setProductOpen(true);
-                    }}
+                    onClick={() => router.push(`/dashboard/store-gallery/products/${priceSheetId}/new?type=${item.type}`)}
                   >
                     <item.icon className="mt-1 size-5 text-[#8a949e]" />
                     <span>
@@ -5607,7 +6571,8 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                     key={product._id}
                     product={product}
                     currency={currency}
-                    onDelete={() => deleteProduct.mutate(product._id)}
+                    onEdit={() => router.push(`/dashboard/store-gallery/products/${priceSheetId}/${product._id}`)}
+                    onDelete={() => setDeleteTarget(product)}
                   />
                 ))}
               </div>
@@ -5670,17 +6635,92 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ProductEditorDialog
-        open={productOpen}
-        type={productType}
-        pending={createProduct.isPending}
-        onOpenChange={setProductOpen}
-        onSave={(payload) =>
-          createProduct.mutate(payload, { onSuccess: () => setProductOpen(false) })
-        }
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete product"
+        description={deleteTarget ? `Delete "${deleteTarget.name}" from this pricing sheet?` : ""}
+        pending={deleteProduct.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteProduct.mutate(deleteTarget._id, {
+            onSuccess: () => setDeleteTarget(null),
+          });
+        }}
       />
+
     </div>
+  );
+}
+
+function StoreProductRouteEditor({
+  priceSheetId,
+  productId,
+  productType,
+}: {
+  priceSheetId: string;
+  productId: string;
+  productType?: StoreProductType;
+}) {
+  const router = useRouter();
+  const { priceSheetQuery, createProduct, updateProduct, deleteProduct } = useStorePriceSheet(priceSheetId);
+  const sheet = priceSheetQuery.data?.data;
+  const editingProduct =
+    productId === "new"
+      ? null
+      : (sheet?.products ?? []).find((item) => item._id === productId) ?? null;
+  const type = editingProduct?.type ?? productType ?? "self-fulfilled";
+  const listPath = `/dashboard/store-gallery/products/${priceSheetId}`;
+
+  useEffect(() => {
+    if (productId !== "new" && !priceSheetQuery.isLoading && !editingProduct) {
+      router.push(listPath);
+    }
+  }, [editingProduct, listPath, priceSheetQuery.isLoading, productId, router]);
+
+  if (priceSheetQuery.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
+        Loading product...
+      </div>
+    );
+  }
+
+  return (
+    <ProductEditorDialog
+      open={true}
+      type={type}
+      product={editingProduct}
+      pending={createProduct.isPending || updateProduct.isPending}
+      onOpenChange={(open) => {
+        if (!open) router.push(listPath);
+      }}
+      onSave={(payload) =>
+        editingProduct
+          ? updateProduct.mutate(
+              { productId: editingProduct._id, payload },
+              {
+                onSuccess: () => router.push(listPath),
+              },
+            )
+          : createProduct.mutate(payload, {
+              onSuccess: () => router.push(listPath),
+            })
+      }
+      onHide={
+        editingProduct
+          ? () => {
+              deleteProduct.mutate(
+                editingProduct._id,
+                {
+                  onSuccess: () => router.push(listPath),
+                },
+              );
+            }
+          : undefined
+      }
+      hidePending={deleteProduct.isPending}
+    />
   );
 }
 
@@ -5693,13 +6733,50 @@ function DetailStat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function DeleteConfirmDialog({
+  open,
+  title,
+  description,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(value) => !value && onCancel()}>
+      <DialogContent className="rounded-none sm:max-w-[430px]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" className="rounded-none" disabled={pending} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button className="rounded-none bg-red-600 text-white hover:bg-red-700" disabled={pending} onClick={onConfirm}>
+            {pending ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ProductTile({
   product,
   currency,
+  onEdit,
   onDelete,
 }: {
   product: StoreProductRecord;
   currency: string;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -5720,14 +6797,16 @@ function ProductTile({
           <Trash2 className="size-4" />
         </button>
       </div>
-      <div className="mt-3 flex items-start justify-between gap-3">
+      <button className="mt-3 flex w-full items-start justify-between gap-3 text-left" onClick={onEdit}>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{product.name}</p>
           <p className="mt-1 text-sm text-[#777]">From {money(productDisplayPrice(product), currency)}</p>
-          <p className="mt-1 text-xs text-[#999]">{productTypeLabels[product.type]}</p>
+          <p className="mt-1 text-xs text-[#999]">
+            {productTypeLabels[product.type]}{product.active === false ? " • Hidden" : ""}
+          </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#00a997]" />
-      </div>
+      </button>
     </div>
   );
 }
@@ -5902,15 +6981,21 @@ function buildProductVariants(
 function ProductEditorDialog({
   open,
   type,
+  product,
   pending,
   onOpenChange,
   onSave,
+  onHide,
+  hidePending = false,
 }: {
   open: boolean;
   type: StoreProductType;
+  product?: StoreProductRecord | null;
   pending: boolean;
   onOpenChange: (value: boolean) => void;
   onSave: (payload: StoreProductPayload) => void;
+  onHide?: () => void;
+  hidePending?: boolean;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -5931,6 +7016,26 @@ function ProductEditorDialog({
 
   useEffect(() => {
     if (!open) return;
+    if (product) {
+      setForm({
+        name: product.name ?? "",
+        description: product.description ?? "",
+        price: String(product.price ?? 0),
+        extraShipping: String(product.extraShipping ?? 0),
+        category: product.category ?? (type === "digital-download" ? "Digital Downloads" : "Prints"),
+        images: product.images ?? [],
+        downloadType: product.downloadType ?? "single-photo",
+        downloadSize: product.downloadSize ?? "High Resolution Original (Full res)",
+        noImageRequired: Boolean(product.noImageRequired),
+        exemptFromSalesTax: Boolean(product.exemptFromSalesTax),
+        limitOnePerCheckout: Boolean(product.limitOnePerCheckout),
+        allowBulkPurchase: Boolean(product.allowBulkPurchase),
+        options: product.options ?? (type === "self-fulfilled" ? defaultSelfFulfilledOptions : []),
+        variants: product.variants ?? [],
+      });
+      return;
+    }
+    const defaultOptions = type === "self-fulfilled" ? defaultSelfFulfilledOptions : [];
     setForm({
       name:
         type === "digital-download"
@@ -5947,12 +7052,12 @@ function ProductEditorDialog({
       exemptFromSalesTax: false,
       limitOnePerCheckout: false,
       allowBulkPurchase: false,
-      options: type === "self-fulfilled" ? defaultSelfFulfilledOptions : [],
+      options: defaultOptions,
       variants: type === "self-fulfilled"
-        ? buildProductVariants(defaultSelfFulfilledOptions, [], Number(form.price) || 0)
+        ? buildProductVariants(defaultOptions, [], 0)
         : [],
     });
-  }, [open, type]);
+  }, [open, product, type]);
 
   useEffect(() => {
     if (!open || type !== "self-fulfilled") return;
@@ -6004,7 +7109,7 @@ function ProductEditorDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
         <DialogHeader>
           <DialogTitle>
-            {type === "digital-download" ? "Add Digital Download" : "Add Product"}
+            {product ? "Edit Product" : type === "digital-download" ? "Add Digital Download" : "Add Product"}
           </DialogTitle>
           <DialogDescription>{productTypeLabels[type]}</DialogDescription>
         </DialogHeader>
@@ -6293,6 +7398,16 @@ function ProductEditorDialog({
         </FieldGroup>
 
         <DialogFooter>
+          {product && onHide && (
+            <Button
+              variant="outline"
+              className="rounded-none text-red-600"
+              disabled={hidePending}
+              onClick={onHide}
+            >
+              {hidePending ? "Deleting..." : "Delete"}
+            </Button>
+          )}
           <Button variant="outline" className="rounded-none" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -6310,23 +7425,180 @@ function ProductEditorDialog({
 }
 
 function CollectionsPanel({ section }: { section: DashboardSection }) {
-  const { collectionsQuery } = useCollections();
+  const { collectionsQuery, updateCollection, deleteCollection, duplicateCollection } = useCollections();
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
+  const [quickEdit, setQuickEdit] = useState<CollectionRecord | null>(null);
+  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "" });
   const [searchTerm, setSearchTerm] = useState("");
-  const filteredCollections = collections.filter((collection) =>
-    [collection.name, collection.tags?.join(" "), collection.status]
-      .join(" ")
-      .toLowerCase()
-      .includes(searchTerm.trim().toLowerCase()),
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [eventDateFilter, setEventDateFilter] = useState("all");
+  const [expiryDateFilter, setExpiryDateFilter] = useState("all");
+  const [starredFilter, setStarredFilter] = useState("all");
+  const [sortFilter, setSortFilter] = useState("newest");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const statuses = useMemo(
+    () => [...new Set(collections.map((item) => item.status).filter((value): value is string => Boolean(value)))].sort(),
+    [collections],
   );
+  const tags = useMemo(
+    () => [...new Set(collections.flatMap((item) => item.tags ?? []))].sort(),
+    [collections],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+  useEffect(() => {
+    if (!quickEdit) return;
+    setQuickForm({
+      name: quickEdit.name,
+      eventDate: quickEdit.eventDate ? quickEdit.eventDate.slice(0, 10) : "",
+    });
+  }, [quickEdit]);
+
+  const filteredCollections = useMemo(() => {
+    const query = debouncedSearchTerm.trim().toLowerCase();
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const matches = collections.filter((collection) => {
+      const searchable = [collection.name, collection.status, ...(collection.tags ?? [])]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (query && !searchable.includes(query)) return false;
+      if (statusFilter !== "all" && collection.status !== statusFilter) return false;
+      if (tagFilter !== "all" && !(collection.tags ?? []).includes(tagFilter)) return false;
+
+      const event = collection.eventDate ? new Date(collection.eventDate) : null;
+      if (eventDateFilter === "upcoming" && (!event || event < today)) return false;
+      if (eventDateFilter === "past" && (!event || event >= today)) return false;
+      if (eventDateFilter === "none" && event) return false;
+
+      const expiry = collection.expiresAt ? new Date(collection.expiresAt) : null;
+      if (expiryDateFilter === "active" && (!expiry || expiry < now)) return false;
+      if (expiryDateFilter === "expired" && (!expiry || expiry >= now)) return false;
+      if (expiryDateFilter === "none" && expiry) return false;
+
+      const isStarred = collection.status === "starred" || collection.settings?.starred === true;
+      if (starredFilter === "yes" && !isStarred) return false;
+      if (starredFilter === "no" && isStarred) return false;
+      return true;
+    });
+
+    return [...matches].sort((left, right) => {
+      if (sortFilter === "name-asc") return left.name.localeCompare(right.name);
+      if (sortFilter === "name-desc") return right.name.localeCompare(left.name);
+      const leftTime = new Date(left.createdAt ?? left.eventDate ?? 0).getTime();
+      const rightTime = new Date(right.createdAt ?? right.eventDate ?? 0).getTime();
+      return sortFilter === "oldest" ? leftTime - rightTime : rightTime - leftTime;
+    });
+  }, [collections, debouncedSearchTerm, eventDateFilter, expiryDateFilter, sortFilter, starredFilter, statusFilter, tagFilter]);
+  const filtersActive = Boolean(
+    searchTerm || statusFilter !== "all" || tagFilter !== "all" || eventDateFilter !== "all" ||
+      expiryDateFilter !== "all" || starredFilter !== "all" || sortFilter !== "newest",
+  );
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setTagFilter("all");
+    setEventDateFilter("all");
+    setExpiryDateFilter("all");
+    setStarredFilter("all");
+    setSortFilter("newest");
+  };
   const openCollectionPreview = (collection: CollectionRecord) => {
-    const path = `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
-    window.open(path, "_blank", "noopener,noreferrer");
+    window.open(publicCollectionPath(collection), "_blank", "noopener,noreferrer");
+  };
+  const shareCollection = async (collection: CollectionRecord) => {
+    const url = `${window.location.origin}${publicCollectionPath(collection)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Collection link copied");
+    } catch {
+      toast.error(url);
+    }
+  };
+  const duplicate = (collection: CollectionRecord) => {
+    duplicateCollection.mutate(collection._id, {
+      onSuccess: () => toast.success("Collection duplicated"),
+      onError: (error) => toast.error(error.message),
+    });
+  };
+  const saveQuickEdit = () => {
+    if (!quickEdit) return;
+    updateCollection.mutate({
+      collectionId: quickEdit._id,
+      payload: {
+        name: quickForm.name.trim(),
+        eventDate: quickForm.eventDate || undefined,
+      },
+    }, {
+      onSuccess: () => {
+        toast.success("Collection updated");
+        setQuickEdit(null);
+      },
+      onError: (error) => toast.error(error.message),
+    });
+  };
+  const toggleCollectionStar = (collection: CollectionRecord) => {
+    const isStarred = collection.status === "starred" || collection.settings?.starred === true;
+    const nextStatus = isStarred ? (collection.status === "starred" ? "draft" : collection.status) : "starred";
+    const nextSettings = {
+      ...(collection.settings ?? {}),
+      starred: !isStarred,
+    };
+    updateCollection.mutate({
+      collectionId: collection._id,
+      payload: { status: nextStatus, settings: nextSettings },
+    });
+  };
+  const removeCollection = (collection: CollectionRecord) => {
+    if (!window.confirm(`Delete "${collection.name}"? This cannot be undone.`)) return;
+    deleteCollection.mutate(collection._id);
   };
 
   return (
     <div className="min-h-full bg-white">
+      <Dialog open={Boolean(quickEdit)} onOpenChange={(open) => !open && setQuickEdit(null)}>
+        <DialogContent className="rounded-none sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>Quick edit</DialogTitle>
+            <DialogDescription>Rename collection and update event date.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="quick-collection-name">Collection Name</FieldLabel>
+              <Input
+                id="quick-collection-name"
+                value={quickForm.name}
+                onChange={(event) => setQuickForm((current) => ({ ...current, name: event.target.value }))}
+                className="rounded-none"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="quick-event-date">Event Date</FieldLabel>
+              <Input
+                id="quick-event-date"
+                type="date"
+                value={quickForm.eventDate}
+                onChange={(event) => setQuickForm((current) => ({ ...current, eventDate: event.target.value }))}
+                className="rounded-none"
+              />
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setQuickEdit(null)}>Cancel</Button>
+            <Button className="rounded-none bg-[#22bda7] text-white hover:bg-[#19a995]" disabled={updateCollection.isPending || !quickForm.name.trim()} onClick={saveQuickEdit}>
+              {updateCollection.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-8">
           <h1 className="text-[28px] font-medium leading-none tracking-normal">
@@ -6365,22 +7637,59 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
 
       <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-2">
-          {["Status", "Category Tag", "Event Date", "Expiry Date", "Starred"].map((filter) => (
-            <button
-              key={filter}
-              className="inline-flex h-8 items-center gap-2 rounded-full bg-[#f6f6f6] px-4 text-xs font-medium text-[#222]"
-              type="button"
-            >
-              {filter}
-              <ChevronDown className="size-3" />
-            </button>
-          ))}
+          <CollectionFilterSelect value={statusFilter} onValueChange={setStatusFilter} placeholder="Status: All">
+            <SelectItem value="all">Status: All</SelectItem>
+            {statuses.map((value) => <SelectItem key={value} value={value}>Status: {titleCase(value)}</SelectItem>)}
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={tagFilter} onValueChange={setTagFilter} placeholder="Category Tag: All">
+            <SelectItem value="all">Category Tag: All</SelectItem>
+            {tags.map((value) => <SelectItem key={value} value={value}>Category Tag: {value}</SelectItem>)}
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={eventDateFilter} onValueChange={setEventDateFilter} placeholder="Event Date: All">
+            <SelectItem value="all">Event Date: All</SelectItem>
+            <SelectItem value="upcoming">Event Date: Upcoming</SelectItem>
+            <SelectItem value="past">Event Date: Past</SelectItem>
+            <SelectItem value="none">Event Date: None</SelectItem>
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={expiryDateFilter} onValueChange={setExpiryDateFilter} placeholder="Expiry Date: All">
+            <SelectItem value="all">Expiry Date: All</SelectItem>
+            <SelectItem value="active">Expiry Date: Not expired</SelectItem>
+            <SelectItem value="expired">Expiry Date: Expired</SelectItem>
+            <SelectItem value="none">Expiry Date: None</SelectItem>
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={starredFilter} onValueChange={setStarredFilter} placeholder="Starred: All">
+            <SelectItem value="all">Starred: All</SelectItem>
+            <SelectItem value="yes">Starred: Yes</SelectItem>
+            <SelectItem value="no">Starred: No</SelectItem>
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={sortFilter} onValueChange={setSortFilter} placeholder="Sort: Newest">
+            <SelectItem value="newest">Sort: Newest</SelectItem>
+            <SelectItem value="oldest">Sort: Oldest</SelectItem>
+            <SelectItem value="name-asc">Sort: Name A-Z</SelectItem>
+            <SelectItem value="name-desc">Sort: Name Z-A</SelectItem>
+          </CollectionFilterSelect>
+          {filtersActive && <button className="h-9 px-3 text-xs font-semibold text-[#00a997]" onClick={clearFilters}>Clear filters</button>}
         </div>
         <div className="flex items-center gap-4 text-[#777]">
-          <ListFilter className="size-5" />
-          <LayoutGrid className="size-5" />
+          <button
+            className={cn("flex size-9 items-center justify-center border", viewMode === "grid" && "border-[#222] bg-[#222] text-white")}
+            onClick={() => setViewMode("grid")}
+            aria-label="Grid view"
+            type="button"
+          >
+            <LayoutGrid className="size-4" />
+          </button>
+          <button
+            className={cn("flex size-9 items-center justify-center border", viewMode === "list" && "border-[#222] bg-[#222] text-white")}
+            onClick={() => setViewMode("list")}
+            aria-label="List view"
+            type="button"
+          >
+            <Menu className="size-4" />
+          </button>
         </div>
       </div>
+      <p className="mt-6 text-xs text-[#777]">Showing {filteredCollections.length} of {collections.length} collections</p>
 
       {collectionsQuery.isLoading ? (
         <p className="mt-10 py-8 text-sm text-[#666]">Loading collections...</p>
@@ -6398,13 +7707,31 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             Create Collection
           </Button>
         </div>
-      ) : (
-        <div className="mt-10 grid gap-x-8 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+      ) : viewMode === "grid" ? (
+        <div className="mt-10 grid gap-x-10 gap-y-12 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filteredCollections.map((collection) => (
             <article
               key={collection._id}
-              className="group text-left"
+              className="group relative text-left"
             >
+              <button
+                className="absolute left-3 top-3 z-10 flex size-10 items-center justify-center rounded-full bg-white/92 text-[#666] shadow-sm transition hover:text-[#00a997]"
+                onClick={() => toggleCollectionStar(collection)}
+                type="button"
+                aria-label="Star collection"
+              >
+                <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
+              </button>
+              <CollectionActionMenu
+                collection={collection}
+                className="absolute right-3 top-3 z-10"
+                onQuickEdit={setQuickEdit}
+                onPreview={openCollectionPreview}
+                onShare={shareCollection}
+                onDuplicate={duplicate}
+                onDelete={removeCollection}
+                pending={duplicateCollection.isPending || deleteCollection.isPending}
+              />
               <button
                 className="block w-full overflow-hidden bg-[#f2f2f2] text-left"
                 onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
@@ -6422,26 +7749,25 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                   </span>
                 )}
               </button>
-              <div className="pt-3">
+              <div className="pt-4">
                 <div className="flex items-start justify-between gap-3">
                   <button
-                    className="min-w-0 flex-1 truncate text-left text-base font-semibold text-[#333]"
+                    className="min-w-0 flex-1 truncate text-left text-[22px] font-semibold leading-none text-[#333]"
                     onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
                     type="button"
                   >
                     {collection.name}
                   </button>
-                  <button
-                    className="shrink-0 text-xs font-bold text-[#00a997] opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={() => openCollectionPreview(collection)}
-                    type="button"
-                  >
-                    Preview
-                  </button>
                 </div>
-                <p className="mt-2 flex items-center gap-2 text-xs text-[#777]">
+                <p className="mt-3 flex items-center gap-2 text-sm text-[#777]">
                   <span className="size-2 rounded-full bg-[#22bda7]" />
                   <span>{collection.imageCount ?? 0} items</span>
+                  {collection.status && (
+                    <>
+                      <span>&bull;</span>
+                      <span>{titleCase(collection.status)}</span>
+                    </>
+                  )}
                   {collection.eventDate && (
                     <>
                       <span>&bull;</span>
@@ -6453,8 +7779,136 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             </article>
           ))}
         </div>
+      ) : (
+        <div className="mt-10 divide-y border">
+          {filteredCollections.map((collection) => (
+            <article key={collection._id} className="grid items-center gap-5 p-5 lg:grid-cols-[220px_1fr_auto]">
+              <button className="overflow-hidden bg-[#f2f2f2] text-left" onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)} type="button">
+                {collection.coverImage ? (
+                  <img src={imageSrc(collection.coverImage)} alt="" className="aspect-[1.35] w-full object-cover" />
+                ) : (
+                  <span className="flex aspect-[1.35] items-center justify-center"><Images className="size-10 text-[#ccc]" /></span>
+                )}
+              </button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <button className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f5] text-[#666] hover:text-[#00a997]" onClick={() => toggleCollectionStar(collection)} type="button" aria-label="Star collection">
+                    <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
+                  </button>
+                  <button className="truncate text-left text-xl font-semibold" onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)} type="button">
+                    {collection.name}
+                  </button>
+                </div>
+                <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[#777]">
+                  <span>{collection.imageCount ?? 0} items</span>
+                  {collection.status && <><span>&bull;</span><span>{titleCase(collection.status)}</span></>}
+                  {collection.eventDate && <><span>&bull;</span><span>{formatDate(collection.eventDate)}</span></>}
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button className="text-sm font-bold text-[#00a997]" onClick={() => openCollectionPreview(collection)} type="button">Preview</button>
+                <CollectionActionMenu
+                  collection={collection}
+                  onQuickEdit={setQuickEdit}
+                  onPreview={openCollectionPreview}
+                  onShare={shareCollection}
+                  onDuplicate={duplicate}
+                  onDelete={removeCollection}
+                  pending={duplicateCollection.isPending || deleteCollection.isPending}
+                />
+              </div>
+            </article>
+          ))}
+        </div>
       )}
     </div>
+  );
+}
+
+function CollectionActionMenu({
+  collection,
+  className,
+  onQuickEdit,
+  onPreview,
+  onShare,
+  onDuplicate,
+  onDelete,
+  pending,
+}: {
+  collection: CollectionRecord;
+  className?: string;
+  onQuickEdit: (collection: CollectionRecord) => void;
+  onPreview: (collection: CollectionRecord) => void;
+  onShare: (collection: CollectionRecord) => void;
+  onDuplicate: (collection: CollectionRecord) => void;
+  onDelete: (collection: CollectionRecord) => void;
+  pending?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn("flex size-10 items-center justify-center rounded-full bg-white/95 text-[#555] shadow-sm transition hover:text-[#00a997]", className)}
+          aria-label="Collection actions"
+        >
+          <MoreHorizontal className="size-5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52 rounded-xl p-1">
+        <DropdownMenuGroup>
+          <DropdownMenuItem onSelect={() => onQuickEdit(collection)}>
+            <Wrench />
+            Quick edit
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onPreview(collection)}>
+            <Eye />
+            Preview
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void onShare(collection)}>
+            <Share2 />
+            Share
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem disabled={pending} onSelect={() => onDuplicate(collection)}>
+            <Copy />
+            Duplicate
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem variant="destructive" disabled={pending} onSelect={() => onDelete(collection)}>
+            <Trash2 />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function CollectionFilterSelect({
+  value,
+  onValueChange,
+  placeholder,
+  children,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder: string;
+  children: ReactNode;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="h-9 rounded-full border-0 bg-[#f5f5f5] px-4 text-xs font-medium text-[#222]">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent align="start">
+        {children}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -6599,6 +8053,7 @@ function CollectionDetailView({
   const router = useRouter();
   const presetSettings = useDashboardSettings("preset").query;
   const watermarkSettings = useDashboardSettings("watermark").query;
+  const brandingSettings = useDashboardSettings<BrandSettings>("branding").query;
   const emailTemplateSettings = useDashboardSettings("email-template").query;
   const storeEmailTemplates = useDashboardStore((state) => state.emailTemplates);
   const storePresetItems = useDashboardStore((state) => state.presetItems);
@@ -6606,6 +8061,7 @@ function CollectionDetailView({
   const storeWatermarkItems = useDashboardStore((state) => state.watermarkItems);
   const { starImage } = useImageActions();
   const { collectionsQuery } = useCollections();
+  const { ordersQuery } = useStoreOrders();
   const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
   const activityActions = useCollectionActivityActions(collectionId);
@@ -6621,7 +8077,7 @@ function CollectionDetailView({
   const [activeImageId, setActiveImageId] = useState("");
   const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "download">("photos");
   const [activeDesignPanel, setActiveDesignPanel] = useState<"cover" | "typography" | "color" | "grid">("cover");
-  const [activityPage, setActivityPage] = useState<"download" | "favorite">("favorite");
+  const [activityPage, setActivityPage] = useState<"download" | "favorite" | "orders">("favorite");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
   const [addSetOpen, setAddSetOpen] = useState(false);
@@ -6654,6 +8110,7 @@ function CollectionDetailView({
     () => (watermarkSettings.data?.data?.map((setting) => setting.data as WatermarkItem) ?? storeWatermarkItems),
     [storeWatermarkItems, watermarkSettings.data?.data],
   );
+  const branding = (brandingSettings.data?.data?.[0]?.data as BrandSettings | undefined) ?? defaultBrandSettings;
   const activeImage =
     images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
   const orderedImages = useMemo(() => {
@@ -6661,6 +8118,10 @@ function CollectionDetailView({
     const rank = new Map(orderedImageIds.map((id, index) => [id, index]));
     return [...images].sort((a, b) => (rank.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b._id) ?? Number.MAX_SAFE_INTEGER));
   }, [images, orderedImageIds]);
+  const collectionOrders = useMemo(
+    () => (ordersQuery.data?.data ?? []).filter((order) => order.collectionId === collectionId),
+    [collectionId, ordersQuery.data?.data],
+  );
   const activeSetImages = useMemo(
     () => orderedImages.filter((image) => (image.setId || "highlights") === activeSetId),
     [activeSetId, orderedImages],
@@ -6921,10 +8382,18 @@ function CollectionDetailView({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button
+            className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
+            disabled={updateCollection.isPending}
+            onClick={saveCollection}
+          >
+            <Save data-icon="inline-start" />
+            {updateCollection.isPending ? "Saving..." : "Save"}
+          </Button>
+          <Button
             variant="outline"
             className="h-10 rounded-none"
             onClick={() =>
-              router.push(`/dashboard/store-gallery/products?collectionId=${collectionId}`)
+              router.push(`/dashboard/store-gallery/collections/${collectionId}/store`)
             }
           >
             <Store data-icon="inline-start" />
@@ -7105,15 +8574,15 @@ function CollectionDetailView({
       <div className={cn("mt-6 grid min-h-0 flex-1 overflow-hidden border transition-[grid-template-columns] duration-300 ease-out", detailCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[250px_minmax(0,1fr)]")}>
         <aside className="flex flex-col border-r bg-[#fafafa] transition-colors duration-300">
           {!detailCollapsed && <div className="aspect-[1.45] bg-[#e8e8e8]">
-            {form.coverImage ? (
-              <DashboardImageWithSkeleton
-                src={imageSrc(form.coverImage)}
+            {(form.coverImage || images[0]?.url) ? (
+              <img
+                src={imageSrc(form.coverImage || images[0]?.url || "")}
                 alt=""
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex h-full items-center justify-center">
-                <Images className="size-9 text-[#bbb]" />
+              <div className="flex h-full items-center justify-center text-xs font-bold uppercase tracking-wide text-[#888]">
+                Cover Image
               </div>
             )}
           </div>}
@@ -7225,8 +8694,8 @@ function CollectionDetailView({
             </div>
           )}
           {activeTab === "design" && !detailCollapsed && (
-            <div className="min-h-0 bg-[#fafafa]">
-              <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Design</p>
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#fafafa]">
+              <p className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-[#777]">Design</p>
               {([
                 ["cover", PanelTop, "Cover"],
                 ["typography", Bold, "Typography"],
@@ -7235,7 +8704,7 @@ function CollectionDetailView({
               ] as const).map(([panel, Icon, label]) => (
                 <button
                   key={panel}
-                  className={cn("flex h-16 w-full items-center gap-4 px-5 text-left", activeDesignPanel === panel && "bg-white font-semibold")}
+                  className={cn("flex h-12 w-full items-center gap-4 px-5 text-left", activeDesignPanel === panel && "bg-white font-semibold")}
                   onClick={() => setActiveDesignPanel(panel)}
                   type="button"
                 >
@@ -7263,6 +8732,14 @@ function CollectionDetailView({
               >
                 <Heart className="size-4" />
                 Favorite Activity
+              </button>
+              <button
+                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "orders" && "bg-white font-bold")}
+                onClick={() => setActivityPage("orders")}
+                type="button"
+              >
+                <ShoppingCart className="size-4" />
+                Store Orders
               </button>
             </div>
           )}
@@ -7539,9 +9016,6 @@ function CollectionDetailView({
                       <option key={preset.id} value={preset.id}>{preset.name}</option>
                     ))}
                   </select>
-                  <Button className="h-11 rounded-none bg-[#22bda7] px-6 text-white" onClick={saveCollection}>
-                    Save
-                  </Button>
                 </div>
                 <PresetDesignPanel
                   design={form.design}
@@ -7558,6 +9032,7 @@ function CollectionDetailView({
                 sets={form.sets}
                 favoriteEnabled={form.favorite.favoritePhotos !== false}
                 storeEnabled={Boolean(form.presetId ? presetItems.find((preset) => preset.id === form.presetId)?.store?.storeStatus : collection.settings?.store?.storeStatus)}
+                branding={branding}
               />
             </div>
           )}
@@ -7621,6 +9096,7 @@ function CollectionDetailView({
               loading={activityQuery.isLoading}
               favoriteLists={activityQuery.data?.data.favoriteLists ?? []}
               downloads={activityQuery.data?.data.downloads ?? []}
+              orders={collectionOrders}
               collectionName={collection.name}
               collectionImages={images}
               publicLink={publicLink}
@@ -7707,6 +9183,7 @@ function CollectionActivityPanel({
   loading,
   favoriteLists,
   downloads,
+  orders,
   collectionName,
   collectionImages,
   publicLink,
@@ -7722,10 +9199,11 @@ function CollectionActivityPanel({
   loading: boolean;
   favoriteLists: CollectionFavoriteActivityRecord[];
   downloads: CollectionDownloadActivityRecord[];
+  orders: StoreOrderRecord[];
   collectionName: string;
   collectionImages: CollectionImageRecord[];
   publicLink: string;
-  activityPage: "download" | "favorite";
+  activityPage: "download" | "favorite" | "orders";
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
   saveFavoriteSettings: (favorite: Partial<PresetFavoriteSettings>) => Promise<void>;
@@ -7956,6 +9434,44 @@ function CollectionActivityPanel({
                   {!downloads.length && (
                     <tr>
                       <td className="px-1 py-10 text-center text-[#777]" colSpan={5}>No downloads yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : activityPage === "orders" ? (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-2xl font-medium">Store Orders</h2>
+              <p className="text-sm text-[#666]">{orders.length} order{orders.length === 1 ? "" : "s"} for this collection</p>
+            </div>
+            <div className="mt-7 overflow-x-auto">
+              <table className="w-full min-w-[820px] text-left text-sm">
+                <thead className="border-b text-xs font-bold uppercase text-[#777]">
+                  <tr>
+                    <th className="px-1 py-3">Order</th>
+                    <th className="px-1 py-3">Customer</th>
+                    <th className="px-1 py-3">Items</th>
+                    <th className="px-1 py-3">Total</th>
+                    <th className="px-1 py-3">Status</th>
+                    <th className="px-1 py-3">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((order) => (
+                    <tr key={order._id} className="border-b">
+                      <td className="px-1 py-5 font-semibold">{order.orderNumber}</td>
+                      <td className="px-1 py-5">{order.customer?.name || order.customer?.email || "-"}</td>
+                      <td className="px-1 py-5">{order.items?.length ?? 0}</td>
+                      <td className="px-1 py-5">{money(order.total, "EUR")}</td>
+                      <td className="px-1 py-5 capitalize">{order.status}</td>
+                      <td className="px-1 py-5">{formatActivityDate(order.createdAt)}</td>
+                    </tr>
+                  ))}
+                  {!orders.length && (
+                    <tr>
+                      <td className="px-1 py-10 text-center text-[#777]" colSpan={6}>No store orders yet.</td>
                     </tr>
                   )}
                 </tbody>
@@ -8511,6 +10027,10 @@ function formatMetaValue(value: unknown) {
   return String(value);
 }
 
+function titleCase(value: string) {
+  return value.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function formatDate(value?: string) {
   if (!value) return "No date";
   try {
@@ -8531,6 +10051,10 @@ function formatActivityDate(value?: string) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function publicCollectionPath(collection: CollectionRecord) {
+  return `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
 }
 
 function safeCsvName(value: string) {

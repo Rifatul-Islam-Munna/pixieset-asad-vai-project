@@ -13,7 +13,7 @@ export default async function CollectionStoreSuccessPage({
   return (
     <PublicCheckoutSuccess
       sessionId={session_id}
-      backHref={`/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`}
+      backHref={`/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}`}
     />
   );
 }

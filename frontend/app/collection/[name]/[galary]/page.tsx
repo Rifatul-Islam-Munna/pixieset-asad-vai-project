@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PublicGallery } from "@/components/dashboard/public-gallery";
+import { PublicGalleryStoreBridge } from "@/components/dashboard/public-gallery-store-bridge";
 import { getHomeCms } from "@/lib/home-cms-server";
 import { JsonLdScript, absoluteUrl, collectSeoText, pageMetadata } from "@/lib/seo";
 
@@ -69,6 +70,7 @@ export default async function CollectionGalleryPage({
     <>
       <JsonLdScript data={jsonLd} id="gallery-json-ld" />
       <PublicGallery name={name} galary={galary} collection={collection} />
+      <PublicGalleryStoreBridge name={name} galary={galary} collection={collection} />
     </>
   );
 }

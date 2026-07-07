@@ -10,10 +10,29 @@ export type StoreOrderStatus =
   | 'delivered'
   | 'cancelled';
 
+export type StoreCropData = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zoom: number;
+  rotation: number;
+  aspectRatio: string;
+};
+
 @Schema({ _id: false })
 export class StoreOrderItem {
   @Prop()
   productId?: string;
+
+  @Prop()
+  collectionId?: string;
+
+  @Prop()
+  imageId?: string;
+
+  @Prop()
+  imageUrl?: string;
 
   @Prop({ required: true })
   name: string;
@@ -30,6 +49,9 @@ export class StoreOrderItem {
   @Prop({ type: Object })
   options?: Record<string, string>;
 
+  @Prop({ type: Object })
+  crop?: StoreCropData;
+
   @Prop({ default: 1 })
   quantity: number;
 
@@ -37,7 +59,13 @@ export class StoreOrderItem {
   unitPrice: number;
 
   @Prop({ default: 0 })
+  extraShipping: number;
+
+  @Prop({ default: 0 })
   total: number;
+
+  @Prop({ default: 'pending' })
+  fulfillmentStatus?: 'pending' | 'in-production' | 'ready' | 'shipped' | 'delivered';
 }
 
 const StoreOrderItemSchema = SchemaFactory.createForClass(StoreOrderItem);
@@ -46,6 +74,12 @@ const StoreOrderItemSchema = SchemaFactory.createForClass(StoreOrderItem);
 export class StoreOrder {
   @Prop({ required: true, index: true })
   userId: string;
+
+  @Prop({ index: true })
+  collectionId?: string;
+
+  @Prop({ index: true })
+  priceSheetId?: string;
 
   @Prop({ required: true, index: true })
   orderNumber: string;
@@ -61,18 +95,15 @@ export class StoreOrder {
     address?: Record<string, unknown>;
   };
 
+  @Prop({ type: Object })
+  professionalInfo?: {
+    company?: string;
+    taxId?: string;
+    invoiceNote?: string;
+  };
+
   @Prop({ type: [StoreOrderItemSchema], default: [] })
-  items: {
-    productId?: string;
-    name: string;
-    type: string;
-    variantId?: string;
-    variantLabel?: string;
-    options?: Record<string, string>;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-  }[];
+  items: StoreOrderItem[];
 
   @Prop({ default: 0 })
   subtotal: number;
@@ -104,6 +135,21 @@ export class StoreOrder {
   @Prop({ default: 'unpaid', index: true })
   paymentStatus: 'unpaid' | 'paid' | 'refunded';
 
+  @Prop({ index: true })
+  stripePaymentIntentId?: string;
+
+  @Prop({ index: true })
+  stripeCheckoutSessionId?: string;
+
+  @Prop({ default: 'owner' })
+  stripeAccountMode: 'owner';
+
+  @Prop({ default: 'public-store' })
+  checkoutSource: 'public-gallery' | 'public-store' | 'buy-photo';
+
+  @Prop({ type: [String], default: [] })
+  activityLogIds?: string[];
+
   @Prop({ default: '' })
   trackingNumber: string;
 
@@ -118,3 +164,4 @@ export const StoreOrderSchema = SchemaFactory.createForClass(StoreOrder);
 
 StoreOrderSchema.index({ userId: 1, createdAt: -1 });
 StoreOrderSchema.index({ userId: 1, customerId: 1 });
+StoreOrderSchema.index({ collectionId: 1, createdAt: -1 });

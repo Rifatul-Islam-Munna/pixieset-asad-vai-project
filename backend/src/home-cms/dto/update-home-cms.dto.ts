@@ -15,6 +15,13 @@ export class UpdateHomeCmsDto {
 
   @IsOptional()
   @IsObject()
+  brand?: Record<string, any>;
+
+  @IsOptional()
+  coverTemplates?: Record<string, any>[];
+
+  @IsOptional()
+  @IsObject()
   media?: {
     heroMediaType?: 'image' | 'video';
     heroMediaUrl?: string;

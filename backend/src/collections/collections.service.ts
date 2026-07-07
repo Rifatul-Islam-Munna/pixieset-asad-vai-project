@@ -51,7 +51,7 @@ export class CollectionsService {
     const collection = await this.collectionModel.create({
       userId,
       name: dto.name,
-      slug: this.slugify(dto.name),
+      slug: await this.uniqueSlug(userId, dto.name),
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
       presetId: dto.presetId,
       design: dto.design ?? {},
@@ -113,6 +113,13 @@ export class CollectionsService {
           .lean()
       : null;
     const presetData = preset?.data as any;
+    const branding = await this.settingModel
+      .findOne({
+        userId: collection.userId,
+        type: DashboardSettingType.BRANDING,
+        localId: 'branding',
+      })
+      .lean();
 
     return {
       ...collection,
@@ -138,6 +145,7 @@ export class CollectionsService {
           ...((collection.settings as any)?.store ?? {}),
         },
       },
+      branding: (branding?.data as any) ?? {},
       images: this.sortImagesForGallery(images),
     };
   }
@@ -433,7 +441,7 @@ export class CollectionsService {
     const collection = await this.collectionModel.create({
       userId,
       name: name?.trim() || `${source.name} Favorites`,
-      slug: this.slugify(name?.trim() || `${source.name} Favorites`),
+      slug: await this.uniqueSlug(userId, name?.trim() || `${source.name} Favorites`),
       eventDate: source.eventDate,
       presetId: source.presetId,
       coverImage: images[0]?.url,
@@ -502,7 +510,7 @@ export class CollectionsService {
 
     if (dto.name !== undefined) {
       collection.name = dto.name;
-      collection.slug = this.slugify(dto.name);
+      collection.slug = await this.uniqueSlug(userId, dto.name, id);
     }
     if (dto.eventDate !== undefined) collection.eventDate = new Date(dto.eventDate);
     if (dto.presetId !== undefined) collection.presetId = dto.presetId || undefined;
@@ -530,6 +538,83 @@ export class CollectionsService {
 
     await collection.save();
     return collection.toObject();
+  }
+
+  async duplicate(userId: string, id: string) {
+    const source = await this.collectionModel.findOne({ _id: id, userId }).lean();
+    if (!source) throw new NotFoundException('Collection not found');
+
+    const images = await this.imageModel
+      .find({ collectionId: id, userId })
+      .sort({ order: 1, createdAt: -1 })
+      .lean();
+    const name = `${source.name} Copy`;
+    const collection = await this.collectionModel.create({
+      userId,
+      name,
+      slug: await this.uniqueSlug(userId, name),
+      eventDate: source.eventDate,
+      presetId: source.presetId,
+      coverImage: source.coverImage,
+      sets: source.sets ?? [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],
+      tags: source.tags ?? [],
+      watermarkId: source.watermarkId,
+      expiresAt: source.expiresAt,
+      design: source.design ?? {},
+      settings: source.settings ?? {},
+      imageCount: images.length,
+      status: source.status ?? 'draft',
+    });
+
+    if (images.length) {
+      await this.imageModel.insertMany(images.map((image) => ({
+        userId,
+        collectionId: collection._id.toString(),
+        setId: image.setId,
+        url: image.url,
+        thumbnailUrl: image.thumbnailUrl,
+        blurDataUrl: image.blurDataUrl,
+        originalName: image.originalName,
+        filename: image.filename,
+        mimetype: image.mimetype,
+        sizeBytes: image.sizeBytes,
+        watermarked: image.watermarked,
+        metadata: image.metadata ?? {},
+        order: image.order,
+      })));
+    }
+
+    return { collection: collection.toObject(), copied: images.length };
+  }
+
+  async remove(userId: string, id: string) {
+    const collection = await this.collectionModel.findOne({ _id: id, userId });
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const images = await this.imageModel.find({ collectionId: id, userId });
+    let reclaimedBytes = 0;
+    for (const image of images) {
+      reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
+      await this.deleteStoredImageFiles(image);
+      await this.faceSearchService.deleteImageFaces(id, image._id.toString()).catch(() => null);
+    }
+
+    await Promise.all([
+      this.imageModel.deleteMany({ collectionId: id, userId }),
+      this.favoriteModel.deleteMany({ collectionId: id }),
+      this.imageFavoriteModel.deleteMany({ collectionId: id }),
+      this.downloadActivityModel.deleteMany({ collectionId: id }),
+      this.collectionModel.deleteOne({ _id: id, userId }),
+    ]);
+
+    if (reclaimedBytes > 0) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $inc: { storageUsedBytes: -reclaimedBytes } },
+      );
+    }
+
+    return { deleted: true, collectionId: id };
   }
 
   async addSet(userId: string, collectionId: string, name: string) {
@@ -1002,6 +1087,26 @@ export class CollectionsService {
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
+  }
+
+  private randomSlugSuffix() {
+    return Math.random().toString(36).slice(2, 8);
+  }
+
+  private async uniqueSlug(userId: string, value: string, excludeId?: string) {
+    const base = this.slugify(value) || 'collection';
+    const exists = async (slug: string) => {
+      const query: Record<string, unknown> = { userId, slug };
+      if (excludeId) query._id = { $ne: excludeId };
+      return this.collectionModel.exists(query);
+    };
+
+    if (!(await exists(base))) return base;
+    for (let index = 0; index < 6; index += 1) {
+      const candidate = `${base}-${this.randomSlugSuffix()}`;
+      if (!(await exists(candidate))) return candidate;
+    }
+    return `${base}-${Date.now().toString(36)}-${this.randomSlugSuffix()}`;
   }
 
   private async findCollectionByIdentifier(identifier: string) {

@@ -5,6 +5,10 @@ export class UpdateStoreProductDto {
   @IsOptional()
   type?: 'digital-download' | 'self-fulfilled';
 
+  @IsBoolean()
+  @IsOptional()
+  active?: boolean;
+
   @IsString()
   @IsOptional()
   name?: string;

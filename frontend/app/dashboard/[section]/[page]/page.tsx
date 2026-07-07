@@ -1,12 +1,7 @@
-import { redirect } from "next/navigation";
+import { ClientDashboard } from "@/components/dashboard/client-dashboard";
+import { notFound, redirect } from "next/navigation";
 
-import {
-  ClientDashboard,
-  type DashboardPage,
-  type DashboardSection,
-} from "@/components/dashboard/client-dashboard";
-
-const sections = ["client-gallery", "store-gallery"] as const;
+const sections = ["client-gallery", "store-gallery"];
 const pages = [
   "collections",
   "collection-new",
@@ -14,41 +9,33 @@ const pages = [
   "favorites",
   "starred",
   "homepage",
-  "settings",
   "marketing",
+  "settings",
+  "storage",
+  "get-started",
+  "storefront",
+  "pricing",
   "products",
   "orders",
   "customers",
   "taxes",
   "shipping",
   "coupons",
-  "storefront",
-  "storage",
-] as const;
+];
 
-export default async function DashboardNestedPage({
+export default async function DashboardSectionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ section: string; page: string }>;
+  searchParams: Promise<{ collectionId?: string }>;
 }) {
   const { section, page } = await params;
-
-  if (!sections.includes(section as DashboardSection)) {
-    redirect("/dashboard/client-gallery");
+  await searchParams;
+  if (!sections.includes(section) || !pages.includes(page)) notFound();
+  if (section === "store-gallery" && page === "pricing") {
+    redirect("/dashboard/store-gallery/products");
   }
 
-  if (!pages.includes(page as DashboardPage)) {
-    redirect(`/dashboard/${section}`);
-  }
-
-  if (page === "marketing") {
-    redirect(`/dashboard/${section}/marketing/email-campaigns`);
-  }
-
-  return (
-    <ClientDashboard
-      page={page as DashboardPage}
-      section={section as DashboardSection}
-    />
-  );
+  return <ClientDashboard section={section} page={page} />;
 }

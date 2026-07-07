@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DeleteRequestAxios,
   GetRequestNormal,
@@ -14,6 +14,7 @@ export type StoreProductRecord = {
   _id: string;
   priceSheetId: string;
   type: StoreProductType;
+  active?: boolean;
   name: string;
   description?: string;
   price: number;
@@ -47,7 +48,7 @@ export type StorePriceSheetRecord = {
   isDefault?: boolean;
   collectionIds?: string[];
   minimumOrderAmount?: number;
-  fulfillment?: "self-fulfilled";
+  fulfillment?: "self-fulfilled" | "auto";
   productCount?: number;
   collectionCount?: number;
   products?: StoreProductRecord[];
@@ -69,14 +70,28 @@ export type StoreOrderRecord = {
   customer: { name: string; email: string; phone?: string; address?: Record<string, any> };
   items: {
     productId?: string;
+    collectionId?: string;
+    imageId?: string;
+    imageUrl?: string;
     name: string;
     type: string;
     variantId?: string;
     variantLabel?: string;
     options?: Record<string, string>;
+    crop?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      zoom: number;
+      rotation: number;
+      aspectRatio: string;
+    };
     quantity: number;
     unitPrice: number;
+    extraShipping?: number;
     total: number;
+    fulfillmentStatus?: "pending" | "in-production" | "ready" | "shipped" | "delivered";
   }[];
   subtotal: number;
   tax: number;
@@ -195,7 +210,7 @@ export function useStorePriceSheets(collectionId?: string) {
     queryKey,
     queryFn: () =>
       GetRequestNormal<ListResponse<StorePriceSheetRecord[]>>(
-        `/store/price-sheets${queryString}`,
+        `/store/catalog/price-sheets${queryString}`,
       ),
   });
 
@@ -205,10 +220,11 @@ export function useStorePriceSheets(collectionId?: string) {
       isDefault?: boolean;
       collectionIds?: string[];
       minimumOrderAmount?: number;
+      fulfillment?: "self-fulfilled" | "auto";
     }) => {
       const [data, error] = await PostRequestAxios<
         ListResponse<StorePriceSheetRecord> & { message: string }
-      >("/store/price-sheets", payload);
+      >("/store/catalog/price-sheets/default", payload);
 
       if (error) throw new Error(error.message);
       return data;
@@ -218,7 +234,21 @@ export function useStorePriceSheets(collectionId?: string) {
     },
   });
 
-  return { priceSheetsQuery, createPriceSheet };
+  const deletePriceSheet = useMutation({
+    mutationFn: async (priceSheetId: string) => {
+      const [data, error] = await DeleteRequestAxios<
+        ListResponse<StorePriceSheetRecord> & { message: string }
+      >(`/store/price-sheets/${priceSheetId}`);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheets"] });
+    },
+  });
+
+  return { priceSheetsQuery, createPriceSheet, deletePriceSheet };
 }
 
 export function useStorePriceSheet(priceSheetId?: string) {
@@ -229,7 +259,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
     queryFn: () =>
       GetRequestNormal<
         ListResponse<StorePriceSheetRecord & { products: StoreProductRecord[] }>
-      >(`/store/price-sheets/${priceSheetId}`),
+      >(`/store/catalog/price-sheets/${priceSheetId}`),
   });
 
   const updatePriceSheet = useMutation({
@@ -237,7 +267,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
       if (!priceSheetId) throw new Error("Price sheet is required");
       const [data, error] = await PatchRequestAxios<
         ListResponse<StorePriceSheetRecord> & { message: string }
-      >(`/store/price-sheets/${priceSheetId}`, payload as any);
+      >(`/store/catalog/price-sheets/${priceSheetId}`, payload as any);
 
       if (error) throw new Error(error.message);
       return data;
@@ -253,7 +283,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
       if (!priceSheetId) throw new Error("Price sheet is required");
       const [data, error] = await PostRequestAxios<
         ListResponse<StoreProductRecord> & { message: string }
-      >(`/store/price-sheets/${priceSheetId}/products`, payload);
+      >(`/store/catalog/price-sheets/${priceSheetId}/products`, payload);
 
       if (error) throw new Error(error.message);
       return data;
@@ -275,7 +305,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
       if (!priceSheetId) throw new Error("Price sheet is required");
       const [data, error] = await PatchRequestAxios<
         ListResponse<StoreProductRecord> & { message: string }
-      >(`/store/price-sheets/${priceSheetId}/products/${productId}`, payload as any);
+      >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`, payload as any);
 
       if (error) throw new Error(error.message);
       return data;
@@ -290,7 +320,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
       if (!priceSheetId) throw new Error("Price sheet is required");
       const [data, error] = await DeleteRequestAxios<
         ListResponse<StoreProductRecord> & { message: string }
-      >(`/store/price-sheets/${priceSheetId}/products/${productId}`);
+      >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`);
 
       if (error) throw new Error(error.message);
       return data;
@@ -308,6 +338,71 @@ export function useStorePriceSheet(priceSheetId?: string) {
     updateProduct,
     deleteProduct,
   };
+}
+
+export function useStorePriceSheetDetails(priceSheetIds: string[]) {
+  return useQueries({
+    queries: priceSheetIds.map((priceSheetId) => ({
+      enabled: Boolean(priceSheetId),
+      queryKey: ["store-price-sheet", priceSheetId],
+      queryFn: () =>
+        GetRequestNormal<
+          ListResponse<StorePriceSheetRecord & { products: StoreProductRecord[] }>
+        >(`/store/catalog/price-sheets/${priceSheetId}`),
+    })),
+  });
+}
+
+export function useStoreProductUpdate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      priceSheetId,
+      productId,
+      payload,
+    }: {
+      priceSheetId: string;
+      productId: string;
+      payload: Partial<StoreProductRecord>;
+    }) => {
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<StoreProductRecord> & { message: string }
+      >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`, payload as any);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheets"] });
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheet", variables.priceSheetId] });
+    },
+  });
+}
+
+export function useStoreProductDelete() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      priceSheetId,
+      productId,
+    }: {
+      priceSheetId: string;
+      productId: string;
+    }) => {
+      const [data, error] = await DeleteRequestAxios<
+        ListResponse<StoreProductRecord> & { message: string }
+      >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheets"] });
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheet", variables.priceSheetId] });
+    },
+  });
 }
 
 export function useStoreDashboard() {
