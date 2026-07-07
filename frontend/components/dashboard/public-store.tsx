@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ShoppingBag } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { PublicStoreProductBuilder } from "./public-store-product-builder";
 import { StoreCartPanel } from "./store-cart-panel";
-import { PublicStoreCatalog, StoreMegaMenu, categoryNames, slugify } from "./public-store-catalog";
+import { PublicStoreCatalog, StoreMegaMenu, categoryNames } from "./public-store-catalog";
 import {
   storeCartKey,
   type PublicStoreCartItem,
@@ -42,6 +42,7 @@ export function PublicStore({
   const currency = data?.store?.currency ?? "EUR";
   const cartStorageKey = storeCartKey(data?.collection?._id);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const collectionSets = data?.collection?.sets ?? [];
 
   useEffect(() => {
     try {
@@ -112,42 +113,52 @@ export function PublicStore({
 
   return (
     <main className="min-h-screen bg-white text-[#171717]">
-      <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur">
-        <div className="flex min-h-[70px] items-center justify-between gap-5 px-4 md:px-8">
-          <Link href={backHref} className="min-w-0">
-            <h1 className="truncate text-sm font-medium uppercase tracking-[0.06em] md:max-w-[520px] md:text-base">
+      <header className="sticky top-0 z-40 border-b bg-white">
+        <div className="flex h-[68px] items-center justify-between gap-5 px-4 md:px-8">
+          <Link href={backHref} className="min-w-0 max-w-[430px]">
+            <h1 className="truncate text-sm font-medium uppercase tracking-[0.05em] md:text-base">
               {data.collection?.name || "Collection Store"}
             </h1>
             {data.collection?.studioName && (
-              <p className="mt-1 truncate text-[9px] uppercase tracking-[0.26em] text-[#8a8a8a]">{data.collection.studioName}</p>
+              <p className="mt-1 truncate text-[9px] uppercase tracking-[0.26em] text-[#8a8a8a]">
+                {data.collection.studioName}
+              </p>
             )}
           </Link>
 
-          <nav className="hidden items-center gap-7 text-sm lg:flex">
-            {categories.slice(0, 4).map((category) => (
-              <a key={category} href={`#${slugify(category)}`} className="text-[#595959] transition hover:text-black">{category}</a>
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-7 overflow-hidden text-sm lg:flex">
+            {collectionSets.slice(0, 8).map((set) => (
+              <Link
+                key={set.id}
+                href={`${backHref}#gallery`}
+                className="shrink-0 text-[#777] transition hover:text-black"
+              >
+                {set.name}
+              </Link>
             ))}
-            {data.store?.showPrintStoreNav !== false && (
-              <div className="relative" onMouseEnter={() => setMenuOpen(true)} onMouseLeave={() => setMenuOpen(false)}>
-                <button className="flex h-[69px] items-center gap-1.5 font-medium" onClick={() => setMenuOpen((value) => !value)}>
-                  Print Store <ChevronDown className="size-3.5" />
-                </button>
-                {menuOpen && (
-                  <StoreMegaMenu
-                    products={products}
-                    currency={currency}
-                    onOpen={(product) => {
-                      setActiveProduct(product);
-                      setMenuOpen(false);
-                    }}
-                  />
-                )}
-              </div>
-            )}
           </nav>
 
-          <div className="flex shrink-0 items-center gap-4">
-            <Link href={backHref} className="hidden text-sm text-[#666] md:block">View Gallery</Link>
+          <div className="flex shrink-0 items-center gap-5">
+            <div
+              className="relative hidden lg:block"
+              onMouseEnter={() => setMenuOpen(true)}
+              onMouseLeave={() => setMenuOpen(false)}
+            >
+              <button className="flex h-[67px] items-center border-r pr-6 text-sm font-medium">
+                Print Store
+              </button>
+              {menuOpen && (
+                <StoreMegaMenu
+                  products={products}
+                  currency={currency}
+                  onOpen={(product) => {
+                    setActiveProduct(product);
+                    setMenuOpen(false);
+                  }}
+                />
+              )}
+            </div>
+            <Link href={backHref} className="hidden text-sm text-[#777] md:block">View Gallery</Link>
             <button className="relative flex size-10 items-center justify-center" onClick={() => setCartOpen(true)} aria-label="Open cart">
               <ShoppingBag className="size-5" />
               {cartCount > 0 && (
@@ -158,14 +169,13 @@ export function PublicStore({
         </div>
       </header>
 
-      <section className="mx-auto max-w-[1500px] px-5 pb-20 pt-12 md:px-10 md:pt-16">
-        <div className="flex flex-wrap items-end justify-between gap-6 border-b pb-8">
+      <section className="mx-auto max-w-[1500px] px-5 pb-20 pt-10 md:px-10">
+        <div className="flex items-center justify-between border-b pb-5">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#888]">Print Store</p>
-            <h2 className="mt-3 text-3xl font-normal tracking-tight md:text-4xl">Preserve your favourite moments</h2>
-            <p className="mt-3 max-w-[680px] text-sm leading-7 text-[#656565]">Choose photographs from this collection and order professional prints, wall art or digital downloads.</p>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[#888]">Print Store</p>
+            <h2 className="mt-2 text-2xl font-normal">Shop this collection</h2>
           </div>
-          <button className="inline-flex h-11 items-center gap-3 border px-5 text-sm" onClick={() => setCartOpen(true)}>
+          <button className="inline-flex h-10 items-center gap-2 border px-4 text-sm" onClick={() => setCartOpen(true)}>
             <ShoppingBag className="size-4" /> Cart ({cartCount})
           </button>
         </div>
