@@ -203,12 +203,34 @@ export function CoverPreview({
     );
   }
 
+  if (design.cover === "Stripe") {
+    return (
+      <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
+        <img src={src} alt="" className="h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-black/28" />
+        <div className="absolute left-[12%] right-[12%] top-[22%] border-t border-white" />
+        <div className="absolute bottom-[22%] left-[12%] right-[12%] border-t border-white" />
+        <div className={cn("absolute bottom-[22%] left-[12%] right-[12%] top-[22%] flex items-center justify-center p-6 text-center [text-shadow:0_2px_14px_rgba(0,0,0,0.55)]", compact && "p-3")}>
+          <div className={cn("flex max-w-full flex-col items-center gap-3", compact && "gap-1")}>
+            {!compact && showSmall && <p className="text-xs uppercase tracking-[0.28em]">{smallTitle}</p>}
+            {showTitle && <h3 className={cn("font-semibold uppercase", compact ? "text-[11px] tracking-[0.24em]" : "text-4xl tracking-[0.18em] md:text-6xl")}>{sampleTitle}</h3>}
+            {!compact && showDate && <p className="text-sm uppercase tracking-[0.22em]">{date}</p>}
+            {!compact && showButton && (
+              <span className="mt-3 inline-flex w-fit max-w-full border px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em]">
+                {buttonText}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
       <img src={src} alt="" className="h-full w-full object-cover" />
       <div className={cn("absolute inset-0", design.cover === "Vintage" ? "bg-white/55" : "bg-black/28")} />
       {design.cover === "Frame" && <div className={cn("absolute inset-4 border border-white", compact && "inset-2")} />}
-      {design.cover === "Stripe" && <><div className="absolute left-[12%] right-[12%] top-[22%] border-t border-white" /><div className="absolute bottom-[22%] left-[12%] right-[12%] border-t border-white" /></>}
       {design.cover === "Divider" && <div className="absolute bottom-0 left-1/2 top-0 border-l border-white" />}
       {design.cover === "Outline" && <div className={cn("absolute inset-[18%] border border-white", compact && "inset-[16%]")} />}
       {design.cover === "Banner" && <div className="absolute inset-x-0 bottom-[18%] bg-white/88 py-3 text-center text-[#222]" />}
@@ -217,7 +239,7 @@ export function CoverPreview({
         className={cn(
           "absolute p-6",
           ["Center", "Frame", "Outline", "Portal"].includes(design.cover) && "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center",
-          ["Left", "Stripe", "Classic"].includes(design.cover) && "bottom-8 left-8 text-left",
+          ["Left", "Classic"].includes(design.cover) && "bottom-8 left-8 text-left",
           ["Vintage", "Gallery"].includes(design.cover) && "bottom-8 left-1/2 -translate-x-1/2 text-center text-[#222]",
           design.cover === "Divider" && "bottom-8 left-8 text-left",
           design.cover === "Banner" && "bottom-[18%] left-1/2 -translate-x-1/2 translate-y-1/2 text-center text-[#222]",
