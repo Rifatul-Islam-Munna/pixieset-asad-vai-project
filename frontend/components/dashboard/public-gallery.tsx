@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
@@ -600,7 +600,10 @@ export function PublicGallery({
       )}
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen scroll-smooth">
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-black/5 px-5 md:px-10">
-        <p className="truncate text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <span data-public-store-cart-host="true" />
+          <p className="truncate text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
+        </div>
         <div className="hidden min-w-0 items-center justify-center gap-7 text-sm text-black/60 md:flex">
           {showSetTabs && gallerySets.map((set) => (
             <button
@@ -620,9 +623,6 @@ export function PublicGallery({
         <div className="flex items-center justify-end gap-4" data-print-store-actions-host="true">
           {design.navigationStyle === "Icon & Text" ? (
             <>
-              <button className="flex items-center gap-2 text-sm">
-                <Grid2X2 className="size-4" /> Gallery
-              </button>
               <button className="flex items-center gap-2 text-sm" onClick={() => void shareCollection()} type="button">
                 <Share2 className="size-4" /> Share
               </button>
@@ -634,7 +634,6 @@ export function PublicGallery({
             </>
           ) : (
             <>
-              <Grid2X2 className="size-5" />
               <button onClick={() => void shareCollection()} type="button" aria-label="Share collection">
                 <Share2 className="size-5" />
               </button>
@@ -824,10 +823,11 @@ export function PublicGallery({
 
       {activeImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4">
-          <button className="absolute right-5 top-5 rounded-full bg-white p-3 text-black" onClick={() => setActiveImage(null)} aria-label="Close image">
-            <X className="size-5" />
+          <button className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => setActiveImage(null)} aria-label="Back to gallery">
+            <ChevronLeft className="size-5" />
+            Back
           </button>
-          <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
+          <div className="absolute right-5 top-5 flex flex-wrap justify-end gap-2">
             {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
               <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" data-buy-photo-open={activeImage._id} type="button">
                 <ShoppingBag className="size-4" />
@@ -861,10 +861,11 @@ export function PublicGallery({
 
       {slideshowImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black p-4" onDoubleClick={closeSlideshow}>
-          <button className="absolute right-5 top-5 rounded-full bg-white p-3 text-black" onClick={closeSlideshow} aria-label="Close slideshow">
-            <X className="size-5" />
+          <button className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-bold text-black" onClick={closeSlideshow} aria-label="Back to gallery">
+            <ChevronLeft className="size-5" />
+            Back
           </button>
-          <div className="absolute left-5 top-5 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white backdrop-blur">
+          <div className="absolute left-5 top-20 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white backdrop-blur">
             {slideshowPosition + 1} / {visibleImages.length}
           </div>
           <button className="absolute left-5 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-3 text-black shadow" onClick={showPreviousSlide} aria-label="Previous slide" type="button">
@@ -873,7 +874,7 @@ export function PublicGallery({
           <button className="absolute right-5 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-3 text-black shadow" onClick={showNextSlide} aria-label="Next slide" type="button">
             <ChevronRight className="size-6" />
           </button>
-          <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
+          <div className="absolute right-5 top-5 flex flex-wrap justify-end gap-2">
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
               <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" data-buy-photo-open={slideshowImage._id} type="button">
                 <ShoppingBag className="size-4" />

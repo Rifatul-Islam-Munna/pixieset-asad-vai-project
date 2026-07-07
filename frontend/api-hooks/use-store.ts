@@ -70,14 +70,28 @@ export type StoreOrderRecord = {
   customer: { name: string; email: string; phone?: string; address?: Record<string, any> };
   items: {
     productId?: string;
+    collectionId?: string;
+    imageId?: string;
+    imageUrl?: string;
     name: string;
     type: string;
     variantId?: string;
     variantLabel?: string;
     options?: Record<string, string>;
+    crop?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      zoom: number;
+      rotation: number;
+      aspectRatio: string;
+    };
     quantity: number;
     unitPrice: number;
+    extraShipping?: number;
     total: number;
+    fulfillmentStatus?: "pending" | "in-production" | "ready" | "shipped" | "delivered";
   }[];
   subtotal: number;
   tax: number;

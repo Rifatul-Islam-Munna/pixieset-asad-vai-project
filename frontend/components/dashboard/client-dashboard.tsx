@@ -4341,6 +4341,64 @@ function StoreDashboardPanel() {
   );
 }
 
+function storeOrderImageSrc(url?: string) {
+  if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://")) return url;
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  return url.startsWith("/") ? `${base}${url}` : url;
+}
+
+async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], filename: string) {
+  const source = storeOrderImageSrc(item.imageUrl);
+  if (!source) return;
+
+  if (!item.crop) {
+    const link = document.createElement("a");
+    link.href = source;
+    link.download = `${filename}.jpg`;
+    link.click();
+    return;
+  }
+
+  try {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.src = source;
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Image could not be loaded"));
+    });
+
+    const [ratioW, ratioH] = String(item.crop.aspectRatio || "4:3").split(":").map(Number);
+    const width = 1600;
+    const height = ratioW > 0 && ratioH > 0 ? Math.round(width * (ratioH / ratioW)) : 1200;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable");
+
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, width, height);
+    context.translate(width / 2 + (width * Number(item.crop.x ?? 0)) / 100, height / 2 + (height * Number(item.crop.y ?? 0)) / 100);
+    context.rotate((Number(item.crop.rotation ?? 0) * Math.PI) / 180);
+    const scale = Math.max(width / image.width, height / image.height) * Number(item.crop.zoom ?? 1);
+    context.drawImage(image, -image.width * scale / 2, -image.height * scale / 2, image.width * scale, image.height * scale);
+
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${filename}-modified.png`;
+    link.click();
+  } catch {
+    toast.error("Unable to download the modified image.");
+  }
+}
+
+function storeCropRatio(value?: string) {
+  const [width, height] = String(value || "4:3").split(":").map(Number);
+  return width > 0 && height > 0 ? width / height : 4 / 3;
+}
+
 function StoreOrdersPanel() {
   const { ordersQuery, createOrder, updateOrder, deleteOrder } = useStoreOrders();
   const { rulesQuery: shippingQuery } = useStoreRules<StoreShippingRecord>("shipping");
@@ -4349,6 +4407,7 @@ function StoreOrdersPanel() {
   const orders = ordersQuery.data?.data ?? [];
   const shippingMethods = shippingQuery.data?.data ?? [];
   const [open, setOpen] = useState(false);
+  const [viewOrder, setViewOrder] = useState<StoreOrderRecord | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -4451,18 +4510,96 @@ function StoreOrdersPanel() {
             </select>,
             <StatusBadge key="payment" value={order.paymentStatus} />,
             money(order.total, currency),
-            <button
-              key="delete"
-              className="text-red-600"
-              onClick={() => deleteOrder.mutate(order._id)}
-              aria-label="Delete order"
-            >
-              <Trash2 className="size-4" />
-            </button>,
+            <div key="actions" className="flex items-center gap-3">
+              <button
+                className="text-[#555] hover:text-black"
+                onClick={() => setViewOrder(order)}
+                aria-label="View order"
+              >
+                <Eye className="size-4" />
+              </button>
+              <button
+                className="text-red-600"
+                onClick={() => deleteOrder.mutate(order._id)}
+                aria-label="Delete order"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>,
           ])}
           empty="No orders yet"
         />
       </div>
+      <Dialog open={Boolean(viewOrder)} onOpenChange={(next) => !next && setViewOrder(null)}>
+        <DialogContent className="rounded-none sm:max-w-[900px]">
+          <DialogHeader>
+            <DialogTitle>{viewOrder?.orderNumber ?? "Order details"}</DialogTitle>
+            <DialogDescription>
+              {viewOrder?.customer?.name} {viewOrder?.customer?.email ? `- ${viewOrder.customer.email}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {viewOrder && (
+            <div className="max-h-[70vh] overflow-y-auto pr-1">
+              <div className="grid gap-3 text-sm sm:grid-cols-3">
+                <div className="border p-3"><p className="text-xs text-[#777]">Status</p><StatusBadge value={viewOrder.status} /></div>
+                <div className="border p-3"><p className="text-xs text-[#777]">Payment</p><StatusBadge value={viewOrder.paymentStatus} /></div>
+                <div className="border p-3"><p className="text-xs text-[#777]">Total</p><p className="mt-1 font-semibold">{money(viewOrder.total, currency)}</p></div>
+              </div>
+              <div className="mt-5 grid gap-4">
+                {viewOrder.items.map((item, index) => (
+                  <article key={`${item.productId ?? item.name}-${index}`} className="grid gap-4 border p-4 md:grid-cols-[180px_1fr]">
+                    <div className="relative overflow-hidden bg-[#f1f1ef]" style={{ aspectRatio: storeCropRatio(item.crop?.aspectRatio) }}>
+                      {item.imageUrl ? (
+                        <img
+                          src={storeOrderImageSrc(item.imageUrl)}
+                          alt={item.name}
+                          className="absolute left-1/2 top-1/2 h-full w-full max-w-none object-cover"
+                          style={{
+                            transform: item.crop
+                              ? `translate(calc(-50% + ${item.crop.x}%), calc(-50% + ${item.crop.y}%)) scale(${item.crop.zoom}) rotate(${item.crop.rotation}deg)`
+                              : "translate(-50%, -50%)",
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-[#888]">No image</div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold">{item.name}</h3>
+                          <p className="mt-1 text-xs text-[#777]">{item.variantLabel || item.type}</p>
+                        </div>
+                        <p className="font-semibold">{money(item.total, currency)}</p>
+                      </div>
+                      <div className="mt-4 grid gap-2 text-sm text-[#555] sm:grid-cols-3">
+                        <p>Qty: {item.quantity}</p>
+                        <p>Unit: {money(item.unitPrice, currency)}</p>
+                        <p>Image: {item.imageId || "-"}</p>
+                      </div>
+                      {item.crop && (
+                        <p className="mt-3 text-xs text-[#777]">
+                          Crop: {item.crop.aspectRatio || "custom"} / zoom {Number(item.crop.zoom ?? 1).toFixed(2)}
+                        </p>
+                      )}
+                      {item.imageUrl && (
+                        <button
+                          className="mt-4 inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
+                          onClick={() => void downloadStoreOrderImage(item, `${viewOrder.orderNumber}-${index + 1}`)}
+                          type="button"
+                        >
+                          <Download className="size-4" />
+                          {item.crop ? "Download modified image" : "Download image"}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="rounded-none sm:max-w-[760px]">
           <DialogHeader>

@@ -13,12 +13,14 @@ export function StoreOrderPanel({
   items,
   data,
   identifier,
+  backLabel = "Back to cart",
   onBack,
   onClear,
 }: {
   items: PublicStoreCartItem[];
   data?: PublicStoreData | null;
   identifier: string;
+  backLabel?: string;
   onBack: () => void;
   onClear: () => void;
 }) {
@@ -104,9 +106,12 @@ export function StoreOrderPanel({
     setPlacingOrder(true);
     setMessage("");
     const currentUrl = window.location.href.split("?")[0].replace(/\/$/, "");
-    const successUrl = currentUrl.endsWith("/store")
-      ? `${currentUrl}/success?session_id={CHECKOUT_SESSION_ID}`
-      : `${currentUrl}/store/success?session_id={CHECKOUT_SESSION_ID}`;
+    const galleryUrl = currentUrl.endsWith("/checkout")
+      ? currentUrl.replace(/\/checkout$/, "")
+      : currentUrl;
+    const successUrl = galleryUrl.endsWith("/store")
+      ? `${galleryUrl}/success?session_id={CHECKOUT_SESSION_ID}`
+      : `${galleryUrl}/store/success?session_id={CHECKOUT_SESSION_ID}`;
     const response = await fetch(`/api/public-print-store/${encodeURIComponent(identifier)}/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -129,7 +134,7 @@ export function StoreOrderPanel({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-7">
       <button className="mb-6 inline-flex items-center gap-2 text-sm" onClick={onBack}>
-        <ArrowLeft className="size-4" /> Back to cart
+        <ArrowLeft className="size-4" /> {backLabel}
       </button>
       <Section title="Contact">
         <div className="grid gap-3 sm:grid-cols-2">

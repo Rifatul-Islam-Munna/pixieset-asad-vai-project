@@ -18,6 +18,7 @@ export function StoreCartPanel({
   items,
   data,
   identifier,
+  checkoutHref,
   onClose,
   onChange,
   onRemove,
@@ -27,6 +28,7 @@ export function StoreCartPanel({
   items: PublicStoreCartItem[];
   data?: PublicStoreData | null;
   identifier: string;
+  checkoutHref?: string;
   onClose: () => void;
   onChange: (itemId: string, patch: Partial<PublicStoreCartItem>) => void;
   onRemove: (itemId: string) => void;
@@ -112,7 +114,15 @@ export function StoreCartPanel({
             </div>
             <footer className="shrink-0 border-t px-5 py-5 md:px-7">
               <div className="flex items-center justify-between text-base font-semibold"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
-              <button className="mt-4 h-12 w-full bg-[#303030] text-sm font-semibold text-white" onClick={() => setOrderOpen(true)}>Checkout</button>
+              <button
+                className="mt-4 h-12 w-full bg-[#303030] text-sm font-semibold text-white"
+                onClick={() => {
+                  if (checkoutHref) window.location.href = checkoutHref;
+                  else setOrderOpen(true);
+                }}
+              >
+                Checkout
+              </button>
               <button className="mt-3 h-10 w-full text-xs font-medium text-[#777]" onClick={onClear}>Clear cart</button>
             </footer>
           </>

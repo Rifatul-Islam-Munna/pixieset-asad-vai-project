@@ -51,6 +51,7 @@ export function PublicGalleryStoreBridge({
   const showBuyPhotoButton = storeSettings.showBuyPhotoButton !== false;
   const [storeData, setStoreData] = useState<PublicStoreData | null>(null);
   const [navHost, setNavHost] = useState<HTMLElement | null>(null);
+  const [cartHost, setCartHost] = useState<HTMLElement | null>(null);
   const [activeImageId, setActiveImageId] = useState("");
   const [buyOpen, setBuyOpen] = useState(false);
   const [storeOpen, setStoreOpen] = useState(false);
@@ -61,6 +62,8 @@ export function PublicGalleryStoreBridge({
   const images = useMemo(() => collection?.images ?? [], [collection?.images]);
   const selectedImage = images.find((image) => image._id === activeImageId);
   const cartKey = storeCartKey(collection?._id ?? galary);
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const checkoutHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/checkout`;
 
   useEffect(() => {
     try {
@@ -104,6 +107,7 @@ export function PublicGalleryStoreBridge({
     if (!enabled) return;
 
     let host: HTMLElement | null = null;
+    let cartButtonHost: HTMLElement | null = null;
     const attach = () => {
       const navSlot = document.querySelector<HTMLElement>('[data-print-store-nav-host="true"]');
       if (navSlot && !host) {
@@ -111,6 +115,13 @@ export function PublicGalleryStoreBridge({
         host.dataset.printStoreHost = "true";
         navSlot.replaceWith(host);
         setNavHost(host);
+      }
+      const cartSlot = document.querySelector<HTMLElement>('[data-public-store-cart-host="true"]');
+      if (cartSlot && !cartButtonHost) {
+        cartButtonHost = document.createElement("div");
+        cartButtonHost.dataset.publicStoreCartHost = "true";
+        cartSlot.replaceWith(cartButtonHost);
+        setCartHost(cartButtonHost);
       }
     };
 
@@ -121,7 +132,9 @@ export function PublicGalleryStoreBridge({
     return () => {
       observer.disconnect();
       setNavHost(null);
+      setCartHost(null);
       host?.remove();
+      cartButtonHost?.remove();
     };
   }, [enabled]);
 
@@ -216,6 +229,24 @@ export function PublicGalleryStoreBridge({
           navHost,
         )}
 
+      {cartHost &&
+        createPortal(
+          <button
+            type="button"
+            className="relative inline-flex size-10 items-center justify-center rounded-full bg-[#202326] text-white shadow-sm transition hover:opacity-90"
+            onClick={() => setCartOpen(true)}
+            aria-label="Open cart"
+          >
+            <ShoppingBag className="size-4" />
+            {cartCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-bold text-[#202326] shadow">
+                {cartCount}
+              </span>
+            )}
+          </button>,
+          cartHost,
+        )}
+
       {activeImageId && showBuyPhotoButton && !buyOpen && (
         <button
           type="button"
@@ -254,7 +285,7 @@ export function PublicGalleryStoreBridge({
             setActiveProduct(product);
           }}
           onOpenCart={() => setCartOpen(true)}
-          cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)}
+          cartCount={cartCount}
         />
       )}
 
@@ -274,6 +305,7 @@ export function PublicGalleryStoreBridge({
         items={cart}
         data={storeData}
         identifier={galary}
+        checkoutHref={checkoutHref}
         onClose={() => setCartOpen(false)}
         onChange={(itemId, patch) =>
           setCart((items) => items.map((item) => item.id === itemId ? { ...item, ...patch } : item))
