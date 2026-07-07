@@ -185,6 +185,7 @@ const switcherItems = [
     text: "Better way to share, deliver, proof and sell",
     href: "/dashboard/client-gallery",
     mark: "bg-[#0dc6b5]",
+    accent: "from-[#0dc6b5] to-[#9de7de]",
   },
   {
     key: "store-gallery",
@@ -192,6 +193,7 @@ const switcherItems = [
     text: "Your online store for prints and downloads",
     href: "/dashboard/store-gallery",
     mark: "bg-[#ff4f5d]",
+    accent: "from-[#ff4f5d] to-[#ffc7cd]",
   },
 ] as const;
 
@@ -205,9 +207,10 @@ const sidebarItems = {
     { label: "Settings", icon: Settings, page: "settings" },
   ],
   "store-gallery": [
+    { label: "Dashboard", icon: Store, page: "storefront" },
     { label: "Orders", icon: ShoppingBag, page: "orders" },
     { label: "Customers", icon: Users, page: "customers" },
-    { label: "Products", icon: Package, page: "products" },
+    { label: "Price Sheets", icon: Package, page: "products" },
     { label: "Taxes", icon: ListFilter, page: "taxes" },
     { label: "Shipping", icon: Package, page: "shipping" },
     { label: "Coupons", icon: Copy, page: "coupons" },
@@ -359,12 +362,12 @@ export function ClientDashboard({
                 {!collapsed && <ChevronDown className="size-3 text-[#777]" />}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[310px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+            <DropdownMenuContent className="w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
               <DropdownMenuGroup className="p-5">
                 {switcherItems.map((item) => (
                   <DropdownMenuItem key={item.key} asChild className="p-0">
-                    <Link href={item.href} className="flex gap-4 py-3">
-                      <span className={cn("mt-1 size-8 shrink-0 rounded-full", item.mark)} />
+                    <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
+                      <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
                       <span className="flex flex-col gap-1">
                         <span className="font-bold text-[#151515]">{item.title}</span>
                         <span className="text-xs leading-5 text-[#777]">{item.text}</span>
@@ -437,7 +440,7 @@ export function ClientDashboard({
                 />
                 {!collapsed && "Marketing"}
               </Link>
-              {!collapsed && page === "marketing" && (
+              {!collapsed && (
                 <div className="ml-7 flex flex-col border-l border-[#e8e8e8] pl-4">
                   {[
                     { label: "Email Campaigns", slug: "email-campaigns", icon: Mail },
@@ -532,14 +535,30 @@ export function ClientDashboard({
                       <ChevronDown className="size-3" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[270px] rounded-none">
+                  <DropdownMenuContent className="w-[300px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
                     <DropdownMenuGroup>
                       {switcherItems.map((item) => (
-                        <DropdownMenuItem key={item.key} asChild>
-                          <Link href={item.href} onClick={() => setMobileMenuOpen(false)}>{item.title}</Link>
+                        <DropdownMenuItem key={item.key} asChild className="p-0">
+                          <Link
+                            href={item.href}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="flex gap-4 px-4 py-4"
+                          >
+                            <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
+                            <span className="flex flex-col gap-1">
+                              <span className="font-bold text-[#151515]">{item.title}</span>
+                              <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                            </span>
+                          </Link>
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuGroup>
+                    <div className="bg-[#f7f7f7] p-4 text-center">
+                      <Link href={`/dashboard/${section}`} onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center gap-2 text-sm text-[#333]">
+                        <LayoutGrid className="size-4 text-[#999]" />
+                        View Dashboard
+                      </Link>
+                    </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <button className="flex size-10 items-center justify-center bg-[#f4f4f4]" onClick={() => setMobileMenuOpen(false)} aria-label="Close dashboard menu">
@@ -570,6 +589,22 @@ export function ClientDashboard({
                       <Megaphone className={cn("size-5 text-[#333]", page === "marketing" && "text-[#00a997]")} />
                       Marketing
                     </Link>
+                    <div className="ml-9 grid gap-3">
+                      {[
+                        ["Email Campaigns", `/dashboard/${section}/marketing/email-campaigns`],
+                        ["Contacts", `/dashboard/${section}/marketing/contacts`],
+                        ["Settings", `/dashboard/${section}/marketing/settings`],
+                      ].map(([label, href]) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="text-sm text-[#555]"
+                        >
+                          {label}
+                        </Link>
+                      ))}
+                    </div>
                     <Link
                       href={`/dashboard/${section}/storage`}
                       onClick={() => setMobileMenuOpen(false)}

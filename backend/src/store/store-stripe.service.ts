@@ -19,7 +19,7 @@ export class StoreStripeService {
     this.requireReady(config);
     const stripe = new Stripe(config.secretKey);
     const currency = priced.currency.toLowerCase();
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = priced.items.map((item: any) => ({
+    const lineItems = priced.items.map((item: any) => ({
       quantity: item.quantity,
       price_data: {
         currency,

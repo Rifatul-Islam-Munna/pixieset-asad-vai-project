@@ -5,16 +5,21 @@ import { notFound } from "next/navigation";
 const sections = ["client-gallery", "store-gallery"];
 const pages = [
   "collections",
-  "create-collection",
+  "collection-new",
+  "library",
+  "favorites",
+  "starred",
+  "homepage",
+  "marketing",
   "settings",
+  "storage",
+  "storefront",
   "products",
   "orders",
   "customers",
   "taxes",
   "shipping",
   "coupons",
-  "payment-methods",
-  "price-sheets",
 ];
 
 export default async function DashboardSectionPage({

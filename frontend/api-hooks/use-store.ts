@@ -195,7 +195,7 @@ export function useStorePriceSheets(collectionId?: string) {
     queryKey,
     queryFn: () =>
       GetRequestNormal<ListResponse<StorePriceSheetRecord[]>>(
-        `/store/price-sheets${queryString}`,
+        `/store/catalog/price-sheets${queryString}`,
       ),
   });
 
@@ -208,7 +208,7 @@ export function useStorePriceSheets(collectionId?: string) {
     }) => {
       const [data, error] = await PostRequestAxios<
         ListResponse<StorePriceSheetRecord> & { message: string }
-      >("/store/price-sheets", payload);
+      >("/store/catalog/price-sheets/default", payload);
 
       if (error) throw new Error(error.message);
       return data;
@@ -229,7 +229,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
     queryFn: () =>
       GetRequestNormal<
         ListResponse<StorePriceSheetRecord & { products: StoreProductRecord[] }>
-      >(`/store/price-sheets/${priceSheetId}`),
+      >(`/store/catalog/price-sheets/${priceSheetId}`),
   });
 
   const updatePriceSheet = useMutation({
@@ -237,7 +237,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
       if (!priceSheetId) throw new Error("Price sheet is required");
       const [data, error] = await PatchRequestAxios<
         ListResponse<StorePriceSheetRecord> & { message: string }
-      >(`/store/price-sheets/${priceSheetId}`, payload as any);
+      >(`/store/catalog/price-sheets/${priceSheetId}`, payload as any);
 
       if (error) throw new Error(error.message);
       return data;
@@ -253,7 +253,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
       if (!priceSheetId) throw new Error("Price sheet is required");
       const [data, error] = await PostRequestAxios<
         ListResponse<StoreProductRecord> & { message: string }
-      >(`/store/price-sheets/${priceSheetId}/products`, payload);
+      >(`/store/catalog/price-sheets/${priceSheetId}/products`, payload);
 
       if (error) throw new Error(error.message);
       return data;
@@ -275,7 +275,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
       if (!priceSheetId) throw new Error("Price sheet is required");
       const [data, error] = await PatchRequestAxios<
         ListResponse<StoreProductRecord> & { message: string }
-      >(`/store/price-sheets/${priceSheetId}/products/${productId}`, payload as any);
+      >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`, payload as any);
 
       if (error) throw new Error(error.message);
       return data;
@@ -290,7 +290,7 @@ export function useStorePriceSheet(priceSheetId?: string) {
       if (!priceSheetId) throw new Error("Price sheet is required");
       const [data, error] = await DeleteRequestAxios<
         ListResponse<StoreProductRecord> & { message: string }
-      >(`/store/price-sheets/${priceSheetId}/products/${productId}`);
+      >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`);
 
       if (error) throw new Error(error.message);
       return data;

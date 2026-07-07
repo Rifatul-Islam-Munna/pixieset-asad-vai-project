@@ -105,7 +105,7 @@ export class StoreProduct {
 
 export const StoreProductSchema = SchemaFactory.createForClass(StoreProduct);
 
-StoreProductSchema.pre('validate', function setStoreProductSlug(next) {
+StoreProductSchema.pre('validate', function setStoreProductSlug(this: StoreProductDocument, next: () => void) {
   if (!this.slug && this.name) {
     this.slug = String(this.name)
       .toLowerCase()

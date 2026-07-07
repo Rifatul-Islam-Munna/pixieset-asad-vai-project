@@ -49,11 +49,12 @@ export class StorePricingService {
     const rawItems = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
     if (!rawItems.length) throw new BadRequestException('Cart is empty');
 
-    const productIds = [...new Set(
+    const productIdStrings = Array.from(new Set<string>(
       rawItems
         .map((item: any) => String(item.productId || ''))
         .filter((id: string) => Types.ObjectId.isValid(id)),
-    )];
+    ));
+    const productIds = productIdStrings.map((id) => new Types.ObjectId(id));
     const products = await this.productModel.find({
       _id: { $in: productIds },
       userId: resolved.userId,
@@ -62,11 +63,12 @@ export class StorePricingService {
     }).lean();
     const productMap = new Map(products.map((product: any) => [product._id.toString(), product]));
 
-    const imageIds = [...new Set(
+    const imageIdStrings = Array.from(new Set<string>(
       rawItems
         .map((item: any) => String(item.imageId || ''))
         .filter((id: string) => Types.ObjectId.isValid(id)),
-    )];
+    ));
+    const imageIds = imageIdStrings.map((id) => new Types.ObjectId(id));
     const images = imageIds.length
       ? await this.imageModel.find({
           _id: { $in: imageIds },

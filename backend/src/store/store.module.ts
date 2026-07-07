@@ -9,12 +9,14 @@ import { StoreShipping, StoreShippingSchema } from './entities/store-shipping.en
 import { StoreSetting, StoreSettingSchema } from './entities/store-setting.entity';
 import { StoreTax, StoreTaxSchema } from './entities/store-tax.entity';
 import { StoreActivity, StoreActivitySchema } from './entities/store-activity.entity';
-import { StoreController } from './store.controller';
+import { PublicStoreController, StoreController } from './store.controller';
 import { PublicPrintStoreController } from './public-print-store.controller';
 import { StorePrintAdminController } from './store-print-admin.controller';
 import { StoreService } from './store.service';
 import { PublicStoreService } from './public-store.service';
 import { StoreCatalogService } from './store-catalog.service';
+import { StoreCollectionCatalogService } from './store-collection-catalog.service';
+import { StoreCollectionProductService } from './store-collection-product.service';
 import { StorePricingService } from './store-pricing.service';
 import { StoreStripeService } from './store-stripe.service';
 import { StoreOrderCreateService } from './store-order-create.service';
@@ -40,11 +42,18 @@ import { User, UserSchema } from 'src/user/entities/user.entity';
       { name: User.name, schema: UserSchema },
     ]),
   ],
-  controllers: [StoreController, PublicPrintStoreController, StorePrintAdminController],
+  controllers: [
+    PublicStoreController,
+    StoreController,
+    PublicPrintStoreController,
+    StorePrintAdminController,
+  ],
   providers: [
     StoreService,
     PublicStoreService,
     StoreCatalogService,
+    StoreCollectionCatalogService,
+    StoreCollectionProductService,
     StorePricingService,
     StoreStripeService,
     StoreOrderCreateService,

@@ -93,15 +93,16 @@ const wallSizes: Array<[string, string, number]> = [
 ];
 
 function product(
-  input: Omit<DefaultStoreProduct, 'active' | 'extraShipping' | 'noImageRequired' | 'exemptFromSalesTax' | 'limitOnePerCheckout'>,
+  input: Omit<DefaultStoreProduct, 'active' | 'extraShipping' | 'noImageRequired' | 'exemptFromSalesTax' | 'limitOnePerCheckout'>
+    & Partial<Pick<DefaultStoreProduct, 'noImageRequired' | 'exemptFromSalesTax' | 'limitOnePerCheckout'>>,
 ): DefaultStoreProduct {
   return {
     active: true,
     extraShipping: 0,
-    noImageRequired: false,
-    exemptFromSalesTax: false,
-    limitOnePerCheckout: false,
     ...input,
+    noImageRequired: input.noImageRequired ?? false,
+    exemptFromSalesTax: input.exemptFromSalesTax ?? false,
+    limitOnePerCheckout: input.limitOnePerCheckout ?? false,
   };
 }
 
