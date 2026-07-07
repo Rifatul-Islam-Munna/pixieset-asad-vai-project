@@ -211,9 +211,9 @@ export class StoreCatalogService {
     const config: CollectionStoreConfig = {
       enabled,
       priceSheetId: sheet?._id?.toString() || raw.priceSheetId,
-      showPrintStoreNav: true,
-      showBuyPhotoButton: true,
-      allowBulkBuy: true,
+      showPrintStoreNav: raw.showPrintStoreNav ?? true,
+      showBuyPhotoButton: raw.showBuyPhotoButton ?? true,
+      allowBulkBuy: raw.allowBulkBuy ?? true,
       minimumOrderAmount: Number(raw.minimumOrderAmount ?? 0),
       currency: String(raw.currency || settings?.currency || 'EUR').toUpperCase(),
       requireProfessionalInfo: Boolean(raw.requireProfessionalInfo),

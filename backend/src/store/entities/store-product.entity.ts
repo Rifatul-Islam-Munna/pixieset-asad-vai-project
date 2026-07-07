@@ -105,7 +105,7 @@ export class StoreProduct {
 
 export const StoreProductSchema = SchemaFactory.createForClass(StoreProduct);
 
-StoreProductSchema.pre('validate', function setStoreProductSlug(this: StoreProductDocument, next: () => void) {
+StoreProductSchema.pre('validate', function setStoreProductSlug(this: StoreProductDocument) {
   if (!this.slug && this.name) {
     this.slug = String(this.name)
       .toLowerCase()
@@ -116,7 +116,6 @@ StoreProductSchema.pre('validate', function setStoreProductSlug(this: StoreProdu
   if (!this.previewImages?.length && this.images?.length) {
     this.previewImages = [...this.images];
   }
-  next();
 });
 StoreProductSchema.index({ userId: 1, priceSheetId: 1, sortOrder: 1, createdAt: -1 });
 StoreProductSchema.index({ userId: 1, priceSheetId: 1, slug: 1 }, { unique: true });

@@ -2,24 +2,35 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
 import { ChevronRight, ShoppingBag, X } from "lucide-react";
+import { toast } from "sonner";
 import {
   displayPrice,
   formatMoney,
+  storeCartKey,
   publicImageSrc,
   visibleVariants,
+  type PublicStoreCartItem,
   type PublicStoreData,
   type PublicStoreImage,
   type PublicStoreProduct,
 } from "@/lib/public-store";
+import { PublicStoreCatalog } from "./public-store-catalog";
+import { PublicStoreProductBuilder } from "./public-store-product-builder";
+import { StoreCartPanel } from "./store-cart-panel";
 
 type GalleryImage = PublicStoreImage;
 
 type GalleryStoreSettings = {
   enabled?: boolean;
   storeStatus?: boolean;
+  showPrintStoreNav?: boolean;
+  showBuyPhotoButton?: boolean;
 };
+
+function productCategory(product: PublicStoreProduct) {
+  return product.type === "digital-download" ? "Digital Downloads" : product.category || "Other";
+}
 
 export function PublicGalleryStoreBridge({
   name,
@@ -36,15 +47,47 @@ export function PublicGalleryStoreBridge({
 }) {
   const storeSettings = collection?.settings?.store ?? {};
   const enabled = Boolean(storeSettings.enabled ?? storeSettings.storeStatus);
+  const showPrintStoreNav = storeSettings.showPrintStoreNav !== false;
+  const showBuyPhotoButton = storeSettings.showBuyPhotoButton !== false;
   const [storeData, setStoreData] = useState<PublicStoreData | null>(null);
   const [navHost, setNavHost] = useState<HTMLElement | null>(null);
-  const [actionsHost, setActionsHost] = useState<HTMLElement | null>(null);
   const [activeImageId, setActiveImageId] = useState("");
   const [buyOpen, setBuyOpen] = useState(false);
+  const [storeOpen, setStoreOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [activeProduct, setActiveProduct] = useState<PublicStoreProduct | null>(null);
+  const [cart, setCart] = useState<PublicStoreCartItem[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
-  const storeHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`;
   const images = useMemo(() => collection?.images ?? [], [collection?.images]);
   const selectedImage = images.find((image) => image._id === activeImageId);
+  const cartKey = storeCartKey(collection?._id ?? galary);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(cartKey);
+      if (stored) setCart(JSON.parse(stored) as PublicStoreCartItem[]);
+    } catch {
+      setCart([]);
+    }
+  }, [cartKey]);
+
+  useEffect(() => {
+    window.localStorage.setItem(cartKey, JSON.stringify(cart));
+  }, [cart, cartKey]);
+
+  const addItems = (incoming: PublicStoreCartItem[]) => {
+    setCart((current) => {
+      const next = [...current];
+      incoming.forEach((item) => {
+        const existing = next.find((entry) => entry.id === item.id);
+        if (existing) existing.quantity += item.quantity;
+        else next.push(item);
+      });
+      return next;
+    });
+    setCartOpen(true);
+    toast.success(incoming.length > 1 ? `${incoming.length} products added to cart` : "Product added to cart");
+  };
 
   useEffect(() => {
     if (!enabled) return;
@@ -61,19 +104,13 @@ export function PublicGalleryStoreBridge({
     if (!enabled) return;
 
     let host: HTMLElement | null = null;
-    let actions: HTMLElement | null = null;
     const attach = () => {
       const navSlot = document.querySelector<HTMLElement>('[data-print-store-nav-host="true"]');
-      const actionSlot = document.querySelector<HTMLElement>('[data-print-store-actions-host="true"]');
       if (navSlot && !host) {
         host = document.createElement("div");
         host.dataset.printStoreHost = "true";
         navSlot.replaceWith(host);
         setNavHost(host);
-      }
-      if (actionSlot && !actions) {
-        actions = actionSlot;
-        setActionsHost(actionSlot);
       }
     };
 
@@ -84,8 +121,31 @@ export function PublicGalleryStoreBridge({
     return () => {
       observer.disconnect();
       setNavHost(null);
-      setActionsHost(null);
       host?.remove();
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const openStore = (event: MouseEvent) => {
+      const trigger = (event.target as HTMLElement | null)?.closest("[data-public-store-open]");
+      if (!trigger) return;
+      event.preventDefault();
+      setStoreOpen(true);
+    };
+    const openBuyPhoto = (event: MouseEvent) => {
+      const trigger = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-buy-photo-open]");
+      const imageId = trigger?.dataset.buyPhotoOpen;
+      if (!imageId) return;
+      event.preventDefault();
+      setActiveImageId(imageId);
+      setBuyOpen(true);
+    };
+    document.addEventListener("click", openStore);
+    document.addEventListener("click", openBuyPhoto);
+    return () => {
+      document.removeEventListener("click", openStore);
+      document.removeEventListener("click", openBuyPhoto);
     };
   }, [enabled]);
 
@@ -126,24 +186,29 @@ export function PublicGalleryStoreBridge({
 
   return (
     <>
-      {navHost &&
+      {navHost && showPrintStoreNav &&
         createPortal(
           <div
             className="relative hidden md:block"
             onMouseEnter={() => setMenuOpen(true)}
             onMouseLeave={() => setMenuOpen(false)}
           >
-            <Link
-              href={storeHref}
+            <button
+              type="button"
               data-print-store-reference="true"
               className="inline-flex h-16 items-center gap-2 text-sm font-medium text-black/70 transition-colors hover:text-black"
+              onClick={() => setStoreOpen(true)}
             >
               Print Store
-            </Link>
+            </button>
             {menuOpen && (
               <GalleryStoreMegaMenu
                 products={storeData?.products ?? []}
-                storeHref={storeHref}
+                onOpen={(product) => {
+                  setActiveProduct(product);
+                  setStoreOpen(false);
+                  setMenuOpen(false);
+                }}
                 onClose={() => setMenuOpen(false)}
               />
             )}
@@ -151,15 +216,7 @@ export function PublicGalleryStoreBridge({
           navHost,
         )}
 
-      {actionsHost && !navHost &&
-        createPortal(
-          <a href={storeHref} className="inline-flex items-center gap-2 text-sm">
-            <ShoppingBag className="size-4" /> Store
-          </a>,
-          actionsHost,
-        )}
-
-      {activeImageId && !buyOpen && (
+      {activeImageId && showBuyPhotoButton && !buyOpen && (
         <button
           type="button"
           className="fixed right-20 top-5 z-[70] inline-flex h-11 items-center gap-2 bg-[#303030] px-5 text-sm font-semibold text-white shadow-lg"
@@ -175,24 +232,70 @@ export function PublicGalleryStoreBridge({
           image={selectedImage}
           products={storeData?.products ?? []}
           currency={storeData?.store?.currency ?? "EUR"}
-          storeHref={storeHref}
+          onOpenStore={() => {
+            setBuyOpen(false);
+            setStoreOpen(true);
+          }}
+          onPickProduct={(product) => {
+            setBuyOpen(false);
+            setActiveProduct(product);
+          }}
           onClose={() => setBuyOpen(false)}
         />
       )}
+
+      {storeOpen && (
+        <StoreOverlay
+          data={storeData}
+          currency={storeData?.store?.currency ?? "EUR"}
+          onClose={() => setStoreOpen(false)}
+          onOpenProduct={(product) => {
+            setStoreOpen(false);
+            setActiveProduct(product);
+          }}
+          onOpenCart={() => setCartOpen(true)}
+          cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)}
+        />
+      )}
+
+      <PublicStoreProductBuilder
+        open={Boolean(activeProduct)}
+        product={activeProduct}
+        images={images}
+        currency={storeData?.store?.currency ?? "EUR"}
+        allowBulkBuy={Boolean(storeData?.store?.allowBulkBuy)}
+        initialImageId={activeImageId}
+        onClose={() => setActiveProduct(null)}
+        onAdd={addItems}
+      />
+
+      <StoreCartPanel
+        open={cartOpen}
+        items={cart}
+        data={storeData}
+        identifier={galary}
+        onClose={() => setCartOpen(false)}
+        onChange={(itemId, patch) =>
+          setCart((items) => items.map((item) => item.id === itemId ? { ...item, ...patch } : item))
+        }
+        onRemove={(itemId) => setCart((items) => items.filter((item) => item.id !== itemId))}
+        onClear={() => setCart([])}
+      />
     </>
   );
 }
 
 function GalleryStoreMegaMenu({
   products,
-  storeHref,
+  onOpen,
   onClose,
 }: {
   products: PublicStoreProduct[];
-  storeHref: string;
+  onOpen: (product: PublicStoreProduct) => void;
   onClose: () => void;
 }) {
-  const categories = ["Prints", "Wall Art"];
+  const categories = ["Prints", "Wall Art", "Digital Downloads", ...new Set(products.map(productCategory))]
+    .filter((category, index, list) => list.indexOf(category) === index);
   return (
     <div className="fixed left-0 right-0 top-16 z-[80] border-b border-black/10 bg-white/98 px-8 py-9 text-[#222] shadow-[0_18px_40px_rgba(0,0,0,0.08)] backdrop-blur">
       <div className="mx-auto grid max-w-[900px] gap-20 md:grid-cols-2">
@@ -201,17 +304,20 @@ function GalleryStoreMegaMenu({
             <p className="mb-4 text-sm font-medium text-black">{category}</p>
             <div className="grid gap-4">
               {products
-                .filter((product) => product.active !== false && product.category === category)
+                .filter((product) => product.active !== false && productCategory(product) === category)
                 .sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
                 .map((product) => (
-                  <Link
+                  <button
                     key={product._id}
-                    href={`${storeHref}/${encodeURIComponent(product.slug)}`}
-                    className="text-sm text-[#777] transition hover:text-black"
-                    onClick={onClose}
+                    type="button"
+                    className="text-left text-sm text-[#777] transition hover:text-black"
+                    onClick={() => {
+                      onOpen(product);
+                      onClose();
+                    }}
                   >
                     {product.name}
-                  </Link>
+                  </button>
                 ))}
             </div>
           </div>
@@ -225,23 +331,26 @@ function BuyPhotoDialog({
   image,
   products,
   currency,
-  storeHref,
+  onOpenStore,
+  onPickProduct,
   onClose,
 }: {
   image: GalleryImage;
   products: PublicStoreProduct[];
   currency: string;
-  storeHref: string;
+  onOpenStore: () => void;
+  onPickProduct: (product: PublicStoreProduct) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"Prints" | "Wall Art">("Prints");
+  const [tab, setTab] = useState("Prints");
   const activeProducts = products
-    .filter((product) => product.active !== false && product.category === tab)
+    .filter((product) => product.active !== false && productCategory(product) === tab)
     .sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
   const mainPrint = products.find(
     (product) => product.active !== false && product.slug === "print",
   ) ?? activeProducts[0];
-  const imageQuery = `?imageId=${encodeURIComponent(image._id)}`;
+  const categories = ["Prints", "Wall Art", "Digital Downloads", ...new Set(products.map(productCategory))]
+    .filter((category, index, list) => list.indexOf(category) === index && products.some((product) => productCategory(product) === category));
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/55 p-0 md:p-4" role="dialog" aria-modal="true">
@@ -259,9 +368,9 @@ function BuyPhotoDialog({
           <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-5 md:px-10">
             <h2 className="text-lg font-medium">Buy This Photo</h2>
             <div className="flex items-center gap-5">
-              <Link href={storeHref} className="text-sm text-[#777] hover:text-black">
+              <button type="button" onClick={onOpenStore} className="text-sm text-[#777] hover:text-black">
                 Visit Store <ChevronRight className="ml-1 inline size-4" />
-              </Link>
+              </button>
               <button className="flex size-9 items-center justify-center" onClick={onClose} aria-label="Close">
                 <X className="size-5" />
               </button>
@@ -270,7 +379,7 @@ function BuyPhotoDialog({
 
           <div className="px-6 pb-10 pt-5 md:px-10">
             <div className="flex gap-7 border-b">
-              {(["Prints", "Wall Art"] as const).map((category) => (
+              {categories.map((category) => (
                 <button
                   key={category}
                   className={`border-b-2 pb-3 text-sm ${
@@ -289,9 +398,10 @@ function BuyPhotoDialog({
               <>
                 <div className="divide-y border-b">
                   {visibleVariants(mainPrint).map((variant) => (
-                    <Link
+                    <button
                       key={variant.id}
-                      href={`${storeHref}/${encodeURIComponent(mainPrint.slug)}${imageQuery}`}
+                      type="button"
+                      onClick={() => onPickProduct(mainPrint)}
                       className="flex min-h-11 items-center justify-between gap-5 py-3 text-sm"
                     >
                       <span>{variant.label}</span>
@@ -299,24 +409,14 @@ function BuyPhotoDialog({
                         {formatMoney(variant.price, currency)}
                         <ChevronRight className="size-4" />
                       </span>
-                    </Link>
+                    </button>
                   ))}
                 </div>
                 <h3 className="mt-9 text-base font-medium">Shop All Prints</h3>
-                <ProductChoiceGrid
-                  products={activeProducts}
-                  currency={currency}
-                  imageQuery={imageQuery}
-                  storeHref={storeHref}
-                />
+                <ProductChoiceGrid products={activeProducts} currency={currency} onPickProduct={onPickProduct} />
               </>
             ) : (
-              <ProductChoiceGrid
-                products={activeProducts}
-                currency={currency}
-                imageQuery={imageQuery}
-                storeHref={storeHref}
-              />
+              <ProductChoiceGrid products={activeProducts} currency={currency} onPickProduct={onPickProduct} />
             )}
 
             {!activeProducts.length && (
@@ -334,23 +434,22 @@ function BuyPhotoDialog({
 function ProductChoiceGrid({
   products,
   currency,
-  imageQuery,
-  storeHref,
+  onPickProduct,
 }: {
   products: PublicStoreProduct[];
   currency: string;
-  imageQuery: string;
-  storeHref: string;
+  onPickProduct: (product: PublicStoreProduct) => void;
 }) {
   return (
     <div className="mt-5 grid gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3">
       {products.map((product) => {
         const preview = product.previewImages?.[0] || product.images?.[0];
         return (
-          <Link
+          <button
             key={product._id}
-            href={`${storeHref}/${encodeURIComponent(product.slug)}${imageQuery}`}
-            className="group"
+            type="button"
+            className="group text-left"
+            onClick={() => onPickProduct(product)}
           >
             <div className="aspect-square overflow-hidden bg-[#f2f2f0]">
               {preview && (
@@ -365,9 +464,55 @@ function ProductChoiceGrid({
             <p className="mt-1 text-sm text-[#888]">
               From {formatMoney(displayPrice(product), currency)}
             </p>
-          </Link>
+          </button>
         );
       })}
+    </div>
+  );
+}
+
+function StoreOverlay({
+  data,
+  currency,
+  cartCount,
+  onClose,
+  onOpenProduct,
+  onOpenCart,
+}: {
+  data: PublicStoreData | null;
+  currency: string;
+  cartCount: number;
+  onClose: () => void;
+  onOpenProduct: (product: PublicStoreProduct) => void;
+  onOpenCart: () => void;
+}) {
+  const products = (data?.products ?? []).filter((product) => product.active !== false);
+  return (
+    <div className="fixed inset-0 z-[110] bg-black/55 p-0 md:p-5" role="dialog" aria-modal="true">
+      <div className="mx-auto flex h-full max-h-[940px] w-full max-w-[1180px] flex-col overflow-hidden bg-white shadow-2xl">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b px-5 md:px-8">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#888]">Store</p>
+            <h2 className="text-lg font-medium">{data?.collection?.name || "Collection Store"}</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="inline-flex h-10 items-center gap-2 border px-4 text-sm" onClick={onOpenCart} type="button">
+              <ShoppingBag className="size-4" /> {cartCount}
+            </button>
+            <button className="flex size-10 items-center justify-center" onClick={onClose} aria-label="Close">
+              <X className="size-5" />
+            </button>
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-8">
+          <PublicStoreCatalog
+            products={products}
+            currency={currency}
+            enabled={data?.store?.enabled !== false}
+            onOpen={onOpenProduct}
+          />
+        </div>
+      </div>
     </div>
   );
 }

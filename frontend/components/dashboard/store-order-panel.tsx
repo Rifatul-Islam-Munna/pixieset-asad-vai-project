@@ -104,12 +104,15 @@ export function StoreOrderPanel({
     setPlacingOrder(true);
     setMessage("");
     const currentUrl = window.location.href.split("?")[0].replace(/\/$/, "");
+    const successUrl = currentUrl.endsWith("/store")
+      ? `${currentUrl}/success?session_id={CHECKOUT_SESSION_ID}`
+      : `${currentUrl}/store/success?session_id={CHECKOUT_SESSION_ID}`;
     const response = await fetch(`/api/public-print-store/${encodeURIComponent(identifier)}/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...requestBody(),
-        successUrl: `${currentUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+        successUrl,
         cancelUrl: currentUrl,
       }),
     }).catch(() => null);

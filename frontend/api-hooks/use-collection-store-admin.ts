@@ -45,8 +45,12 @@ export function useCollectionStoreAdmin(collectionId: string) {
       ...defaults,
       enabled: Boolean(store.enabled ?? store.storeStatus),
       priceSheetId: store.priceSheetId ?? "",
+      showPrintStoreNav: store.showPrintStoreNav ?? defaults.showPrintStoreNav,
+      showBuyPhotoButton: store.showBuyPhotoButton ?? defaults.showBuyPhotoButton,
+      allowBulkBuy: store.allowBulkBuy ?? defaults.allowBulkBuy,
       minimumOrderAmount: String(store.minimumOrderAmount ?? 0),
       currency: String(store.currency ?? "EUR").toUpperCase(),
+      requireProfessionalInfo: Boolean(store.requireProfessionalInfo),
     });
     setLoaded(true);
   }, [collection, loaded]);
@@ -70,10 +74,12 @@ export function useCollectionStoreAdmin(collectionId: string) {
   const saveSettings = async () => {
     if (!collection) return;
     try {
-      const catalog = await ensureCollectionStoreCatalog(
-        collectionId,
-        Number(form.minimumOrderAmount || 0),
-      );
+      const catalog = form.priceSheetId
+        ? { _id: form.priceSheetId }
+        : await ensureCollectionStoreCatalog(
+            collectionId,
+            Number(form.minimumOrderAmount || 0),
+          );
       await updateCollection.mutateAsync({
         settings: {
           ...(collection.settings ?? {}),
@@ -82,12 +88,12 @@ export function useCollectionStoreAdmin(collectionId: string) {
             enabled: form.enabled,
             storeStatus: form.enabled,
             priceSheetId: catalog._id,
-            showPrintStoreNav: true,
-            showBuyPhotoButton: true,
-            allowBulkBuy: true,
+            showPrintStoreNav: form.showPrintStoreNav,
+            showBuyPhotoButton: form.showBuyPhotoButton,
+            allowBulkBuy: form.allowBulkBuy,
             minimumOrderAmount: Number(form.minimumOrderAmount || 0),
             currency: form.currency,
-            requireProfessionalInfo: false,
+            requireProfessionalInfo: form.requireProfessionalInfo,
           },
         },
       });

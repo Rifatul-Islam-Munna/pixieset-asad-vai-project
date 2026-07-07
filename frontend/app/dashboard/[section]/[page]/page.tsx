@@ -1,5 +1,5 @@
 import { ClientDashboard } from "@/components/dashboard/client-dashboard";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 const sections = ["client-gallery", "store-gallery"];
 const pages = [
@@ -32,6 +32,9 @@ export default async function DashboardSectionPage({
   const { section, page } = await params;
   await searchParams;
   if (!sections.includes(section) || !pages.includes(page)) notFound();
+  if (section === "store-gallery" && page === "pricing") {
+    redirect("/dashboard/store-gallery/products");
+  }
 
   return <ClientDashboard section={section} page={page} />;
 }

@@ -48,7 +48,7 @@ export type StorePriceSheetRecord = {
   isDefault?: boolean;
   collectionIds?: string[];
   minimumOrderAmount?: number;
-  fulfillment?: "self-fulfilled";
+  fulfillment?: "self-fulfilled" | "auto";
   productCount?: number;
   collectionCount?: number;
   products?: StoreProductRecord[];
@@ -206,6 +206,7 @@ export function useStorePriceSheets(collectionId?: string) {
       isDefault?: boolean;
       collectionIds?: string[];
       minimumOrderAmount?: number;
+      fulfillment?: "self-fulfilled" | "auto";
     }) => {
       const [data, error] = await PostRequestAxios<
         ListResponse<StorePriceSheetRecord> & { message: string }
@@ -219,7 +220,21 @@ export function useStorePriceSheets(collectionId?: string) {
     },
   });
 
-  return { priceSheetsQuery, createPriceSheet };
+  const deletePriceSheet = useMutation({
+    mutationFn: async (priceSheetId: string) => {
+      const [data, error] = await DeleteRequestAxios<
+        ListResponse<StorePriceSheetRecord> & { message: string }
+      >(`/store/price-sheets/${priceSheetId}`);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheets"] });
+    },
+  });
+
+  return { priceSheetsQuery, createPriceSheet, deletePriceSheet };
 }
 
 export function useStorePriceSheet(priceSheetId?: string) {
@@ -340,6 +355,31 @@ export function useStoreProductUpdate() {
       const [data, error] = await PatchRequestAxios<
         ListResponse<StoreProductRecord> & { message: string }
       >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`, payload as any);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheets"] });
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheet", variables.priceSheetId] });
+    },
+  });
+}
+
+export function useStoreProductDelete() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      priceSheetId,
+      productId,
+    }: {
+      priceSheetId: string;
+      productId: string;
+    }) => {
+      const [data, error] = await DeleteRequestAxios<
+        ListResponse<StoreProductRecord> & { message: string }
+      >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`);
 
       if (error) throw new Error(error.message);
       return data;

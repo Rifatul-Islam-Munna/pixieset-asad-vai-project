@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
@@ -44,7 +44,7 @@ type PublicCollection = {
     general?: { slideshow?: boolean | string };
     download?: Partial<PresetDownloadSettings>;
     favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string };
-    store?: { storeStatus?: boolean; enabled?: boolean; showPrintStoreNav?: boolean };
+    store?: { storeStatus?: boolean; enabled?: boolean; showPrintStoreNav?: boolean; showBuyPhotoButton?: boolean };
   };
 };
 
@@ -137,13 +137,13 @@ export function PublicGallery({
     ...(collection ? (collection.settings?.download ?? {}) : fallbackPresetDownload),
   };
   const storeConfig = collection?.settings?.store;
+  const storeEnabled = Boolean(collection ? (storeConfig?.enabled ?? storeConfig?.storeStatus) : fallbackPresetStore.storeStatus);
   const storeStatus = Boolean(
-    storeConfig?.showPrintStoreNav ??
-    storeConfig?.enabled ??
-    storeConfig?.storeStatus ??
-    fallbackPresetStore.showPrintStoreNav ??
-    fallbackPresetStore.storeStatus,
+    collection
+      ? storeEnabled && storeConfig?.showPrintStoreNav !== false
+      : fallbackPresetStore.showPrintStoreNav ?? fallbackPresetStore.storeStatus,
   );
+  const showBuyPhotoButton = Boolean(storeEnabled && storeConfig?.showBuyPhotoButton !== false);
   const slideshowEnabled = collection
     ? boolSetting(collection.settings?.general?.slideshow ?? true)
     : boolSetting(fallbackPresetGeneral.slideshow);
@@ -161,10 +161,13 @@ export function PublicGallery({
   const galleryImages = coverImage
     ? [coverImage, ...images.filter((image) => imageSrc(image.url) !== imageSrc(coverImage.url))]
     : images;
-  const gallerySets = (collection?.sets ?? []).filter((set) =>
-    galleryImages.some((image) => imageSetId(image) === set.id)
+  const gallerySets = useMemo(
+    () => collection?.sets?.length
+      ? collection.sets
+      : [{ id: "highlights", name: "Highlights" }],
+    [collection?.sets],
   );
-  const showSetTabs = gallerySets.length > 1;
+  const showSetTabs = gallerySets.length > 0;
   const coverPhoto = imageSrc(collection?.coverImage || images[0]?.url);
   const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
@@ -205,7 +208,6 @@ export function PublicGallery({
   const masonryColumns = design.thumbnailSize === "Large"
     ? "columns-1 sm:columns-2"
     : "columns-1 sm:columns-2 lg:columns-3";
-  const storeHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`;
   const downloadsEnabled = boolSetting(download.photoDownload);
   const favoriteSettings = collection?.settings?.favorite;
   const favoritesEnabled = favoriteSettings?.favoritePhotos !== false;
@@ -629,11 +631,6 @@ export function PublicGallery({
                   <Download className="size-4" /> Install
                 </button>
               )}
-              {storeStatus && (
-                <a href={storeHref} className="flex items-center gap-2 text-sm">
-                  <ShoppingBag className="size-4" /> Store
-                </a>
-              )}
             </>
           ) : (
             <>
@@ -646,7 +643,6 @@ export function PublicGallery({
                   <Download className="size-5" />
                 </button>
               )}
-              {storeStatus && <a href={storeHref} aria-label="Store"><ShoppingBag className="size-5" /></a>}
             </>
           )}
         </div>
@@ -693,10 +689,9 @@ export function PublicGallery({
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-full border border-black/10 bg-[#f4f4f2] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur">
             {storeStatus && (
-              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" title="Store" aria-label="Store">
-                <ShoppingBag className="size-4" />
-                <span className="md:sr-only">Store</span>
-              </a>
+              <button className="inline-flex h-10 items-center rounded-full px-4 text-sm font-bold transition hover:bg-black/5" type="button" data-public-store-open="true">
+                Print Store
+              </button>
             )}
             <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90 md:w-10 md:justify-center md:px-0" title={faceBusy ? "Searching" : "Find me"}>
               {faceBusy ? <Search className="size-4 animate-pulse" /> : <Camera className="size-4" />}
@@ -833,6 +828,12 @@ export function PublicGallery({
             <X className="size-5" />
           </button>
           <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
+            {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
+              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" data-buy-photo-open={activeImage._id} type="button">
+                <ShoppingBag className="size-4" />
+                Buy This Photo
+              </button>
+            )}
             {favoritesEnabled && isPersistedImageId(activeImage._id) && (
               <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void toggleImageFavorite(activeImage)} type="button">
                 <Heart className={cn("size-4", favoriteImageIds.has(activeImage._id) && "fill-red-500 text-red-500")} />
@@ -873,6 +874,12 @@ export function PublicGallery({
             <ChevronRight className="size-6" />
           </button>
           <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
+            {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
+              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" data-buy-photo-open={slideshowImage._id} type="button">
+                <ShoppingBag className="size-4" />
+                Buy This Photo
+              </button>
+            )}
             {favoritesEnabled && isPersistedImageId(slideshowImage._id) && (
               <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void toggleImageFavorite(slideshowImage)} type="button">
                 <Heart className={cn("size-4", favoriteImageIds.has(slideshowImage._id) && "fill-red-500 text-red-500")} />

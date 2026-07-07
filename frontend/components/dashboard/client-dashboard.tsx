@@ -127,6 +127,7 @@ import { CoverPreview, coverOptions } from "@/components/dashboard/cover-designs
 import {
   useStorePriceSheet,
   useStorePriceSheetDetails,
+  useStoreProductDelete,
   useStoreProductUpdate,
   useStorePriceSheets,
   useStoreCustomers,
@@ -222,8 +223,7 @@ const sidebarItems = {
     { label: "Dashboard", icon: Store, page: "storefront" },
     { label: "Orders", icon: ShoppingBag, page: "orders" },
     { label: "Customers", icon: Users, page: "customers" },
-    { label: "Pricing", icon: CreditCard, page: "pricing" },
-    { label: "Products", icon: Package, page: "products" },
+    { label: "Pricing Sheet", icon: CreditCard, page: "products" },
     { label: "Taxes", icon: ListFilter, page: "taxes" },
     { label: "Shipping", icon: Package, page: "shipping" },
     { label: "Coupons", icon: Copy, page: "coupons" },
@@ -5486,7 +5486,7 @@ function money(value: number, currency = "EUR") {
 }
 
 function getPricingProductCount(sheet?: (StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null) {
-  return (sheet?.products ?? []).filter((product) => product.type === "self-fulfilled").length;
+  return (sheet?.products ?? []).length;
 }
 
 function pickPrimaryPricingSheet(
@@ -5520,7 +5520,7 @@ function pickPrimaryPricingSheet(
 function StorePricingPanel() {
   const router = useRouter();
   const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
-  const updateProduct = useStoreProductUpdate();
+  const deleteProduct = useStoreProductDelete();
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const sheets = priceSheetsQuery.data?.data ?? [];
@@ -5529,11 +5529,10 @@ function StorePricingPanel() {
     .map((query) => query.data?.data ?? null)
     .filter((sheet): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } => Boolean(sheet));
   const pricingSheet = pickPrimaryPricingSheet(sheets, detailedSheets);
-  const products = detailedSheets.flatMap((sheet) =>
-    (sheet.products ?? []).filter((product) => product.type === "self-fulfilled"),
-  );
+  const products = detailedSheets.flatMap((sheet) => sheet.products ?? []);
   const creatingDefault = useRef(false);
   const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
+  const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(null);
 
   useEffect(() => {
     if (priceSheetsQuery.isLoading || sheets.length || createPriceSheet.isPending || creatingDefault.current) {
@@ -5556,15 +5555,15 @@ function StorePricingPanel() {
 
   const groupedProducts = products.reduce<Record<string, StoreProductRecord[]>>(
     (groups, product) => {
-      const key = product.category || "Prints";
+      const key = product.type === "digital-download" ? "Digital Downloads" : product.category || "Prints";
       groups[key] = [...(groups[key] ?? []), product];
       return groups;
     },
     {},
   );
   const orderedGroups = [
-    ...["Prints", "Wall Art"].filter((category) => groupedProducts[category]?.length),
-    ...Object.keys(groupedProducts).filter((category) => !["Prints", "Wall Art"].includes(category)),
+    ...["Prints", "Wall Art", "Digital Downloads"].filter((category) => groupedProducts[category]?.length),
+    ...Object.keys(groupedProducts).filter((category) => !["Prints", "Wall Art", "Digital Downloads"].includes(category)),
   ];
 
   const goAdd = (type: StoreProductType) => {
@@ -5605,9 +5604,9 @@ function StorePricingPanel() {
     <div className="mx-auto max-w-[950px] px-5 py-8">
       <div className="flex flex-wrap items-center justify-between gap-5 border-b pb-5">
         <div>
-          <h1 className="text-[28px] font-medium leading-none">Pricing</h1>
+          <h1 className="text-[28px] font-medium leading-none">Pricing Sheet</h1>
           <p className="mt-3 text-sm text-[#666]">
-            Update Print and Wall Art products used by client gallery stores.
+            Update digital downloads, print items, and fulfillment products used by public galleries.
           </p>
         </div>
         <DropdownMenu>
@@ -5631,6 +5630,18 @@ function StorePricingPanel() {
                   </span>
                 </span>
               </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer items-start gap-4 rounded-none p-2"
+                onClick={() => goAdd("digital-download")}
+              >
+                <Download className="mt-1 size-5 text-[#8a949e]" />
+                <span>
+                  <span className="block font-bold text-[#222]">Digital Download</span>
+                  <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
+                    Sell downloadable files from the public gallery.
+                  </span>
+                </span>
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -5648,16 +5659,7 @@ function StorePricingPanel() {
                     product={product}
                     currency={currency}
                     onEdit={() => router.push(`/dashboard/store-gallery/pricing/${product._id}`)}
-                    onHide={() => {
-                      if (!window.confirm("Hide this product from store?")) return;
-                      const sheetId = product.priceSheetId;
-                      if (!sheetId) return;
-                      updateProduct.mutate({
-                        priceSheetId: sheetId,
-                        productId: product._id,
-                        payload: { active: false },
-                      });
-                    }}
+                    onDelete={() => setDeleteTarget(product)}
                   />
                 ))}
               </div>
@@ -5668,9 +5670,23 @@ function StorePricingPanel() {
         <div className="mt-9 flex min-h-[260px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
           <Package className="size-10 text-[#aaa]" />
           <p className="mt-5 font-bold">No pricing products yet</p>
-          <p className="mt-2 text-sm text-[#666]">Add Print or Wall Art products.</p>
+          <p className="mt-2 text-sm text-[#666]">Add digital downloads or fulfillment products.</p>
         </div>
       )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete product"
+        description={deleteTarget ? `Delete "${deleteTarget.name}" from this pricing sheet?` : ""}
+        pending={deleteProduct.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget?.priceSheetId) return;
+          deleteProduct.mutate(
+            { priceSheetId: deleteTarget.priceSheetId, productId: deleteTarget._id },
+            { onSuccess: () => setDeleteTarget(null) },
+          );
+        }}
+      />
     </div>
   );
 }
@@ -5699,7 +5715,7 @@ function StorePricingRouteEditor({
       ? null
       : ownerSheet?.products?.find((item) => item._id === productId) ?? null;
   const type = editingProduct?.type ?? productType ?? "self-fulfilled";
-  const { createProduct, updateProduct } = useStorePriceSheet(ownerSheet?._id);
+  const { createProduct, updateProduct, deleteProduct } = useStorePriceSheet(ownerSheet?._id);
   const creatingDefault = useRef(false);
   const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
 
@@ -5760,9 +5776,8 @@ function StorePricingRouteEditor({
       onHide={
         editingProduct
           ? () => {
-              if (!window.confirm("Hide this product from store?")) return;
-              updateProduct.mutate(
-                { productId: editingProduct._id, payload: { active: false } },
+              deleteProduct.mutate(
+                editingProduct._id,
                 {
                   onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
                 },
@@ -5770,18 +5785,20 @@ function StorePricingRouteEditor({
             }
           : undefined
       }
-      hidePending={updateProduct.isPending}
+      hidePending={deleteProduct.isPending}
     />
   );
 }
 
 function StoreProductsPanel() {
   const router = useRouter();
-  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
+  const { priceSheetsQuery, createPriceSheet, deletePriceSheet } = useStorePriceSheets();
   const sheets = priceSheetsQuery.data?.data ?? [];
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sheetName, setSheetName] = useState("My Price Sheet");
   const [minimumOrderAmount, setMinimumOrderAmount] = useState("0");
+  const [fulfillment, setFulfillment] = useState<"self-fulfilled" | "auto">("self-fulfilled");
+  const [deleteSheet, setDeleteSheet] = useState<StorePriceSheetRecord | null>(null);
 
   const addSheet = () => {
     createPriceSheet.mutate(
@@ -5789,16 +5806,14 @@ function StoreProductsPanel() {
         name: sheetName.trim() || "My Price Sheet",
         isDefault: !sheets.length,
         minimumOrderAmount: Number(minimumOrderAmount) || 0,
+        fulfillment,
       },
       {
         onSuccess: (response) => {
+          setSettingsOpen(false);
           const id = response?.data?._id;
           if (!id) return;
-          router.push(
-            response?.data?.isDefault
-              ? "/dashboard/store-gallery/pricing"
-              : `/dashboard/store-gallery/products/${id}`,
-          );
+          router.push(`/dashboard/store-gallery/products/${id}`);
         },
       },
     );
@@ -5839,18 +5854,16 @@ function StoreProductsPanel() {
       ) : (
         <div className="mt-8 grid gap-7 sm:grid-cols-2">
           {sheets.map((sheet) => (
-            <button
+            <article
               key={sheet._id}
-              className="group text-left"
-              onClick={() =>
-                router.push(
-                  sheet.isDefault
-                    ? "/dashboard/store-gallery/pricing"
-                    : `/dashboard/store-gallery/products/${sheet._id}`,
-                )
-              }
+              className="group relative text-left"
             >
-              <span className="relative flex aspect-[1.8] items-center justify-center bg-[#f4f4f4]">
+              <button
+                className="block w-full text-left"
+                onClick={() => router.push(`/dashboard/store-gallery/products/${sheet._id}`)}
+                type="button"
+              >
+                <span className="relative flex aspect-[1.8] items-center justify-center bg-[#f4f4f4]">
                 {sheet.isDefault && (
                   <span className="absolute left-3 top-3 bg-[#e7e7e7] px-2 py-1 text-[10px] font-bold uppercase">
                     Default
@@ -5858,14 +5871,23 @@ function StoreProductsPanel() {
                 )}
                 <CircleUserRound className="size-10 text-[#2f3438]" />
               </span>
-              <span className="mt-4 flex items-center justify-between gap-4">
+                <span className="mt-4 flex items-center justify-between gap-4">
                 <span className="font-bold uppercase">{sheet.name}</span>
                 <MoreHorizontal className="size-5 text-[#00a997]" />
               </span>
-              <span className="mt-2 block text-sm text-[#777]">
+                <span className="mt-2 block text-sm text-[#777]">
                 {sheet.productCount ?? 0} Products &nbsp; {sheet.collectionCount ?? 0} Collection
               </span>
-            </button>
+              </button>
+              <button
+                className="absolute right-3 top-3 flex size-9 items-center justify-center bg-white text-red-600 opacity-0 shadow-sm transition group-hover:opacity-100"
+                onClick={() => setDeleteSheet(sheet)}
+                type="button"
+                aria-label="Delete price sheet"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </article>
           ))}
         </div>
       )}
@@ -5895,7 +5917,25 @@ function StoreProductsPanel() {
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold">Fulfillment</FieldLabel>
-                  <p className="text-sm">Self Fulfillment</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {([
+                      ["self-fulfilled", "Self fulfillment", "Empty sheet. You add products manually."],
+                      ["auto", "Auto defaults", "Create sheet with default Print and Wall Art products."],
+                    ] as const).map(([value, label, text]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={cn(
+                          "border px-4 py-4 text-left",
+                          fulfillment === value && "border-[#22bda7] bg-[#f2fbf9]",
+                        )}
+                        onClick={() => setFulfillment(value)}
+                      >
+                        <span className="block text-sm font-bold">{label}</span>
+                        <span className="mt-1 block text-xs leading-5 text-[#777]">{text}</span>
+                      </button>
+                    ))}
+                  </div>
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold">Minimum Order Amount</FieldLabel>
@@ -5926,13 +5966,26 @@ function StoreProductsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <DeleteConfirmDialog
+        open={Boolean(deleteSheet)}
+        title="Delete price sheet"
+        description={deleteSheet ? `Delete "${deleteSheet.name}" and all products inside it?` : ""}
+        pending={deletePriceSheet.isPending}
+        onCancel={() => setDeleteSheet(null)}
+        onConfirm={() => {
+          if (!deleteSheet) return;
+          deletePriceSheet.mutate(deleteSheet._id, {
+            onSuccess: () => setDeleteSheet(null),
+          });
+        }}
+      />
     </div>
   );
 }
 
 function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
   const router = useRouter();
-  const { priceSheetQuery, updatePriceSheet, updateProduct } =
+  const { priceSheetQuery, updatePriceSheet, deleteProduct } =
     useStorePriceSheet(priceSheetId);
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
@@ -5943,6 +5996,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
     name: "",
     minimumOrderAmount: "0",
   });
+  const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(null);
 
   useEffect(() => {
     if (!sheet) return;
@@ -5951,12 +6005,6 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
       minimumOrderAmount: String(sheet.minimumOrderAmount ?? 0),
     });
   }, [sheet]);
-
-  useEffect(() => {
-    if (sheet?.isDefault) {
-      router.replace("/dashboard/store-gallery/pricing");
-    }
-  }, [router, sheet?.isDefault]);
 
   const groupedProducts = products.reduce<Record<string, StoreProductRecord[]>>(
     (groups, product) => {
@@ -6081,13 +6129,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                     product={product}
                     currency={currency}
                     onEdit={() => router.push(`/dashboard/store-gallery/products/${priceSheetId}/${product._id}`)}
-                    onHide={() => {
-                      if (!window.confirm("Hide this product from store?")) return;
-                      updateProduct.mutate({
-                        productId: product._id,
-                        payload: { active: false },
-                      });
-                    }}
+                    onDelete={() => setDeleteTarget(product)}
                   />
                 ))}
               </div>
@@ -6150,6 +6192,19 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete product"
+        description={deleteTarget ? `Delete "${deleteTarget.name}" from this pricing sheet?` : ""}
+        pending={deleteProduct.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteProduct.mutate(deleteTarget._id, {
+            onSuccess: () => setDeleteTarget(null),
+          });
+        }}
+      />
 
     </div>
   );
@@ -6165,27 +6220,14 @@ function StoreProductRouteEditor({
   productType?: StoreProductType;
 }) {
   const router = useRouter();
-  const { priceSheetQuery, createProduct, updateProduct } = useStorePriceSheet(priceSheetId);
+  const { priceSheetQuery, createProduct, updateProduct, deleteProduct } = useStorePriceSheet(priceSheetId);
   const sheet = priceSheetQuery.data?.data;
   const editingProduct =
     productId === "new"
       ? null
       : (sheet?.products ?? []).find((item) => item._id === productId) ?? null;
   const type = editingProduct?.type ?? productType ?? "self-fulfilled";
-  const detailPath = sheet?.isDefault
-    ? productId === "new"
-      ? `/dashboard/store-gallery/pricing/new?type=${type}`
-      : `/dashboard/store-gallery/pricing/${productId}`
-    : `/dashboard/store-gallery/products/${priceSheetId}${productId === "new" ? `/new?type=${type}` : `/${productId}`}`;
-  const listPath = sheet?.isDefault
-    ? "/dashboard/store-gallery/pricing"
-    : `/dashboard/store-gallery/products/${priceSheetId}`;
-
-  useEffect(() => {
-    if (sheet?.isDefault) {
-      router.replace(detailPath);
-    }
-  }, [detailPath, router, sheet?.isDefault]);
+  const listPath = `/dashboard/store-gallery/products/${priceSheetId}`;
 
   useEffect(() => {
     if (productId !== "new" && !priceSheetQuery.isLoading && !editingProduct) {
@@ -6225,9 +6267,8 @@ function StoreProductRouteEditor({
       onHide={
         editingProduct
           ? () => {
-              if (!window.confirm("Hide this product from store?")) return;
-              updateProduct.mutate(
-                { productId: editingProduct._id, payload: { active: false } },
+              deleteProduct.mutate(
+                editingProduct._id,
                 {
                   onSuccess: () => router.push(listPath),
                 },
@@ -6235,7 +6276,7 @@ function StoreProductRouteEditor({
             }
           : undefined
       }
-      hidePending={updateProduct.isPending}
+      hidePending={deleteProduct.isPending}
     />
   );
 }
@@ -6249,16 +6290,51 @@ function DetailStat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function DeleteConfirmDialog({
+  open,
+  title,
+  description,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(value) => !value && onCancel()}>
+      <DialogContent className="rounded-none sm:max-w-[430px]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" className="rounded-none" disabled={pending} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button className="rounded-none bg-red-600 text-white hover:bg-red-700" disabled={pending} onClick={onConfirm}>
+            {pending ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ProductTile({
   product,
   currency,
   onEdit,
-  onHide,
+  onDelete,
 }: {
   product: StoreProductRecord;
   currency: string;
   onEdit: () => void;
-  onHide: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div className="group">
@@ -6272,8 +6348,8 @@ function ProductTile({
         )}
         <button
           className="absolute right-2 top-2 hidden size-8 items-center justify-center bg-white text-red-600 shadow-sm group-hover:flex"
-          onClick={onHide}
-          aria-label="Hide product"
+          onClick={onDelete}
+          aria-label="Delete product"
         >
           <Trash2 className="size-4" />
         </button>
@@ -6886,7 +6962,7 @@ function ProductEditorDialog({
               disabled={hidePending}
               onClick={onHide}
             >
-              {hidePending ? "Hiding..." : "Hide"}
+              {hidePending ? "Deleting..." : "Delete"}
             </Button>
           )}
           <Button variant="outline" className="rounded-none" onClick={() => onOpenChange(false)}>

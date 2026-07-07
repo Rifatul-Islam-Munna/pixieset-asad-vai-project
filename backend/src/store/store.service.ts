@@ -16,6 +16,7 @@ import { StoreShipping, StoreShippingDocument } from './entities/store-shipping.
 import { StoreTax, StoreTaxDocument } from './entities/store-tax.entity';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
+import { DEFAULT_STORE_PRODUCTS } from './store-defaults';
 
 @Injectable()
 export class StoreService {
@@ -194,14 +195,24 @@ export class StoreService {
     if (!dto.name?.trim()) throw new BadRequestException('Price sheet name is required');
     if (dto.isDefault) await this.priceSheetModel.updateMany({ userId }, { $set: { isDefault: false } });
 
+    const fulfillment = dto.fulfillment === 'auto' ? 'auto' : 'self-fulfilled';
     const sheet = await this.priceSheetModel.create({
       userId,
       name: dto.name.trim(),
       isDefault: Boolean(dto.isDefault),
       collectionIds: dto.collectionIds ?? [],
       minimumOrderAmount: dto.minimumOrderAmount ?? 0,
-      fulfillment: 'self-fulfilled',
+      fulfillment,
     });
+    if (fulfillment === 'auto') {
+      await this.productModel.insertMany(
+        DEFAULT_STORE_PRODUCTS.map((item) => ({
+          userId,
+          priceSheetId: sheet._id.toString(),
+          ...item,
+        })),
+      );
+    }
 
     return sheet.toObject();
   }
@@ -469,6 +480,7 @@ export class StoreService {
     if (dto.isDefault !== undefined) sheet.isDefault = dto.isDefault;
     if (dto.collectionIds !== undefined) sheet.collectionIds = dto.collectionIds;
     if (dto.minimumOrderAmount !== undefined) sheet.minimumOrderAmount = dto.minimumOrderAmount;
+    if (dto.fulfillment !== undefined) sheet.fulfillment = dto.fulfillment;
     await sheet.save();
     return sheet.toObject();
   }

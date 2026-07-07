@@ -18,11 +18,11 @@ export function PublicStoreCatalog({
 }: {
   products: PublicStoreProduct[];
   currency: string;
-  enabled: boolean;
+  enabled?: boolean;
   onOpen: (product: PublicStoreProduct) => void;
 }) {
   const categories = categoryNames(products);
-  if (!enabled) {
+  if (enabled === false) {
     return (
       <div className="mt-12 border bg-[#fafafa] p-8 text-center">
         <h3 className="text-xl font-medium">This store is currently turned off</h3>
@@ -41,7 +41,7 @@ export function PublicStoreCatalog({
   return (
     <>
       {categories.map((category) => {
-        const items = products.filter((product) => (product.category || "Other") === category);
+        const items = products.filter((product) => productCategory(product) === category);
         return (
           <section key={category} id={slugify(category)} className="scroll-mt-24 pt-14">
             <div className="mb-6 flex items-center justify-between border-b pb-4">
@@ -70,7 +70,7 @@ export function StoreMegaMenu({
   onOpen: (product: PublicStoreProduct) => void;
 }) {
   const groups = STORE_CATEGORY_ORDER
-    .map((category) => ({ category, products: products.filter((product) => product.category === category) }))
+    .map((category) => ({ category, products: products.filter((product) => productCategory(product) === category) }))
     .filter((group) => group.products.length);
   return (
     <div className="fixed left-0 right-0 top-[69px] border-b bg-[#f7f7f6] px-8 py-9 shadow-[0_15px_30px_rgba(0,0,0,0.05)]">
@@ -94,12 +94,16 @@ export function StoreMegaMenu({
 }
 
 export function categoryNames(products: PublicStoreProduct[]) {
-  const names = [...new Set(products.map((product) => product.category || "Other"))];
+  const names = [...new Set(products.map(productCategory))];
   return names.sort((a, b) => {
     const left = STORE_CATEGORY_ORDER.indexOf(a);
     const right = STORE_CATEGORY_ORDER.indexOf(b);
     return (left < 0 ? 99 : left) - (right < 0 ? 99 : right) || a.localeCompare(b);
   });
+}
+
+function productCategory(product: PublicStoreProduct) {
+  return product.type === "digital-download" ? "Digital Downloads" : product.category || "Other";
 }
 
 export function slugify(value: string) {

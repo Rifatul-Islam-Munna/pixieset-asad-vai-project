@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class UpdatePriceSheetDto {
   @IsString()
@@ -16,4 +16,8 @@ export class UpdatePriceSheetDto {
   @IsNumber()
   @IsOptional()
   minimumOrderAmount?: number;
+
+  @IsIn(['self-fulfilled', 'auto'])
+  @IsOptional()
+  fulfillment?: 'self-fulfilled' | 'auto';
 }

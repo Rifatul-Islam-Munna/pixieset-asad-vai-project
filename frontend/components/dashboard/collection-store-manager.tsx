@@ -4,11 +4,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Activity, ExternalLink, Loader2, Settings } from "lucide-react";
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
+import { useStorePriceSheets } from "@/api-hooks/use-store";
 import { CollectionStoreSettingsPanel } from "./collection-store-settings-panel";
 import { StoreActivityList } from "./store-activity-list";
 
 export function CollectionStoreManager({ collectionId }: { collectionId: string }) {
   const admin = useCollectionStoreAdmin(collectionId);
+  const { priceSheetsQuery } = useStorePriceSheets();
   const [tab, setTab] = useState<"settings" | "activity">("settings");
   const preparing = useRef(false);
 
@@ -77,6 +79,7 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
           <CollectionStoreSettingsPanel
             form={admin.form}
             busy={admin.busy}
+            priceSheets={priceSheetsQuery.data?.data ?? []}
             onChange={(patch) => admin.setForm((value) => ({ ...value, ...patch }))}
             onSave={admin.saveSettings}
           />
