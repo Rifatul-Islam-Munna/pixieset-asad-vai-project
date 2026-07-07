@@ -18,8 +18,23 @@ export class StoreProduct {
   @Prop({ required: true, trim: true })
   name: string;
 
+  @Prop({ required: true, trim: true, index: true })
+  slug: string;
+
+  @Prop({ default: true, index: true })
+  active: boolean;
+
+  @Prop({ default: 0 })
+  sortOrder: number;
+
   @Prop({ default: '' })
   description: string;
+
+  @Prop({ default: '' })
+  productInfo: string;
+
+  @Prop({ default: '' })
+  productionNote: string;
 
   @Prop({ required: true, min: 0 })
   price: number;
@@ -27,11 +42,20 @@ export class StoreProduct {
   @Prop({ default: 0, min: 0 })
   extraShipping: number;
 
-  @Prop({ default: 'Prints' })
+  @Prop({ default: 'Prints', index: true })
   category: string;
 
   @Prop({ type: [String], default: [] })
   images: string[];
+
+  @Prop({ type: [String], default: [] })
+  previewImages: string[];
+
+  @Prop({ default: true })
+  requiresPhoto: boolean;
+
+  @Prop({ default: true })
+  allowCrop: boolean;
 
   @Prop()
   downloadType?: 'single-photo' | 'all-photos';
@@ -42,8 +66,29 @@ export class StoreProduct {
   @Prop({ type: [{ name: String, values: [String] }], default: [] })
   options: { name: string; values: string[] }[];
 
-  @Prop({ type: [{ id: String, label: String, options: Object, price: Number, hidden: Boolean }], default: [] })
-  variants: { id: string; label: string; options: Record<string, string>; price: number; hidden?: boolean }[];
+  @Prop({
+    type: [{
+      id: String,
+      label: String,
+      options: Object,
+      price: Number,
+      extraShipping: Number,
+      hidden: Boolean,
+      sortOrder: Number,
+      isDefault: Boolean,
+    }],
+    default: [],
+  })
+  variants: {
+    id: string;
+    label: string;
+    options: Record<string, string>;
+    price: number;
+    extraShipping?: number;
+    hidden?: boolean;
+    sortOrder?: number;
+    isDefault?: boolean;
+  }[];
 
   @Prop({ default: false })
   noImageRequired: boolean;
@@ -60,4 +105,5 @@ export class StoreProduct {
 
 export const StoreProductSchema = SchemaFactory.createForClass(StoreProduct);
 
-StoreProductSchema.index({ userId: 1, priceSheetId: 1, createdAt: -1 });
+StoreProductSchema.index({ userId: 1, priceSheetId: 1, sortOrder: 1, createdAt: -1 });
+StoreProductSchema.index({ userId: 1, priceSheetId: 1, slug: 1 }, { unique: true });
