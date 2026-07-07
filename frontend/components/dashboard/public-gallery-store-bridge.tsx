@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
+import { STORE_CATEGORY_ORDER, type PublicStoreData } from "@/lib/public-store";
 
 type GalleryImage = {
   _id?: string;
@@ -13,8 +14,6 @@ type GalleryImage = {
 type GalleryStoreSettings = {
   enabled?: boolean;
   storeStatus?: boolean;
-  showPrintStoreNav?: boolean;
-  showBuyPhotoButton?: boolean;
 };
 
 export function PublicGalleryStoreBridge({
@@ -30,43 +29,106 @@ export function PublicGalleryStoreBridge({
     settings?: { store?: GalleryStoreSettings };
   } | null;
 }) {
-  const store = collection?.settings?.store ?? {};
-  const enabled = Boolean(store.enabled ?? store.storeStatus);
+  const storeSettings = collection?.settings?.store ?? {};
+  const enabled = Boolean(storeSettings.enabled ?? storeSettings.storeStatus);
+  const [storeData, setStoreData] = useState<PublicStoreData | null>(null);
   const [imageId, setImageId] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const storeHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`;
   const images = useMemo(() => collection?.images ?? [], [collection?.images]);
+  const products = useMemo(
+    () => (storeData?.products ?? []).filter((product) => product.active !== false),
+    [storeData?.products],
+  );
 
   useEffect(() => {
-    if (!enabled || store.showBuyPhotoButton === false) return;
-    const listener = (event: MouseEvent) => {
+    if (!enabled) return;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+    fetch(`${baseUrl}/public/collections/${encodeURIComponent(galary)}/store`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => setStoreData(payload?.data ?? null))
+      .catch(() => setStoreData(null));
+  }, [enabled, galary]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const onClick = (event: MouseEvent) => {
       const target = event.target;
-      if (!(target instanceof HTMLImageElement)) return;
-      const source = target.currentSrc || target.src;
-      const match = images.find(image => {
-        const candidates = [image.url, image.thumbnailUrl].filter(Boolean) as string[];
-        return candidates.some(candidate => source === candidate || source.endsWith(candidate));
+      if (!(target instanceof Element)) return;
+      const closeButton = target.closest('button[aria-label="Close image"]');
+      if (closeButton) {
+        setImageId("");
+        return;
+      }
+      const image = target instanceof HTMLImageElement ? target : target.closest("img");
+      if (!(image instanceof HTMLImageElement)) return;
+      const source = image.currentSrc || image.src;
+      const match = images.find((item) => {
+        const candidates = [item.url, item.thumbnailUrl].filter(Boolean) as string[];
+        return candidates.some((candidate) => source === candidate || source.endsWith(candidate));
       });
       if (match?._id) setImageId(match._id);
     };
-    document.addEventListener("click", listener, true);
-    return () => document.removeEventListener("click", listener, true);
-  }, [enabled, images, store.showBuyPhotoButton]);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setImageId("");
+    };
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [enabled, images]);
 
   if (!enabled) return null;
 
-  return <div className="pointer-events-none fixed bottom-5 right-5 z-[75] flex flex-col items-end gap-3">
-    {imageId && store.showBuyPhotoButton !== false && (
-      <Link
-        className="pointer-events-auto inline-flex h-11 items-center gap-2 bg-[#303030] px-5 text-sm font-semibold text-white shadow-lg"
-        href={`${storeHref}?imageId=${encodeURIComponent(imageId)}&product=print`}
+  return (
+    <>
+      <div
+        className="fixed right-[190px] top-0 z-[65] hidden h-16 items-center border-r border-black/10 bg-white px-5 lg:flex"
+        onMouseEnter={() => setMenuOpen(true)}
+        onMouseLeave={() => setMenuOpen(false)}
       >
-        <ShoppingBag className="size-4" /> Buy Photo
-      </Link>
-    )}
-    {store.showPrintStoreNav !== false && (
-      <Link className="pointer-events-auto inline-flex h-11 items-center gap-2 border bg-white px-5 text-sm font-medium shadow-lg" href={storeHref}>
-        <ShoppingBag className="size-4" /> Print Store
-      </Link>
-    )}
-  </div>;
+        <Link href={storeHref} className="text-sm font-medium text-[#222]">
+          Print Store
+        </Link>
+        {menuOpen && (
+          <div className="fixed left-0 right-0 top-16 z-[64] border-b border-black/10 bg-[#f5f5f5] px-8 py-9 shadow-[0_12px_28px_rgba(0,0,0,0.06)]">
+            <div className="mx-auto grid max-w-[760px] gap-16 md:grid-cols-2">
+              {STORE_CATEGORY_ORDER.slice(0, 2).map((category) => {
+                const categoryProducts = products.filter((product) => product.category === category);
+                if (!categoryProducts.length) return null;
+                return (
+                  <div key={category}>
+                    <p className="mb-4 text-sm font-medium text-black">{category}</p>
+                    <div className="grid gap-4">
+                      {categoryProducts.map((product) => (
+                        <Link
+                          key={product._id}
+                          href={`${storeHref}?product=${encodeURIComponent(product.slug)}`}
+                          className="text-sm text-[#777] transition hover:text-black"
+                        >
+                          {product.name}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {imageId && (
+        <Link
+          href={`${storeHref}?imageId=${encodeURIComponent(imageId)}&product=print`}
+          className="fixed right-20 top-5 z-[70] inline-flex h-11 items-center gap-2 bg-[#303030] px-5 text-sm font-semibold text-white shadow-lg"
+        >
+          <ShoppingBag className="size-4" />
+          Buy Photo
+        </Link>
+      )}
+    </>
+  );
 }
