@@ -67,6 +67,7 @@ export function PublicStoreProductBuilder({
     .map((id) => images.find((image) => image._id === id))
     .filter(Boolean) as PublicStoreImage[];
   const activeCropImage = images.find((image) => image._id === activeCropImageId) ?? selectedImages[0];
+  const buyPhotoMode = Boolean(initialImageId && selectedImages.length);
   const price = Number(selectedVariant?.price ?? product.price ?? 0);
 
   const choosePhoto = (imageId: string) => {
@@ -90,6 +91,16 @@ export function PublicStoreProductBuilder({
     }
     if (!requiresPhoto) {
       completeAdd([]);
+      return;
+    }
+    if (selectedImages.length) {
+      if (product.allowCrop !== false && selectedImages.length === 1) {
+        setActiveCropImageId(selectedImages[0]._id);
+        setCrop(defaultCrop(aspectLabel(selectedVariant?.label)));
+        setStep("crop");
+        return;
+      }
+      completeAdd(selectedImages);
       return;
     }
     if (!images.length) {
@@ -135,7 +146,9 @@ export function PublicStoreProductBuilder({
         <div className="flex h-16 shrink-0 items-center justify-between border-b px-5 md:px-8">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8c8c8c]">
-              {step === "product" ? product.category || "Product" : step === "photos" ? "Choose photos" : "Adjust crop"}
+              {step === "product"
+                ? buyPhotoMode ? "Buy This Photo" : product.category || "Product"
+                : step === "photos" ? "Choose photos" : "Adjust crop"}
             </p>
             <p className="truncate text-base font-medium">{product.name}</p>
           </div>
@@ -146,7 +159,7 @@ export function PublicStoreProductBuilder({
 
         {step === "product" && (
           <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1.15fr)_minmax(390px,0.85fr)]">
-            <ProductPreview product={product} />
+            <ProductPreview product={product} selectedImage={buyPhotoMode ? selectedImages[0] : undefined} />
             <div className="p-6 md:p-10">
               <h2 className="text-3xl font-normal tracking-tight">{product.name}</h2>
               <p className="mt-3 text-lg">From {formatMoney(price, currency)}</p>
@@ -201,7 +214,9 @@ export function PublicStoreProductBuilder({
                 disabled={variants.length > 0 && !selectedVariant}
                 onClick={startAdd}
               >
-                {requiresPhoto ? "Choose Photo" : "Add to Cart"}
+                {buyPhotoMode
+                  ? product.allowCrop !== false ? "Adjust Photo" : "Add to Cart"
+                  : requiresPhoto ? "Choose Photo" : "Add to Cart"}
               </button>
 
               <div className="mt-9 border-t">
@@ -249,7 +264,7 @@ export function PublicStoreProductBuilder({
                     onClick={() => choosePhoto(image._id)}
                   >
                     <img src={publicImageSrc(image.thumbnailUrl || image.url)} alt={image.originalName || "Collection photo"} className="h-full w-full object-cover" />
-                    <span className={cn("absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border bg-white/95", selected ? "border-[#27b9a4] bg-[#27b9a4] text-white" : "border-white text-transparent")}>
+                    <span className={cn("absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border bg-white/95", selected ? "border-[#27b9a4] bg-[#27b9a4] text-white" : "border-white text-transparent") }>
                       <Check className="size-4" />
                     </span>
                   </button>
@@ -293,7 +308,7 @@ export function PublicStoreProductBuilder({
                 </div>
               </div>
               <div className="mt-9 flex gap-3">
-                <button className="h-12 flex-1 border text-sm" onClick={() => setStep("photos")}>Back</button>
+                <button className="h-12 flex-1 border text-sm" onClick={() => setStep("product")}>Back</button>
                 <button className="h-12 flex-[1.4] bg-[#2f2f2f] text-sm font-semibold text-white" onClick={() => completeAdd([activeCropImage], crop)}>
                   Add to Cart
                 </button>
@@ -306,15 +321,23 @@ export function PublicStoreProductBuilder({
   );
 }
 
-function ProductPreview({ product }: { product: PublicStoreProduct }) {
-  const previews = product.previewImages?.length ? product.previewImages : product.images ?? [];
+function ProductPreview({
+  product,
+  selectedImage,
+}: {
+  product: PublicStoreProduct;
+  selectedImage?: PublicStoreImage;
+}) {
+  const previews = selectedImage
+    ? [selectedImage.url]
+    : product.previewImages?.length ? product.previewImages : product.images ?? [];
   const [active, setActive] = useState(0);
-  useEffect(() => setActive(0), [product._id]);
+  useEffect(() => setActive(0), [product._id, selectedImage?._id]);
   return (
     <div className="flex min-h-[420px] flex-col bg-[#f3f3f2] p-6 md:p-10">
       <div className="flex min-h-[380px] flex-1 items-center justify-center">
         {previews[active] ? (
-          <img src={publicImageSrc(previews[active])} alt={product.name} className="max-h-[680px] w-full object-contain" />
+          <img src={publicImageSrc(previews[active])} alt={selectedImage?.originalName || product.name} className="max-h-[680px] w-full object-contain" />
         ) : (
           <div className="flex flex-col items-center text-[#8b8b8b]"><ImageIcon className="size-10" /><span className="mt-3 text-sm">Product preview</span></div>
         )}
