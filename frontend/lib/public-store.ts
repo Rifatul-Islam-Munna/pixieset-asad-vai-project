@@ -52,6 +52,7 @@ export type PublicStoreData = {
     slug?: string;
     studioName?: string;
     coverImage?: string;
+    sets?: Array<{ id: string; name: string }>;
     images?: PublicStoreImage[];
   };
   store?: {
