@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DeleteRequestAxios,
   GetRequestNormal,
@@ -14,6 +14,7 @@ export type StoreProductRecord = {
   _id: string;
   priceSheetId: string;
   type: StoreProductType;
+  active?: boolean;
   name: string;
   description?: string;
   price: number;
@@ -308,6 +309,46 @@ export function useStorePriceSheet(priceSheetId?: string) {
     updateProduct,
     deleteProduct,
   };
+}
+
+export function useStorePriceSheetDetails(priceSheetIds: string[]) {
+  return useQueries({
+    queries: priceSheetIds.map((priceSheetId) => ({
+      enabled: Boolean(priceSheetId),
+      queryKey: ["store-price-sheet", priceSheetId],
+      queryFn: () =>
+        GetRequestNormal<
+          ListResponse<StorePriceSheetRecord & { products: StoreProductRecord[] }>
+        >(`/store/catalog/price-sheets/${priceSheetId}`),
+    })),
+  });
+}
+
+export function useStoreProductUpdate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      priceSheetId,
+      productId,
+      payload,
+    }: {
+      priceSheetId: string;
+      productId: string;
+      payload: Partial<StoreProductRecord>;
+    }) => {
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<StoreProductRecord> & { message: string }
+      >(`/store/catalog/price-sheets/${priceSheetId}/products/${productId}`, payload as any);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheets"] });
+      queryClient.invalidateQueries({ queryKey: ["store-price-sheet", variables.priceSheetId] });
+    },
+  });
 }
 
 export function useStoreDashboard() {

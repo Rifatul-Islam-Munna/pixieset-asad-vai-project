@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Activity, ExternalLink, Loader2, Settings, Store } from "lucide-react";
+import { Activity, ExternalLink, Loader2, Settings } from "lucide-react";
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { CollectionStoreSettingsPanel } from "./collection-store-settings-panel";
-import { StoreProductAdminCard } from "./store-product-admin-card";
 import { StoreActivityList } from "./store-activity-list";
 
 export function CollectionStoreManager({ collectionId }: { collectionId: string }) {
@@ -38,8 +37,6 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
   const publicHref = `/collection/${encodeURIComponent(admin.collection.name)}/${encodeURIComponent(
     admin.collection.slug || admin.collection._id,
   )}/store`;
-  const sheetId = admin.sheet?._id || admin.form.priceSheetId;
-  const products = admin.sheet?.products ?? [];
 
   return (
     <div className="min-h-screen bg-[#f6f6f4] px-4 py-6 text-[#202020] md:px-8">
@@ -49,7 +46,7 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
             <p className="text-[11px] uppercase tracking-[0.22em] text-[#777]">Collection Store</p>
             <h1 className="mt-2 text-3xl">{admin.collection.name}</h1>
             <p className="mt-2 text-sm text-[#666]">
-              Enable store, keep hover store menu, keep Buy This Photo, manage automatic catalog.
+              Enable collection store and activity. Product pricing is managed in Store Gallery Pricing.
             </p>
           </div>
           <Link
@@ -77,65 +74,12 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
         </div>
 
         {tab === "settings" && (
-          <>
-            <CollectionStoreSettingsPanel
-              form={admin.form}
-              busy={admin.busy}
-              onChange={(patch) => admin.setForm((value) => ({ ...value, ...patch }))}
-              onSave={admin.saveSettings}
-            />
-
-            <section className="mt-6">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-medium">Store products</h2>
-                  <p className="mt-1 text-sm text-[#666]">
-                    No extra products tab now. Edit collection products here.
-                  </p>
-                </div>
-                {sheetId && (
-                  <Link
-                    href={`/dashboard/store-gallery/products/${encodeURIComponent(sheetId)}`}
-                    className="inline-flex h-11 items-center gap-2 bg-[#303030] px-5 text-sm font-semibold text-white"
-                  >
-                    <Store className="size-4" />
-                    Open full products page
-                  </Link>
-                )}
-              </div>
-
-              {admin.sheetLoading || (!admin.form.priceSheetId && admin.busy) ? (
-                <div className="flex min-h-48 items-center justify-center border bg-white">
-                  <div className="text-center">
-                    <Loader2 className="mx-auto size-6 animate-spin" />
-                    <p className="mt-3 text-sm text-[#666]">Preparing default catalog...</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {products.map((product) => (
-                    <StoreProductAdminCard
-                      key={product._id}
-                      product={product}
-                      saving={admin.busy}
-                      onSave={(patch) => admin.saveProduct(product._id, patch)}
-                      onDelete={() => {
-                        if (!window.confirm("Hide this product from the collection store?")) {
-                          return Promise.resolve();
-                        }
-                        return admin.removeProduct(product._id);
-                      }}
-                    />
-                  ))}
-                  {!products.length && (
-                    <div className="border bg-white p-8 text-center text-sm text-[#666]">
-                      Automatic catalog still preparing. Save once or reload if needed.
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-          </>
+          <CollectionStoreSettingsPanel
+            form={admin.form}
+            busy={admin.busy}
+            onChange={(patch) => admin.setForm((value) => ({ ...value, ...patch }))}
+            onSave={admin.saveSettings}
+          />
         )}
 
         {tab === "activity" && (

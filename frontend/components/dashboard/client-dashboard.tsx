@@ -117,6 +117,8 @@ import type { AdminPlan } from "@/actions/admin";
 import { CoverPreview, coverOptions } from "@/components/dashboard/cover-designs";
 import {
   useStorePriceSheet,
+  useStorePriceSheetDetails,
+  useStoreProductUpdate,
   useStorePriceSheets,
   useStoreCustomers,
   useStoreDashboard,
@@ -159,6 +161,7 @@ export type DashboardPage =
   | "homepage"
   | "settings"
   | "marketing"
+  | "pricing"
   | "products"
   | "orders"
   | "customers"
@@ -210,7 +213,8 @@ const sidebarItems = {
     { label: "Dashboard", icon: Store, page: "storefront" },
     { label: "Orders", icon: ShoppingBag, page: "orders" },
     { label: "Customers", icon: Users, page: "customers" },
-    { label: "Price Sheets", icon: Package, page: "products" },
+    { label: "Pricing", icon: CreditCard, page: "pricing" },
+    { label: "Products", icon: Package, page: "products" },
     { label: "Taxes", icon: ListFilter, page: "taxes" },
     { label: "Shipping", icon: Package, page: "shipping" },
     { label: "Coupons", icon: Copy, page: "coupons" },
@@ -309,6 +313,8 @@ export function ClientDashboard({
   settingsPage = "watermark",
   collectionId,
   priceSheetId,
+  productId,
+  productType,
 }: {
   section: DashboardSection;
   page: DashboardPage;
@@ -316,6 +322,8 @@ export function ClientDashboard({
   settingsPage?: SettingsPage;
   collectionId?: string;
   priceSheetId?: string;
+  productId?: string;
+  productType?: StoreProductType;
 }) {
   const router = useRouter();
   const active = dashboardCopy[section];
@@ -335,7 +343,9 @@ export function ClientDashboard({
   const isCollectionIndex =
     page === "collections" || (section === "store-gallery" && page === "products");
   const isCollectionDetail = page === "collections" && Boolean(collectionId);
-  const isPriceSheetDetail = page === "products" && Boolean(priceSheetId);
+  const isPriceSheetDetail =
+    (page === "products" && Boolean(priceSheetId)) ||
+    (section === "store-gallery" && page === "pricing" && Boolean(productId));
   const [logoutPending, startLogoutTransition] = useTransition();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logout = () => {
@@ -660,6 +670,16 @@ export function ClientDashboard({
             <StoreTaxesPanel />
           ) : section === "store-gallery" && page === "shipping" ? (
             <StoreShippingPanel />
+          ) : section === "store-gallery" && page === "pricing" && productId ? (
+            <StorePricingRouteEditor productId={productId} productType={productType} />
+          ) : section === "store-gallery" && page === "pricing" ? (
+            <StorePricingPanel />
+          ) : page === "products" && priceSheetId && productId ? (
+            <StoreProductRouteEditor
+              priceSheetId={priceSheetId}
+              productId={productId}
+              productType={productType}
+            />
           ) : page === "products" && priceSheetId ? (
             <StorePriceSheetDetail priceSheetId={priceSheetId} />
           ) : page === "collections" && collectionId ? (
@@ -5340,32 +5360,320 @@ function money(value: number, currency = "EUR") {
   return `${currency} ${Number(value || 0).toFixed(2)}`;
 }
 
+function getPricingProductCount(sheet?: (StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null) {
+  return (sheet?.products ?? []).filter((product) => product.type === "self-fulfilled").length;
+}
+
+function pickPrimaryPricingSheet(
+  sheets: StorePriceSheetRecord[],
+  detailedSheets: Array<(StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null>,
+) {
+  if (!detailedSheets.length) return null;
+
+  return detailedSheets.reduce<(StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null>(
+    (best, current) => {
+      if (!current) return best;
+      if (!best) return current;
+
+      const currentCount = getPricingProductCount(current);
+      const bestCount = getPricingProductCount(best);
+
+      if (currentCount > bestCount) return current;
+      if (currentCount < bestCount) return best;
+
+      if (current.isDefault && !best.isDefault) return current;
+      if (!current.isDefault && best.isDefault) return best;
+
+      const currentIndex = sheets.findIndex((sheet) => sheet._id === current._id);
+      const bestIndex = sheets.findIndex((sheet) => sheet._id === best._id);
+      return currentIndex !== -1 && (bestIndex === -1 || currentIndex < bestIndex) ? current : best;
+    },
+    null,
+  );
+}
+
+function StorePricingPanel() {
+  const router = useRouter();
+  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
+  const updateProduct = useStoreProductUpdate();
+  const settingsQuery = useStoreSettings().settingsQuery;
+  const currency = settingsQuery.data?.data?.currency ?? "EUR";
+  const sheets = priceSheetsQuery.data?.data ?? [];
+  const priceSheetDetails = useStorePriceSheetDetails(sheets.map((sheet) => sheet._id));
+  const detailedSheets = priceSheetDetails
+    .map((query) => query.data?.data ?? null)
+    .filter((sheet): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } => Boolean(sheet));
+  const pricingSheet = pickPrimaryPricingSheet(sheets, detailedSheets);
+  const products = detailedSheets.flatMap((sheet) =>
+    (sheet.products ?? []).filter((product) => product.type === "self-fulfilled"),
+  );
+  const creatingDefault = useRef(false);
+  const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
+
+  useEffect(() => {
+    if (priceSheetsQuery.isLoading || sheets.length || createPriceSheet.isPending || creatingDefault.current) {
+      return;
+    }
+    creatingDefault.current = true;
+    createPriceSheet.mutate(
+      {
+        name: "Default Print Store Pricing",
+        isDefault: true,
+        minimumOrderAmount: 0,
+      },
+      {
+        onSettled: () => {
+          creatingDefault.current = false;
+        },
+      },
+    );
+  }, [createPriceSheet, priceSheetsQuery.isLoading, sheets.length]);
+
+  const groupedProducts = products.reduce<Record<string, StoreProductRecord[]>>(
+    (groups, product) => {
+      const key = product.category || "Prints";
+      groups[key] = [...(groups[key] ?? []), product];
+      return groups;
+    },
+    {},
+  );
+  const orderedGroups = [
+    ...["Prints", "Wall Art"].filter((category) => groupedProducts[category]?.length),
+    ...Object.keys(groupedProducts).filter((category) => !["Prints", "Wall Art"].includes(category)),
+  ];
+
+  const goAdd = (type: StoreProductType) => {
+    if (!pricingSheet?._id) return;
+    router.push(`/dashboard/store-gallery/pricing/new?type=${type}`);
+  };
+
+  if (priceSheetsQuery.isLoading || createPriceSheet.isPending || pricingLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
+        Loading pricing...
+      </div>
+    );
+  }
+
+  if (!sheets.length) {
+    return (
+      <div className="mx-auto flex max-w-[855px] min-h-[420px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+        <CreditCard className="size-10 text-[#999]" />
+        <p className="mt-5 font-bold">Default pricing not ready</p>
+        <Button
+          className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white"
+          onClick={() =>
+            createPriceSheet.mutate({
+              name: "Default Print Store Pricing",
+              isDefault: true,
+              minimumOrderAmount: 0,
+            })
+          }
+        >
+          Create Default Pricing
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-[950px] px-5 py-8">
+      <div className="flex flex-wrap items-center justify-between gap-5 border-b pb-5">
+        <div>
+          <h1 className="text-[28px] font-medium leading-none">Pricing</h1>
+          <p className="mt-3 text-sm text-[#666]">
+            Update Print and Wall Art products used by client gallery stores.
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white">
+              <PlusCircle data-icon="inline-start" />
+              Add Product
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
+            <DropdownMenuGroup className="flex flex-col gap-4">
+              <DropdownMenuItem
+                className="cursor-pointer items-start gap-4 rounded-none p-2"
+                onClick={() => goAdd("self-fulfilled")}
+              >
+                <Images className="mt-1 size-5 text-[#8a949e]" />
+                <span>
+                  <span className="block font-bold text-[#222]">Print / Wall Art Item</span>
+                  <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
+                    Add a product with image, prices, variants, and hide controls.
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {products.length ? (
+        <div className="mt-9 flex flex-col gap-12">
+          {orderedGroups.map((category) => (
+            <section key={category}>
+              <h2 className="text-lg font-medium">{category}</h2>
+              <div className="mt-5 grid gap-8 border-t pt-5 sm:grid-cols-2 md:grid-cols-4">
+                {groupedProducts[category].map((product) => (
+                  <ProductTile
+                    key={product._id}
+                    product={product}
+                    currency={currency}
+                    onEdit={() => router.push(`/dashboard/store-gallery/pricing/${product._id}`)}
+                    onHide={() => {
+                      if (!window.confirm("Hide this product from store?")) return;
+                      const sheetId = product.priceSheetId;
+                      if (!sheetId) return;
+                      updateProduct.mutate({
+                        priceSheetId: sheetId,
+                        productId: product._id,
+                        payload: { active: false },
+                      });
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-9 flex min-h-[260px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+          <Package className="size-10 text-[#aaa]" />
+          <p className="mt-5 font-bold">No pricing products yet</p>
+          <p className="mt-2 text-sm text-[#666]">Add Print or Wall Art products.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StorePricingRouteEditor({
+  productId,
+  productType,
+}: {
+  productId: string;
+  productType?: StoreProductType;
+}) {
+  const router = useRouter();
+  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
+  const sheets = priceSheetsQuery.data?.data ?? [];
+  const priceSheetDetails = useStorePriceSheetDetails(sheets.map((sheet) => sheet._id));
+  const detailedSheets = priceSheetDetails
+    .map((query) => query.data?.data ?? null)
+    .filter((sheet): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } => Boolean(sheet));
+  const pricingSheet = pickPrimaryPricingSheet(sheets, detailedSheets);
+  const ownerSheet =
+    productId === "new"
+      ? pricingSheet
+      : detailedSheets.find((sheet) => (sheet.products ?? []).some((item) => item._id === productId)) ?? null;
+  const editingProduct =
+    productId === "new"
+      ? null
+      : ownerSheet?.products?.find((item) => item._id === productId) ?? null;
+  const type = editingProduct?.type ?? productType ?? "self-fulfilled";
+  const { createProduct, updateProduct } = useStorePriceSheet(ownerSheet?._id);
+  const creatingDefault = useRef(false);
+  const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
+
+  useEffect(() => {
+    if (priceSheetsQuery.isLoading || sheets.length || createPriceSheet.isPending || creatingDefault.current) {
+      return;
+    }
+    creatingDefault.current = true;
+    createPriceSheet.mutate(
+      {
+        name: "Default Print Store Pricing",
+        isDefault: true,
+        minimumOrderAmount: 0,
+      },
+      {
+        onSettled: () => {
+          creatingDefault.current = false;
+        },
+      },
+    );
+  }, [createPriceSheet, priceSheetsQuery.isLoading, sheets.length]);
+
+  useEffect(() => {
+    if (productId !== "new" && !priceSheetsQuery.isLoading && !pricingLoading && !editingProduct) {
+      router.push("/dashboard/store-gallery/pricing");
+    }
+  }, [editingProduct, priceSheetsQuery.isLoading, pricingLoading, productId, router]);
+
+  if (priceSheetsQuery.isLoading || createPriceSheet.isPending || pricingLoading || !ownerSheet?._id) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
+        Loading pricing product...
+      </div>
+    );
+  }
+
+  return (
+    <ProductEditorDialog
+      open={true}
+      type={type}
+      product={editingProduct}
+      pending={createProduct.isPending || updateProduct.isPending}
+      onOpenChange={(open) => {
+        if (!open) router.push("/dashboard/store-gallery/pricing");
+      }}
+      onSave={(payload) =>
+        editingProduct
+          ? updateProduct.mutate(
+              { productId: editingProduct._id, payload },
+              {
+                onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
+              },
+            )
+          : createProduct.mutate(payload, {
+              onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
+            })
+      }
+      onHide={
+        editingProduct
+          ? () => {
+              if (!window.confirm("Hide this product from store?")) return;
+              updateProduct.mutate(
+                { productId: editingProduct._id, payload: { active: false } },
+                {
+                  onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
+                },
+              );
+            }
+          : undefined
+      }
+      hidePending={updateProduct.isPending}
+    />
+  );
+}
+
 function StoreProductsPanel() {
   const router = useRouter();
-  const [collectionId, setCollectionId] = useState<string | undefined>();
-  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets(collectionId);
+  const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
   const sheets = priceSheetsQuery.data?.data ?? [];
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sheetName, setSheetName] = useState("My Price Sheet");
   const [minimumOrderAmount, setMinimumOrderAmount] = useState("0");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setCollectionId(params.get("collectionId") ?? undefined);
-  }, []);
 
   const addSheet = () => {
     createPriceSheet.mutate(
       {
         name: sheetName.trim() || "My Price Sheet",
         isDefault: !sheets.length,
-        collectionIds: collectionId ? [collectionId] : [],
         minimumOrderAmount: Number(minimumOrderAmount) || 0,
       },
       {
         onSuccess: (response) => {
           const id = response?.data?._id;
-          if (id) router.push(`/dashboard/store-gallery/products/${id}`);
+          if (!id) return;
+          router.push(
+            response?.data?.isDefault
+              ? "/dashboard/store-gallery/pricing"
+              : `/dashboard/store-gallery/products/${id}`,
+          );
         },
       },
     );
@@ -5376,9 +5684,7 @@ function StoreProductsPanel() {
       <div className="flex items-center justify-between gap-5 border-b pb-4">
         <div>
           <h1 className="text-[26px] font-medium leading-none">Price Sheets</h1>
-          {collectionId && (
-            <p className="mt-3 text-sm text-[#777]">Showing sheets connected to this collection.</p>
-          )}
+          <p className="mt-3 text-sm text-[#777]">Manage store price sheets outside collection pages.</p>
         </div>
         <Button
           className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
@@ -5411,7 +5717,13 @@ function StoreProductsPanel() {
             <button
               key={sheet._id}
               className="group text-left"
-              onClick={() => router.push(`/dashboard/store-gallery/products/${sheet._id}`)}
+              onClick={() =>
+                router.push(
+                  sheet.isDefault
+                    ? "/dashboard/store-gallery/pricing"
+                    : `/dashboard/store-gallery/products/${sheet._id}`,
+                )
+              }
             >
               <span className="relative flex aspect-[1.8] items-center justify-center bg-[#f4f4f4]">
                 {sheet.isDefault && (
@@ -5472,7 +5784,7 @@ function StoreProductsPanel() {
               </FieldGroup>
             </TabsContent>
             <TabsContent value="advanced" className="mt-7 text-sm leading-6 text-[#666]">
-              Connected collections: {collectionId ? "1 selected" : "All collections can be assigned later"}
+              Collections use the Store Gallery Pricing defaults unless changed by store settings.
             </TabsContent>
           </Tabs>
           <DialogFooter>
@@ -5495,15 +5807,13 @@ function StoreProductsPanel() {
 
 function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
   const router = useRouter();
-  const { priceSheetQuery, updatePriceSheet, createProduct, deleteProduct } =
+  const { priceSheetQuery, updatePriceSheet, updateProduct } =
     useStorePriceSheet(priceSheetId);
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const sheet = priceSheetQuery.data?.data;
   const products = sheet?.products ?? [];
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [productOpen, setProductOpen] = useState(false);
-  const [productType, setProductType] = useState<StoreProductType>("self-fulfilled");
   const [settingsForm, setSettingsForm] = useState({
     name: "",
     minimumOrderAmount: "0",
@@ -5516,6 +5826,12 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
       minimumOrderAmount: String(sheet.minimumOrderAmount ?? 0),
     });
   }, [sheet]);
+
+  useEffect(() => {
+    if (sheet?.isDefault) {
+      router.replace("/dashboard/store-gallery/pricing");
+    }
+  }, [router, sheet?.isDefault]);
 
   const groupedProducts = products.reduce<Record<string, StoreProductRecord[]>>(
     (groups, product) => {
@@ -5600,10 +5916,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                   <DropdownMenuItem
                     key={item.type}
                     className="cursor-pointer items-start gap-4 rounded-none p-2"
-                    onClick={() => {
-                      setProductType(item.type);
-                      setProductOpen(true);
-                    }}
+                    onClick={() => router.push(`/dashboard/store-gallery/products/${priceSheetId}/new?type=${item.type}`)}
                   >
                     <item.icon className="mt-1 size-5 text-[#8a949e]" />
                     <span>
@@ -5642,7 +5955,14 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                     key={product._id}
                     product={product}
                     currency={currency}
-                    onDelete={() => deleteProduct.mutate(product._id)}
+                    onEdit={() => router.push(`/dashboard/store-gallery/products/${priceSheetId}/${product._id}`)}
+                    onHide={() => {
+                      if (!window.confirm("Hide this product from store?")) return;
+                      updateProduct.mutate({
+                        productId: product._id,
+                        payload: { active: false },
+                      });
+                    }}
                   />
                 ))}
               </div>
@@ -5706,16 +6026,92 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
         </DialogContent>
       </Dialog>
 
-      <ProductEditorDialog
-        open={productOpen}
-        type={productType}
-        pending={createProduct.isPending}
-        onOpenChange={setProductOpen}
-        onSave={(payload) =>
-          createProduct.mutate(payload, { onSuccess: () => setProductOpen(false) })
-        }
-      />
     </div>
+  );
+}
+
+function StoreProductRouteEditor({
+  priceSheetId,
+  productId,
+  productType,
+}: {
+  priceSheetId: string;
+  productId: string;
+  productType?: StoreProductType;
+}) {
+  const router = useRouter();
+  const { priceSheetQuery, createProduct, updateProduct } = useStorePriceSheet(priceSheetId);
+  const sheet = priceSheetQuery.data?.data;
+  const editingProduct =
+    productId === "new"
+      ? null
+      : (sheet?.products ?? []).find((item) => item._id === productId) ?? null;
+  const type = editingProduct?.type ?? productType ?? "self-fulfilled";
+  const detailPath = sheet?.isDefault
+    ? productId === "new"
+      ? `/dashboard/store-gallery/pricing/new?type=${type}`
+      : `/dashboard/store-gallery/pricing/${productId}`
+    : `/dashboard/store-gallery/products/${priceSheetId}${productId === "new" ? `/new?type=${type}` : `/${productId}`}`;
+  const listPath = sheet?.isDefault
+    ? "/dashboard/store-gallery/pricing"
+    : `/dashboard/store-gallery/products/${priceSheetId}`;
+
+  useEffect(() => {
+    if (sheet?.isDefault) {
+      router.replace(detailPath);
+    }
+  }, [detailPath, router, sheet?.isDefault]);
+
+  useEffect(() => {
+    if (productId !== "new" && !priceSheetQuery.isLoading && !editingProduct) {
+      router.push(listPath);
+    }
+  }, [editingProduct, listPath, priceSheetQuery.isLoading, productId, router]);
+
+  if (priceSheetQuery.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
+        Loading product...
+      </div>
+    );
+  }
+
+  return (
+    <ProductEditorDialog
+      open={true}
+      type={type}
+      product={editingProduct}
+      pending={createProduct.isPending || updateProduct.isPending}
+      onOpenChange={(open) => {
+        if (!open) router.push(listPath);
+      }}
+      onSave={(payload) =>
+        editingProduct
+          ? updateProduct.mutate(
+              { productId: editingProduct._id, payload },
+              {
+                onSuccess: () => router.push(listPath),
+              },
+            )
+          : createProduct.mutate(payload, {
+              onSuccess: () => router.push(listPath),
+            })
+      }
+      onHide={
+        editingProduct
+          ? () => {
+              if (!window.confirm("Hide this product from store?")) return;
+              updateProduct.mutate(
+                { productId: editingProduct._id, payload: { active: false } },
+                {
+                  onSuccess: () => router.push(listPath),
+                },
+              );
+            }
+          : undefined
+      }
+      hidePending={updateProduct.isPending}
+    />
   );
 }
 
@@ -5731,11 +6127,13 @@ function DetailStat({ label, value }: { label: string; value: string }) {
 function ProductTile({
   product,
   currency,
-  onDelete,
+  onEdit,
+  onHide,
 }: {
   product: StoreProductRecord;
   currency: string;
-  onDelete: () => void;
+  onEdit: () => void;
+  onHide: () => void;
 }) {
   return (
     <div className="group">
@@ -5749,20 +6147,22 @@ function ProductTile({
         )}
         <button
           className="absolute right-2 top-2 hidden size-8 items-center justify-center bg-white text-red-600 shadow-sm group-hover:flex"
-          onClick={onDelete}
-          aria-label="Delete product"
+          onClick={onHide}
+          aria-label="Hide product"
         >
           <Trash2 className="size-4" />
         </button>
       </div>
-      <div className="mt-3 flex items-start justify-between gap-3">
+      <button className="mt-3 flex w-full items-start justify-between gap-3 text-left" onClick={onEdit}>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{product.name}</p>
           <p className="mt-1 text-sm text-[#777]">From {money(productDisplayPrice(product), currency)}</p>
-          <p className="mt-1 text-xs text-[#999]">{productTypeLabels[product.type]}</p>
+          <p className="mt-1 text-xs text-[#999]">
+            {productTypeLabels[product.type]}{product.active === false ? " • Hidden" : ""}
+          </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#00a997]" />
-      </div>
+      </button>
     </div>
   );
 }
@@ -5937,15 +6337,21 @@ function buildProductVariants(
 function ProductEditorDialog({
   open,
   type,
+  product,
   pending,
   onOpenChange,
   onSave,
+  onHide,
+  hidePending = false,
 }: {
   open: boolean;
   type: StoreProductType;
+  product?: StoreProductRecord | null;
   pending: boolean;
   onOpenChange: (value: boolean) => void;
   onSave: (payload: StoreProductPayload) => void;
+  onHide?: () => void;
+  hidePending?: boolean;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -5966,6 +6372,26 @@ function ProductEditorDialog({
 
   useEffect(() => {
     if (!open) return;
+    if (product) {
+      setForm({
+        name: product.name ?? "",
+        description: product.description ?? "",
+        price: String(product.price ?? 0),
+        extraShipping: String(product.extraShipping ?? 0),
+        category: product.category ?? (type === "digital-download" ? "Digital Downloads" : "Prints"),
+        images: product.images ?? [],
+        downloadType: product.downloadType ?? "single-photo",
+        downloadSize: product.downloadSize ?? "High Resolution Original (Full res)",
+        noImageRequired: Boolean(product.noImageRequired),
+        exemptFromSalesTax: Boolean(product.exemptFromSalesTax),
+        limitOnePerCheckout: Boolean(product.limitOnePerCheckout),
+        allowBulkPurchase: Boolean(product.allowBulkPurchase),
+        options: product.options ?? (type === "self-fulfilled" ? defaultSelfFulfilledOptions : []),
+        variants: product.variants ?? [],
+      });
+      return;
+    }
+    const defaultOptions = type === "self-fulfilled" ? defaultSelfFulfilledOptions : [];
     setForm({
       name:
         type === "digital-download"
@@ -5982,12 +6408,12 @@ function ProductEditorDialog({
       exemptFromSalesTax: false,
       limitOnePerCheckout: false,
       allowBulkPurchase: false,
-      options: type === "self-fulfilled" ? defaultSelfFulfilledOptions : [],
+      options: defaultOptions,
       variants: type === "self-fulfilled"
-        ? buildProductVariants(defaultSelfFulfilledOptions, [], Number(form.price) || 0)
+        ? buildProductVariants(defaultOptions, [], 0)
         : [],
     });
-  }, [open, type]);
+  }, [open, product, type]);
 
   useEffect(() => {
     if (!open || type !== "self-fulfilled") return;
@@ -6039,7 +6465,7 @@ function ProductEditorDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
         <DialogHeader>
           <DialogTitle>
-            {type === "digital-download" ? "Add Digital Download" : "Add Product"}
+            {product ? "Edit Product" : type === "digital-download" ? "Add Digital Download" : "Add Product"}
           </DialogTitle>
           <DialogDescription>{productTypeLabels[type]}</DialogDescription>
         </DialogHeader>
@@ -6328,6 +6754,16 @@ function ProductEditorDialog({
         </FieldGroup>
 
         <DialogFooter>
+          {product && onHide && (
+            <Button
+              variant="outline"
+              className="rounded-none text-red-600"
+              disabled={hidePending}
+              onClick={onHide}
+            >
+              {hidePending ? "Hiding..." : "Hide"}
+            </Button>
+          )}
           <Button variant="outline" className="rounded-none" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -6959,7 +7395,7 @@ function CollectionDetailView({
             variant="outline"
             className="h-10 rounded-none"
             onClick={() =>
-              router.push(`/dashboard/store-gallery/products?collectionId=${collectionId}`)
+              router.push(`/dashboard/store-gallery/collections/${collectionId}/store`)
             }
           >
             <Store data-icon="inline-start" />
