@@ -1,5 +1,7 @@
 "use client";
 
+import { Loader2, Save } from "lucide-react";
+
 export type StoreSettingsForm = {
   enabled: boolean;
   priceSheetId: string;
@@ -27,42 +29,54 @@ export function CollectionStoreSettingsPanel(props: {
   onCreateCatalog: () => void;
   onAddDefaults: () => void;
 }) {
-  const { form, sheets } = props;
-  return <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
-    <section className="border bg-white p-6">
+  return (
+    <section className="mt-6 max-w-[760px] border bg-white p-6 md:p-8">
       <h2 className="text-xl font-medium">Collection storefront</h2>
-      <label className="mt-5 block text-sm">Price sheet
-        <select className="mt-2 h-11 w-full border bg-white px-3" value={form.priceSheetId} onChange={event => props.onChange({ priceSheetId: event.target.value })}>
-          <option value="">Choose a price sheet</option>
-          {sheets.map(sheet => <option key={sheet._id} value={sheet._id}>{sheet.name} ({sheet.productCount ?? 0})</option>)}
-        </select>
-      </label>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <Input label="Currency" value={form.currency} onChange={currency => props.onChange({ currency: currency.toUpperCase() })} />
-        <Input label="Minimum order" value={form.minimumOrderAmount} onChange={minimumOrderAmount => props.onChange({ minimumOrderAmount })} type="number" />
+      <p className="mt-2 text-sm leading-6 text-[#666]">
+        Turn the store on for this collection. The product catalog is created and connected automatically.
+      </p>
+
+      <div className="mt-7 grid gap-4">
+        <label className="flex cursor-pointer items-center justify-between gap-5 border px-5 py-5 text-sm font-medium">
+          <span>
+            <span className="block text-base">Enable store</span>
+            <span className="mt-1 block text-xs font-normal text-[#777]">
+              Show Print Store navigation and Buy Photo inside the image viewer.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={props.form.enabled}
+            onChange={(event) => props.onChange({ enabled: event.target.checked })}
+            className="size-4"
+          />
+        </label>
+
+        <label className="text-sm font-medium">
+          Minimum order
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={props.form.minimumOrderAmount}
+            onChange={(event) => props.onChange({ minimumOrderAmount: event.target.value })}
+            className="mt-2 h-12 w-full border px-4 text-sm outline-none focus:border-[#555]"
+            placeholder="0"
+          />
+          <span className="mt-2 block text-xs font-normal text-[#777]">
+            Leave this at 0 when there is no minimum order amount.
+          </span>
+        </label>
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <Toggle label="Enable store" checked={form.enabled} onChange={enabled => props.onChange({ enabled })} />
-        <Toggle label="Show Print Store navigation" checked={form.showPrintStoreNav} onChange={showPrintStoreNav => props.onChange({ showPrintStoreNav })} />
-        <Toggle label="Show Buy Photo" checked={form.showBuyPhotoButton} onChange={showBuyPhotoButton => props.onChange({ showBuyPhotoButton })} />
-        <Toggle label="Allow bulk selection" checked={form.allowBulkBuy} onChange={allowBulkBuy => props.onChange({ allowBulkBuy })} />
-        <Toggle label="Require professional info" checked={form.requireProfessionalInfo} onChange={requireProfessionalInfo => props.onChange({ requireProfessionalInfo })} />
-      </div>
-      <button className="mt-6 h-11 bg-[#303030] px-6 text-sm font-semibold text-white disabled:opacity-50" disabled={props.busy} onClick={props.onSave}>Save settings</button>
+
+      <button
+        className="mt-7 inline-flex h-11 items-center gap-2 bg-[#303030] px-6 text-sm font-semibold text-white disabled:opacity-50"
+        disabled={props.busy}
+        onClick={props.onSave}
+      >
+        {props.busy ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+        Save settings
+      </button>
     </section>
-    <aside className="border bg-white p-6">
-      <h2 className="text-lg font-medium">Catalog setup</h2>
-      <p className="mt-2 text-sm leading-6 text-[#666]">Create a price sheet and add the default products.</p>
-      <button className="mt-5 h-11 w-full border text-sm" disabled={props.busy} onClick={props.onCreateCatalog}>Create default price sheet</button>
-      <button className="mt-3 h-11 w-full bg-[#303030] text-sm text-white disabled:opacity-50" disabled={props.busy || !form.priceSheetId} onClick={props.onAddDefaults}>Add default products</button>
-    </aside>
-  </div>;
-}
-
-function Input({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <label className="text-sm">{label}<input className="mt-2 h-11 w-full border px-3" type={type} value={value} onChange={event => onChange(event.target.value)} /></label>;
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="flex items-center justify-between border px-4 py-3 text-sm"><span>{label}</span><input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} /></label>;
+  );
 }
