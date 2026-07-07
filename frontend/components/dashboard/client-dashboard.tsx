@@ -84,6 +84,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -94,6 +95,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -858,6 +860,8 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
   const { ordersQuery } = useStoreOrders();
   const collections = collectionsQuery.data?.data ?? [];
   const activities = useCollectionActivities(collections.map((collection) => collection._id));
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
   const recentItems = useMemo(() => {
     const collectionMap = new Map(collections.map((collection) => [collection._id, collection]));
     const items: Array<DashboardNotificationItem & { timestamp: number }> = [];
@@ -902,13 +906,33 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
     return items
       .filter((item) => Number.isFinite(item.timestamp) && item.timestamp > 0)
       .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 8);
+      .slice(0, 10);
   }, [activities, collections, ordersQuery.data?.data]);
 
-  const unreadCount = recentItems.length;
+  useEffect(() => {
+    const saved = window.localStorage.getItem("dashboard-notification-read-ids");
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) setReadIds(parsed);
+    } catch {
+      window.localStorage.removeItem("dashboard-notification-read-ids");
+    }
+  }, []);
+
+  const unreadCount = recentItems.filter((item) => !readIds.includes(item.id)).length;
+  const markRead = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen || !recentItems.length) return;
+    setReadIds((current) => {
+      const next = [...new Set([...current, ...recentItems.map((item) => item.id)])].slice(-80);
+      window.localStorage.setItem("dashboard-notification-read-ids", JSON.stringify(next));
+      return next;
+    });
+  };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={markRead}>
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Notifications"
@@ -925,24 +949,34 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[340px] rounded-none p-0 shadow-[0_18px_35px_rgba(0,0,0,0.18)]">
-        <div className="border-b px-4 py-3">
-          <p className="text-sm font-bold text-[#222]">Notifications</p>
-          <p className="mt-1 text-xs text-[#777]">Recent collection and store activity</p>
+      <DropdownMenuContent align="end" className="w-[380px] rounded-xl p-0 shadow-[0_22px_55px_rgba(0,0,0,0.18)]">
+        <div className="flex items-start justify-between gap-4 border-b px-4 py-4">
+          <div>
+            <p className="text-sm font-bold text-[#222]">Notifications</p>
+            <p className="mt-1 text-xs text-[#777]">Recent collection and store activity</p>
+          </div>
+          <span className="rounded-full bg-[#eef8f6] px-2.5 py-1 text-[11px] font-bold text-[#008f80]">
+            {recentItems.length}
+          </span>
         </div>
-        <div className="max-h-[380px] overflow-y-auto">
+        <ScrollArea className="h-[430px]">
           {recentItems.length ? recentItems.map((item) => (
-            <div key={item.id} className="border-b px-4 py-3 last:border-b-0">
-              <p className="text-sm font-semibold text-[#222]">{item.title}</p>
-              <p className="mt-1 text-xs leading-5 text-[#666]">{item.meta}</p>
-              <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-[#999]">
-                {formatActivityDate(item.time)}
-              </p>
+            <div key={item.id} className="flex gap-3 border-b px-4 py-3.5 last:border-b-0">
+              <span className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eef8f6] text-[#009b8c]">
+                {item.id.startsWith("download") ? <Download /> : item.id.startsWith("favorite") ? <Heart /> : <ShoppingBag />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[#222]">{item.title}</p>
+                <p className="mt-1 text-xs leading-5 text-[#666]">{item.meta}</p>
+                <p className="mt-2 text-[11px] font-medium uppercase text-[#999]">
+                  {formatActivityDate(item.time)}
+                </p>
+              </div>
             </div>
           )) : (
             <div className="px-4 py-8 text-center text-sm text-[#777]">No notifications yet.</div>
           )}
-        </div>
+        </ScrollArea>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -7119,9 +7153,11 @@ function ProductEditorDialog({
 }
 
 function CollectionsPanel({ section }: { section: DashboardSection }) {
-  const { collectionsQuery, updateCollection, deleteCollection } = useCollections();
+  const { collectionsQuery, updateCollection, deleteCollection, duplicateCollection } = useCollections();
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
+  const [quickEdit, setQuickEdit] = useState<CollectionRecord | null>(null);
+  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "" });
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -7144,6 +7180,13 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 250);
     return () => window.clearTimeout(timer);
   }, [searchTerm]);
+  useEffect(() => {
+    if (!quickEdit) return;
+    setQuickForm({
+      name: quickEdit.name,
+      eventDate: quickEdit.eventDate ? quickEdit.eventDate.slice(0, 10) : "",
+    });
+  }, [quickEdit]);
 
   const filteredCollections = useMemo(() => {
     const query = debouncedSearchTerm.trim().toLowerCase();
@@ -7197,8 +7240,38 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     setSortFilter("newest");
   };
   const openCollectionPreview = (collection: CollectionRecord) => {
-    const path = `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
-    window.open(path, "_blank", "noopener,noreferrer");
+    window.open(publicCollectionPath(collection), "_blank", "noopener,noreferrer");
+  };
+  const shareCollection = async (collection: CollectionRecord) => {
+    const url = `${window.location.origin}${publicCollectionPath(collection)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Collection link copied");
+    } catch {
+      toast.error(url);
+    }
+  };
+  const duplicate = (collection: CollectionRecord) => {
+    duplicateCollection.mutate(collection._id, {
+      onSuccess: () => toast.success("Collection duplicated"),
+      onError: (error) => toast.error(error.message),
+    });
+  };
+  const saveQuickEdit = () => {
+    if (!quickEdit) return;
+    updateCollection.mutate({
+      collectionId: quickEdit._id,
+      payload: {
+        name: quickForm.name.trim(),
+        eventDate: quickForm.eventDate || undefined,
+      },
+    }, {
+      onSuccess: () => {
+        toast.success("Collection updated");
+        setQuickEdit(null);
+      },
+      onError: (error) => toast.error(error.message),
+    });
   };
   const toggleCollectionStar = (collection: CollectionRecord) => {
     const isStarred = collection.status === "starred" || collection.settings?.starred === true;
@@ -7219,6 +7292,41 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
 
   return (
     <div className="min-h-full bg-white">
+      <Dialog open={Boolean(quickEdit)} onOpenChange={(open) => !open && setQuickEdit(null)}>
+        <DialogContent className="rounded-none sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>Quick edit</DialogTitle>
+            <DialogDescription>Rename collection and update event date.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="quick-collection-name">Collection Name</FieldLabel>
+              <Input
+                id="quick-collection-name"
+                value={quickForm.name}
+                onChange={(event) => setQuickForm((current) => ({ ...current, name: event.target.value }))}
+                className="rounded-none"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="quick-event-date">Event Date</FieldLabel>
+              <Input
+                id="quick-event-date"
+                type="date"
+                value={quickForm.eventDate}
+                onChange={(event) => setQuickForm((current) => ({ ...current, eventDate: event.target.value }))}
+                className="rounded-none"
+              />
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setQuickEdit(null)}>Cancel</Button>
+            <Button className="rounded-none bg-[#22bda7] text-white hover:bg-[#19a995]" disabled={updateCollection.isPending || !quickForm.name.trim()} onClick={saveQuickEdit}>
+              {updateCollection.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-8">
           <h1 className="text-[28px] font-medium leading-none tracking-normal">
@@ -7342,6 +7450,16 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               >
                 <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
               </button>
+              <CollectionActionMenu
+                collection={collection}
+                className="absolute right-3 top-3 z-10"
+                onQuickEdit={setQuickEdit}
+                onPreview={openCollectionPreview}
+                onShare={shareCollection}
+                onDuplicate={duplicate}
+                onDelete={removeCollection}
+                pending={duplicateCollection.isPending || deleteCollection.isPending}
+              />
               <button
                 className="block w-full overflow-hidden bg-[#f2f2f2] text-left"
                 onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
@@ -7368,9 +7486,6 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                   >
                     {collection.name}
                   </button>
-                  <button className="shrink-0 text-xs font-bold text-[#00a997]" onClick={() => openCollectionPreview(collection)} type="button">
-                    Preview
-                  </button>
                 </div>
                 <p className="mt-3 flex items-center gap-2 text-sm text-[#777]">
                   <span className="size-2 rounded-full bg-[#22bda7]" />
@@ -7388,14 +7503,6 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                     </>
                   )}
                 </p>
-                <button
-                  className="absolute bottom-4 right-4 flex size-10 items-center justify-center rounded-full bg-white/92 text-[#777] shadow-sm transition hover:text-red-600"
-                  onClick={() => removeCollection(collection)}
-                  type="button"
-                  aria-label="Delete collection"
-                >
-                  <Trash2 className="size-4" />
-                </button>
               </div>
             </article>
           ))}
@@ -7428,15 +7535,85 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               </div>
               <div className="flex items-center justify-end gap-3">
                 <button className="text-sm font-bold text-[#00a997]" onClick={() => openCollectionPreview(collection)} type="button">Preview</button>
-                <button className="flex size-10 items-center justify-center rounded-full bg-[#f5f5f5] text-[#777] hover:text-red-600" onClick={() => removeCollection(collection)} type="button" aria-label="Delete collection">
-                  <Trash2 className="size-4" />
-                </button>
+                <CollectionActionMenu
+                  collection={collection}
+                  onQuickEdit={setQuickEdit}
+                  onPreview={openCollectionPreview}
+                  onShare={shareCollection}
+                  onDuplicate={duplicate}
+                  onDelete={removeCollection}
+                  pending={duplicateCollection.isPending || deleteCollection.isPending}
+                />
               </div>
             </article>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function CollectionActionMenu({
+  collection,
+  className,
+  onQuickEdit,
+  onPreview,
+  onShare,
+  onDuplicate,
+  onDelete,
+  pending,
+}: {
+  collection: CollectionRecord;
+  className?: string;
+  onQuickEdit: (collection: CollectionRecord) => void;
+  onPreview: (collection: CollectionRecord) => void;
+  onShare: (collection: CollectionRecord) => void;
+  onDuplicate: (collection: CollectionRecord) => void;
+  onDelete: (collection: CollectionRecord) => void;
+  pending?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn("flex size-10 items-center justify-center rounded-full bg-white/95 text-[#555] shadow-sm transition hover:text-[#00a997]", className)}
+          aria-label="Collection actions"
+        >
+          <MoreHorizontal className="size-5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52 rounded-xl p-1">
+        <DropdownMenuGroup>
+          <DropdownMenuItem onSelect={() => onQuickEdit(collection)}>
+            <Wrench />
+            Quick edit
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onPreview(collection)}>
+            <Eye />
+            Preview
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void onShare(collection)}>
+            <Share2 />
+            Share
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem disabled={pending} onSelect={() => onDuplicate(collection)}>
+            <Copy />
+            Duplicate
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem variant="destructive" disabled={pending} onSelect={() => onDelete(collection)}>
+            <Trash2 />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -9593,6 +9770,10 @@ function formatActivityDate(value?: string) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function publicCollectionPath(collection: CollectionRecord) {
+  return `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
 }
 
 function safeCsvName(value: string) {

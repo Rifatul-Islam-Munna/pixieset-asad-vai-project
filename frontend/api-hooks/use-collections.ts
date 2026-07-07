@@ -130,7 +130,19 @@ export function useCollections() {
     },
   });
 
-  return { collectionsQuery, createCollection, updateCollection, deleteCollection };
+  const duplicateCollection = useMutation({
+    mutationFn: async (collectionId: string) => {
+      const [data, error] = await PostRequestAxios<
+        { data: { collection: CollectionRecord; copied: number }; message: string }
+      >(`/collections/${collectionId}/duplicate`, {});
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
+  });
+
+  return { collectionsQuery, createCollection, updateCollection, deleteCollection, duplicateCollection };
 }
 
 export function useCollectionDetail(collectionId?: string) {

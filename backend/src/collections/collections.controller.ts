@@ -170,6 +170,12 @@ export class CollectionsController {
     return { message: 'Collection updated', data };
   }
 
+  @Post(':id/duplicate')
+  async duplicate(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.collectionsService.duplicate(req.user.id, id);
+    return { message: 'Collection duplicated', data };
+  }
+
   @Delete(':id')
   async remove(@Param('id') id: string, @Req() req: ExpressRequest) {
     const data = await this.collectionsService.remove(req.user.id, id);
