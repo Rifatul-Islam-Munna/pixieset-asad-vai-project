@@ -52,6 +52,25 @@ export function PublicGalleryStoreBridge({
 
   useEffect(() => {
     if (!enabled) return;
+    const hiddenLinks = new Set<HTMLElement>();
+    const hideLegacyStoreLinks = () => {
+      document.querySelectorAll<HTMLAnchorElement>(`a[href="${storeHref}"]`).forEach((link) => {
+        if (link.dataset.referenceStoreLink === "true") return;
+        link.style.display = "none";
+        hiddenLinks.add(link);
+      });
+    };
+    hideLegacyStoreLinks();
+    const observer = new MutationObserver(hideLegacyStoreLinks);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      hiddenLinks.forEach((link) => link.style.removeProperty("display"));
+    };
+  }, [enabled, storeHref]);
+
+  useEffect(() => {
+    if (!enabled) return;
     const onClick = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -89,7 +108,11 @@ export function PublicGalleryStoreBridge({
         onMouseEnter={() => setMenuOpen(true)}
         onMouseLeave={() => setMenuOpen(false)}
       >
-        <Link href={storeHref} className="text-sm font-medium text-[#222]">
+        <Link
+          href={storeHref}
+          data-reference-store-link="true"
+          className="text-sm font-medium text-[#222]"
+        >
           Print Store
         </Link>
         {menuOpen && (
