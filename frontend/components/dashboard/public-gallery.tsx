@@ -44,7 +44,7 @@ type PublicCollection = {
     general?: { slideshow?: boolean | string };
     download?: Partial<PresetDownloadSettings>;
     favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string };
-    store?: { storeStatus?: boolean };
+    store?: { storeStatus?: boolean; enabled?: boolean; showPrintStoreNav?: boolean };
   };
 };
 
@@ -136,7 +136,14 @@ export function PublicGallery({
     ...defaultDownload,
     ...(collection ? (collection.settings?.download ?? {}) : fallbackPresetDownload),
   };
-  const storeStatus = collection?.settings?.store?.storeStatus ?? fallbackPresetStore.storeStatus;
+  const storeConfig = collection?.settings?.store;
+  const storeStatus = Boolean(
+    storeConfig?.showPrintStoreNav ??
+    storeConfig?.enabled ??
+    storeConfig?.storeStatus ??
+    fallbackPresetStore.showPrintStoreNav ??
+    fallbackPresetStore.storeStatus,
+  );
   const slideshowEnabled = collection
     ? boolSetting(collection.settings?.general?.slideshow ?? true)
     : boolSetting(fallbackPresetGeneral.slideshow);
@@ -590,9 +597,25 @@ export function PublicGallery({
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen scroll-smooth">
-      <nav className="flex h-16 items-center justify-between px-5 md:px-10">
-        <p className="text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
-        <div className="flex items-center gap-4">
+      <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-black/5 px-5 md:px-10">
+        <p className="truncate text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
+        <div className="hidden min-w-0 items-center justify-center gap-7 text-sm text-black/60 md:flex">
+          {showSetTabs && gallerySets.map((set) => (
+            <button
+              key={set.id}
+              className={cn(
+                "truncate transition-colors hover:text-black",
+                activeSetId === set.id ? "font-semibold text-black" : "",
+              )}
+              onClick={() => setActiveSetId(set.id)}
+              type="button"
+            >
+              {set.name}
+            </button>
+          ))}
+          <span data-print-store-nav-host="true" />
+        </div>
+        <div className="flex items-center justify-end gap-4" data-print-store-actions-host="true">
           {design.navigationStyle === "Icon & Text" ? (
             <>
               <button className="flex items-center gap-2 text-sm">
@@ -650,7 +673,7 @@ export function PublicGallery({
             <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-2">
               <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
               {showSetTabs && (
-                <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold">
+                <div className="flex flex-1 flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-bold">
                   {gallerySets.map((set) => (
                     <button
                       key={set.id}
@@ -669,6 +692,12 @@ export function PublicGallery({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-full border border-black/10 bg-[#f4f4f2] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur">
+            {storeStatus && (
+              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" title="Store" aria-label="Store">
+                <ShoppingBag className="size-4" />
+                <span className="md:sr-only">Store</span>
+              </a>
+            )}
             <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90 md:w-10 md:justify-center md:px-0" title={faceBusy ? "Searching" : "Find me"}>
               {faceBusy ? <Search className="size-4 animate-pulse" /> : <Camera className="size-4" />}
               <span className="md:sr-only">{faceBusy ? "Searching" : "Find me"}</span>
@@ -706,12 +735,6 @@ export function PublicGallery({
               <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
               <span className="md:sr-only">Favorite</span>
             </button>
-            {storeStatus && (
-              <a id="store" href={storeHref} className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" title="Store" aria-label="Store">
-                <ShoppingBag className="size-4" />
-                <span className="md:sr-only">Store</span>
-              </a>
-            )}
             {canDownload && (
               <button className="inline-flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
                 {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}

@@ -532,6 +532,36 @@ export class CollectionsService {
     return collection.toObject();
   }
 
+  async remove(userId: string, id: string) {
+    const collection = await this.collectionModel.findOne({ _id: id, userId });
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const images = await this.imageModel.find({ collectionId: id, userId });
+    let reclaimedBytes = 0;
+    for (const image of images) {
+      reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
+      await this.deleteStoredImageFiles(image);
+      await this.faceSearchService.deleteImageFaces(id, image._id.toString()).catch(() => null);
+    }
+
+    await Promise.all([
+      this.imageModel.deleteMany({ collectionId: id, userId }),
+      this.favoriteModel.deleteMany({ collectionId: id }),
+      this.imageFavoriteModel.deleteMany({ collectionId: id }),
+      this.downloadActivityModel.deleteMany({ collectionId: id }),
+      this.collectionModel.deleteOne({ _id: id, userId }),
+    ]);
+
+    if (reclaimedBytes > 0) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $inc: { storageUsedBytes: -reclaimedBytes } },
+      );
+    }
+
+    return { deleted: true, collectionId: id };
+  }
+
   async addSet(userId: string, collectionId: string, name: string) {
     const trimmed = name?.trim();
     if (!trimmed) throw new BadRequestException('Set name is required');

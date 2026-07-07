@@ -145,7 +145,7 @@ export function PublicStoreProductPage({
         </div>
 
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(390px,0.95fr)]">
-          <div className="bg-[#f2f3f3]">
+          <div className="overflow-hidden border bg-[#f6f4f1]">
             <div className="flex min-h-[560px] items-center justify-center p-8">
               {previews[activePreview] && (
                 <img
@@ -173,6 +173,7 @@ export function PublicStoreProductPage({
           </div>
 
           <div className="py-1">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[#888]">{product.category}</p>
             <h2 className="text-3xl font-normal">{product.name}</h2>
             <p className="mt-3 text-lg">
               From {formatMoney(displayPrice(product), currency)}
@@ -180,6 +181,21 @@ export function PublicStoreProductPage({
             <p className="mt-6 text-sm leading-7 text-[#555]">
               {stripHtml(product.description)}
             </p>
+
+            <div className="mt-8 grid gap-3 border bg-[#faf9f7] p-5 text-sm text-[#555]">
+              <div className="flex items-center justify-between gap-4">
+                <span>Made for</span>
+                <span className="font-medium text-[#222]">
+                  {initialImageId ? "Selected photo" : "Collection photos"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span>Product type</span>
+                <span className="font-medium text-[#222]">
+                  {product.category === "Wall Art" ? "Wall art" : "Print product"}
+                </span>
+              </div>
+            </div>
 
             {visibleVariants(product).length > 0 && (
               <div className="mt-8">

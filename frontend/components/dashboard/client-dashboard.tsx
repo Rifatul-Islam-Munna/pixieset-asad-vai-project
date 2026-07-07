@@ -13,6 +13,7 @@ import { ReactSortable } from "react-sortablejs";
 import {
   ArrowLeft,
   ArrowRight,
+  Bell,
   Calendar as CalendarIcon,
   Bold,
   ChevronDown,
@@ -93,6 +94,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -101,6 +109,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useCollectionDetail,
   useCollectionActivity,
+  useCollectionActivities,
   useCollectionActivityActions,
   useCollectionImages,
   useCollections,
@@ -396,6 +405,7 @@ export function ClientDashboard({
           </DropdownMenu>
 
           <div className={cn("flex items-center gap-4", collapsed && "hidden")}>
+            {section === "client-gallery" && <DashboardNotifications />}
             <Avatar className="size-7">
               <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
             </Avatar>
@@ -528,9 +538,12 @@ export function ClientDashboard({
             <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
             <span className="truncate">{active.title}</span>
           </div>
-          <button aria-label="Logout" onClick={logout} disabled={logoutPending} className="flex size-10 items-center justify-center bg-[#f4f4f4]">
-            <LogOut className="size-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {section === "client-gallery" && <DashboardNotifications mobile />}
+            <button aria-label="Logout" onClick={logout} disabled={logoutPending} className="flex size-10 items-center justify-center bg-[#f4f4f4]">
+              <LogOut className="size-5" />
+            </button>
+          </div>
         </div>}
 
         {mobileMenuOpen && !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && (
@@ -830,6 +843,108 @@ function UsagePanel({
       </div>
       <Progress value={percent} className="mt-4 h-2 bg-[#e8e8e8]" />
     </div>
+  );
+}
+
+type DashboardNotificationItem = {
+  id: string;
+  title: string;
+  meta: string;
+  time?: string;
+};
+
+function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
+  const { collectionsQuery } = useCollections();
+  const { ordersQuery } = useStoreOrders();
+  const collections = collectionsQuery.data?.data ?? [];
+  const activities = useCollectionActivities(collections.map((collection) => collection._id));
+  const recentItems = useMemo(() => {
+    const collectionMap = new Map(collections.map((collection) => [collection._id, collection]));
+    const items: Array<DashboardNotificationItem & { timestamp: number }> = [];
+
+    activities.forEach((query, index) => {
+      const collection = collections[index];
+      const data = query.data?.data;
+      if (!collection || !data) return;
+
+      data.downloads.forEach((download) => {
+        items.push({
+          id: `download-${collection._id}-${download._id}`,
+          title: `${collection.name}: download`,
+          meta: `${download.email || "Visitor"} downloaded ${download.imageName || "collection files"}`,
+          time: download.updatedAt,
+          timestamp: new Date(download.updatedAt ?? download.createdAt ?? 0).getTime(),
+        });
+      });
+
+      data.favoriteLists.forEach((favorite) => {
+        items.push({
+          id: `favorite-${collection._id}-${favorite.id}`,
+          title: `${collection.name}: favorites`,
+          meta: `${favorite.email || favorite.name || "Visitor"} saved ${favorite.photos} photo${favorite.photos === 1 ? "" : "s"}`,
+          time: favorite.updatedAt,
+          timestamp: new Date(favorite.updatedAt ?? favorite.createdAt ?? 0).getTime(),
+        });
+      });
+    });
+
+    (ordersQuery.data?.data ?? []).forEach((order) => {
+      const collection = order.collectionId ? collectionMap.get(order.collectionId) : null;
+      items.push({
+        id: `order-${order._id}`,
+        title: `${collection?.name ?? "Store"}: order`,
+        meta: `${order.customer?.name || order.customer?.email || "Customer"} placed ${order.orderNumber}`,
+        time: order.createdAt,
+        timestamp: new Date(order.createdAt ?? 0).getTime(),
+      });
+    });
+
+    return items
+      .filter((item) => Number.isFinite(item.timestamp) && item.timestamp > 0)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 8);
+  }, [activities, collections, ordersQuery.data?.data]);
+
+  const unreadCount = recentItems.length;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-label="Notifications"
+          className={cn(
+            "relative flex items-center justify-center text-[#555]",
+            mobile ? "size-10 bg-[#f4f4f4]" : "size-8",
+          )}
+        >
+          <Bell className="size-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-[#22bda7] px-1 text-[10px] font-bold text-white">
+              {Math.min(unreadCount, 9)}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-[340px] rounded-none p-0 shadow-[0_18px_35px_rgba(0,0,0,0.18)]">
+        <div className="border-b px-4 py-3">
+          <p className="text-sm font-bold text-[#222]">Notifications</p>
+          <p className="mt-1 text-xs text-[#777]">Recent collection and store activity</p>
+        </div>
+        <div className="max-h-[380px] overflow-y-auto">
+          {recentItems.length ? recentItems.map((item) => (
+            <div key={item.id} className="border-b px-4 py-3 last:border-b-0">
+              <p className="text-sm font-semibold text-[#222]">{item.title}</p>
+              <p className="mt-1 text-xs leading-5 text-[#666]">{item.meta}</p>
+              <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-[#999]">
+                {formatActivityDate(item.time)}
+              </p>
+            </div>
+          )) : (
+            <div className="px-4 py-8 text-center text-sm text-[#777]">No notifications yet.</div>
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1725,6 +1840,8 @@ function StarredGrid({
   emptyText: string;
   emptySubtext: string;
 }) {
+  const router = useRouter();
+
   if (!items.length) {
     return (
       <div className="mx-auto flex min-h-[430px] max-w-[420px] flex-col items-center justify-center text-center">
@@ -1754,7 +1871,15 @@ function StarredGrid({
           : `${image.collectionName ?? "Collection"} / ${image.setName ?? "Highlights"}`;
 
         return (
-        <button key={`${kind}-${item._id}`} className="group text-left">
+        <button
+          key={`${kind}-${item._id}`}
+          className="group text-left"
+          onClick={() =>
+            isCollection
+              ? router.push(`/dashboard/client-gallery/collections/${collection._id}`)
+              : router.push(`/dashboard/client-gallery/collections/${image.collectionId}`)
+          }
+        >
           <span className="relative block overflow-hidden bg-[#f3f3f3]">
             {src ? (
               <img
@@ -6781,19 +6906,102 @@ function ProductEditorDialog({
 }
 
 function CollectionsPanel({ section }: { section: DashboardSection }) {
-  const { collectionsQuery } = useCollections();
+  const { collectionsQuery, updateCollection, deleteCollection } = useCollections();
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
   const [searchTerm, setSearchTerm] = useState("");
-  const filteredCollections = collections.filter((collection) =>
-    [collection.name, collection.tags?.join(" "), collection.status]
-      .join(" ")
-      .toLowerCase()
-      .includes(searchTerm.trim().toLowerCase()),
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [eventDateFilter, setEventDateFilter] = useState("all");
+  const [expiryDateFilter, setExpiryDateFilter] = useState("all");
+  const [starredFilter, setStarredFilter] = useState("all");
+  const [sortFilter, setSortFilter] = useState("newest");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const statuses = useMemo(
+    () => [...new Set(collections.map((item) => item.status).filter((value): value is string => Boolean(value)))].sort(),
+    [collections],
   );
+  const tags = useMemo(
+    () => [...new Set(collections.flatMap((item) => item.tags ?? []))].sort(),
+    [collections],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  const filteredCollections = useMemo(() => {
+    const query = debouncedSearchTerm.trim().toLowerCase();
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const matches = collections.filter((collection) => {
+      const searchable = [collection.name, collection.status, ...(collection.tags ?? [])]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (query && !searchable.includes(query)) return false;
+      if (statusFilter !== "all" && collection.status !== statusFilter) return false;
+      if (tagFilter !== "all" && !(collection.tags ?? []).includes(tagFilter)) return false;
+
+      const event = collection.eventDate ? new Date(collection.eventDate) : null;
+      if (eventDateFilter === "upcoming" && (!event || event < today)) return false;
+      if (eventDateFilter === "past" && (!event || event >= today)) return false;
+      if (eventDateFilter === "none" && event) return false;
+
+      const expiry = collection.expiresAt ? new Date(collection.expiresAt) : null;
+      if (expiryDateFilter === "active" && (!expiry || expiry < now)) return false;
+      if (expiryDateFilter === "expired" && (!expiry || expiry >= now)) return false;
+      if (expiryDateFilter === "none" && expiry) return false;
+
+      const isStarred = collection.status === "starred" || collection.settings?.starred === true;
+      if (starredFilter === "yes" && !isStarred) return false;
+      if (starredFilter === "no" && isStarred) return false;
+      return true;
+    });
+
+    return [...matches].sort((left, right) => {
+      if (sortFilter === "name-asc") return left.name.localeCompare(right.name);
+      if (sortFilter === "name-desc") return right.name.localeCompare(left.name);
+      const leftTime = new Date(left.createdAt ?? left.eventDate ?? 0).getTime();
+      const rightTime = new Date(right.createdAt ?? right.eventDate ?? 0).getTime();
+      return sortFilter === "oldest" ? leftTime - rightTime : rightTime - leftTime;
+    });
+  }, [collections, debouncedSearchTerm, eventDateFilter, expiryDateFilter, sortFilter, starredFilter, statusFilter, tagFilter]);
+  const filtersActive = Boolean(
+    searchTerm || statusFilter !== "all" || tagFilter !== "all" || eventDateFilter !== "all" ||
+      expiryDateFilter !== "all" || starredFilter !== "all" || sortFilter !== "newest",
+  );
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setTagFilter("all");
+    setEventDateFilter("all");
+    setExpiryDateFilter("all");
+    setStarredFilter("all");
+    setSortFilter("newest");
+  };
   const openCollectionPreview = (collection: CollectionRecord) => {
     const path = `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
     window.open(path, "_blank", "noopener,noreferrer");
+  };
+  const toggleCollectionStar = (collection: CollectionRecord) => {
+    const isStarred = collection.status === "starred" || collection.settings?.starred === true;
+    const nextStatus = isStarred ? (collection.status === "starred" ? "draft" : collection.status) : "starred";
+    const nextSettings = {
+      ...(collection.settings ?? {}),
+      starred: !isStarred,
+    };
+    updateCollection.mutate({
+      collectionId: collection._id,
+      payload: { status: nextStatus, settings: nextSettings },
+    });
+  };
+  const removeCollection = (collection: CollectionRecord) => {
+    if (!window.confirm(`Delete "${collection.name}"? This cannot be undone.`)) return;
+    deleteCollection.mutate(collection._id);
   };
 
   return (
@@ -6836,22 +7044,59 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
 
       <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-2">
-          {["Status", "Category Tag", "Event Date", "Expiry Date", "Starred"].map((filter) => (
-            <button
-              key={filter}
-              className="inline-flex h-8 items-center gap-2 rounded-full bg-[#f6f6f6] px-4 text-xs font-medium text-[#222]"
-              type="button"
-            >
-              {filter}
-              <ChevronDown className="size-3" />
-            </button>
-          ))}
+          <CollectionFilterSelect value={statusFilter} onValueChange={setStatusFilter} placeholder="Status: All">
+            <SelectItem value="all">Status: All</SelectItem>
+            {statuses.map((value) => <SelectItem key={value} value={value}>Status: {titleCase(value)}</SelectItem>)}
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={tagFilter} onValueChange={setTagFilter} placeholder="Category Tag: All">
+            <SelectItem value="all">Category Tag: All</SelectItem>
+            {tags.map((value) => <SelectItem key={value} value={value}>Category Tag: {value}</SelectItem>)}
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={eventDateFilter} onValueChange={setEventDateFilter} placeholder="Event Date: All">
+            <SelectItem value="all">Event Date: All</SelectItem>
+            <SelectItem value="upcoming">Event Date: Upcoming</SelectItem>
+            <SelectItem value="past">Event Date: Past</SelectItem>
+            <SelectItem value="none">Event Date: None</SelectItem>
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={expiryDateFilter} onValueChange={setExpiryDateFilter} placeholder="Expiry Date: All">
+            <SelectItem value="all">Expiry Date: All</SelectItem>
+            <SelectItem value="active">Expiry Date: Not expired</SelectItem>
+            <SelectItem value="expired">Expiry Date: Expired</SelectItem>
+            <SelectItem value="none">Expiry Date: None</SelectItem>
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={starredFilter} onValueChange={setStarredFilter} placeholder="Starred: All">
+            <SelectItem value="all">Starred: All</SelectItem>
+            <SelectItem value="yes">Starred: Yes</SelectItem>
+            <SelectItem value="no">Starred: No</SelectItem>
+          </CollectionFilterSelect>
+          <CollectionFilterSelect value={sortFilter} onValueChange={setSortFilter} placeholder="Sort: Newest">
+            <SelectItem value="newest">Sort: Newest</SelectItem>
+            <SelectItem value="oldest">Sort: Oldest</SelectItem>
+            <SelectItem value="name-asc">Sort: Name A-Z</SelectItem>
+            <SelectItem value="name-desc">Sort: Name Z-A</SelectItem>
+          </CollectionFilterSelect>
+          {filtersActive && <button className="h-9 px-3 text-xs font-semibold text-[#00a997]" onClick={clearFilters}>Clear filters</button>}
         </div>
         <div className="flex items-center gap-4 text-[#777]">
-          <ListFilter className="size-5" />
-          <LayoutGrid className="size-5" />
+          <button
+            className={cn("flex size-9 items-center justify-center border", viewMode === "grid" && "border-[#222] bg-[#222] text-white")}
+            onClick={() => setViewMode("grid")}
+            aria-label="Grid view"
+            type="button"
+          >
+            <LayoutGrid className="size-4" />
+          </button>
+          <button
+            className={cn("flex size-9 items-center justify-center border", viewMode === "list" && "border-[#222] bg-[#222] text-white")}
+            onClick={() => setViewMode("list")}
+            aria-label="List view"
+            type="button"
+          >
+            <Menu className="size-4" />
+          </button>
         </div>
       </div>
+      <p className="mt-6 text-xs text-[#777]">Showing {filteredCollections.length} of {collections.length} collections</p>
 
       {collectionsQuery.isLoading ? (
         <p className="mt-10 py-8 text-sm text-[#666]">Loading collections...</p>
@@ -6869,13 +7114,21 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             Create Collection
           </Button>
         </div>
-      ) : (
-        <div className="mt-10 grid gap-x-8 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+      ) : viewMode === "grid" ? (
+        <div className="mt-10 grid gap-x-10 gap-y-12 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filteredCollections.map((collection) => (
             <article
               key={collection._id}
-              className="group text-left"
+              className="group relative text-left"
             >
+              <button
+                className="absolute left-3 top-3 z-10 flex size-10 items-center justify-center rounded-full bg-white/92 text-[#666] shadow-sm transition hover:text-[#00a997]"
+                onClick={() => toggleCollectionStar(collection)}
+                type="button"
+                aria-label="Star collection"
+              >
+                <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
+              </button>
               <button
                 className="block w-full overflow-hidden bg-[#f2f2f2] text-left"
                 onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
@@ -6893,26 +7146,28 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                   </span>
                 )}
               </button>
-              <div className="pt-3">
+              <div className="pt-4">
                 <div className="flex items-start justify-between gap-3">
                   <button
-                    className="min-w-0 flex-1 truncate text-left text-base font-semibold text-[#333]"
+                    className="min-w-0 flex-1 truncate text-left text-[22px] font-semibold leading-none text-[#333]"
                     onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
                     type="button"
                   >
                     {collection.name}
                   </button>
-                  <button
-                    className="shrink-0 text-xs font-bold text-[#00a997] opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={() => openCollectionPreview(collection)}
-                    type="button"
-                  >
+                  <button className="shrink-0 text-xs font-bold text-[#00a997]" onClick={() => openCollectionPreview(collection)} type="button">
                     Preview
                   </button>
                 </div>
-                <p className="mt-2 flex items-center gap-2 text-xs text-[#777]">
+                <p className="mt-3 flex items-center gap-2 text-sm text-[#777]">
                   <span className="size-2 rounded-full bg-[#22bda7]" />
                   <span>{collection.imageCount ?? 0} items</span>
+                  {collection.status && (
+                    <>
+                      <span>&bull;</span>
+                      <span>{titleCase(collection.status)}</span>
+                    </>
+                  )}
                   {collection.eventDate && (
                     <>
                       <span>&bull;</span>
@@ -6920,12 +7175,78 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                     </>
                   )}
                 </p>
+                <button
+                  className="absolute bottom-4 right-4 flex size-10 items-center justify-center rounded-full bg-white/92 text-[#777] shadow-sm transition hover:text-red-600"
+                  onClick={() => removeCollection(collection)}
+                  type="button"
+                  aria-label="Delete collection"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-10 divide-y border">
+          {filteredCollections.map((collection) => (
+            <article key={collection._id} className="grid items-center gap-5 p-5 lg:grid-cols-[220px_1fr_auto]">
+              <button className="overflow-hidden bg-[#f2f2f2] text-left" onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)} type="button">
+                {collection.coverImage ? (
+                  <img src={imageSrc(collection.coverImage)} alt="" className="aspect-[1.35] w-full object-cover" />
+                ) : (
+                  <span className="flex aspect-[1.35] items-center justify-center"><Images className="size-10 text-[#ccc]" /></span>
+                )}
+              </button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <button className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f5] text-[#666] hover:text-[#00a997]" onClick={() => toggleCollectionStar(collection)} type="button" aria-label="Star collection">
+                    <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
+                  </button>
+                  <button className="truncate text-left text-xl font-semibold" onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)} type="button">
+                    {collection.name}
+                  </button>
+                </div>
+                <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[#777]">
+                  <span>{collection.imageCount ?? 0} items</span>
+                  {collection.status && <><span>&bull;</span><span>{titleCase(collection.status)}</span></>}
+                  {collection.eventDate && <><span>&bull;</span><span>{formatDate(collection.eventDate)}</span></>}
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button className="text-sm font-bold text-[#00a997]" onClick={() => openCollectionPreview(collection)} type="button">Preview</button>
+                <button className="flex size-10 items-center justify-center rounded-full bg-[#f5f5f5] text-[#777] hover:text-red-600" onClick={() => removeCollection(collection)} type="button" aria-label="Delete collection">
+                  <Trash2 className="size-4" />
+                </button>
               </div>
             </article>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function CollectionFilterSelect({
+  value,
+  onValueChange,
+  placeholder,
+  children,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder: string;
+  children: ReactNode;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="h-9 rounded-full border-0 bg-[#f5f5f5] px-4 text-xs font-medium text-[#222]">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent align="start">
+        {children}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -7077,6 +7398,7 @@ function CollectionDetailView({
   const storeWatermarkItems = useDashboardStore((state) => state.watermarkItems);
   const { starImage } = useImageActions();
   const { collectionsQuery } = useCollections();
+  const { ordersQuery } = useStoreOrders();
   const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
   const activityActions = useCollectionActivityActions(collectionId);
@@ -7092,7 +7414,7 @@ function CollectionDetailView({
   const [activeImageId, setActiveImageId] = useState("");
   const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "download">("photos");
   const [activeDesignPanel, setActiveDesignPanel] = useState<"cover" | "typography" | "color" | "grid">("cover");
-  const [activityPage, setActivityPage] = useState<"download" | "favorite">("favorite");
+  const [activityPage, setActivityPage] = useState<"download" | "favorite" | "orders">("favorite");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
   const [addSetOpen, setAddSetOpen] = useState(false);
@@ -7132,6 +7454,10 @@ function CollectionDetailView({
     const rank = new Map(orderedImageIds.map((id, index) => [id, index]));
     return [...images].sort((a, b) => (rank.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b._id) ?? Number.MAX_SAFE_INTEGER));
   }, [images, orderedImageIds]);
+  const collectionOrders = useMemo(
+    () => (ordersQuery.data?.data ?? []).filter((order) => order.collectionId === collectionId),
+    [collectionId, ordersQuery.data?.data],
+  );
   const activeSetImages = useMemo(
     () => orderedImages.filter((image) => (image.setId || "highlights") === activeSetId),
     [activeSetId, orderedImages],
@@ -7576,17 +7902,16 @@ function CollectionDetailView({
       <div className={cn("mt-6 grid min-h-0 flex-1 overflow-hidden border transition-[grid-template-columns] duration-300 ease-out", detailCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[250px_minmax(0,1fr)]")}>
         <aside className="flex flex-col border-r bg-[#fafafa] transition-colors duration-300">
           {!detailCollapsed && <div className="aspect-[1.45] bg-[#e8e8e8]">
-            {form.coverImage ? (
-              <DashboardImageWithSkeleton
-                src={imageSrc(form.coverImage)}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <Images className="size-9 text-[#bbb]" />
-              </div>
-            )}
+            <CoverPreview
+              design={{
+                ...form.design,
+                coverTitle: form.design.coverTitle || collection.name,
+                coverDate: form.design.coverDate || (collection.eventDate ? formatDate(collection.eventDate) : ""),
+                coverSmallTitle: form.design.coverSmallTitle || "Studio",
+              }}
+              image={form.coverImage ? imageSrc(form.coverImage) : images[0]?.url ? imageSrc(images[0].url) : undefined}
+              className="h-full min-h-0"
+            />
           </div>}
           <div className={cn("grid border-b bg-white", detailCollapsed ? "grid-cols-1" : "grid-cols-4")}>
             {([
@@ -7696,7 +8021,7 @@ function CollectionDetailView({
             </div>
           )}
           {activeTab === "design" && !detailCollapsed && (
-            <div className="min-h-0 bg-[#fafafa]">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#fafafa]">
               <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Design</p>
               {([
                 ["cover", PanelTop, "Cover"],
@@ -7734,6 +8059,14 @@ function CollectionDetailView({
               >
                 <Heart className="size-4" />
                 Favorite Activity
+              </button>
+              <button
+                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "orders" && "bg-white font-bold")}
+                onClick={() => setActivityPage("orders")}
+                type="button"
+              >
+                <ShoppingCart className="size-4" />
+                Store Orders
               </button>
             </div>
           )}
@@ -8092,6 +8425,7 @@ function CollectionDetailView({
               loading={activityQuery.isLoading}
               favoriteLists={activityQuery.data?.data.favoriteLists ?? []}
               downloads={activityQuery.data?.data.downloads ?? []}
+              orders={collectionOrders}
               collectionName={collection.name}
               collectionImages={images}
               publicLink={publicLink}
@@ -8178,6 +8512,7 @@ function CollectionActivityPanel({
   loading,
   favoriteLists,
   downloads,
+  orders,
   collectionName,
   collectionImages,
   publicLink,
@@ -8193,10 +8528,11 @@ function CollectionActivityPanel({
   loading: boolean;
   favoriteLists: CollectionFavoriteActivityRecord[];
   downloads: CollectionDownloadActivityRecord[];
+  orders: StoreOrderRecord[];
   collectionName: string;
   collectionImages: CollectionImageRecord[];
   publicLink: string;
-  activityPage: "download" | "favorite";
+  activityPage: "download" | "favorite" | "orders";
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
   saveFavoriteSettings: (favorite: Partial<PresetFavoriteSettings>) => Promise<void>;
@@ -8427,6 +8763,44 @@ function CollectionActivityPanel({
                   {!downloads.length && (
                     <tr>
                       <td className="px-1 py-10 text-center text-[#777]" colSpan={5}>No downloads yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : activityPage === "orders" ? (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-2xl font-medium">Store Orders</h2>
+              <p className="text-sm text-[#666]">{orders.length} order{orders.length === 1 ? "" : "s"} for this collection</p>
+            </div>
+            <div className="mt-7 overflow-x-auto">
+              <table className="w-full min-w-[820px] text-left text-sm">
+                <thead className="border-b text-xs font-bold uppercase text-[#777]">
+                  <tr>
+                    <th className="px-1 py-3">Order</th>
+                    <th className="px-1 py-3">Customer</th>
+                    <th className="px-1 py-3">Items</th>
+                    <th className="px-1 py-3">Total</th>
+                    <th className="px-1 py-3">Status</th>
+                    <th className="px-1 py-3">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((order) => (
+                    <tr key={order._id} className="border-b">
+                      <td className="px-1 py-5 font-semibold">{order.orderNumber}</td>
+                      <td className="px-1 py-5">{order.customer?.name || order.customer?.email || "-"}</td>
+                      <td className="px-1 py-5">{order.items?.length ?? 0}</td>
+                      <td className="px-1 py-5">{money(order.total, "EUR")}</td>
+                      <td className="px-1 py-5 capitalize">{order.status}</td>
+                      <td className="px-1 py-5">{formatActivityDate(order.createdAt)}</td>
+                    </tr>
+                  ))}
+                  {!orders.length && (
+                    <tr>
+                      <td className="px-1 py-10 text-center text-[#777]" colSpan={6}>No store orders yet.</td>
                     </tr>
                   )}
                 </tbody>
@@ -8980,6 +9354,10 @@ function formatMetaValue(value: unknown) {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function titleCase(value: string) {
+  return value.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function formatDate(value?: string) {

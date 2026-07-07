@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ShoppingBag } from "lucide-react";
+import { ChevronRight, ShoppingBag, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { PublicStoreProductBuilder } from "./public-store-product-builder";
 import { StoreCartPanel } from "./store-cart-panel";
@@ -170,14 +170,42 @@ export function PublicStore({
       </header>
 
       <section className="mx-auto max-w-[1500px] px-5 pb-20 pt-10 md:px-10">
-        <div className="flex items-center justify-between border-b pb-5">
-          <div>
+        <div className="grid gap-8 border-b pb-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+          <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-[0.24em] text-[#888]">Print Store</p>
-            <h2 className="mt-2 text-2xl font-normal">Shop this collection</h2>
+            <h2 className="mt-2 text-2xl font-normal md:text-4xl">Shop this collection</h2>
+            <p className="mt-4 max-w-[720px] text-sm leading-7 text-[#666]">
+              Curated prints, wall art, and keepsakes built from this gallery. Choose a product,
+              personalize it, then checkout in one flow.
+            </p>
+            {categories.length > 0 && (
+              <div className="mt-6 flex flex-wrap gap-2">
+                {categories.map((category) => (
+                  <a
+                    key={category}
+                    href={`#${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
+                    className="inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium transition hover:border-black"
+                  >
+                    {category}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
-          <button className="inline-flex h-10 items-center gap-2 border px-4 text-sm" onClick={() => setCartOpen(true)}>
-            <ShoppingBag className="size-4" /> Cart ({cartCount})
-          </button>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="border bg-[#f7f7f4] p-5">
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[#888]">Collection</p>
+              <p className="mt-3 text-lg font-medium">{data.collection?.name || "Collection Store"}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-[#666]">
+                <Sparkles className="size-4 text-[#22bda7]" />
+                {products.length} active product{products.length === 1 ? "" : "s"}
+              </div>
+            </div>
+            <button className="inline-flex h-12 items-center justify-center gap-2 border px-4 text-sm font-medium" onClick={() => setCartOpen(true)}>
+              <ShoppingBag className="size-4" /> Cart ({cartCount})
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
         </div>
 
         <PublicStoreCatalog

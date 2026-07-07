@@ -38,6 +38,7 @@ export function PublicGalleryStoreBridge({
   const enabled = Boolean(storeSettings.enabled ?? storeSettings.storeStatus);
   const [storeData, setStoreData] = useState<PublicStoreData | null>(null);
   const [navHost, setNavHost] = useState<HTMLElement | null>(null);
+  const [actionsHost, setActionsHost] = useState<HTMLElement | null>(null);
   const [activeImageId, setActiveImageId] = useState("");
   const [buyOpen, setBuyOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -60,22 +61,20 @@ export function PublicGalleryStoreBridge({
     if (!enabled) return;
 
     let host: HTMLElement | null = null;
-    const hiddenLinks = new Map<HTMLElement, string>();
-
+    let actions: HTMLElement | null = null;
     const attach = () => {
-      const actions = document.querySelector<HTMLElement>("main nav .flex.items-center.gap-4");
-      if (actions && !host) {
+      const navSlot = document.querySelector<HTMLElement>('[data-print-store-nav-host="true"]');
+      const actionSlot = document.querySelector<HTMLElement>('[data-print-store-actions-host="true"]');
+      if (navSlot && !host) {
         host = document.createElement("div");
         host.dataset.printStoreHost = "true";
-        actions.insertBefore(host, actions.firstChild);
+        navSlot.replaceWith(host);
         setNavHost(host);
       }
-
-      document.querySelectorAll<HTMLAnchorElement>(`a[href="${storeHref}"]`).forEach((link) => {
-        if (host?.contains(link) || link.dataset.printStoreReference === "true") return;
-        if (!hiddenLinks.has(link)) hiddenLinks.set(link, link.style.display);
-        link.style.display = "none";
-      });
+      if (actionSlot && !actions) {
+        actions = actionSlot;
+        setActionsHost(actionSlot);
+      }
     };
 
     attach();
@@ -85,12 +84,10 @@ export function PublicGalleryStoreBridge({
     return () => {
       observer.disconnect();
       setNavHost(null);
+      setActionsHost(null);
       host?.remove();
-      hiddenLinks.forEach((display, link) => {
-        link.style.display = display;
-      });
     };
-  }, [enabled, storeHref]);
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -132,14 +129,14 @@ export function PublicGalleryStoreBridge({
       {navHost &&
         createPortal(
           <div
-            className="relative"
+            className="relative hidden md:block"
             onMouseEnter={() => setMenuOpen(true)}
             onMouseLeave={() => setMenuOpen(false)}
           >
             <Link
               href={storeHref}
               data-print-store-reference="true"
-              className="inline-flex h-16 items-center gap-2 border-r border-black/10 pr-5 text-sm font-medium"
+              className="inline-flex h-16 items-center gap-2 text-sm font-medium text-black/70 transition-colors hover:text-black"
             >
               Print Store
             </Link>
@@ -152,6 +149,14 @@ export function PublicGalleryStoreBridge({
             )}
           </div>,
           navHost,
+        )}
+
+      {actionsHost && !navHost &&
+        createPortal(
+          <a href={storeHref} className="inline-flex items-center gap-2 text-sm">
+            <ShoppingBag className="size-4" /> Store
+          </a>,
+          actionsHost,
         )}
 
       {activeImageId && !buyOpen && (
@@ -189,8 +194,8 @@ function GalleryStoreMegaMenu({
 }) {
   const categories = ["Prints", "Wall Art"];
   return (
-    <div className="fixed left-0 right-0 top-16 z-[80] border-b border-black/10 bg-[#f5f5f5] px-8 py-9 text-[#222] shadow-[0_12px_28px_rgba(0,0,0,0.06)]">
-      <div className="mx-auto grid max-w-[760px] gap-16 md:grid-cols-2">
+    <div className="fixed left-0 right-0 top-16 z-[80] border-b border-black/10 bg-white/98 px-8 py-9 text-[#222] shadow-[0_18px_40px_rgba(0,0,0,0.08)] backdrop-blur">
+      <div className="mx-auto grid max-w-[900px] gap-20 md:grid-cols-2">
         {categories.map((category) => (
           <div key={category}>
             <p className="mb-4 text-sm font-medium text-black">{category}</p>

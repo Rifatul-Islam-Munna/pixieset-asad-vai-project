@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
 
 export type CollectionRecord = {
@@ -94,7 +94,43 @@ export function useCollections() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
   });
 
-  return { collectionsQuery, createCollection };
+  const updateCollection = useMutation({
+    mutationFn: async ({
+      collectionId,
+      payload,
+    }: {
+      collectionId: string;
+      payload: Partial<CollectionRecord>;
+    }) => {
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<CollectionRecord> & { message: string }
+      >(`/collections/${collectionId}`, payload as any);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", variables.collectionId] });
+    },
+  });
+
+  const deleteCollection = useMutation({
+    mutationFn: async (collectionId: string) => {
+      const [data, error] = await DeleteRequestAxios<
+        { data: { deleted: boolean; collectionId: string }; message: string }
+      >(`/collections/${collectionId}`);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collection-images"] });
+    },
+  });
+
+  return { collectionsQuery, createCollection, updateCollection, deleteCollection };
 }
 
 export function useCollectionDetail(collectionId?: string) {
@@ -218,6 +254,22 @@ export function useCollectionActivity(collectionId?: string) {
           downloads: CollectionDownloadActivityRecord[];
         }>
       >(`/collections/${collectionId}/activity`),
+  });
+}
+
+export function useCollectionActivities(collectionIds: string[]) {
+  return useQueries({
+    queries: collectionIds.map((collectionId) => ({
+      enabled: Boolean(collectionId),
+      queryKey: ["collections", collectionId, "activity"],
+      queryFn: () =>
+        GetRequestNormal<
+          ListResponse<{
+            favoriteLists: CollectionFavoriteActivityRecord[];
+            downloads: CollectionDownloadActivityRecord[];
+          }>
+        >(`/collections/${collectionId}/activity`),
+    })),
   });
 }
 

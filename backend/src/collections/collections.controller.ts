@@ -170,6 +170,12 @@ export class CollectionsController {
     return { message: 'Collection updated', data };
   }
 
+  @Delete(':id')
+  async remove(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.collectionsService.remove(req.user.id, id);
+    return { message: 'Collection deleted', data };
+  }
+
   @Post(':id/sets')
   async addSet(
     @Param('id') id: string,
