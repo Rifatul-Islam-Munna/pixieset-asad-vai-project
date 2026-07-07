@@ -1,54 +1,36 @@
-import { redirect } from "next/navigation";
+import { ClientDashboard } from "@/components/dashboard/client-dashboard";
+import { CollectionStoreManager } from "@/components/dashboard/collection-store-manager";
+import { notFound } from "next/navigation";
 
-import {
-  ClientDashboard,
-  type DashboardPage,
-  type DashboardSection,
-} from "@/components/dashboard/client-dashboard";
-
-const sections = ["client-gallery", "store-gallery"] as const;
+const sections = ["client-gallery", "store-gallery"];
 const pages = [
   "collections",
-  "collection-new",
-  "library",
-  "favorites",
-  "starred",
-  "homepage",
+  "create-collection",
   "settings",
-  "marketing",
   "products",
   "orders",
   "customers",
   "taxes",
   "shipping",
   "coupons",
-  "storefront",
-  "storage",
-] as const;
+  "payment-methods",
+  "price-sheets",
+];
 
-export default async function DashboardNestedPage({
+export default async function DashboardSectionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ section: string; page: string }>;
+  searchParams: Promise<{ collectionId?: string }>;
 }) {
   const { section, page } = await params;
+  const query = await searchParams;
+  if (!sections.includes(section) || !pages.includes(page)) notFound();
 
-  if (!sections.includes(section as DashboardSection)) {
-    redirect("/dashboard/client-gallery");
+  if (section === "store-gallery" && page === "products" && query.collectionId) {
+    return <CollectionStoreManager collectionId={query.collectionId} />;
   }
 
-  if (!pages.includes(page as DashboardPage)) {
-    redirect(`/dashboard/${section}`);
-  }
-
-  if (page === "marketing") {
-    redirect(`/dashboard/${section}/marketing/email-campaigns`);
-  }
-
-  return (
-    <ClientDashboard
-      page={page as DashboardPage}
-      section={section as DashboardSection}
-    />
-  );
+  return <ClientDashboard section={section} page={page} />;
 }
