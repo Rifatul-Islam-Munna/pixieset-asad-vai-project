@@ -42,6 +42,9 @@ export class StoreProduct {
   @Prop({ type: [{ name: String, values: [String] }], default: [] })
   options: { name: string; values: string[] }[];
 
+  @Prop({ type: [{ id: String, label: String, options: Object, price: Number, hidden: Boolean }], default: [] })
+  variants: { id: string; label: string; options: Record<string, string>; price: number; hidden?: boolean }[];
+
   @Prop({ default: false })
   noImageRequired: boolean;
 

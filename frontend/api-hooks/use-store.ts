@@ -22,12 +22,23 @@ export type StoreProductRecord = {
   images?: string[];
   downloadType?: "single-photo" | "all-photos";
   downloadSize?: string;
-  options?: { name: string; values: string[] }[];
+  options?: StoreProductOption[];
+  variants?: StoreProductVariant[];
   noImageRequired?: boolean;
   exemptFromSalesTax?: boolean;
   limitOnePerCheckout?: boolean;
   allowBulkPurchase?: boolean;
   createdAt?: string;
+};
+
+export type StoreProductOption = { name: string; values: string[] };
+
+export type StoreProductVariant = {
+  id: string;
+  label: string;
+  options: Record<string, string>;
+  price: number;
+  hidden?: boolean;
 };
 
 export type StorePriceSheetRecord = {
@@ -60,6 +71,9 @@ export type StoreOrderRecord = {
     productId?: string;
     name: string;
     type: string;
+    variantId?: string;
+    variantLabel?: string;
+    options?: Record<string, string>;
     quantity: number;
     unitPrice: number;
     total: number;

@@ -125,9 +125,11 @@ import {
   type StoreDashboardRecord,
   type StoreOrderRecord,
   type StoreOrderStatus,
+  type StoreProductOption,
   type StoreProductPayload,
   type StoreProductRecord,
   type StoreProductType,
+  type StoreProductVariant,
   type StoreShippingRecord,
   type StoreSettingsRecord,
   type StoreTaxRecord,
@@ -5556,13 +5558,21 @@ function ProductTile({
       <div className="mt-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{product.name}</p>
-          <p className="mt-1 text-sm text-[#777]">From {money(product.price || 0, currency)}</p>
+          <p className="mt-1 text-sm text-[#777]">From {money(productDisplayPrice(product), currency)}</p>
           <p className="mt-1 text-xs text-[#999]">{productTypeLabels[product.type]}</p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#00a997]" />
       </div>
     </div>
   );
+}
+
+function productDisplayPrice(product: StoreProductRecord) {
+  const visiblePrices = (product.variants ?? [])
+    .filter((variant) => !variant.hidden)
+    .map((variant) => Number(variant.price))
+    .filter((price) => Number.isFinite(price));
+  return visiblePrices.length ? Math.min(...visiblePrices) : Number(product.price || 0);
 }
 
 function RichTextEditor({
@@ -5675,6 +5685,55 @@ function RichTextEditor({
   );
 }
 
+const defaultSelfFulfilledOptions: StoreProductOption[] = [
+  { name: "Size", values: ["4 x 6", "5 x 7", "8 x 10", "8 x 12", "11 x 14", "12 x 18", "16 x 20"] },
+  { name: "Paper", values: ["Glossy", "Matte"] },
+];
+
+function optionValueList(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function optionValuesText(values: string[]) {
+  return values.join(", ");
+}
+
+function variantId(options: Record<string, string>) {
+  return Object.entries(options)
+    .map(([name, value]) => `${name}:${value}`)
+    .join("|");
+}
+
+function buildProductVariants(
+  options: StoreProductOption[],
+  existing: StoreProductVariant[],
+  basePrice: number,
+) {
+  const activeOptions = options
+    .map((option) => ({ name: option.name.trim(), values: option.values.map((value) => value.trim()).filter(Boolean) }))
+    .filter((option) => option.name && option.values.length);
+  if (!activeOptions.length) return [];
+
+  const combinations = activeOptions.reduce<Record<string, string>[]>((rows, option) =>
+    rows.flatMap((row) => option.values.map((value) => ({ ...row, [option.name]: value }))),
+  [{}]);
+
+  return combinations.map((combo) => {
+    const id = variantId(combo);
+    const previous = existing.find((variant) => variant.id === id);
+    return {
+      id,
+      label: Object.values(combo).join(", "),
+      options: combo,
+      price: previous?.price ?? basePrice,
+      hidden: previous?.hidden ?? false,
+    };
+  });
+}
+
 function ProductEditorDialog({
   open,
   type,
@@ -5701,6 +5760,8 @@ function ProductEditorDialog({
     exemptFromSalesTax: false,
     limitOnePerCheckout: false,
     allowBulkPurchase: false,
+    options: [] as StoreProductOption[],
+    variants: [] as StoreProductVariant[],
   });
 
   useEffect(() => {
@@ -5721,8 +5782,20 @@ function ProductEditorDialog({
       exemptFromSalesTax: false,
       limitOnePerCheckout: false,
       allowBulkPurchase: false,
+      options: type === "self-fulfilled" ? defaultSelfFulfilledOptions : [],
+      variants: type === "self-fulfilled"
+        ? buildProductVariants(defaultSelfFulfilledOptions, [], Number(form.price) || 0)
+        : [],
     });
   }, [open, type]);
+
+  useEffect(() => {
+    if (!open || type !== "self-fulfilled") return;
+    setForm((current) => ({
+      ...current,
+      variants: buildProductVariants(current.options, current.variants, Number(current.price) || 0),
+    }));
+  }, [form.options, form.price, open, type]);
 
   const save = () => {
     const name = form.name.trim();
@@ -5737,6 +5810,8 @@ function ProductEditorDialog({
       images: form.images,
       downloadType: type === "digital-download" ? form.downloadType : undefined,
       downloadSize: type === "digital-download" ? form.downloadSize : undefined,
+      options: type === "self-fulfilled" ? form.options : [],
+      variants: type === "self-fulfilled" ? form.variants : [],
       noImageRequired: form.noImageRequired,
       exemptFromSalesTax: form.exemptFromSalesTax,
       limitOnePerCheckout: form.limitOnePerCheckout,
@@ -5905,11 +5980,129 @@ function ProductEditorDialog({
                 className="h-12 w-full border bg-white px-3 text-sm outline-none"
               >
                 <option>Prints</option>
+                <option>Packages</option>
+                <option>Digital</option>
                 <option>Wall Art</option>
-                <option>Albums</option>
                 <option>Cards</option>
+                <option>Albums & Books</option>
+                <option>Gifts</option>
+                <option>Other</option>
               </select>
             </Field>
+          )}
+
+          {type === "self-fulfilled" && (
+            <div className="grid gap-5">
+              <div>
+                <p className="text-base font-bold">Product Options</p>
+                <div className="mt-3 grid gap-2">
+                  {form.options.map((option, index) => (
+                    <div key={`${option.name}-${index}`} className="grid gap-3 bg-[#f7f7f7] p-4 md:grid-cols-[170px_1fr_auto]">
+                      <Input
+                        value={option.name}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            options: current.options.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, name: event.target.value } : item,
+                            ),
+                          }))
+                        }
+                        className="h-11 rounded-none bg-white"
+                        placeholder="Option name"
+                      />
+                      <Input
+                        value={optionValuesText(option.values)}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            options: current.options.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, values: optionValueList(event.target.value) } : item,
+                            ),
+                          }))
+                        }
+                        className="h-11 rounded-none bg-white"
+                        placeholder="Comma separated values"
+                      />
+                      <button
+                        type="button"
+                        className="flex h-11 items-center justify-center px-3 text-red-600"
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            options: current.options.filter((_, itemIndex) => itemIndex !== index),
+                          }))
+                        }
+                        aria-label="Remove option"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="mt-3 text-sm font-bold text-[#00a997]"
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      options: [...current.options, { name: "Option", values: ["Value"] }],
+                    }))
+                  }
+                >
+                  + Add product option
+                </button>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-base font-bold">Pricing</p>
+                  <p className="text-xs font-semibold text-[#777]">Hide variants clients should not order.</p>
+                </div>
+                <div className="mt-3 max-h-[360px] overflow-y-auto border bg-white">
+                  <div className="grid grid-cols-[1fr_120px_64px] border-b bg-[#fafafa] px-4 py-3 text-xs font-bold uppercase text-[#777]">
+                    <span>Variation</span>
+                    <span>Price</span>
+                    <span className="text-center">Hide</span>
+                  </div>
+                  {form.variants.map((variant) => (
+                    <div key={variant.id} className="grid grid-cols-[1fr_120px_64px] items-center gap-3 border-b px-4 py-2 last:border-b-0">
+                      <span className={cn("text-sm", variant.hidden && "text-[#aaa] line-through")}>{variant.label}</span>
+                      <Input
+                        value={String(variant.price)}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            variants: current.variants.map((item) =>
+                              item.id === variant.id ? { ...item, price: Number(event.target.value) || 0 } : item,
+                            ),
+                          }))
+                        }
+                        className="h-9 rounded-none bg-white text-right"
+                      />
+                      <button
+                        type="button"
+                        className="flex h-9 items-center justify-center text-[#777]"
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            variants: current.variants.map((item) =>
+                              item.id === variant.id ? { ...item, hidden: !item.hidden } : item,
+                            ),
+                          }))
+                        }
+                        aria-label={variant.hidden ? "Show variation" : "Hide variation"}
+                      >
+                        <Eye className={cn("size-4", variant.hidden && "opacity-35")} />
+                      </button>
+                    </div>
+                  ))}
+                  {!form.variants.length && (
+                    <p className="px-4 py-6 text-sm text-[#777]">Add options to create variations.</p>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
           {type === "self-fulfilled" && (

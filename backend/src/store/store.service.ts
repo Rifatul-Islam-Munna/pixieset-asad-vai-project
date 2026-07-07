@@ -288,11 +288,21 @@ export class StoreService {
         const product = productMap.get(item.productId);
         if (!product) return null;
         const quantity = Math.max(1, Number(item.quantity ?? 1));
-        const unitPrice = Number(product.price ?? 0);
+        if (product.variants?.length && !item.variantId) {
+          throw new BadRequestException('Product variation is required');
+        }
+        const variant = product.variants?.find((entry: any) => entry.id === item.variantId && !entry.hidden);
+        if (product.variants?.length && !variant) {
+          throw new BadRequestException('Product variation is not available');
+        }
+        const unitPrice = variant ? Number(variant.price ?? 0) : Number(product.price ?? 0);
         return {
           productId: product._id.toString(),
           name: product.name,
           type: product.type,
+          variantId: variant?.id ?? item.variantId,
+          variantLabel: variant?.label ?? item.variantLabel ?? '',
+          options: variant?.options ?? item.options,
           quantity,
           unitPrice,
           total: quantity * unitPrice,
@@ -372,7 +382,7 @@ export class StoreService {
           currency,
           unit_amount: this.stripeAmount(item.unitPrice, currency),
           product_data: {
-            name: item.name,
+            name: item.variantLabel ? `${item.name} - ${item.variantLabel}` : item.name,
           },
         },
       })).concat([
@@ -487,6 +497,7 @@ export class StoreService {
       downloadType: dto.type === 'digital-download' ? dto.downloadType ?? 'single-photo' : undefined,
       downloadSize: dto.type === 'digital-download' ? dto.downloadSize ?? 'High Resolution Original (Full res)' : undefined,
       options: dto.options ?? [],
+      variants: dto.variants ?? [],
       noImageRequired: Boolean(dto.noImageRequired),
       exemptFromSalesTax: Boolean(dto.exemptFromSalesTax),
       limitOnePerCheckout: Boolean(dto.limitOnePerCheckout),
@@ -529,13 +540,24 @@ export class StoreService {
       const product = item.productId
         ? await this.productModel.findOne({ _id: item.productId, userId }).lean()
         : null;
+      if (product?.variants?.length && !item.variantId) {
+        throw new BadRequestException('Product variation is required');
+      }
+      const variant = product?.variants?.find((entry: any) => entry.id === item.variantId && !entry.hidden);
+      if (product?.variants?.length && !variant) {
+        throw new BadRequestException('Product variation is not available');
+      }
+      const resolvedUnitPrice = variant ? Number(variant.price ?? 0) : unitPrice;
       return {
         productId: item.productId,
         name: item.name ?? product?.name ?? 'Product',
         type: item.type ?? product?.type ?? 'self-fulfilled',
+        variantId: variant?.id ?? item.variantId,
+        variantLabel: variant?.label ?? item.variantLabel ?? '',
+        options: variant?.options ?? item.options,
         quantity,
-        unitPrice,
-        total: quantity * unitPrice,
+        unitPrice: resolvedUnitPrice,
+        total: quantity * resolvedUnitPrice,
       };
     }));
     const shippingMethod = dto.shippingMethodId

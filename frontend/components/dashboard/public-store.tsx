@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, ShoppingBag, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 type PublicProduct = {
   _id: string;
@@ -13,6 +14,20 @@ type PublicProduct = {
   category?: string;
   type: "digital-download" | "self-fulfilled";
   images?: string[];
+  options?: { name: string; values: string[] }[];
+  variants?: {
+    id: string;
+    label: string;
+    options: Record<string, string>;
+    price: number;
+    hidden?: boolean;
+  }[];
+};
+
+type CartItem = {
+  product: PublicProduct;
+  variant?: NonNullable<PublicProduct["variants"]>[number];
+  quantity: number;
 };
 
 type PublicStoreData = {
@@ -47,13 +62,15 @@ export function PublicStore({
   const products = data?.products ?? [];
   const currency = data?.store?.currency ?? "EUR";
   const [activeProduct, setActiveProduct] = useState<PublicProduct | null>(null);
-  const [cart, setCart] = useState<{ product: PublicProduct; quantity: number }[]>([]);
+  const [selectedVariantId, setSelectedVariantId] = useState("");
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [customer, setCustomer] = useState({ name: "", email: "", phone: "", country: "" });
   const [shippingMethodId, setShippingMethodId] = useState("");
   const [couponCode, setCouponCode] = useState("");
-  const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + cartUnitPrice(item) * item.quantity, 0);
   const shippingMethod = (data?.shipping ?? []).find((method) => method._id === shippingMethodId);
   const shipping = shippingMethod ? Number(shippingMethod.price ?? 0) : 0;
   const coupon = (data?.coupons ?? []).find((item) => item.code.toUpperCase() === couponCode.trim().toUpperCase());
@@ -74,15 +91,30 @@ export function PublicStore({
       ),
   );
   const paymentMessage = data?.store?.checkoutMessage ?? "No payment method active at this moment.";
-  const addToCart = (product: PublicProduct) => {
+  const openProduct = (product: PublicProduct) => {
+    setActiveProduct(product);
+    setSelectedVariantId(firstVisibleVariant(product)?.id ?? "");
+    setSelectedQuantity(1);
+  };
+  const addToCart = (product: PublicProduct, variant?: CartItem["variant"], quantity = 1) => {
+    const selectedVariant = variant;
+    if (visibleVariants(product).length > 0 && !selectedVariant) {
+      toast.error("No available variation");
+      return;
+    }
     setCart((items) => {
-      const existing = items.find((item) => item.product._id === product._id);
+      const key = cartKey(product, selectedVariant);
+      const existing = items.find((item) => cartKey(item.product, item.variant) === key);
       if (existing) {
-        toast.info("Product already in cart");
-        return items;
+        toast.success("Quantity updated");
+        return items.map((item) =>
+          cartKey(item.product, item.variant) === key
+            ? { ...item, quantity: item.quantity + Math.max(1, quantity) }
+            : item,
+        );
       }
       toast.success("Product added to cart");
-      return [...items, { product, quantity: 1 }];
+      return [...items, { product, variant: selectedVariant, quantity: Math.max(1, quantity) }];
     });
   };
   const checkout = async () => {
@@ -101,8 +133,11 @@ export function PublicStore({
           productId: item.product._id,
           name: item.product.name,
           type: item.product.type,
-          unitPrice: item.product.price,
-          price: item.product.price,
+          unitPrice: cartUnitPrice(item),
+          price: cartUnitPrice(item),
+          variantId: item.variant?.id,
+          variantLabel: item.variant?.label,
+          options: item.variant?.options,
           quantity: item.quantity,
         })),
       }),
@@ -163,18 +198,28 @@ export function PublicStore({
                 )}
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <p className="rounded-full bg-[#f1f1f1] px-3 py-1 text-sm font-bold">
-                    {currency} {formatPrice(product.price)}
+                    {currency} {formatPrice(productDisplayPrice(product))}
                   </p>
                   <button
                     className="inline-flex items-center gap-1 text-xs font-bold text-[#111]"
-                    onClick={() => setActiveProduct(product)}
+                    onClick={() => openProduct(product)}
                   >
                     <Eye className="size-4" />
                     View
                   </button>
                 </div>
-                <button className="mt-4 w-full bg-[#111] px-4 py-2 text-sm font-bold text-white" onClick={() => addToCart(product)}>
-                  Add to Cart
+                <button
+                  className="mt-4 w-full bg-[#111] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  disabled={(product.variants?.length ?? 0) > 0 && visibleVariants(product).length === 0}
+                  onClick={() => {
+                    if (product.type === "self-fulfilled") {
+                      openProduct(product);
+                      return;
+                    }
+                    addToCart(product);
+                  }}
+                >
+                  {product.type === "self-fulfilled" ? "Choose Options" : "Add to Cart"}
                 </button>
               </div>
             </article>
@@ -205,12 +250,47 @@ export function PublicStore({
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#777]">{activeProduct.category ?? activeProduct.type}</p>
               <h2 className="mt-4 text-3xl font-semibold leading-tight">{activeProduct.name}</h2>
               <p className="mt-5 inline-flex rounded-full bg-[#111] px-4 py-2 text-sm font-bold text-white">
-                {currency} {formatPrice(activeProduct.price)}
+                {currency} {formatPrice(activeVariant(activeProduct, selectedVariantId)?.price ?? activeProduct.price)}
               </p>
               {activeProduct.description && (
                 <p className="mt-6 text-sm leading-7 text-[#555]">{plainText(activeProduct.description)}</p>
               )}
-              <button className="mt-8 w-full bg-[#111] px-5 py-3 text-sm font-bold text-white" onClick={() => addToCart(activeProduct)}>
+              {visibleVariants(activeProduct).length > 0 && (
+                <div className="mt-7 grid gap-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Choose variation</p>
+                  <div className="grid gap-2">
+                    {visibleVariants(activeProduct).map((variant) => (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        className={cn(
+                          "flex items-center justify-between border px-3 py-3 text-left text-sm",
+                          (selectedVariantId || visibleVariants(activeProduct)[0]?.id) === variant.id && "border-[#111] bg-[#f4f4f2]",
+                        )}
+                        onClick={() => setSelectedVariantId(variant.id)}
+                      >
+                        <span className="font-semibold">{variant.label}</span>
+                        <span>{currency} {formatPrice(variant.price)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Quantity</p>
+                <input
+                  type="number"
+                  min="1"
+                  value={selectedQuantity}
+                  onChange={(event) => setSelectedQuantity(Math.max(1, Number(event.target.value) || 1))}
+                  className="mt-2 h-11 w-28 border px-3 text-sm outline-none"
+                />
+              </div>
+              <button
+                className="mt-8 w-full bg-[#111] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+                disabled={(activeProduct.variants?.length ?? 0) > 0 && visibleVariants(activeProduct).length === 0}
+                onClick={() => addToCart(activeProduct, activeVariant(activeProduct, selectedVariantId), selectedQuantity)}
+              >
                 Add to Cart
               </button>
             </div>
@@ -233,7 +313,7 @@ export function PublicStore({
             ) : (
               <div className="mt-7 flex flex-col gap-4">
                 {cart.map((item) => (
-                  <div key={item.product._id} className="flex gap-3 border-b pb-4">
+                  <div key={cartKey(item.product, item.variant)} className="flex gap-3 border-b pb-4">
                     <div className="size-16 shrink-0 bg-[#f2f2f2]">
                       {item.product.images?.[0] && (
                         <img src={imageSrc(item.product.images[0])} alt="" className="h-full w-full object-cover" />
@@ -241,13 +321,27 @@ export function PublicStore({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold">{item.product.name}</p>
+                      {item.variant && <p className="mt-1 text-xs text-[#777]">{item.variant.label}</p>}
                       <p className="mt-1 text-sm text-[#666]">
-                        {currency} {formatPrice(item.product.price)} x {item.quantity}
+                        {currency} {formatPrice(cartUnitPrice(item))} x {item.quantity}
                       </p>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(event) =>
+                          setCart((items) => items.map((entry) =>
+                            cartKey(entry.product, entry.variant) === cartKey(item.product, item.variant)
+                              ? { ...entry, quantity: Math.max(1, Number(event.target.value) || 1) }
+                              : entry,
+                          ))
+                        }
+                        className="mt-2 h-8 w-20 border px-2 text-sm outline-none"
+                      />
                     </div>
                     <button
                       className="text-red-600"
-                      onClick={() => setCart((items) => items.filter((entry) => entry.product._id !== item.product._id))}
+                      onClick={() => setCart((items) => items.filter((entry) => cartKey(entry.product, entry.variant) !== cartKey(item.product, item.variant)))}
                       aria-label="Remove item"
                     >
                       <Trash2 className="size-4" />
@@ -332,6 +426,32 @@ function formatPrice(value: number) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
+}
+
+function visibleVariants(product: PublicProduct) {
+  return (product.variants ?? []).filter((variant) => !variant.hidden);
+}
+
+function firstVisibleVariant(product: PublicProduct) {
+  return visibleVariants(product)[0];
+}
+
+function activeVariant(product: PublicProduct, variantId: string) {
+  const variants = visibleVariants(product);
+  return variants.find((variant) => variant.id === variantId) ?? variants[0];
+}
+
+function cartKey(product: PublicProduct, variant?: CartItem["variant"]) {
+  return `${product._id}:${variant?.id ?? "base"}`;
+}
+
+function cartUnitPrice(item: CartItem) {
+  return Number(item.variant?.price ?? item.product.price ?? 0);
+}
+
+function productDisplayPrice(product: PublicProduct) {
+  const prices = visibleVariants(product).map((variant) => Number(variant.price)).filter(Number.isFinite);
+  return prices.length ? Math.min(...prices) : Number(product.price ?? 0);
 }
 
 function imageSrc(url?: string) {

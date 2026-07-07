@@ -39,6 +39,11 @@ export class CreateStoreProductDto {
   @IsOptional()
   options?: { name: string; values: string[] }[];
 
+  @IsArray()
+  @IsObject({ each: true })
+  @IsOptional()
+  variants?: { id: string; label: string; options: Record<string, string>; price: number; hidden?: boolean }[];
+
   @IsBoolean()
   @IsOptional()
   noImageRequired?: boolean;

@@ -21,6 +21,15 @@ export class StoreOrderItem {
   @Prop({ required: true })
   type: string;
 
+  @Prop()
+  variantId?: string;
+
+  @Prop({ default: '' })
+  variantLabel?: string;
+
+  @Prop({ type: Object })
+  options?: Record<string, string>;
+
   @Prop({ default: 1 })
   quantity: number;
 
@@ -57,6 +66,9 @@ export class StoreOrder {
     productId?: string;
     name: string;
     type: string;
+    variantId?: string;
+    variantLabel?: string;
+    options?: Record<string, string>;
     quantity: number;
     unitPrice: number;
     total: number;
