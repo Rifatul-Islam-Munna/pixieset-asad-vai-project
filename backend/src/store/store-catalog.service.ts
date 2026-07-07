@@ -90,6 +90,7 @@ export class StoreCatalogService {
         name: resolved.collection.name,
         slug: resolved.collection.slug,
         coverImage: resolved.collection.coverImage,
+        sets: resolved.collection.sets ?? [],
         studioName: owner?.name || owner?.email || '',
       },
       store: {
@@ -113,7 +114,7 @@ export class StoreCatalogService {
 
   async getPublicProduct(identifier: string, slug: string) {
     const resolved = await this.resolve(identifier);
-    if (!resolved.sheet) throw new NotFoundException('No price sheet is assigned');
+    if (!resolved.sheet) throw new NotFoundException('The automatic store catalog is unavailable');
     const product = await this.productModel.findOne({
       userId: resolved.userId,
       priceSheetId: resolved.sheet._id.toString(),
@@ -153,7 +154,9 @@ export class StoreCatalogService {
     const userId = String(collection.userId);
     const settings = await this.settingModel.findOne({ userId }).lean();
     const raw = ((collection.settings as any)?.store ?? {}) as Record<string, any>;
+    const enabled = Boolean(raw.enabled ?? raw.storeStatus);
     let sheet: any | null = null;
+
     if (raw.priceSheetId && Types.ObjectId.isValid(raw.priceSheetId)) {
       sheet = await this.priceSheetModel.findOne({ _id: raw.priceSheetId, userId }).lean();
     }
@@ -163,13 +166,55 @@ export class StoreCatalogService {
         .sort({ isDefault: -1, createdAt: -1 })
         .lean();
     }
+    if (!sheet) {
+      sheet = await this.priceSheetModel
+        .findOne({ userId })
+        .sort({ isDefault: -1, createdAt: 1 })
+        .lean();
+    }
+    if (enabled && !sheet) {
+      sheet = await this.priceSheetModel.create({
+        userId,
+        name: 'Default Print Store',
+        isDefault: true,
+        collectionIds: [collection._id.toString()],
+        minimumOrderAmount: Number(raw.minimumOrderAmount ?? 0),
+      });
+      await this.productModel.insertMany(
+        DEFAULT_STORE_PRODUCTS.map((item) => ({
+          userId,
+          priceSheetId: sheet._id.toString(),
+          ...item,
+        })),
+      );
+      await this.collectionModel.updateOne(
+        { _id: collection._id, userId },
+        {
+          $set: {
+            'settings.store.priceSheetId': sheet._id.toString(),
+            'settings.store.showPrintStoreNav': true,
+            'settings.store.showBuyPhotoButton': true,
+            'settings.store.allowBulkBuy': true,
+          },
+        },
+      );
+    } else if (sheet && enabled) {
+      await Promise.all([
+        this.priceSheetModel.updateOne(
+          { _id: sheet._id, userId },
+          { $addToSet: { collectionIds: collection._id.toString() } },
+        ),
+        this.ensureDefaultProducts(userId, sheet._id.toString()),
+      ]);
+    }
+
     const config: CollectionStoreConfig = {
-      enabled: Boolean(raw.enabled ?? raw.storeStatus),
+      enabled,
       priceSheetId: sheet?._id?.toString() || raw.priceSheetId,
-      showPrintStoreNav: raw.showPrintStoreNav !== false,
-      showBuyPhotoButton: raw.showBuyPhotoButton !== false,
-      allowBulkBuy: raw.allowBulkBuy !== false,
-      minimumOrderAmount: Number(raw.minimumOrderAmount ?? sheet?.minimumOrderAmount ?? 0),
+      showPrintStoreNav: true,
+      showBuyPhotoButton: true,
+      allowBulkBuy: true,
+      minimumOrderAmount: Number(raw.minimumOrderAmount ?? 0),
       currency: String(raw.currency || settings?.currency || 'EUR').toUpperCase(),
       requireProfessionalInfo: Boolean(raw.requireProfessionalInfo),
     };
@@ -181,14 +226,9 @@ export class StoreCatalogService {
     const sheet = await this.priceSheetModel.findOne({ _id: priceSheetId, userId }).lean();
     if (!sheet) throw new NotFoundException('Price sheet not found');
     if (replace) await this.productModel.deleteMany({ userId, priceSheetId });
-    const existing = await this.productModel.find({ userId, priceSheetId }).select('slug').lean();
-    const slugs = new Set(existing.map((item: any) => item.slug));
-    const missing = DEFAULT_STORE_PRODUCTS.filter((item) => !slugs.has(item.slug));
-    if (missing.length) {
-      await this.productModel.insertMany(missing.map((item) => ({ userId, priceSheetId, ...item })));
-    }
+    const created = await this.ensureDefaultProducts(userId, priceSheetId);
     return {
-      created: missing.length,
+      created,
       total: await this.productModel.countDocuments({ userId, priceSheetId }),
     };
   }
@@ -267,5 +307,17 @@ export class StoreCatalogService {
         .filter((variant: any) => !variant.hidden)
         .sort((a: any, b: any) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)),
     };
+  }
+
+  private async ensureDefaultProducts(userId: string, priceSheetId: string) {
+    const existing = await this.productModel.find({ userId, priceSheetId }).select('slug').lean();
+    const slugs = new Set(existing.map((item: any) => item.slug));
+    const missing = DEFAULT_STORE_PRODUCTS.filter((item) => !slugs.has(item.slug));
+    if (missing.length) {
+      await this.productModel.insertMany(
+        missing.map((item) => ({ userId, priceSheetId, ...item })),
+      );
+    }
+    return missing.length;
   }
 }
