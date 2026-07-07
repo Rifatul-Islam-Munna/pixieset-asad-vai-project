@@ -38,8 +38,10 @@ export class PublicStoreService {
     return this.catalog.getPublicProduct(identifier, slug);
   }
 
-  getCartPrice(identifier: string, body: any) {
-    return this.pricing.price(identifier, body);
+  async getCartPrice(identifier: string, body: any) {
+    const priced = await this.pricing.price(identifier, body);
+    const { resolved: _privateOwnerConfiguration, ...publicTotals } = priced;
+    return publicTotals;
   }
 
   createCheckout(identifier: string, body: any) {
