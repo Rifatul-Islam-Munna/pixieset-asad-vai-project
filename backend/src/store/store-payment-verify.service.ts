@@ -1,11 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { StoreActivity, StoreActivityDocument, StoreActivityType } from './entities/store-activity.entity';
 import { StoreCoupon, StoreCouponDocument } from './entities/store-coupon.entity';
 import { StoreCustomer, StoreCustomerDocument } from './entities/store-customer.entity';
 import { StoreOrder, StoreOrderDocument } from './entities/store-order.entity';
 import { StoreSetting, StoreSettingDocument } from './entities/store-setting.entity';
-import { StoreCatalogService } from './store-catalog.service';
+import { StoreCatalogService, type ResolvedCollectionStore } from './store-catalog.service';
 import { StoreStripeService } from './store-stripe.service';
 
 @Injectable()
@@ -21,6 +22,8 @@ export class StorePaymentVerifyService {
     private readonly couponModel: Model<StoreCouponDocument>,
     @InjectModel(StoreSetting.name)
     private readonly settingModel: Model<StoreSettingDocument>,
+    @InjectModel(StoreActivity.name)
+    private readonly activityModel: Model<StoreActivityDocument>,
   ) {}
 
   async checkoutSession(sessionId: string) {
@@ -28,6 +31,7 @@ export class StorePaymentVerifyService {
     if (!order) throw new NotFoundException('Checkout order not found');
     const session = await this.stripe.retrieveCheckoutSession(order);
     const paid = session.payment_status === 'paid';
+    const becamePaid = paid && order.paymentStatus !== 'paid';
     order.stripePaymentIntentId = typeof session.payment_intent === 'string'
       ? session.payment_intent
       : session.payment_intent?.id;
@@ -37,8 +41,9 @@ export class StorePaymentVerifyService {
     }
     if (order.collectionId) {
       const resolved = await this.catalog.resolve(order.collectionId, false);
-      const activity = await this.catalog.log(
+      const activity = await this.logPaymentOnce(
         resolved,
+        order,
         paid ? 'payment_succeeded' : 'payment_failed',
         {
           orderId: order._id.toString(),
@@ -46,17 +51,18 @@ export class StorePaymentVerifyService {
           currency: session.currency?.toUpperCase(),
           source: order.checkoutSource,
         },
-        order.customer?.email,
       );
       if (activity?._id) {
         order.activityLogIds = [...(order.activityLogIds ?? []), activity._id.toString()];
       }
     }
     await order.save();
-    if (paid && session.metadata?.couponId) {
+    if (becamePaid && session.metadata?.couponId) {
       await this.couponModel.updateOne({ _id: session.metadata.couponId }, { $inc: { usageCount: 1 } });
     }
-    await this.recalculateCustomer(order.userId, order.customer?.email);
+    if (becamePaid) {
+      await this.recalculateCustomer(order.userId, order.customer?.email);
+    }
     return {
       sessionId: session.id,
       paymentStatus: session.payment_status,
@@ -90,12 +96,14 @@ export class StorePaymentVerifyService {
     if (!order) throw new NotFoundException('Order not found');
     const intent = await this.stripe.retrieveOrderIntent(resolved, paymentIntentId);
     const success = intent.status === 'succeeded';
+    const becamePaid = success && order.paymentStatus !== 'paid';
     if (success) {
       order.paymentStatus = 'paid';
       order.status = 'processing';
     }
-    const activity = await this.catalog.log(
+    const activity = await this.logPaymentOnce(
       resolved,
+      order,
       success ? 'payment_succeeded' : 'payment_failed',
       {
         orderId: order._id.toString(),
@@ -103,13 +111,14 @@ export class StorePaymentVerifyService {
         currency: intent.currency.toUpperCase(),
         source: order.checkoutSource,
       },
-      order.customer?.email,
     );
     if (activity?._id) {
       order.activityLogIds = [...(order.activityLogIds ?? []), activity._id.toString()];
     }
     await order.save();
-    await this.recalculateCustomer(order.userId, order.customer?.email);
+    if (becamePaid) {
+      await this.recalculateCustomer(order.userId, order.customer?.email);
+    }
     return {
       paymentIntentId: intent.id,
       status: intent.status,
@@ -140,6 +149,23 @@ export class StorePaymentVerifyService {
       amount: intent.amount / 100,
       currency: intent.currency.toUpperCase(),
     };
+  }
+
+  private async logPaymentOnce(
+    resolved: ResolvedCollectionStore,
+    order: StoreOrderDocument,
+    type: Extract<StoreActivityType, 'payment_succeeded' | 'payment_failed'>,
+    metadata: Record<string, unknown>,
+  ) {
+    const orderId = order._id.toString();
+    const exists = await this.activityModel.exists({
+      userId: resolved.userId,
+      collectionId: resolved.collection._id.toString(),
+      type,
+      'metadata.orderId': orderId,
+    });
+    if (exists) return null;
+    return this.catalog.log(resolved, type, metadata, order.customer?.email);
   }
 
   private async recalculateCustomer(userId: string, email?: string) {
