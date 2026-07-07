@@ -41,7 +41,13 @@ type PublicCollection = {
   images?: PublicImage[];
   design?: Partial<PresetDesignSettings>;
   settings?: {
-    general?: { slideshow?: boolean | string };
+    general?: {
+      emailRegistration?: boolean | string;
+      galleryAssist?: boolean | string;
+      slideshow?: boolean | string;
+      socialSharing?: boolean | string;
+      language?: string;
+    };
     download?: Partial<PresetDownloadSettings>;
     favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string };
     store?: { storeStatus?: boolean; enabled?: boolean; showPrintStoreNav?: boolean; showBuyPhotoButton?: boolean };
@@ -144,9 +150,13 @@ export function PublicGallery({
       : fallbackPresetStore.showPrintStoreNav ?? fallbackPresetStore.storeStatus,
   );
   const showBuyPhotoButton = Boolean(storeEnabled && storeConfig?.showBuyPhotoButton !== false);
+  const generalSettings = collection?.settings?.general ?? fallbackPresetGeneral;
   const slideshowEnabled = collection
-    ? boolSetting(collection.settings?.general?.slideshow ?? true)
+    ? boolSetting(generalSettings.slideshow ?? true)
     : boolSetting(fallbackPresetGeneral.slideshow);
+  const socialSharingEnabled = boolSetting(generalSettings.socialSharing ?? true);
+  const galleryAssistEnabled = boolSetting(generalSettings.galleryAssist);
+  const emailRegistrationEnabled = boolSetting(generalSettings.emailRegistration);
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images = collection?.images?.length
     ? collection.images
@@ -172,7 +182,11 @@ export function PublicGallery({
   const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [pinDraft, setPinDraft] = useState("");
   const [downloadCount, setDownloadCount] = useState(0);
+  const [visitorEmail, setVisitorEmail] = useState("");
+  const [visitorEmailSaved, setVisitorEmailSaved] = useState(false);
   const [zipDownloading, setZipDownloading] = useState(false);
   const [faceBusy, setFaceBusy] = useState(false);
   const [faceError, setFaceError] = useState("");
@@ -218,6 +232,13 @@ export function PublicGallery({
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
   const canDownload = downloadsEnabled && pinOk && limitOk;
   const onDownload = () => setDownloadCount((count) => count + 1);
+  const unlockDownloads = () => {
+    setEnteredPin(pinDraft.trim());
+    if (pinDraft.trim() === String(download.downloadPinCode ?? "").trim()) {
+      setPinDialogOpen(false);
+      setShareNotice("Downloads unlocked");
+    }
+  };
   const ensureDownloadEmail = () => {
     const saved = downloadEmail || window.localStorage.getItem("pixieset-download-email") || "";
     const email = window.prompt("Enter your email to download", saved);
@@ -598,7 +619,7 @@ export function PublicGallery({
       {customFontName && design.customFontDataUrl && (
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
-    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen scroll-smooth">
+    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-black/5 px-5 md:px-10">
         <p className="truncate text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
         <div />
@@ -606,9 +627,11 @@ export function PublicGallery({
           <span data-public-store-cart-host="true" />
           {design.navigationStyle === "Icon & Text" ? (
             <>
-              <button className="flex items-center gap-2 text-sm" onClick={() => void shareCollection()} type="button">
-                <Share2 className="size-4" /> Share
-              </button>
+              {socialSharingEnabled && (
+                <button className="flex items-center gap-2 text-sm" onClick={() => void shareCollection()} type="button">
+                  <Share2 className="size-4" /> Share
+                </button>
+              )}
               {!isStandaloneApp && (
                 <button className="flex items-center gap-2 text-sm" onClick={() => void installApp()} type="button">
                   <Download className="size-4" /> Install
@@ -617,9 +640,11 @@ export function PublicGallery({
             </>
           ) : (
             <>
-              <button onClick={() => void shareCollection()} type="button" aria-label="Share collection">
-                <Share2 className="size-5" />
-              </button>
+              {socialSharingEnabled && (
+                <button onClick={() => void shareCollection()} type="button" aria-label="Share collection">
+                  <Share2 className="size-5" />
+                </button>
+              )}
               {!isStandaloneApp && (
                 <button onClick={() => void installApp()} type="button" aria-label="Install app">
                   <Download className="size-5" />
@@ -698,10 +723,12 @@ export function PublicGallery({
                 <span className="md:sr-only">Slideshow</span>
               </button>
             )}
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
-              <Share2 className="size-4" />
-              <span className="md:sr-only">Share</span>
-            </button>
+            {socialSharingEnabled && (
+              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
+                <Share2 className="size-4" />
+                <span className="md:sr-only">Share</span>
+              </button>
+            )}
             {!isStandaloneApp && (
               <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void installApp()} type="button" title="Install app" aria-label="Install app">
                 <Download className="size-4" />
@@ -717,22 +744,38 @@ export function PublicGallery({
                 {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               </button>
             )}
+            {pinRequired && !pinOk && (
+              <button className="inline-flex h-10 items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90" onClick={() => setPinDialogOpen(true)} type="button">
+                <Lock className="size-4" />
+                Unlock
+              </button>
+            )}
           </div>
         </div>
 
-        {pinRequired && !pinOk && (
-          <div className="mx-4 mt-5 flex max-w-[320px] flex-col gap-2 md:mx-8">
-            <label className="inline-flex items-center gap-2 text-sm font-semibold">
-              <Lock className="size-4" />
-              Enter download PIN
-            </label>
+        {galleryAssistEnabled && (
+          <div className="mx-4 mt-5 flex max-w-3xl flex-wrap items-center gap-3 border border-black/10 bg-[#f4f4f2] px-4 py-3 text-sm md:mx-8">
+            <Check className="size-4" />
+            <span>Use favorite, share, slideshow, face search, and download tools from the gallery bar.</span>
+          </div>
+        )}
+
+        {emailRegistrationEnabled && !visitorEmailSaved && (
+          <div className="mx-4 mt-5 flex max-w-xl flex-wrap items-center gap-3 border border-black/10 bg-white px-4 py-3 md:mx-8">
             <input
-              value={enteredPin}
-              onChange={(event) => setEnteredPin(event.target.value)}
-              placeholder="PIN"
-              className="h-11 border bg-white px-4 text-sm text-black outline-none"
+              value={visitorEmail}
+              onChange={(event) => setVisitorEmail(event.target.value)}
+              placeholder="Email for gallery access"
+              className="h-10 min-w-[240px] flex-1 border bg-white px-3 text-sm text-black outline-none"
             />
-            {enteredPin && !pinOk && <p className="text-xs text-red-600">PIN does not match.</p>}
+            <button
+              className="h-10 bg-[#202326] px-4 text-sm font-bold text-white disabled:opacity-45"
+              disabled={!visitorEmail.includes("@")}
+              onClick={() => setVisitorEmailSaved(true)}
+              type="button"
+            >
+              Continue
+            </button>
           </div>
         )}
 
@@ -792,6 +835,7 @@ export function PublicGallery({
                 spacing={masonryGapPx}
                 canFavorite={favoritesEnabled}
                 canDownload={canDownload}
+                canShare={socialSharingEnabled}
                 favoriteBusy={favoriteImageBusy === photo._id}
                 favorited={favoriteImageIds.has(photo._id)}
                 onDownload={downloadPhoto}
@@ -803,6 +847,43 @@ export function PublicGallery({
           </div>
         </div>
       </section>
+
+      {pinDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-[380px] bg-white p-6 text-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#777]">Protected downloads</p>
+                <h2 className="mt-2 text-2xl font-semibold">Enter PIN</h2>
+              </div>
+              <button onClick={() => setPinDialogOpen(false)} aria-label="Close PIN dialog">
+                <X className="size-5" />
+              </button>
+            </div>
+            <input
+              value={pinDraft}
+              onChange={(event) => setPinDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") unlockDownloads();
+              }}
+              placeholder="Download PIN"
+              className="mt-6 h-12 w-full border bg-white px-4 text-sm text-black outline-none"
+              autoFocus
+            />
+            {pinDraft && pinDraft.trim() !== String(download.downloadPinCode ?? "").trim() && (
+              <p className="mt-3 text-xs font-semibold text-red-600">PIN does not match.</p>
+            )}
+            <button
+              className="mt-5 h-11 w-full bg-[#202326] text-sm font-bold text-white disabled:opacity-50"
+              onClick={unlockDownloads}
+              disabled={!pinDraft.trim()}
+              type="button"
+            >
+              Unlock downloads
+            </button>
+          </div>
+        </div>
+      )}
 
       {activeImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4">
@@ -823,10 +904,12 @@ export function PublicGallery({
                 Favorite
               </button>
             )}
-            <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(activeImage)} type="button">
-              <Share2 className="size-4" />
-              Share
-            </button>
+            {socialSharingEnabled && (
+              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(activeImage)} type="button">
+                <Share2 className="size-4" />
+                Share
+              </button>
+            )}
             {canDownload && (
               <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => downloadPhoto(activeImage)} type="button">
                 <Download className="size-4" />
@@ -870,10 +953,12 @@ export function PublicGallery({
                 Favorite
               </button>
             )}
-            <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(slideshowImage)} type="button">
-              <Share2 className="size-4" />
-              Share
-            </button>
+            {socialSharingEnabled && (
+              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(slideshowImage)} type="button">
+                <Share2 className="size-4" />
+                Share
+              </button>
+            )}
             {canDownload && (
               <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button">
                 <Download className="size-4" />
@@ -976,6 +1061,7 @@ function GalleryTile({
   spacing,
   canFavorite,
   canDownload,
+  canShare,
   favoriteBusy,
   favorited,
   onDownload,
@@ -987,6 +1073,7 @@ function GalleryTile({
   spacing: number;
   canFavorite: boolean;
   canDownload: boolean;
+  canShare: boolean;
   favoriteBusy: boolean;
   favorited: boolean;
   onDownload: (photo: PublicImage) => void;
@@ -1017,9 +1104,11 @@ function GalleryTile({
         <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onPreview(photo)} aria-label="View image">
           <Eye className="size-4" />
         </button>
-        <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onShare(photo)} aria-label="Share image" type="button">
-          <Share2 className="size-4" />
-        </button>
+        {canShare && (
+          <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onShare(photo)} aria-label="Share image" type="button">
+            <Share2 className="size-4" />
+          </button>
+        )}
         {canDownload && (
           <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onDownload(photo)} aria-label="Download image" type="button">
             <Download className="size-4" />

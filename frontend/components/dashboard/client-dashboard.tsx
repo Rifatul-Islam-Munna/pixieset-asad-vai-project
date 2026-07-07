@@ -2680,6 +2680,7 @@ function PresetEditor({ section }: { section: DashboardSection }) {
     setPresetStore,
   } = useDashboardStore();
   const { saveSetting, deleteSetting } = useDashboardSettings("preset");
+  const [presetDesignPanel, setPresetDesignPanel] = useState<"cover" | "typography" | "color" | "grid">("cover");
   useEffect(() => {
     if (!activePresetId) addPresetDraft();
   }, [activePresetId, addPresetDraft]);
@@ -2796,10 +2797,31 @@ function PresetEditor({ section }: { section: DashboardSection }) {
           />
         )}
         {presetEditorPanel === "design" && (
-          <PresetDesignPanel
-            design={presetDesign}
-            onChange={setPresetDesign}
-          />
+          <div className="grid gap-8 lg:grid-cols-[160px_minmax(0,1fr)]">
+            <div className="flex flex-col gap-1 border-r pr-4">
+              {([
+                ["cover", PanelTop, "Cover"],
+                ["typography", Bold, "Typography"],
+                ["color", Palette, "Color"],
+                ["grid", LayoutGrid, "Grid"],
+              ] as const).map(([panel, Icon, label]) => (
+                <button
+                  key={panel}
+                  className={cn("flex h-12 items-center gap-3 px-3 text-left text-sm", presetDesignPanel === panel && "bg-[#f5f5f5] font-bold text-[#00a997]")}
+                  onClick={() => setPresetDesignPanel(panel)}
+                  type="button"
+                >
+                  <Icon className="size-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <PresetDesignPanel
+              design={presetDesign}
+              activePanel={presetDesignPanel}
+              onChange={setPresetDesign}
+            />
+          </div>
         )}
         {presetEditorPanel === "download" && (
           <PresetDownloadPanel
@@ -2902,31 +2924,6 @@ function PresetGeneralPanel({
             <Link href={`/dashboard/${section}/settings/watermark`} className="text-[#00a997]">
               App Settings
             </Link>.
-          </p>
-        </Field>
-
-        <Field>
-          <FieldLabel className="font-bold">
-            Auto Expiry Reminder Email
-          </FieldLabel>
-          <div className="bg-[#eef7f9] p-5">
-            <p className="font-bold">Upgrade for Premium Features</p>
-            <p className="mt-2 text-sm leading-6 text-[#333]">
-              Sending reminder emails to activity lists is only available for
-              upgraded accounts. Default settings for activity lists will not
-              apply until you have upgraded.
-            </p>
-            <button className="mt-3 text-sm font-semibold text-[#00a997]">
-              Upgrade
-            </button>
-          </div>
-          <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
-            <PlusCircle className="size-4" />
-            Add expiry reminder email
-          </button>
-          <p className="text-sm leading-6 text-[#666]">
-            Setup reminder emails that will send when you create a collection and
-            add an Auto Expiry date.
           </p>
         </Field>
 
