@@ -175,7 +175,7 @@ export function PublicGalleryStoreBridge({
 
     const syncLightbox = () => {
       const closeButton = document.querySelector<HTMLButtonElement>(
-        'button[aria-label="Close image"]',
+        'button[aria-label="Back to gallery"], button[aria-label="Close image"], button[aria-label="Close slideshow"]',
       );
       const lightbox = closeButton?.closest<HTMLElement>("div.fixed.inset-0");
       const preview = lightbox?.querySelector<HTMLImageElement>("img");
@@ -246,17 +246,6 @@ export function PublicGalleryStoreBridge({
           </button>,
           cartHost,
         )}
-
-      {activeImageId && showBuyPhotoButton && !buyOpen && (
-        <button
-          type="button"
-          className="fixed right-20 top-5 z-[70] inline-flex h-11 items-center gap-2 bg-[#303030] px-5 text-sm font-semibold text-white shadow-lg"
-          onClick={() => setBuyOpen(true)}
-        >
-          <ShoppingBag className="size-4" />
-          Buy This Photo
-        </button>
-      )}
 
       {buyOpen && selectedImage && (
         <BuyPhotoDialog

@@ -600,27 +600,10 @@ export function PublicGallery({
       )}
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen scroll-smooth">
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-black/5 px-5 md:px-10">
-        <div className="flex min-w-0 items-center gap-3">
-          <span data-public-store-cart-host="true" />
-          <p className="truncate text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
-        </div>
-        <div className="hidden min-w-0 items-center justify-center gap-7 text-sm text-black/60 md:flex">
-          {showSetTabs && gallerySets.map((set) => (
-            <button
-              key={set.id}
-              className={cn(
-                "truncate transition-colors hover:text-black",
-                activeSetId === set.id ? "font-semibold text-black" : "",
-              )}
-              onClick={() => setActiveSetId(set.id)}
-              type="button"
-            >
-              {set.name}
-            </button>
-          ))}
-          <span data-print-store-nav-host="true" />
-        </div>
+        <p className="truncate text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
+        <div />
         <div className="flex items-center justify-end gap-4" data-print-store-actions-host="true">
+          <span data-public-store-cart-host="true" />
           {design.navigationStyle === "Icon & Text" ? (
             <>
               <button className="flex items-center gap-2 text-sm" onClick={() => void shareCollection()} type="button">
