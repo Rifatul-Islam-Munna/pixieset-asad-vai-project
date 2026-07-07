@@ -8,9 +8,12 @@ import { StoreOrder, StoreOrderSchema } from './entities/store-order.entity';
 import { StoreShipping, StoreShippingSchema } from './entities/store-shipping.entity';
 import { StoreSetting, StoreSettingSchema } from './entities/store-setting.entity';
 import { StoreTax, StoreTaxSchema } from './entities/store-tax.entity';
-import { PublicStoreController, StoreController } from './store.controller';
+import { StoreActivity, StoreActivitySchema } from './entities/store-activity.entity';
+import { PublicCollectionStoreController, PublicStoreController, StoreController } from './store.controller';
 import { StoreService } from './store.service';
+import { PublicStoreService } from './public-store.service';
 import { Collection, CollectionSchema } from 'src/collections/entities/collection.entity';
+import { CollectionImage, CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 
 @Module({
@@ -24,11 +27,13 @@ import { User, UserSchema } from 'src/user/entities/user.entity';
       { name: StoreTax.name, schema: StoreTaxSchema },
       { name: StoreShipping.name, schema: StoreShippingSchema },
       { name: StoreSetting.name, schema: StoreSettingSchema },
+      { name: StoreActivity.name, schema: StoreActivitySchema },
       { name: Collection.name, schema: CollectionSchema },
+      { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: User.name, schema: UserSchema },
     ]),
   ],
-  controllers: [StoreController, PublicStoreController],
-  providers: [StoreService],
+  controllers: [StoreController, PublicStoreController, PublicCollectionStoreController],
+  providers: [StoreService, PublicStoreService],
 })
 export class StoreModule {}
