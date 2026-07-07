@@ -12,6 +12,11 @@ import { StoreActivity, StoreActivitySchema } from './entities/store-activity.en
 import { PublicCollectionStoreController, PublicStoreController, StoreController } from './store.controller';
 import { StoreService } from './store.service';
 import { PublicStoreService } from './public-store.service';
+import { StoreCatalogService } from './store-catalog.service';
+import { StorePricingService } from './store-pricing.service';
+import { StoreStripeService } from './store-stripe.service';
+import { StoreOrderCreateService } from './store-order-create.service';
+import { StorePaymentVerifyService } from './store-payment-verify.service';
 import { Collection, CollectionSchema } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
@@ -34,6 +39,14 @@ import { User, UserSchema } from 'src/user/entities/user.entity';
     ]),
   ],
   controllers: [StoreController, PublicStoreController, PublicCollectionStoreController],
-  providers: [StoreService, PublicStoreService],
+  providers: [
+    StoreService,
+    PublicStoreService,
+    StoreCatalogService,
+    StorePricingService,
+    StoreStripeService,
+    StoreOrderCreateService,
+    StorePaymentVerifyService,
+  ],
 })
 export class StoreModule {}
