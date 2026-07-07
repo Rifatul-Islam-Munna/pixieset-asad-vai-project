@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { CustomCoverTemplate } from "@/lib/home-cms";
 
 export type PresetEditorPanel =
   | "general"
@@ -26,6 +27,7 @@ export type PresetDesignSettings = {
   thumbnailSize: "Regular" | "Large";
   gridSpacing: "Regular" | "Large";
   navigationStyle: "Icon Only" | "Icon & Text";
+  customCoverTemplate?: CustomCoverTemplate;
 };
 
 export type PresetDownloadSettings = {
@@ -109,7 +111,7 @@ export type EmailTemplateItem = {
 
 export type DashboardSettingRecord<T = unknown> = {
   _id: string;
-  type: "watermark" | "preset" | "email-template";
+  type: "watermark" | "preset" | "email-template" | "branding";
   localId: string;
   name: string;
   data: T;

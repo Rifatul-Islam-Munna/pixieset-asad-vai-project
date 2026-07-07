@@ -3,12 +3,45 @@ export type HomeLanguage = "en" | "gr";
 export type HomeCmsData = {
   seo: SiteSeo;
   auth: AuthCms;
+  brand: BrandSettings;
+  coverTemplates: CustomCoverTemplate[];
   content: Record<HomeLanguage, HomeContent>;
   media: {
     heroMediaType: "image" | "video";
     heroMediaUrl: string;
   };
   defaultLanguage: HomeLanguage;
+};
+
+export type BrandSettings = {
+  logoUrl: string;
+  brandText: string;
+  brandImageUrl: string;
+  accentColor: string;
+};
+
+export type CustomCoverElement = {
+  id: string;
+  type: "title" | "subtitle" | "date" | "button" | "brandText" | "logo" | "line";
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  color: string;
+  opacity: number;
+  align?: "left" | "center" | "right";
+};
+
+export type CustomCoverTemplate = {
+  id: string;
+  name: string;
+  backgroundImage: string;
+  overlayOpacity: number;
+  gridOpacity: number;
+  lineOpacity: number;
+  elements: CustomCoverElement[];
 };
 
 export type SiteSeo = {
@@ -68,6 +101,13 @@ const image = "https://images.unsplash.com/photo-1529636798458-92182e662485?auto
 
 export const defaultHomeCms: HomeCmsData = {
   defaultLanguage: "en",
+  brand: {
+    logoUrl: "",
+    brandText: "Nikoset",
+    brandImageUrl: "",
+    accentColor: "#22bda7",
+  },
+  coverTemplates: [],
   seo: {
     siteTitle: "Nikoset",
     siteDescription: "An all-in-one platform for modern photographers with client galleries, websites, stores, and studio tools.",
@@ -206,6 +246,8 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     defaultLanguage: data?.defaultLanguage === "gr" ? "gr" : "en",
     seo,
     auth,
+    brand: { ...defaultHomeCms.brand, ...(data?.brand ?? {}) },
+    coverTemplates: Array.isArray(data?.coverTemplates) ? data.coverTemplates : [],
     media,
     content: {
       en: { ...defaultHomeCms.content.en, ...(data?.content?.en ?? {}) },

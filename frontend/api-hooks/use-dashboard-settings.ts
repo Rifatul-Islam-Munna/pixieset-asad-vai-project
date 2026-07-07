@@ -7,7 +7,7 @@ import {
   PostRequestAxios,
 } from "./api-hooks";
 
-export type DashboardSettingType = "watermark" | "preset" | "email-template";
+export type DashboardSettingType = "watermark" | "preset" | "email-template" | "branding";
 
 export type DashboardSettingRecord<T = unknown> = {
   _id: string;

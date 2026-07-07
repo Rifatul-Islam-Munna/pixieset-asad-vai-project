@@ -161,6 +161,7 @@ import {
   type PresetItem,
   type WatermarkItem,
 } from "@/lib/dashboard-store";
+import type { BrandSettings, CustomCoverTemplate, HomeCmsData } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
@@ -180,6 +181,7 @@ export type DashboardPage =
   | "taxes"
   | "shipping"
   | "coupons"
+  | "get-started"
   | "storefront"
   | "storage";
 export type MarketingPage = "email-campaigns" | "contacts" | "settings";
@@ -222,10 +224,11 @@ const sidebarItems = {
     { label: "Settings", icon: Settings, page: "settings" },
   ],
   "store-gallery": [
+    { label: "Get Started", icon: Info, page: "get-started" },
     { label: "Dashboard", icon: Store, page: "storefront" },
     { label: "Orders", icon: ShoppingBag, page: "orders" },
     { label: "Customers", icon: Users, page: "customers" },
-    { label: "Pricing Sheet", icon: CreditCard, page: "products" },
+    { label: "Products", icon: CreditCard, page: "products" },
     { label: "Taxes", icon: ListFilter, page: "taxes" },
     { label: "Shipping", icon: Package, page: "shipping" },
     { label: "Coupons", icon: Copy, page: "coupons" },
@@ -357,6 +360,8 @@ export function ClientDashboard({
   const isPriceSheetDetail =
     (page === "products" && Boolean(priceSheetId)) ||
     (section === "store-gallery" && page === "pricing" && Boolean(productId));
+  const dashboardChromeOpen = !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail;
+  const storeTopNavOpen = dashboardChromeOpen && section === "store-gallery";
   const [logoutPending, startLogoutTransition] = useTransition();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logout = () => {
@@ -368,7 +373,7 @@ export function ClientDashboard({
 
   return (
     <main className="min-h-screen bg-white text-[#151515]">
-      {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <aside
+      {dashboardChromeOpen && !storeTopNavOpen && <aside
         className={cn(
           "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
           collapsed ? "w-[76px]" : "w-[292px]"
@@ -531,8 +536,9 @@ export function ClientDashboard({
         </nav>
       </aside>}
 
-      <section className={cn("min-h-screen transition-all", campaignBuilderOpen || isCollectionDetail || isPriceSheetDetail ? "" : collapsed ? "md:pl-[76px]" : "md:pl-[292px]")}>
-        {!campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
+      <section className={cn("min-h-screen transition-all", dashboardChromeOpen && !storeTopNavOpen ? collapsed ? "md:pl-[76px]" : "md:pl-[292px]" : "")}>
+        {storeTopNavOpen && <StoreTopNavigation activePage={page} logout={logout} logoutPending={logoutPending} />}
+        {dashboardChromeOpen && !storeTopNavOpen && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
           <button className="flex size-10 items-center justify-center bg-[#111] text-white" onClick={() => setMobileMenuOpen(true)} aria-label="Open dashboard menu">
             <Menu className="size-5" />
           </button>
@@ -548,7 +554,7 @@ export function ClientDashboard({
           </div>
         </div>}
 
-        {mobileMenuOpen && !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail && (
+        {mobileMenuOpen && dashboardChromeOpen && !storeTopNavOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
             <aside className="h-full w-[84vw] max-w-[330px] overflow-y-auto bg-white px-5 py-5 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
               <div className="flex items-center justify-between border-b pb-4">
@@ -650,7 +656,7 @@ export function ClientDashboard({
           </div>
         )}
 
-        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20")}>
+        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : storeTopNavOpen ? "max-w-[1220px] px-4 py-10 sm:px-5 md:py-14" : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20")}>
           {campaignBuilderOpen ? (
             <CampaignBuilder onClose={closeCampaignBuilder} />
           ) : wizardOpen ? (
@@ -673,6 +679,8 @@ export function ClientDashboard({
             <MarketingPanel marketingPage={marketingPage} />
           ) : page === "collection-new" ? (
             <CollectionNewPanel section={section} />
+          ) : section === "store-gallery" && page === "get-started" ? (
+            <StoreGetStartedPanel />
           ) : section === "store-gallery" && page === "storefront" ? (
             <StoreDashboardPanel />
           ) : section === "store-gallery" && page === "orders" ? (
@@ -710,6 +718,143 @@ export function ClientDashboard({
       </section>
 
     </main>
+  );
+}
+
+function StoreTopNavigation({
+  activePage,
+  logout,
+  logoutPending,
+}: {
+  activePage: DashboardPage;
+  logout: () => void;
+  logoutPending: boolean;
+}) {
+  const items = sidebarItems["store-gallery"];
+
+  return (
+    <header className="border-t-[5px] border-[#202020] bg-white text-[#1e1e1e]">
+      <div className="bg-[#f7f7f7] px-5 sm:px-8">
+        <div className="mx-auto flex h-[50px] max-w-[1220px] items-center justify-between">
+        <div className="flex min-w-0 items-center gap-5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex min-w-0 items-center gap-2 text-sm font-semibold outline-none">
+                <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]">
+                  <span className="h-[2px] w-3 bg-white" />
+                </span>
+                <span>Store</span>
+                <ChevronDown className="size-4 text-[#333]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+              <DropdownMenuGroup className="p-5">
+                {switcherItems.map((item) => (
+                  <DropdownMenuItem key={item.key} asChild className="p-0">
+                    <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
+                      <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
+                      <span className="flex flex-col gap-1">
+                        <span className="font-bold text-[#151515]">{item.title}</span>
+                        <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+              <div className="bg-[#f7f7f7] p-5 text-center">
+                <Link href="/dashboard/store-gallery" className="inline-flex items-center gap-2 text-sm text-[#333]">
+                  <LayoutGrid className="size-4 text-[#999]" />
+                  View Dashboard
+                </Link>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="flex items-center gap-4 text-[#8a8a8a]">
+          <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Help">
+            <Info className="size-5" />
+          </button>
+          <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Notifications">
+            <Bell className="size-5" />
+          </button>
+          <button
+            className="flex size-8 items-center justify-center rounded-full bg-white text-[#555] hover:text-red-600 disabled:opacity-50"
+            onClick={logout}
+            disabled={logoutPending}
+            aria-label="Logout"
+          >
+            <CircleUserRound className="size-5" />
+          </button>
+        </div>
+        </div>
+      </div>
+      <nav className="overflow-x-auto border-b border-[#ececec] bg-white px-5 sm:px-8">
+        <div className="mx-auto max-w-[1220px]">
+        <div className="flex min-w-max items-center gap-7">
+          {items.map((item) => (
+            <Link
+              key={item.label}
+              href={item.page === "storefront" ? "/dashboard/store-gallery" : `/dashboard/store-gallery/${item.page}`}
+              className={cn(
+                "flex h-10 items-center border-b-2 border-transparent text-sm text-[#777] transition-colors hover:text-[#111]",
+                activePage === item.page && "border-[#00a997] text-[#111]"
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+        </div>
+      </nav>
+    </header>
+  );
+}
+
+function StoreGetStartedPanel() {
+  const router = useRouter();
+  const steps = [
+    {
+      title: "1. Review Products",
+      text: "Manage your products and adjust pricing.",
+      icon: CreditCard,
+      href: "/dashboard/store-gallery/products",
+    },
+    {
+      title: "2. Setup Checkout",
+      text: "Connect Stripe or Paypal to start accepting online payments.",
+      icon: ShoppingCart,
+      href: "/dashboard/store-gallery/settings",
+    },
+  ];
+
+  return (
+    <div className="mx-auto max-w-[950px] pb-20 text-[#1f2933]">
+      <div className="border-b border-[#e8e8e8] pb-4">
+        <h1 className="text-[25px] font-normal tracking-wide">Launch your Store in 2 easy steps</h1>
+      </div>
+
+      <div className="mt-7 grid gap-3 md:grid-cols-2">
+        {steps.map((step) => (
+          <button
+            key={step.title}
+            onClick={() => router.push(step.href)}
+            className="flex h-40 flex-col items-center justify-center bg-[#f2f2f2] text-center transition-colors hover:bg-[#ebebeb]"
+          >
+            <step.icon className="size-9 stroke-[1.8] text-[#29313a]" />
+            <span className="mt-6 text-base font-semibold text-[#151515]">{step.title}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 grid gap-6 text-sm text-[#6a7280] md:grid-cols-2">
+        {steps.map((step) => (
+          <p key={step.title}>
+            {step.text} <button onClick={() => router.push(step.href)} className="text-[#00a997]">Learn more</button>
+          </p>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -2252,6 +2397,8 @@ function SettingsPanel({
       <div className="mt-9">
         {settingsPage === "watermark" ? (
           <WatermarkList section={section} />
+        ) : settingsPage === "branding" ? (
+          <BrandingSettings />
         ) : settingsPage === "watermark-editor" ? (
           <WatermarkSettings section={section} />
         ) : settingsPage === "presets" ? (
@@ -2270,6 +2417,91 @@ function SettingsPanel({
             </p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+const defaultBrandSettings: BrandSettings = {
+  logoUrl: "",
+  brandText: "Studio Brand",
+  brandImageUrl: "",
+  accentColor: "#22bda7",
+};
+
+function BrandingSettings() {
+  const { query, saveSetting } = useDashboardSettings<BrandSettings>("branding");
+  const saved = (query.data?.data?.[0]?.data as BrandSettings | undefined) ?? defaultBrandSettings;
+  const [form, setForm] = useState<BrandSettings>(saved);
+
+  useEffect(() => {
+    setForm(saved);
+  }, [saved.logoUrl, saved.brandText, saved.brandImageUrl, saved.accentColor]);
+
+  const readImage = (file: File | undefined, key: keyof Pick<BrandSettings, "logoUrl" | "brandImageUrl">) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setForm((current) => ({ ...current, [key]: String(reader.result ?? "") }));
+    reader.readAsDataURL(file);
+  };
+
+  const save = () => {
+    saveSetting.mutate({
+      localId: "branding",
+      name: "Branding",
+      data: form,
+    }, {
+      onSuccess: () => toast.success("Branding saved"),
+      onError: (error) => toast.error(error.message),
+    });
+  };
+
+  return (
+    <div className="grid gap-8 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <div className="bg-white">
+        <h2 className="text-2xl font-medium">Branding</h2>
+        <p className="mt-3 text-sm leading-6 text-[#666]">
+          Brand logo, text, color, and image can appear on custom admin cover templates.
+        </p>
+        <FieldGroup className="mt-8 gap-7">
+          <Field>
+            <FieldLabel className="font-bold">Brand Text</FieldLabel>
+            <Input value={form.brandText} onChange={(event) => setForm({ ...form, brandText: event.target.value })} className="h-12 rounded-none bg-white" />
+          </Field>
+          <Field>
+            <FieldLabel className="font-bold">Accent Color</FieldLabel>
+            <div className="flex gap-3">
+              <Input type="color" value={form.accentColor} onChange={(event) => setForm({ ...form, accentColor: event.target.value })} className="size-12 rounded-none p-1" />
+              <Input value={form.accentColor} onChange={(event) => setForm({ ...form, accentColor: event.target.value })} className="h-12 rounded-none bg-white" />
+            </div>
+          </Field>
+          <Field>
+            <FieldLabel className="font-bold">Brand Logo</FieldLabel>
+            <Input type="file" accept="image/*" onChange={(event) => readImage(event.target.files?.[0], "logoUrl")} className="h-12 rounded-none bg-white" />
+          </Field>
+          <Field>
+            <FieldLabel className="font-bold">Brand Image</FieldLabel>
+            <Input type="file" accept="image/*" onChange={(event) => readImage(event.target.files?.[0], "brandImageUrl")} className="h-12 rounded-none bg-white" />
+          </Field>
+        </FieldGroup>
+        <Button className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white" disabled={saveSetting.isPending} onClick={save}>
+          {saveSetting.isPending ? "Saving..." : "Save Branding"}
+        </Button>
+      </div>
+
+      <div className="flex min-h-[480px] items-center justify-center bg-[#f4f4f4] p-8">
+        <div className="relative aspect-[1.45] w-full max-w-[760px] overflow-hidden bg-[#151515] text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+          {form.brandImageUrl ? <img src={form.brandImageUrl} alt="" className="h-full w-full object-cover opacity-70" /> : <div className="h-full w-full bg-[#202326]" />}
+          <div className="absolute inset-0 bg-black/25" />
+          <div className="absolute left-8 top-8 flex items-center gap-4">
+            {form.logoUrl && <img src={form.logoUrl} alt="" className="size-16 object-contain" />}
+            <p className="text-xl font-semibold uppercase tracking-[0.22em]" style={{ color: form.accentColor }}>{form.brandText}</p>
+          </div>
+          <div className="absolute bottom-10 left-10 max-w-[70%]">
+            <p className="text-sm uppercase tracking-[0.28em]">Client Gallery</p>
+            <h3 className="mt-4 text-5xl font-semibold uppercase tracking-[0.12em]">Brand Preview</h3>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3251,6 +3483,7 @@ function PresetDesignPanel({
   activePanel: "cover" | "typography" | "color" | "grid";
   onChange: (value: Partial<typeof design>) => void;
 }) {
+  const [adminCoverTemplates, setAdminCoverTemplates] = useState<CustomCoverTemplate[]>([]);
   const readCustomFont = (file?: File) => {
     if (!file) return;
     const reader = new FileReader();
@@ -3263,6 +3496,14 @@ function PresetDesignPanel({
     };
     reader.readAsDataURL(file);
   };
+
+  useEffect(() => {
+    const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+    fetch(`${base}/home-cms`)
+      .then((response) => response.json())
+      .then((payload: { data?: HomeCmsData }) => setAdminCoverTemplates(payload.data?.coverTemplates ?? []))
+      .catch(() => setAdminCoverTemplates([]));
+  }, []);
 
   return (
     <div className="min-w-0 border bg-white p-7">
@@ -3296,6 +3537,21 @@ function PresetDesignPanel({
             </OptionSection>
             <p className="mt-10 text-sm font-bold">Cover</p>
             <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8">
+              {adminCoverTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  className="text-center"
+                  onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}
+                  type="button"
+                >
+                  <span className={cn("block border p-1", design.cover === `custom:${template.id}` && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                    <span className="relative block aspect-[1.45] overflow-hidden bg-white">
+                      <CoverPreview design={{ ...design, cover: `custom:${template.id}`, customCoverTemplate: template }} compact className="min-h-0" />
+                    </span>
+                  </span>
+                  <span className="mt-3 block text-sm">{template.name}</span>
+                </button>
+              ))}
               {coverOptions.map(([name]) => (
                 <button key={name} className="text-center" onClick={() => onChange({ cover: name })} type="button">
                   <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
@@ -3395,6 +3651,7 @@ function CollectionDesignLivePreview({
   sets,
   favoriteEnabled,
   storeEnabled,
+  branding,
 }: {
   design: PresetDesignSettings;
   collectionName: string;
@@ -3404,6 +3661,7 @@ function CollectionDesignLivePreview({
   sets: { id: string; name: string }[];
   favoriteEnabled: boolean;
   storeEnabled: boolean;
+  branding?: Partial<BrandSettings>;
 }) {
   const previewImages = images.length ? images.slice(0, 6) : [];
   const firstSets = sets.slice(0, 5);
@@ -3417,21 +3675,42 @@ function CollectionDesignLivePreview({
   const fontFamily = customFontName
     ? `"${customFontName.replace(/"/g, "")}", ${fallbackFontFamily}`
     : fallbackFontFamily;
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
+  const isMobilePreview = previewDevice === "mobile";
 
   return (
-    <aside className="sticky top-0 hidden min-h-[calc(100dvh-9rem)] items-center justify-center bg-[#f4f4f4] px-8 py-10 xl:flex">
-      <div className="w-full max-w-[650px]">
+    <aside className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-hidden bg-[#f4f4f4] px-8 py-6 xl:block">
+      <div className="mb-4 flex items-center justify-center gap-4 text-[#777]">
+        <button
+          className={cn("flex size-9 items-center justify-center", !isMobilePreview && "bg-white text-[#111] shadow-sm")}
+          onClick={() => setPreviewDevice("desktop")}
+          aria-label="Desktop preview"
+          type="button"
+        >
+          <Monitor className="size-5" />
+        </button>
+        <button
+          className={cn("flex size-9 items-center justify-center", isMobilePreview && "bg-white text-[#111] shadow-sm")}
+          onClick={() => setPreviewDevice("mobile")}
+          aria-label="Mobile preview"
+          type="button"
+        >
+          <Smartphone className="size-5" />
+        </button>
+      </div>
+      <div className={cn("mx-auto w-full transition-all duration-300", isMobilePreview ? "max-w-[320px]" : "max-w-[650px]")}>
         {customFontName && design.customFontDataUrl && (
           <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
         )}
-        <div className="shadow-[0_28px_80px_rgba(0,0,0,0.18)]" style={{ backgroundColor: bg, color: fg, fontFamily }}>
+        <div className={cn("shadow-[0_28px_80px_rgba(0,0,0,0.18)]", isMobilePreview && "rounded-[28px] border-[10px] border-[#1d1d1d]")} style={{ backgroundColor: bg, color: fg, fontFamily }}>
           <div className="overflow-hidden border border-white" style={{ backgroundColor: bg }}>
-            <div className="h-[350px] overflow-hidden">
+            <div className={cn("overflow-hidden", isMobilePreview ? "h-[210px]" : "h-[260px]")}>
               <CoverPreview
                 design={{
                   ...design,
                   coverTitle: design.coverTitle || collectionName,
                   coverDate: design.coverDate || eventDate,
+                  branding,
                 }}
                 image={coverImage ? imageSrc(coverImage) : undefined}
                 className="min-h-full"
@@ -3455,7 +3734,7 @@ function CollectionDesignLivePreview({
                 <span key={set.id} className="shrink-0">{set.name}</span>
               )) : <span>Highlights</span>}
             </div>
-            <div className={masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
+            <div className={isMobilePreview ? "columns-2" : masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
               {previewImages.length ? previewImages.map((image, index) => (
                 <div key={image._id} className="break-inside-avoid overflow-hidden bg-[#ececec]" style={{ marginBottom: `${masonryGapPx}px` }}>
                   <img
@@ -3469,10 +3748,6 @@ function CollectionDesignLivePreview({
               ))}
             </div>
           </div>
-        </div>
-        <div className="mt-5 flex items-center justify-center gap-5 text-[#777]">
-          <Monitor className="size-5 text-[#111]" />
-          <Smartphone className="size-5" />
         </div>
       </div>
     </aside>
@@ -7778,6 +8053,7 @@ function CollectionDetailView({
   const router = useRouter();
   const presetSettings = useDashboardSettings("preset").query;
   const watermarkSettings = useDashboardSettings("watermark").query;
+  const brandingSettings = useDashboardSettings<BrandSettings>("branding").query;
   const emailTemplateSettings = useDashboardSettings("email-template").query;
   const storeEmailTemplates = useDashboardStore((state) => state.emailTemplates);
   const storePresetItems = useDashboardStore((state) => state.presetItems);
@@ -7834,6 +8110,7 @@ function CollectionDetailView({
     () => (watermarkSettings.data?.data?.map((setting) => setting.data as WatermarkItem) ?? storeWatermarkItems),
     [storeWatermarkItems, watermarkSettings.data?.data],
   );
+  const branding = (brandingSettings.data?.data?.[0]?.data as BrandSettings | undefined) ?? defaultBrandSettings;
   const activeImage =
     images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
   const orderedImages = useMemo(() => {
@@ -8105,6 +8382,14 @@ function CollectionDetailView({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button
+            className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
+            disabled={updateCollection.isPending}
+            onClick={saveCollection}
+          >
+            <Save data-icon="inline-start" />
+            {updateCollection.isPending ? "Saving..." : "Save"}
+          </Button>
+          <Button
             variant="outline"
             className="h-10 rounded-none"
             onClick={() =>
@@ -8289,16 +8574,17 @@ function CollectionDetailView({
       <div className={cn("mt-6 grid min-h-0 flex-1 overflow-hidden border transition-[grid-template-columns] duration-300 ease-out", detailCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[250px_minmax(0,1fr)]")}>
         <aside className="flex flex-col border-r bg-[#fafafa] transition-colors duration-300">
           {!detailCollapsed && <div className="aspect-[1.45] bg-[#e8e8e8]">
-            <CoverPreview
-              design={{
-                ...form.design,
-                coverTitle: form.design.coverTitle || collection.name,
-                coverDate: form.design.coverDate || (collection.eventDate ? formatDate(collection.eventDate) : ""),
-                coverSmallTitle: form.design.coverSmallTitle || "Studio",
-              }}
-              image={form.coverImage ? imageSrc(form.coverImage) : images[0]?.url ? imageSrc(images[0].url) : undefined}
-              className="h-full min-h-0"
-            />
+            {(form.coverImage || images[0]?.url) ? (
+              <img
+                src={imageSrc(form.coverImage || images[0]?.url || "")}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs font-bold uppercase tracking-wide text-[#888]">
+                Cover Image
+              </div>
+            )}
           </div>}
           <div className={cn("grid border-b bg-white", detailCollapsed ? "grid-cols-1" : "grid-cols-4")}>
             {([
@@ -8409,7 +8695,7 @@ function CollectionDetailView({
           )}
           {activeTab === "design" && !detailCollapsed && (
             <div className="min-h-0 flex-1 overflow-y-auto bg-[#fafafa]">
-              <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Design</p>
+              <p className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-[#777]">Design</p>
               {([
                 ["cover", PanelTop, "Cover"],
                 ["typography", Bold, "Typography"],
@@ -8418,7 +8704,7 @@ function CollectionDetailView({
               ] as const).map(([panel, Icon, label]) => (
                 <button
                   key={panel}
-                  className={cn("flex h-16 w-full items-center gap-4 px-5 text-left", activeDesignPanel === panel && "bg-white font-semibold")}
+                  className={cn("flex h-12 w-full items-center gap-4 px-5 text-left", activeDesignPanel === panel && "bg-white font-semibold")}
                   onClick={() => setActiveDesignPanel(panel)}
                   type="button"
                 >
@@ -8730,9 +9016,6 @@ function CollectionDetailView({
                       <option key={preset.id} value={preset.id}>{preset.name}</option>
                     ))}
                   </select>
-                  <Button className="h-11 rounded-none bg-[#22bda7] px-6 text-white" onClick={saveCollection}>
-                    Save
-                  </Button>
                 </div>
                 <PresetDesignPanel
                   design={form.design}
@@ -8749,6 +9032,7 @@ function CollectionDetailView({
                 sets={form.sets}
                 favoriteEnabled={form.favorite.favoritePhotos !== false}
                 storeEnabled={Boolean(form.presetId ? presetItems.find((preset) => preset.id === form.presetId)?.store?.storeStatus : collection.settings?.store?.storeStatus)}
+                branding={branding}
               />
             </div>
           )}

@@ -113,6 +113,13 @@ export class CollectionsService {
           .lean()
       : null;
     const presetData = preset?.data as any;
+    const branding = await this.settingModel
+      .findOne({
+        userId: collection.userId,
+        type: DashboardSettingType.BRANDING,
+        localId: 'branding',
+      })
+      .lean();
 
     return {
       ...collection,
@@ -138,6 +145,7 @@ export class CollectionsService {
           ...((collection.settings as any)?.store ?? {}),
         },
       },
+      branding: (branding?.data as any) ?? {},
       images: this.sortImagesForGallery(images),
     };
   }

@@ -17,6 +17,12 @@ export class HomeCms {
   @Prop({ type: Object, default: {} })
   auth: Record<string, any>;
 
+  @Prop({ type: Object, default: {} })
+  brand: Record<string, any>;
+
+  @Prop({ type: [Object], default: [] })
+  coverTemplates: Record<string, any>[];
+
   @Prop({ type: Object, default: { heroMediaType: 'image', heroMediaUrl: '' } })
   media: {
     heroMediaType?: 'image' | 'video';

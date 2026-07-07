@@ -5,6 +5,7 @@ import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Heart, Loader2
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
+import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 type PublicImage = {
@@ -40,6 +41,7 @@ type PublicCollection = {
   sets?: Array<{ id: string; name: string }>;
   images?: PublicImage[];
   design?: Partial<PresetDesignSettings>;
+  branding?: Partial<BrandSettings>;
   settings?: {
     general?: {
       emailRegistration?: boolean | string;
@@ -661,6 +663,7 @@ export function PublicGallery({
             ...design,
             coverTitle: design.coverTitle || title,
             coverSmallTitle: design.coverSmallTitle || decodeURIComponent(name),
+            branding: collection?.branding,
           }}
           image={coverPhoto}
           className="mx-auto max-w-[1180px]"

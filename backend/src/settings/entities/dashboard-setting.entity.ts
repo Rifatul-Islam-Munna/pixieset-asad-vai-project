@@ -7,6 +7,7 @@ export enum DashboardSettingType {
   WATERMARK = 'watermark',
   PRESET = 'preset',
   EMAIL_TEMPLATE = 'email-template',
+  BRANDING = 'branding',
 }
 
 @Schema({ timestamps: true, autoIndex: true })

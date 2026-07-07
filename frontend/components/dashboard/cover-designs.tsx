@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import type { BrandSettings, CustomCoverTemplate } from "@/lib/home-cms";
 
 export const coverOptions = [
   ["Center", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80"],
@@ -43,6 +44,8 @@ export type CoverPreviewSettings = {
   showCoverTitle?: boolean;
   showCoverDate?: boolean;
   showCoverButton?: boolean;
+  customCoverTemplate?: CustomCoverTemplate;
+  branding?: Partial<BrandSettings>;
 };
 
 export function coverImage(name: string) {
@@ -61,6 +64,21 @@ export function CoverPreview({
   className?: string;
 }) {
   const src = image || coverImage(design.cover);
+  if (design.customCoverTemplate) {
+    return (
+      <CustomCoverPreview
+        template={design.customCoverTemplate}
+        branding={design.branding}
+        image={image}
+        compact={compact}
+        className={className}
+        title={design.coverTitle}
+        subtitle={design.coverSmallTitle}
+        date={design.coverDate}
+        buttonText={design.coverButtonText}
+      />
+    );
+  }
   const showSmall = design.showCoverSmallTitle !== false;
   const showTitle = design.showCoverTitle !== false;
   const showDate = design.showCoverDate !== false;
@@ -250,6 +268,103 @@ export function CoverPreview({
       >
         {text}
       </div>
+    </div>
+  );
+}
+
+function CustomCoverPreview({
+  branding,
+  buttonText,
+  className,
+  compact,
+  date,
+  image,
+  subtitle,
+  template,
+  title,
+}: {
+  branding?: Partial<BrandSettings>;
+  buttonText?: string;
+  className?: string;
+  compact?: boolean;
+  date?: string;
+  image?: string;
+  subtitle?: string;
+  template: CustomCoverTemplate;
+  title?: string;
+}) {
+  const src = image || template.backgroundImage || coverOptions[0][1];
+  const textMap = {
+    title: title || "Gallery Title",
+    subtitle: subtitle || branding?.brandText || "Studio",
+    date: date || "June 14, 2026",
+    button: buttonText || "View Gallery",
+    brandText: branding?.brandText || template.elements.find((item) => item.type === "brandText")?.text || "Brand",
+    logo: "",
+    line: "",
+  };
+
+  return (
+    <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#111] text-white", compact && "min-h-0", className)}>
+      <img src={src} alt="" className="h-full w-full object-cover" />
+      <div className="absolute inset-0 bg-black" style={{ opacity: template.overlayOpacity / 100 }} />
+      {template.gridOpacity > 0 && (
+        <div
+          className="absolute inset-0"
+          style={{
+            opacity: template.gridOpacity / 100,
+            backgroundImage:
+              "linear-gradient(to right, rgba(255,255,255,.55) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.55) 1px, transparent 1px)",
+            backgroundSize: compact ? "28px 28px" : "64px 64px",
+          }}
+        />
+      )}
+      {template.elements.map((element) => {
+        const common = {
+          left: `${element.x}%`,
+          top: `${element.y}%`,
+          width: `${element.width}%`,
+          height: `${element.height}%`,
+          opacity: element.opacity / 100,
+          color: element.color,
+          transform: "translate(-50%, -50%)",
+        };
+        if (element.type === "logo") {
+          return branding?.logoUrl ? (
+            <img
+              key={element.id}
+              src={branding.logoUrl}
+              alt=""
+              className="absolute object-contain"
+              style={common}
+            />
+          ) : null;
+        }
+        if (element.type === "line") {
+          return (
+            <span
+              key={element.id}
+              className="absolute block border-t"
+              style={{ ...common, borderColor: element.color, opacity: (element.opacity * template.lineOpacity) / 10000 }}
+            />
+          );
+        }
+        return (
+          <span
+            key={element.id}
+            className={cn("absolute flex items-center leading-tight", element.type === "button" && "justify-center border px-3 font-semibold uppercase tracking-[0.18em]")}
+            style={{
+              ...common,
+              fontSize: compact ? Math.max(8, element.fontSize / 3) : element.fontSize,
+              textAlign: element.align ?? "center",
+              justifyContent: element.align === "left" ? "flex-start" : element.align === "right" ? "flex-end" : "center",
+              borderColor: element.color,
+            }}
+          >
+            {textMap[element.type]}
+          </span>
+        );
+      })}
     </div>
   );
 }
