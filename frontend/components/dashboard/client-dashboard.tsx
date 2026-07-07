@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type PointerEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
@@ -136,7 +136,11 @@ import {
   useDashboardStore,
   type PresetDesignSettings,
   type PresetDownloadSettings,
+  type EmailTemplateItem,
+  type PresetFavoriteSettings,
   type PresetGeneralSettings,
+  type PresetItem,
+  type WatermarkItem,
 } from "@/lib/dashboard-store";
 import { cn } from "@/lib/utils";
 
@@ -2781,6 +2785,7 @@ function PresetGeneralPanel({
 
 function PresetFavoritePanel({
   favorite,
+  hidePager = false,
   onBack,
   onChange,
   onNext,
@@ -2788,7 +2793,10 @@ function PresetFavoritePanel({
   favorite: {
     favoritePhotos: boolean;
     favoriteNotes: boolean;
+    maxFavorites: string;
+    description: string;
   };
+  hidePager?: boolean;
   onBack: () => void;
   onChange: (value: Partial<typeof favorite>) => void;
   onNext: () => void;
@@ -2825,8 +2833,31 @@ function PresetFavoritePanel({
             <span className="text-[#00a997]">Learn more</span>
           </p>
         </Field>
+        <Field>
+          <FieldLabel className="font-bold">Max Favorites</FieldLabel>
+          <Input
+            type="number"
+            min="0"
+            value={favorite.maxFavorites}
+            onChange={(event) => onChange({ maxFavorites: event.target.value })}
+            placeholder="Unlimited"
+            className="h-12 rounded-none bg-white"
+          />
+          <p className="text-sm leading-6 text-[#666]">
+            Empty means no max.
+          </p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Favorite Description</FieldLabel>
+          <Textarea
+            value={favorite.description}
+            onChange={(event) => onChange({ description: event.target.value })}
+            placeholder="Tell clients how to use this favorite list."
+            className="min-h-28 rounded-none bg-white"
+          />
+        </Field>
       </FieldGroup>
-      <PresetPager onBack={onBack} onNext={onNext} />
+      {!hidePager && <PresetPager onBack={onBack} onNext={onNext} />}
     </div>
   );
 }
@@ -6140,13 +6171,10 @@ function CollectionDetailView({
   const presetSettings = useDashboardSettings("preset").query;
   const watermarkSettings = useDashboardSettings("watermark").query;
   const emailTemplateSettings = useDashboardSettings("email-template").query;
-  const {
-    emailTemplates,
-    hydrateDashboardSettings,
-    presetItems,
-    startCampaignBuilder,
-    watermarkItems,
-  } = useDashboardStore();
+  const storeEmailTemplates = useDashboardStore((state) => state.emailTemplates);
+  const storePresetItems = useDashboardStore((state) => state.presetItems);
+  const startCampaignBuilder = useDashboardStore((state) => state.startCampaignBuilder);
+  const storeWatermarkItems = useDashboardStore((state) => state.watermarkItems);
   const { starImage } = useImageActions();
   const { collectionsQuery } = useCollections();
   const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage } = useCollectionDetail(collectionId);
@@ -6156,8 +6184,11 @@ function CollectionDetailView({
   const collection = collectionQuery.data?.data ?? collections.find((item) => item._id === collectionId);
   const detail = collectionQuery.data?.data;
   const imagesLoading = collectionQuery.isLoading && !detail;
-  const images = detail?.images ?? [];
-  const sets = detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }];
+  const images = useMemo(() => detail?.images ?? [], [detail?.images]);
+  const sets = useMemo(
+    () => detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }],
+    [detail?.sets],
+  );
   const [activeImageId, setActiveImageId] = useState("");
   const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "download">("photos");
   const [activityPage, setActivityPage] = useState<"download" | "favorite">("favorite");
@@ -6179,9 +6210,25 @@ function CollectionDetailView({
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [form, setForm] = useState(() => collectionForm(collection));
+  const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));
+  const emailTemplates = useMemo(
+    () => (emailTemplateSettings.data?.data?.map((setting) => setting.data as EmailTemplateItem) ?? storeEmailTemplates),
+    [emailTemplateSettings.data?.data, storeEmailTemplates],
+  );
+  const presetItems = useMemo(
+    () => (presetSettings.data?.data?.map((setting) => setting.data as PresetItem) ?? storePresetItems),
+    [presetSettings.data?.data, storePresetItems],
+  );
+  const watermarkItems = useMemo(
+    () => (watermarkSettings.data?.data?.map((setting) => setting.data as WatermarkItem) ?? storeWatermarkItems),
+    [storeWatermarkItems, watermarkSettings.data?.data],
+  );
   const activeImage =
     images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
-  const activeSetImages = images.filter((image) => (image.setId || "highlights") === activeSetId);
+  const activeSetImages = useMemo(
+    () => images.filter((image) => (image.setId || "highlights") === activeSetId),
+    [activeSetId, images],
+  );
   const imagePageSize = 24;
   const totalImagePages = Math.max(1, Math.ceil(activeSetImages.length / imagePageSize));
   const visibleSetImages = activeSetImages.slice(
@@ -6209,58 +6256,22 @@ function CollectionDetailView({
   const publicPath = `/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collection?.slug ?? collectionId)}`;
   const publicLink = `${pageOrigin}${publicPath}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicLink)}`;
-
   useEffect(() => {
     setPageOrigin(window.location.origin);
   }, []);
 
   useEffect(() => {
-    const settings = [
-      ...(presetSettings.data?.data ?? []),
-      ...(watermarkSettings.data?.data ?? []),
-      ...(emailTemplateSettings.data?.data ?? []),
-    ];
-    if (settings.length) hydrateDashboardSettings(settings);
-  }, [emailTemplateSettings.data, hydrateDashboardSettings, presetSettings.data, watermarkSettings.data]);
-
-  useEffect(() => {
     if (!collection || updateCollection.isPending) return;
-    setForm(collectionForm(collection));
+    const nextForm = collectionForm(collection);
+    const nextFormKey = collectionFormKey(nextForm);
+    if (syncedCollectionFormKeyRef.current === nextFormKey) return;
+    syncedCollectionFormKeyRef.current = nextFormKey;
+    setForm(nextForm);
   }, [collection, updateCollection.isPending]);
-
-  useEffect(() => {
-    if (!selectedShareTemplateId && emailTemplates[0]) {
-      setSelectedShareTemplateId(emailTemplates[0].id);
-    }
-  }, [emailTemplates, selectedShareTemplateId]);
-
-  useEffect(() => {
-    if (!sets.some((set) => set.id === activeSetId)) {
-      setActiveSetId(sets[0]?.id ?? "highlights");
-    }
-  }, [activeSetId, sets]);
-
-  useEffect(() => {
-    if (!activeSetImages.length) {
-      setActiveImageId("");
-      return;
-    }
-    if (!activeImageId || !activeSetImages.some((image) => image._id === activeImageId)) {
-      setActiveImageId(activeSetImages[0]._id);
-    }
-  }, [activeImageId, activeSetImages]);
-
-  useEffect(() => {
-    setImagePage(1);
-  }, [activeSetId]);
 
   useEffect(() => {
     if (imagePage > totalImagePages) setImagePage(totalImagePages);
   }, [imagePage, totalImagePages]);
-
-  useEffect(() => {
-    setSelectedImageIds((ids) => ids.filter((id) => images.some((image) => image._id === id)));
-  }, [images]);
 
   const presetName = (id?: string) =>
     presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
@@ -6278,13 +6289,17 @@ function CollectionDetailView({
       settings: {
         general: form.general,
         download: form.download,
-        favorite: selectedPreset?.favorite ?? collection?.settings?.favorite,
+        favorite: form.favorite,
         store: selectedPreset?.store ?? collection?.settings?.store,
       },
     };
     updateCollection.mutate(payload, {
       onSuccess: (response) => {
-        if (response?.data) setForm(collectionForm(response.data));
+        if (response?.data) {
+          const nextForm = collectionForm(response.data);
+          syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
+          setForm(nextForm);
+        }
         toast.success("Collection settings saved");
       },
       onError: (error) => {
@@ -6684,7 +6699,10 @@ function CollectionDetailView({
                       ) : (
                         <button
                           className="min-w-0 flex-1 truncate text-left"
-                          onClick={() => setActiveSetId(set.id)}
+                          onClick={() => {
+                            setActiveSetId(set.id);
+                            setImagePage(1);
+                          }}
                           onDoubleClick={() => {
                             setEditingSetId(set.id);
                             setEditingSetName(set.name);
@@ -7001,6 +7019,7 @@ function CollectionDetailView({
                           : value.design,
                         general: preset?.general ?? value.general,
                         download: preset?.download ?? value.download,
+                        favorite: preset?.favorite ?? value.favorite,
                       }));
                     }}
                     className="h-11 w-full border bg-white px-3 text-sm outline-none"
@@ -7060,6 +7079,15 @@ function CollectionDetailView({
                   onChange={(download) => setForm((value) => ({ ...value, download: { ...value.download, ...download } }))}
                 />
               </div>
+              <div className="mt-14 border-t pt-12">
+                <PresetFavoritePanel
+                  favorite={form.favorite}
+                  hidePager
+                  onBack={() => undefined}
+                  onNext={() => undefined}
+                  onChange={(favorite) => setForm((value) => ({ ...value, favorite: { ...value.favorite, ...favorite } }))}
+                />
+              </div>
               <Button className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white" disabled={updateCollection.isPending} onClick={saveCollection}>
                 {updateCollection.isPending ? "Saving..." : "Save Settings"}
               </Button>
@@ -7072,10 +7100,33 @@ function CollectionDetailView({
               favoriteLists={activityQuery.data?.data.favoriteLists ?? []}
               downloads={activityQuery.data?.data.downloads ?? []}
               collectionName={collection.name}
+              collectionImages={images}
               publicLink={publicLink}
               activityPage={activityPage}
+              emailTemplates={emailTemplates}
+              favoriteSettings={form.favorite}
+              saveFavoriteSettings={async (favorite) => {
+                const nextFavorite = { ...form.favorite, ...favorite };
+                setForm((value) => ({ ...value, favorite: nextFavorite }));
+                await updateCollection.mutateAsync({
+                  settings: {
+                    ...(collection.settings ?? {}),
+                    general: form.general,
+                    download: form.download,
+                    favorite: nextFavorite,
+                  },
+                });
+              }}
               deleteFavoriteInfo={activityActions.deleteFavoriteInfo.mutateAsync}
               deleteFavoriteImageInfo={activityActions.deleteFavoriteImageInfo.mutateAsync}
+              copyFavoriteListToSet={(payload) => {
+                if (!activityActions.copyFavoriteListToSet) throw new Error("Copy to set is not available");
+                return activityActions.copyFavoriteListToSet.mutateAsync(payload);
+              }}
+              copyFavoriteListToCollection={(payload) => {
+                if (!activityActions.copyFavoriteListToCollection) throw new Error("Copy to collection is not available");
+                return activityActions.copyFavoriteListToCollection.mutateAsync(payload);
+              }}
             />
           )}
         </div>
@@ -7135,24 +7186,39 @@ function CollectionActivityPanel({
   favoriteLists,
   downloads,
   collectionName,
+  collectionImages,
   publicLink,
   activityPage,
+  emailTemplates,
+  favoriteSettings,
+  saveFavoriteSettings,
   deleteFavoriteInfo,
   deleteFavoriteImageInfo,
+  copyFavoriteListToSet,
+  copyFavoriteListToCollection,
 }: {
   loading: boolean;
   favoriteLists: CollectionFavoriteActivityRecord[];
   downloads: CollectionDownloadActivityRecord[];
   collectionName: string;
+  collectionImages: CollectionImageRecord[];
   publicLink: string;
   activityPage: "download" | "favorite";
+  emailTemplates: EmailTemplateItem[];
+  favoriteSettings: PresetFavoriteSettings;
+  saveFavoriteSettings: (favorite: Partial<PresetFavoriteSettings>) => Promise<void>;
   deleteFavoriteInfo: (favoriteUserId: string) => Promise<unknown>;
   deleteFavoriteImageInfo: (payload: { favoriteUserId: string; imageId: string }) => Promise<unknown>;
+  copyFavoriteListToSet: (payload: { favoriteUserId: string; name?: string }) => Promise<unknown>;
+  copyFavoriteListToCollection: (payload: { favoriteUserId: string; name?: string }) => Promise<unknown>;
 }) {
   const [editingList, setEditingList] = useState<CollectionFavoriteActivityRecord | null>(null);
   const [mailList, setMailList] = useState<CollectionFavoriteActivityRecord | null>(null);
-  const [mailSubject, setMailSubject] = useState("");
-  const [mailMessage, setMailMessage] = useState("");
+  const [selectedMailTemplateId, setSelectedMailTemplateId] = useState("");
+  const [exportJob, setExportJob] = useState<{ title: string; percent: number; list?: CollectionFavoriteActivityRecord } | null>(null);
+  const [copyingListId, setCopyingListId] = useState("");
+  const [favoriteLimitDraft, setFavoriteLimitDraft] = useState(favoriteSettings.maxFavorites);
+  const [favoriteDescriptionDraft, setFavoriteDescriptionDraft] = useState(favoriteSettings.description);
   const downloadFavoritesCsv = (list?: CollectionFavoriteActivityRecord) => {
     const rows = (list ? [list] : favoriteLists).map((item) => ({
       email: item.email,
@@ -7177,6 +7243,44 @@ function CollectionActivityPanel({
       })),
     );
   };
+  const exportFavoriteList = (list?: CollectionFavoriteActivityRecord) => {
+    const title = list ? `${list.name} export` : "Favorite export";
+    setExportJob({ title, percent: 8, list });
+    let percent = 8;
+    const timer = window.setInterval(() => {
+      percent = Math.min(100, percent + 14);
+      setExportJob((job) => job ? { ...job, percent } : null);
+      if (percent >= 100) {
+        window.clearInterval(timer);
+        window.setTimeout(() => {
+          downloadFavoritesCsv(list);
+          setExportJob(null);
+        }, 450);
+      }
+    }, 180);
+  };
+  const openDownloadPage = () => {
+    const images = collectionImages
+      .filter((image) => image.url)
+      .map((image, index) => ({
+        url: image.url,
+        name: image.originalName || `photo-${index + 1}`,
+      }));
+    if (!images.length) {
+      toast.error("No collection images to download");
+      return;
+    }
+    window.sessionStorage.setItem(
+      "nikoset-favorite-download",
+      JSON.stringify({
+        collectionName,
+        listName: "All photos",
+        email: "",
+        images,
+      }),
+    );
+    window.location.href = `${window.location.pathname}/download`;
+  };
   const copyFilenames = async (list: CollectionFavoriteActivityRecord) => {
     const lines = (list.images?.length ? list.images : list.filenames.map((name) => ({ name, imageId: "", url: "" })))
       .map((image) => `${collectionName} - ${image.name || image.imageId}`);
@@ -7185,22 +7289,65 @@ function CollectionActivityPanel({
   };
   const openMailSender = (list: CollectionFavoriteActivityRecord) => {
     setMailList(list);
-    setMailSubject(`${collectionName} download`);
-    setMailMessage(
-      [
-        `Hi,`,
-        ``,
-        `Here are your selected files from ${collectionName}:`,
-        ...(list.filenames.length ? list.filenames.map((name) => `- ${name}`) : ["- No filenames"]),
-        ``,
-        publicLink,
-      ].join("\n"),
-    );
+    setSelectedMailTemplateId((current) => current || emailTemplates[0]?.id || "");
   };
   const sendAsDownload = async () => {
     if (!mailList) return;
+    const template = emailTemplates.find((item) => item.id === selectedMailTemplateId) ?? emailTemplates[0];
+    if (!template) return;
     await recordEmailUsage(1).catch(() => null);
-    window.location.href = `mailto:${encodeURIComponent(mailList.email)}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailMessage)}`;
+    window.sessionStorage.setItem(
+      "nikoset-mail-preview",
+      JSON.stringify({
+        to: mailList.email,
+        collectionName,
+        publicLink,
+        template: { ...template, buttonLink: publicLink },
+      }),
+    );
+    window.location.href = `${window.location.pathname}/mail-preview`;
+    setMailList(null);
+  };
+  useEffect(() => {
+    setFavoriteLimitDraft(favoriteSettings.maxFavorites);
+    setFavoriteDescriptionDraft(favoriteSettings.description);
+  }, [favoriteSettings.description, favoriteSettings.maxFavorites]);
+  const saveFavoriteListRules = async () => {
+    try {
+      await saveFavoriteSettings({
+        maxFavorites: favoriteLimitDraft,
+        description: favoriteDescriptionDraft,
+      });
+      toast.success("Favorite settings saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Save failed");
+    }
+  };
+  const copyToSet = async (list: CollectionFavoriteActivityRecord) => {
+    const name = window.prompt("New set name", `${list.name} - ${list.email}`) || "";
+    if (!name.trim()) return;
+    setCopyingListId(list.id);
+    try {
+      await copyFavoriteListToSet({ favoriteUserId: list.id, name });
+      toast.success("Copied to new set");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Copy failed");
+    } finally {
+      setCopyingListId("");
+    }
+  };
+  const copyToCollection = async (list: CollectionFavoriteActivityRecord) => {
+    const name = window.prompt("New collection name", `${collectionName} - ${list.name}`) || "";
+    if (!name.trim()) return;
+    setCopyingListId(list.id);
+    try {
+      await copyFavoriteListToCollection({ favoriteUserId: list.id, name });
+      toast.success("Copied to new collection");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Copy failed");
+    } finally {
+      setCopyingListId("");
+    }
   };
   const deleteFavoriteList = async (list: CollectionFavoriteActivityRecord) => {
     await deleteFavoriteInfo(list.id);
@@ -7225,6 +7372,29 @@ function CollectionActivityPanel({
         <Skeleton className="h-40 rounded-none" />
         <Skeleton className="h-40 rounded-none" />
       </div>
+    );
+  }
+
+  if (exportJob) {
+    return (
+      <section className="flex min-h-[70dvh] items-center justify-center bg-[#f7fbfa] p-6">
+        <div className="w-full max-w-[620px] border bg-white p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
+          <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#00a997]">Preparing export</p>
+          <h2 className="mt-4 text-3xl font-medium">{collectionName}</h2>
+          <p className="mt-2 text-sm text-[#666]">{exportJob.title}</p>
+          <div className="mx-auto mt-10 flex size-40 items-center justify-center rounded-full border border-[#d9f4ef] bg-[#eefdfa]">
+            <div className="flex size-28 animate-pulse items-center justify-center rounded-full bg-[#22bda7] text-3xl font-bold text-white">
+              {exportJob.percent}%
+            </div>
+          </div>
+          <div className="mt-10 h-3 overflow-hidden bg-[#e4f4f1]">
+            <div className="h-full bg-[#22bda7] transition-all duration-300" style={{ width: `${exportJob.percent}%` }} />
+          </div>
+          <p className="mt-4 text-sm font-semibold text-[#667]">
+            CSV will download when ready.
+          </p>
+        </div>
+      </section>
     );
   }
 
@@ -7274,8 +7444,16 @@ function CollectionActivityPanel({
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-2xl font-medium">Favorite Activity</h2>
-              <div className="flex items-center gap-4">
-                <button className="inline-flex items-center gap-2 text-sm font-bold text-[#777]" type="button">
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button className="inline-flex h-9 items-center gap-2 border bg-white px-3 text-sm font-bold text-[#111] disabled:opacity-50" type="button" onClick={() => openDownloadPage()} disabled={!collectionImages.length}>
+                  <Download className="size-4" />
+                  Download all
+                </button>
+                <button className="inline-flex h-9 items-center gap-2 border bg-white px-3 text-sm font-bold text-[#00a997] disabled:opacity-50" type="button" onClick={() => exportFavoriteList()} disabled={!favoriteLists.length}>
+                  <FileUp className="size-4" />
+                  Export CSV
+                </button>
+                <button className="inline-flex h-9 items-center gap-2 text-sm font-bold text-[#777]" type="button">
                   <ListFilter className="size-4" />
                   Sort by email
                 </button>
@@ -7314,16 +7492,32 @@ function CollectionActivityPanel({
                       <td className="px-1 py-5">{formatActivityDate(item.createdAt)}</td>
                       <td className="px-1 py-5">{formatActivityDate(item.updatedAt)}</td>
                       <td className="px-1 py-5 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 rounded-none px-2" aria-label="Favorite list actions">
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="outline" className="h-8 rounded-none px-2 text-xs" onClick={() => setEditingList(item)}>
+                            Edit List
+                          </Button>
+                          <Button variant="outline" className="h-8 rounded-none px-2 text-xs" onClick={() => openDownloadPage()}>
+                            Download all
+                          </Button>
+                          <Button variant="outline" className="h-8 rounded-none px-2 text-xs" onClick={() => openMailSender(item)}>
+                            Send
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 rounded-none px-2" aria-label="Favorite list actions">
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-60 rounded-none p-3 shadow-[0_18px_35px_rgba(0,0,0,0.12)]">
                             <DropdownMenuGroup>
                               <DropdownMenuItem onClick={() => void copyFilenames(item)}>
                                 <Copy className="size-4" /> Copy filenames
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => void copyToSet(item)} disabled={copyingListId === item.id}>
+                                <Images className="size-4" /> Copy to new set
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => void copyToCollection(item)} disabled={copyingListId === item.id}>
+                                <Package className="size-4" /> Copy to new collection
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setEditingList(item)}>
                                 <Wrench className="size-4" /> Edit List
@@ -7331,8 +7525,11 @@ function CollectionActivityPanel({
                               <DropdownMenuItem onClick={() => window.open(publicLink, "_blank", "noopener,noreferrer")}>
                                 <Eye className="size-4" /> View in Gallery
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => downloadFavoritesCsv(item)}>
+                              <DropdownMenuItem onClick={() => openDownloadPage()}>
                                 <Download className="size-4" /> Download all
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => exportFavoriteList(item)}>
+                                <FileUp className="size-4" /> Export CSV
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openMailSender(item)}>
                                 <Mail className="size-4" /> Send as download
@@ -7342,7 +7539,8 @@ function CollectionActivityPanel({
                               </DropdownMenuItem>
                             </DropdownMenuGroup>
                           </DropdownMenuContent>
-                        </DropdownMenu>
+                          </DropdownMenu>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -7370,6 +7568,31 @@ function CollectionActivityPanel({
             <div className="grid gap-1 text-sm">
               <span className="font-bold">{editingList.email}</span>
               <span className="text-[#777]">{editingList.photos} photos in {editingList.name}</span>
+            </div>
+            <div className="grid gap-4 border bg-[#fafafa] p-4">
+              <Field>
+                <FieldLabel>Max Favorites</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  value={favoriteLimitDraft}
+                  onChange={(event) => setFavoriteLimitDraft(event.target.value)}
+                  placeholder="Unlimited"
+                  className="h-11 rounded-none bg-white"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Description</FieldLabel>
+                <Textarea
+                  value={favoriteDescriptionDraft}
+                  onChange={(event) => setFavoriteDescriptionDraft(event.target.value)}
+                  className="min-h-24 rounded-none bg-white"
+                  placeholder="Shown on public gallery favorite area."
+                />
+              </Field>
+              <Button className="h-10 w-fit rounded-none bg-[#22bda7] text-white" onClick={() => void saveFavoriteListRules()}>
+                Save Favorite Rules
+              </Button>
             </div>
             <div className="max-h-[320px] overflow-y-auto border">
               {(editingList.images?.length ? editingList.images : editingList.filenames.map((name) => ({ imageId: name, name, url: "" }))).map((image) => (
@@ -7403,7 +7626,7 @@ function CollectionActivityPanel({
         <DialogHeader>
           <DialogTitle>Send as download</DialogTitle>
           <DialogDescription>
-            Opens your mail app with this download message.
+            Choose a saved template. Button URL becomes this collection link.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
@@ -7412,20 +7635,31 @@ function CollectionActivityPanel({
             <Input value={mailList?.email ?? ""} readOnly className="h-11 rounded-none bg-white" />
           </Field>
           <Field>
-            <FieldLabel>Subject</FieldLabel>
-            <Input value={mailSubject} onChange={(event) => setMailSubject(event.target.value)} className="h-11 rounded-none bg-white" />
+            <FieldLabel>Email Template</FieldLabel>
+            <select
+              value={selectedMailTemplateId}
+              onChange={(event) => setSelectedMailTemplateId(event.target.value)}
+              className="h-11 rounded-none border bg-white px-3 text-sm"
+            >
+              {emailTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name || template.subject || "Untitled Template"}
+                </option>
+              ))}
+              {!emailTemplates.length && <option value="">No templates</option>}
+            </select>
           </Field>
           <Field>
-            <FieldLabel>Message</FieldLabel>
-            <Textarea value={mailMessage} onChange={(event) => setMailMessage(event.target.value)} className="min-h-44 rounded-none bg-white" />
+            <FieldLabel>Button URL</FieldLabel>
+            <Input value={publicLink} readOnly className="h-11 rounded-none bg-white" />
           </Field>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" className="rounded-none" onClick={() => setMailList(null)}>
             Cancel
           </Button>
-          <Button className="rounded-none bg-[#22bda7] text-white" onClick={() => void sendAsDownload()}>
-            Send
+          <Button className="rounded-none bg-[#22bda7] text-white" disabled={!emailTemplates.length} onClick={() => void sendAsDownload()}>
+            Use Template
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -7529,6 +7763,13 @@ const collectionDefaultDownload: PresetDownloadSettings = {
   limitPinUsage: "",
 };
 
+const collectionDefaultFavorite: PresetFavoriteSettings = {
+  favoritePhotos: true,
+  favoriteNotes: true,
+  maxFavorites: "",
+  description: "",
+};
+
 type CollectionFormState = {
   name: string;
   presetId: string;
@@ -7538,6 +7779,7 @@ type CollectionFormState = {
   design: PresetDesignSettings;
   general: PresetGeneralSettings;
   download: PresetDownloadSettings;
+  favorite: PresetFavoriteSettings;
 };
 
 function coverTextOrDefault(value: string | undefined, fallback: string) {
@@ -7574,7 +7816,15 @@ function collectionForm(collection?: CollectionRecord): CollectionFormState {
       ...collectionDefaultDownload,
       ...((collection?.settings?.download as Partial<PresetDownloadSettings> | undefined) ?? {}),
     },
+    favorite: {
+      ...collectionDefaultFavorite,
+      ...((collection?.settings?.favorite as Partial<PresetFavoriteSettings> | undefined) ?? {}),
+    },
   };
+}
+
+function collectionFormKey(form: CollectionFormState) {
+  return JSON.stringify(form);
 }
 
 function syncSetsFromPhotoSets(

@@ -232,7 +232,40 @@ export function useCollectionActivityActions(collectionId?: string) {
     onSuccess: refresh,
   });
 
-  return { deleteFavoriteInfo, deleteFavoriteImageInfo };
+  const copyFavoriteListToSet = useMutation({
+    mutationFn: async ({ favoriteUserId, name }: { favoriteUserId: string; name?: string }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PostRequestAxios<{ data: { set: CollectionSetRecord; copied: number }; message: string }>(
+        `/collections/${collectionId}/activity/favorites/${favoriteUserId}/copy-to-set`,
+        { name },
+      );
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+    },
+  });
+
+  const copyFavoriteListToCollection = useMutation({
+    mutationFn: async ({ favoriteUserId, name }: { favoriteUserId: string; name?: string }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PostRequestAxios<{ data: { collection: CollectionRecord; copied: number }; message: string }>(
+        `/collections/${collectionId}/activity/favorites/${favoriteUserId}/copy-to-collection`,
+        { name },
+      );
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+
+  return { deleteFavoriteInfo, deleteFavoriteImageInfo, copyFavoriteListToSet, copyFavoriteListToCollection };
 }
 
 export function useCollectionImages() {

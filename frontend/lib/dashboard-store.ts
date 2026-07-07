@@ -54,6 +54,8 @@ export type PresetGeneralSettings = {
 export type PresetFavoriteSettings = {
   favoritePhotos: boolean;
   favoriteNotes: boolean;
+  maxFavorites: string;
+  description: string;
 };
 
 export type PresetStoreSettings = {
@@ -274,6 +276,8 @@ const emptyPresetDownload: PresetDownloadSettings = {
 const emptyPresetFavorite: PresetFavoriteSettings = {
   favoritePhotos: true,
   favoriteNotes: true,
+  maxFavorites: "",
+  description: "",
 };
 
 const emptyPresetStore: PresetStoreSettings = {
@@ -607,7 +611,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         presetGeneral: preset.general,
         presetDesign: { ...emptyPresetDesign, ...preset.design },
         presetDownload: { ...emptyPresetDownload, ...preset.download },
-        presetFavorite: preset.favorite,
+        presetFavorite: { ...emptyPresetFavorite, ...preset.favorite },
         presetStore: preset.store,
         presetEditorPanel: "general",
         presetSaved: true,
@@ -724,7 +728,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
             general: data.general ?? data.presetGeneral ?? emptyPresetGeneral,
             design: { ...emptyPresetDesign, ...(data.design ?? data.presetDesign ?? {}) },
             download: { ...emptyPresetDownload, ...(data.download ?? data.presetDownload ?? {}) },
-            favorite: data.favorite ?? data.presetFavorite ?? emptyPresetFavorite,
+            favorite: { ...emptyPresetFavorite, ...(data.favorite ?? data.presetFavorite ?? {}) },
             store: data.store ?? data.presetStore ?? emptyPresetStore,
             updatedAt: data.updatedAt ?? "Saved",
           } satisfies PresetItem;
@@ -747,7 +751,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         presetGeneral: activePreset?.general ?? state.presetGeneral,
         presetDesign: activePreset ? { ...emptyPresetDesign, ...activePreset.design } : state.presetDesign,
         presetDownload: activePreset ? { ...emptyPresetDownload, ...activePreset.download } : state.presetDownload,
-        presetFavorite: activePreset?.favorite ?? state.presetFavorite,
+        presetFavorite: activePreset ? { ...emptyPresetFavorite, ...activePreset.favorite } : state.presetFavorite,
         presetStore: activePreset?.store ?? state.presetStore,
         watermarkSaved: true,
         emailTemplateSaved: true,

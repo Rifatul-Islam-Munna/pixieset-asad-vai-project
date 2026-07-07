@@ -93,9 +93,23 @@ export function siteMetadata(seo: SiteSeo, autoText = ""): Metadata {
     description,
     keywords: autoKeywords(autoText, seo.siteKeywords),
     applicationName: seo.siteTitle,
+    manifest: "/manifest.webmanifest",
     robots: parseRobots(seo.robots),
     alternates: canonical ? { canonical } : undefined,
-    icons: seo.faviconUrl.trim() ? { icon: [{ url: seo.faviconUrl.trim(), type: "image/png" }] } : undefined,
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: seo.siteTitle,
+    },
+    formatDetection: {
+      telephone: false,
+    },
+    icons: seo.faviconUrl.trim()
+      ? {
+          icon: [{ url: seo.faviconUrl.trim(), type: "image/png" }],
+          apple: [{ url: `/api/pwa-icon?size=180`, sizes: "180x180", type: "image/png" }],
+        }
+      : undefined,
     openGraph: {
       title: seo.siteTitle,
       description,
@@ -137,6 +151,7 @@ export function pageMetadata({
   const nextDescription = description.trim() || autoDescription(autoText, seo.siteDescription);
   return {
     title: { absolute: title },
+    manifest: path ? `/manifest.webmanifest?start=${encodeURIComponent(path)}` : "/manifest.webmanifest",
     description: nextDescription,
     keywords: autoKeywords(`${title} ${description} ${autoText}`, keywords || seo.siteKeywords),
     robots: parseRobots(seo.robots),

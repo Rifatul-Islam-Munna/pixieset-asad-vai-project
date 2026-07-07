@@ -2,7 +2,6 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Grid2X2, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
-import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
@@ -27,6 +26,11 @@ type PublicFace = {
   photoCount: number;
 };
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
 type PublicCollection = {
   _id: string;
   name: string;
@@ -39,6 +43,7 @@ type PublicCollection = {
   settings?: {
     general?: { slideshow?: boolean | string };
     download?: Partial<PresetDownloadSettings>;
+    favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string };
     store?: { storeStatus?: boolean };
   };
 };
@@ -110,10 +115,13 @@ export function PublicGallery({
   galary: string;
   collection?: PublicCollection | null;
 }) {
-  const fallback = useDashboardStore();
+  const fallbackPresetDesign = useDashboardStore((state) => state.presetDesign);
+  const fallbackPresetDownload = useDashboardStore((state) => state.presetDownload);
+  const fallbackPresetStore = useDashboardStore((state) => state.presetStore);
+  const fallbackPresetGeneral = useDashboardStore((state) => state.presetGeneral);
   const design = {
     ...defaultDesign,
-    ...(collection?.design ?? fallback.presetDesign),
+    ...(collection?.design ?? fallbackPresetDesign),
   };
   const title = collection?.name ?? decodeURIComponent(galary);
   design.coverTitle = coverTextOrDefault(design.coverTitle, title);
@@ -124,12 +132,12 @@ export function PublicGallery({
   design.coverButtonText = coverTextOrDefault(design.coverButtonText, "View Gallery");
   const download = {
     ...defaultDownload,
-    ...(collection ? (collection.settings?.download ?? {}) : fallback.presetDownload),
+    ...(collection ? (collection.settings?.download ?? {}) : fallbackPresetDownload),
   };
-  const storeStatus = collection?.settings?.store?.storeStatus ?? fallback.presetStore.storeStatus;
+  const storeStatus = collection?.settings?.store?.storeStatus ?? fallbackPresetStore.storeStatus;
   const slideshowEnabled = collection
     ? boolSetting(collection.settings?.general?.slideshow ?? true)
-    : boolSetting(fallback.presetGeneral.slideshow);
+    : boolSetting(fallbackPresetGeneral.slideshow);
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images = collection?.images?.length
     ? collection.images
@@ -161,6 +169,9 @@ export function PublicGallery({
   const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
+  const [installRequested, setInstallRequested] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [collectionFavorited, setCollectionFavorited] = useState(false);
   const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
@@ -179,6 +190,10 @@ export function PublicGallery({
     typeMap[design.typography as keyof typeof typeMap] ?? typeMap.Classic;
   const storeHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`;
   const downloadsEnabled = boolSetting(download.photoDownload);
+  const favoriteSettings = collection?.settings?.favorite;
+  const favoritesEnabled = favoriteSettings?.favoritePhotos !== false;
+  const maxFavoriteCount = Number(favoriteSettings?.maxFavorites || 0);
+  const canFavoriteMore = !maxFavoriteCount || favoriteImageIds.size < maxFavoriteCount;
   const pinRequired = downloadsEnabled && boolSetting(download.downloadPin);
   const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
@@ -342,6 +357,18 @@ export function PublicGallery({
       { title: photo.originalName || title, text: title, url: currentPublicUrl(photo._id) },
       "Photo shared"
     );
+  const installApp = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt().catch(() => {
+        setShareNotice("Tap Install to save this gallery app");
+      });
+      const choice = await installPrompt.userChoice.catch(() => null);
+      if (choice?.outcome === "accepted") setInstallPrompt(null);
+      setShareNotice(choice?.outcome === "accepted" ? "App installing" : "Install dismissed");
+      return;
+    }
+    setShareNotice("Use browser menu to add app");
+  };
   const toggleCollectionFavorite = async () => {
     if (favoriteBusy) return;
     setFavoriteBusy(true);
@@ -365,7 +392,15 @@ export function PublicGallery({
   };
   const toggleImageFavorite = async (photo: PublicImage) => {
     if (!isPersistedImageId(photo._id)) return;
+    if (!favoritesEnabled) {
+      setShareNotice("Favorites disabled");
+      return;
+    }
     if (favoriteImageBusy === photo._id) return;
+    if (!favoriteImageIds.has(photo._id) && !canFavoriteMore) {
+      setShareNotice(`Favorite limit reached (${maxFavoriteCount})`);
+      return;
+    }
     setFavoriteImageBusy(photo._id);
     const response = await fetch("/api/collection-image-favorites", {
       method: "POST",
@@ -462,6 +497,47 @@ export function PublicGallery({
   }, [shareNotice]);
 
   useEffect(() => {
+    setIsStandaloneApp(
+      window.matchMedia("(display-mode: standalone)").matches ||
+      Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone)
+    );
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const onAppInstalled = () => {
+      setInstallPrompt(null);
+      setIsStandaloneApp(true);
+      setShareNotice("App installed");
+    };
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    const startUrl = `${window.location.pathname}${window.location.search}`;
+    const manifestHref = `/manifest.webmanifest?start=${encodeURIComponent(startUrl)}`;
+    let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!manifestLink) {
+      manifestLink = document.createElement("link");
+      manifestLink.rel = "manifest";
+      document.head.appendChild(manifestLink);
+    }
+    manifestLink.href = manifestHref;
+  }, []);
+
+  useEffect(() => {
+    if (isStandaloneApp) return;
+    if (new URLSearchParams(window.location.search).get("install") !== "1") return;
+    setInstallRequested(true);
+    setShareNotice("Tap Install to save this gallery app");
+  }, [isStandaloneApp]);
+
+  useEffect(() => {
     const identifier = collection?.slug ?? galary;
     fetch("/api/collection-favorites", { cache: "no-store" })
       .then(async (response) => {
@@ -482,7 +558,10 @@ export function PublicGallery({
       })
       .then((payload) => {
         const ids = Array.isArray(payload?.data)
-          ? payload.data.map((item: any) => item.imageId).filter(Boolean)
+          ? payload.data
+              .filter((item: any) => item.collectionId === collection?._id)
+              .map((item: any) => item.imageId)
+              .filter(Boolean)
           : [];
         setFavoriteImageIds(new Set(ids));
       })
@@ -508,6 +587,11 @@ export function PublicGallery({
               <button className="flex items-center gap-2 text-sm" onClick={() => void shareCollection()} type="button">
                 <Share2 className="size-4" /> Share
               </button>
+              {!isStandaloneApp && (
+                <button className="flex items-center gap-2 text-sm" onClick={() => void installApp()} type="button">
+                  <Download className="size-4" /> Install
+                </button>
+              )}
               {storeStatus && (
                 <a href={storeHref} className="flex items-center gap-2 text-sm">
                   <ShoppingBag className="size-4" /> Store
@@ -520,6 +604,11 @@ export function PublicGallery({
               <button onClick={() => void shareCollection()} type="button" aria-label="Share collection">
                 <Share2 className="size-5" />
               </button>
+              {!isStandaloneApp && (
+                <button onClick={() => void installApp()} type="button" aria-label="Install app">
+                  <Download className="size-5" />
+                </button>
+              )}
               {storeStatus && <a href={storeHref} aria-label="Store"><ShoppingBag className="size-5" /></a>}
             </>
           )}
@@ -574,6 +663,12 @@ export function PublicGallery({
               <Share2 className="size-4" />
               <span className="md:sr-only">Share</span>
             </button>
+            {!isStandaloneApp && (
+              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void installApp()} type="button" title="Install app" aria-label="Install app">
+                <Download className="size-4" />
+                <span className="md:sr-only">Install</span>
+              </button>
+            )}
             <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button" title="Favorite" aria-label="Favorite">
               <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
               <span className="md:sr-only">Favorite</span>
@@ -615,10 +710,35 @@ export function PublicGallery({
         )}
 
         {faceError && <p className="mx-4 mt-5 text-sm font-semibold text-red-600 md:mx-8">{faceError}</p>}
+        {installRequested && !isStandaloneApp && (
+          <div className="mx-4 mt-5 flex max-w-xl flex-wrap items-center justify-between gap-3 border border-black/10 bg-[#f4f4f2] px-4 py-3 md:mx-8">
+            <p className="text-sm font-semibold text-[#202326]">
+              Save this gallery as an app on this device.
+            </p>
+            <button
+              className="inline-flex h-10 items-center gap-2 bg-[#202326] px-4 text-sm font-bold text-white"
+              onClick={() => void installApp()}
+              type="button"
+            >
+              <Download className="size-4" />
+              Install
+            </button>
+          </div>
+        )}
         {shareNotice && (
           <p className="mx-4 mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white md:mx-8">
             <Check className="size-4" />
             {shareNotice}
+          </p>
+        )}
+        {favoriteSettings?.description && (
+          <p className="mx-4 mt-5 max-w-2xl text-sm leading-6 md:mx-8" style={{ color: accent }}>
+            {favoriteSettings.description}
+          </p>
+        )}
+        {maxFavoriteCount > 0 && (
+          <p className="mx-4 mt-2 text-sm font-semibold md:mx-8" style={{ color: accent }}>
+            {favoriteImageIds.size} / {maxFavoriteCount} favorites used
           </p>
         )}
         {faceResults && (
@@ -649,47 +769,22 @@ export function PublicGallery({
           id="gallery"
           className="mt-0 bg-white p-0"
         >
-          <ResponsiveMasonry
-            columnsCountBreakPoints={{ 0: 1, 640: 2, 1024: 3 }}
-            gutterBreakPoints={{ 0: 0, 640: 0, 1024: 0 }}
-          >
-            <Masonry gutter="0px" itemStyle={{ overflow: "visible" }}>
-              {visibleImages.map((photo) => (
-                <div
-                  id={`photo-${photo._id}`}
-                  key={photo._id}
-                  className="group relative w-full bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
-                >
-                  <button className="block w-full" onClick={() => setActiveImage(photo)}>
-                    <GalleryImage
-                      src={imageSrc(displayImageUrl(photo))}
-                      fallbackSrc={imageSrc(photo.url)}
-                      alt={photo.originalName ?? ""}
-                      className="block h-auto w-full"
-                    />
-                  </button>
-                  <div className="absolute right-3 top-3 flex gap-2">
-                    {isPersistedImageId(photo._id) && (
-                      <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => void toggleImageFavorite(photo)} disabled={favoriteImageBusy === photo._id} aria-label="Favorite image" type="button">
-                        <Heart className={cn("size-4", favoriteImageIds.has(photo._id) && "fill-red-500 text-red-500")} />
-                      </button>
-                    )}
-                    <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => setActiveImage(photo)} aria-label="View image">
-                      <Eye className="size-4" />
-                    </button>
-                    <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => void sharePhoto(photo)} aria-label="Share image" type="button">
-                      <Share2 className="size-4" />
-                    </button>
-                    {canDownload && (
-                      <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => downloadPhoto(photo)} aria-label="Download image" type="button">
-                        <Download className="size-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </Masonry>
-          </ResponsiveMasonry>
+          <div className="columns-1 sm:columns-2 lg:columns-3">
+            {visibleImages.map((photo) => (
+              <GalleryTile
+                key={photo._id}
+                photo={photo}
+                canFavorite={favoritesEnabled}
+                canDownload={canDownload}
+                favoriteBusy={favoriteImageBusy === photo._id}
+                favorited={favoriteImageIds.has(photo._id)}
+                onDownload={downloadPhoto}
+                onFavorite={toggleImageFavorite}
+                onPreview={setActiveImage}
+                onShare={sharePhoto}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
@@ -699,7 +794,7 @@ export function PublicGallery({
             <X className="size-5" />
           </button>
           <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
-            {isPersistedImageId(activeImage._id) && (
+            {favoritesEnabled && isPersistedImageId(activeImage._id) && (
               <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void toggleImageFavorite(activeImage)} type="button">
                 <Heart className={cn("size-4", favoriteImageIds.has(activeImage._id) && "fill-red-500 text-red-500")} />
                 Favorite
@@ -739,7 +834,7 @@ export function PublicGallery({
             <ChevronRight className="size-6" />
           </button>
           <div className="absolute bottom-5 right-5 flex flex-wrap justify-end gap-2">
-            {isPersistedImageId(slideshowImage._id) && (
+            {favoritesEnabled && isPersistedImageId(slideshowImage._id) && (
               <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void toggleImageFavorite(slideshowImage)} type="button">
                 <Heart className={cn("size-4", favoriteImageIds.has(slideshowImage._id) && "fill-red-500 text-red-500")} />
                 Favorite
@@ -843,6 +938,62 @@ function safeDownloadName(value: string) {
     .replace(/[^a-z0-9-_]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "collection";
+}
+
+function GalleryTile({
+  photo,
+  canFavorite,
+  canDownload,
+  favoriteBusy,
+  favorited,
+  onDownload,
+  onFavorite,
+  onPreview,
+  onShare,
+}: {
+  photo: PublicImage;
+  canFavorite: boolean;
+  canDownload: boolean;
+  favoriteBusy: boolean;
+  favorited: boolean;
+  onDownload: (photo: PublicImage) => void;
+  onFavorite: (photo: PublicImage) => void;
+  onPreview: (photo: PublicImage) => void;
+  onShare: (photo: PublicImage) => void;
+}) {
+  return (
+    <div
+      id={`photo-${photo._id}`}
+      className="group relative mb-0 w-full break-inside-avoid bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
+    >
+      <button className="block w-full" onClick={() => onPreview(photo)}>
+        <GalleryImage
+          src={imageSrc(displayImageUrl(photo))}
+          fallbackSrc={imageSrc(photo.url)}
+          alt={photo.originalName ?? ""}
+          className="block h-auto w-full"
+        />
+      </button>
+      <div className="absolute right-3 top-3 flex gap-2">
+        {canFavorite && isPersistedImageId(photo._id) && (
+          <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" type="button">
+            <Heart className={cn("size-4", favorited && "fill-red-500 text-red-500")} />
+          </button>
+        )}
+        <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onPreview(photo)} aria-label="View image">
+          <Eye className="size-4" />
+        </button>
+        <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onShare(photo)} aria-label="Share image" type="button">
+          <Share2 className="size-4" />
+        </button>
+        {canDownload && (
+          <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onDownload(photo)} aria-label="Download image" type="button">
+            <Download className="size-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function GalleryImage({

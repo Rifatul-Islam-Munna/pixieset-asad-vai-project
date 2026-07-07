@@ -120,6 +120,28 @@ export class CollectionsController {
     return { message: 'Favorite image deleted', data };
   }
 
+  @Post(':id/activity/favorites/:favoriteUserId/copy-to-set')
+  async copyFavoriteListToSet(
+    @Param('id') id: string,
+    @Param('favoriteUserId') favoriteUserId: string,
+    @Body('name') name: string | undefined,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.copyFavoriteListToSet(req.user.id, id, favoriteUserId, name);
+    return { message: 'Favorite list copied to set', data };
+  }
+
+  @Post(':id/activity/favorites/:favoriteUserId/copy-to-collection')
+  async copyFavoriteListToCollection(
+    @Param('id') id: string,
+    @Param('favoriteUserId') favoriteUserId: string,
+    @Body('name') name: string | undefined,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.copyFavoriteListToCollection(req.user.id, id, favoriteUserId, name);
+    return { message: 'Favorite list copied to collection', data };
+  }
+
   @Post('favorites/:identifier')
   async favorite(@Param('identifier') identifier: string, @Req() req: ExpressRequest) {
     const data = await this.collectionsService.toggleFavoriteCollection(req.user.id, identifier);

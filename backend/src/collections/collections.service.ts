@@ -232,6 +232,18 @@ export class CollectionsService {
       return { favorited: false, imageId, collectionId: image.collectionId };
     }
 
+    const collection = await this.collectionModel.findById(image.collectionId).select('settings').lean();
+    const maxFavorites = Number((collection?.settings as any)?.favorite?.maxFavorites || 0);
+    if (maxFavorites > 0) {
+      const currentCount = await this.imageFavoriteModel.countDocuments({
+        userId,
+        collectionId: image.collectionId,
+      });
+      if (currentCount >= maxFavorites) {
+        throw new BadRequestException(`Favorite limit reached (${maxFavorites})`);
+      }
+    }
+
     await this.imageFavoriteModel.updateOne(
       { userId, imageId },
       { $setOnInsert: { userId, imageId, collectionId: image.collectionId } },
@@ -376,6 +388,85 @@ export class CollectionsService {
       imageId,
     });
     return { deleted: result.deletedCount ?? 0 };
+  }
+
+  async copyFavoriteListToSet(userId: string, collectionId: string, favoriteUserId: string, name?: string) {
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId });
+    if (!collection) throw new NotFoundException('Collection not found');
+    const images = await this.favoriteImagesForUser(collectionId, favoriteUserId);
+    if (!images.length) throw new BadRequestException('No favorite photos to copy');
+
+    const set = {
+      id: `set-${Date.now()}`,
+      name: name?.trim() || 'Favorite Selection',
+      createdAt: new Date(),
+    };
+    const copies = images.map((image) => ({
+      userId,
+      collectionId,
+      setId: set.id,
+      url: image.url,
+      thumbnailUrl: image.thumbnailUrl,
+      blurDataUrl: image.blurDataUrl,
+      originalName: image.originalName,
+      filename: image.filename,
+      mimetype: image.mimetype,
+      sizeBytes: image.sizeBytes,
+      watermarked: image.watermarked,
+      metadata: image.metadata ?? {},
+    }));
+
+    await this.imageModel.insertMany(copies);
+    collection.sets = [...(collection.sets ?? []), set];
+    collection.imageCount = (collection.imageCount ?? 0) + copies.length;
+    await collection.save();
+    return { set, copied: copies.length };
+  }
+
+  async copyFavoriteListToCollection(userId: string, collectionId: string, favoriteUserId: string, name?: string) {
+    const source = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    if (!source) throw new NotFoundException('Collection not found');
+    const images = await this.favoriteImagesForUser(collectionId, favoriteUserId);
+    if (!images.length) throw new BadRequestException('No favorite photos to copy');
+
+    const set = { id: 'highlights', name: 'Highlights', createdAt: new Date() };
+    const collection = await this.collectionModel.create({
+      userId,
+      name: name?.trim() || `${source.name} Favorites`,
+      slug: this.slugify(name?.trim() || `${source.name} Favorites`),
+      eventDate: source.eventDate,
+      presetId: source.presetId,
+      coverImage: images[0]?.url,
+      sets: [set],
+      tags: source.tags ?? [],
+      watermarkId: source.watermarkId,
+      design: source.design ?? {},
+      settings: source.settings ?? {},
+      imageCount: images.length,
+      status: source.status ?? 'draft',
+    });
+    await this.imageModel.insertMany(images.map((image) => ({
+      userId,
+      collectionId: collection._id.toString(),
+      setId: set.id,
+      url: image.url,
+      thumbnailUrl: image.thumbnailUrl,
+      blurDataUrl: image.blurDataUrl,
+      originalName: image.originalName,
+      filename: image.filename,
+      mimetype: image.mimetype,
+      sizeBytes: image.sizeBytes,
+      watermarked: image.watermarked,
+      metadata: image.metadata ?? {},
+    })));
+    return { collection: collection.toObject(), copied: images.length };
+  }
+
+  private async favoriteImagesForUser(collectionId: string, favoriteUserId: string) {
+    const favorites = await this.imageFavoriteModel.find({ collectionId, userId: favoriteUserId }).lean();
+    const imageIds = favorites.map((favorite) => favorite.imageId).filter((id) => Types.ObjectId.isValid(id));
+    if (!imageIds.length) return [];
+    return this.imageModel.find({ collectionId, _id: { $in: imageIds } }).lean();
   }
 
   async findAllImages(userId: string) {
