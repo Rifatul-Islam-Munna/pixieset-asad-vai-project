@@ -128,3 +128,16 @@
     @apply font-sans;
   }
 }
+
+.sortable-image-ghost {
+  opacity: 0.35;
+}
+
+.sortable-image-chosen {
+  outline: 2px solid #22bda7;
+  outline-offset: 2px;
+}
+
+.sortable-image-drag {
+  cursor: grabbing;
+}

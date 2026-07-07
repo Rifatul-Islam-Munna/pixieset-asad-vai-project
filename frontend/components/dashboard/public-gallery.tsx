@@ -85,6 +85,8 @@ const defaultDesign: PresetDesignSettings = {
   showCoverDate: true,
   showCoverButton: true,
   typography: "Classic",
+  customFontName: "",
+  customFontDataUrl: "",
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -186,8 +188,16 @@ export function PublicGallery({
   const slideshowPosition = slideshowIndex ?? 0;
   const [bg, fg, accent] =
     themeMap[design.color as keyof typeof themeMap] ?? themeMap.Rose;
-  const fontFamily =
+  const fallbackFontFamily =
     typeMap[design.typography as keyof typeof typeMap] ?? typeMap.Classic;
+  const customFontName = design.customFontName?.trim();
+  const fontFamily = customFontName
+    ? `"${customFontName.replace(/"/g, "")}", ${fallbackFontFamily}`
+    : fallbackFontFamily;
+  const masonryGapPx = design.gridSpacing === "Large" ? 8 : 3;
+  const masonryColumns = design.thumbnailSize === "Large"
+    ? "columns-1 sm:columns-2"
+    : "columns-1 sm:columns-2 lg:columns-3";
   const storeHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`;
   const downloadsEnabled = boolSetting(download.photoDownload);
   const favoriteSettings = collection?.settings?.favorite;
@@ -575,6 +585,10 @@ export function PublicGallery({
   }, [slideshowIndex, visibleImages.length]);
 
   return (
+    <>
+      {customFontName && design.customFontDataUrl && (
+        <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
+      )}
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen scroll-smooth">
       <nav className="flex h-16 items-center justify-between px-5 md:px-10">
         <p className="text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
@@ -629,11 +643,30 @@ export function PublicGallery({
 
       <section className="px-0 py-0">
         <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-y border-black/10 bg-white/95 px-4 py-4 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] backdrop-blur md:px-8">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.26em] text-black/45">
               Masonry gallery
             </p>
-            <h1 className="mt-2 text-2xl font-semibold md:text-3xl">{title}</h1>
+            <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-2">
+              <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
+              {showSetTabs && (
+                <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold">
+                  {gallerySets.map((set) => (
+                    <button
+                      key={set.id}
+                      className={cn(
+                        "transition-opacity hover:opacity-100",
+                        activeSetId === set.id ? "opacity-100" : "opacity-45",
+                      )}
+                      onClick={() => setActiveSetId(set.id)}
+                      type="button"
+                    >
+                      {set.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-full border border-black/10 bg-[#f4f4f2] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur">
             <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90 md:w-10 md:justify-center md:px-0" title={faceBusy ? "Searching" : "Find me"}>
@@ -747,33 +780,16 @@ export function PublicGallery({
           </p>
         )}
 
-        {showSetTabs && (
-          <div className="mx-4 mt-5 flex flex-wrap gap-2 md:mx-8">
-            {gallerySets.map((set) => (
-              <button
-                key={set.id}
-                className={cn(
-                  "border border-black/10 px-4 py-2 text-sm font-bold transition hover:bg-black/5",
-                  activeSetId === set.id && "bg-[#202326] text-white hover:bg-[#202326]",
-                )}
-                onClick={() => setActiveSetId(set.id)}
-                type="button"
-              >
-                {set.name}
-              </button>
-            ))}
-          </div>
-        )}
-
         <div
           id="gallery"
           className="mt-0 bg-white p-0"
         >
-          <div className="columns-1 sm:columns-2 lg:columns-3">
+          <div className={masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
             {visibleImages.map((photo) => (
               <GalleryTile
                 key={photo._id}
                 photo={photo}
+                spacing={masonryGapPx}
                 canFavorite={favoritesEnabled}
                 canDownload={canDownload}
                 favoriteBusy={favoriteImageBusy === photo._id}
@@ -908,6 +924,7 @@ export function PublicGallery({
         </div>
       )}
     </main>
+    </>
   );
 }
 
@@ -942,6 +959,7 @@ function safeDownloadName(value: string) {
 
 function GalleryTile({
   photo,
+  spacing,
   canFavorite,
   canDownload,
   favoriteBusy,
@@ -952,6 +970,7 @@ function GalleryTile({
   onShare,
 }: {
   photo: PublicImage;
+  spacing: number;
   canFavorite: boolean;
   canDownload: boolean;
   favoriteBusy: boolean;
@@ -965,6 +984,7 @@ function GalleryTile({
     <div
       id={`photo-${photo._id}`}
       className="group relative mb-0 w-full break-inside-avoid bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
+      style={{ marginBottom: `${spacing}px` }}
     >
       <button className="block w-full" onClick={() => onPreview(photo)}>
         <GalleryImage

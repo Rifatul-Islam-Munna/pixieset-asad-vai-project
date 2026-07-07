@@ -88,11 +88,11 @@ export class CollectionsService {
 
     const images = await this.imageModel
       .find({ collectionId: id, userId })
-      .sort({ createdAt: -1 })
+      .sort({ order: 1, createdAt: -1 })
       .lean();
     void this.ensureCollectionPreviews(id);
 
-    return { ...collection, images };
+    return { ...collection, images: this.sortImagesForGallery(images) };
   }
 
   async findPublic(identifier: string) {
@@ -100,7 +100,7 @@ export class CollectionsService {
 
     const images = await this.imageModel
       .find({ collectionId: collection._id.toString() })
-      .sort({ createdAt: -1 })
+      .sort({ order: 1, createdAt: -1 })
       .lean();
     void this.ensureCollectionPreviews(collection._id.toString());
     const preset = collection.presetId
@@ -138,7 +138,7 @@ export class CollectionsService {
           ...((collection.settings as any)?.store ?? {}),
         },
       },
-      images,
+      images: this.sortImagesForGallery(images),
     };
   }
 
@@ -549,6 +549,33 @@ export class CollectionsService {
     return set;
   }
 
+  async reorderImages(userId: string, collectionId: string, imageIds: string[]) {
+    if (!Array.isArray(imageIds) || !imageIds.length) {
+      throw new BadRequestException('Image order is required');
+    }
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const images = await this.imageModel
+      .find({ collectionId, userId, _id: { $in: imageIds } })
+      .select('_id')
+      .lean();
+    const validIds = new Set(images.map((image) => image._id.toString()));
+    const orderedIds = imageIds.filter((id) => validIds.has(id));
+    if (!orderedIds.length) throw new BadRequestException('No valid images to reorder');
+
+    await this.imageModel.bulkWrite(
+      orderedIds.map((imageId, index) => ({
+        updateOne: {
+          filter: { _id: imageId, collectionId, userId },
+          update: { $set: { order: index + 1 } },
+        },
+      })),
+    );
+
+    return { updated: orderedIds.length };
+  }
+
   async uploadImages(userId: string, collectionId: string, files: Express.Multer.File[], setId?: string, uploadWatermarkId?: string) {
     if (!files?.length) throw new BadRequestException('Files are required');
     await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + (file.size ?? 0), 0));
@@ -568,8 +595,14 @@ export class CollectionsService {
             ? await this.resolveWatermark(userId, collection.presetId)
             : null;
 
+    const lastImage = await this.imageModel
+      .findOne({ collectionId, userId })
+      .sort({ order: -1, createdAt: -1 })
+      .select('order')
+      .lean();
+    const nextOrder = Math.max(0, Number(lastImage?.order ?? 0));
     const uploaded = await Promise.all(
-      files.map((file) => this.processAndSaveImage(userId, collectionId, file, watermark, resolvedSetId)),
+      files.map((file, index) => this.processAndSaveImage(userId, collectionId, file, watermark, resolvedSetId, nextOrder + index + 1)),
     );
 
     await this.collectionModel.updateOne(
@@ -647,6 +680,7 @@ export class CollectionsService {
     file: Express.Multer.File,
     watermark: WatermarkData | null,
     setId?: string,
+    order = 0,
   ) {
     const metadata = await this.extractMetadata(file);
     const isImage = file.mimetype?.startsWith('image/');
@@ -698,10 +732,24 @@ export class CollectionsService {
       mimetype: file.mimetype,
       sizeBytes: file.size ?? 0,
       watermarked,
+      order,
       metadata,
     });
 
     return image.toObject();
+  }
+
+  private sortImagesForGallery<T extends { order?: number; createdAt?: Date | string; _id?: unknown }>(images: T[]) {
+    return [...images].sort((a, b) => {
+      const aOrder = Number(a.order);
+      const bOrder = Number(b.order);
+      const aHasOrder = Number.isFinite(aOrder) && aOrder > 0;
+      const bHasOrder = Number.isFinite(bOrder) && bOrder > 0;
+      if (aHasOrder && bHasOrder) return aOrder - bOrder;
+      if (aHasOrder) return -1;
+      if (bHasOrder) return 1;
+      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+    });
   }
 
   private async createImagePreview(file: Express.Multer.File) {

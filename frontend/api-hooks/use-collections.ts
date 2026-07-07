@@ -38,6 +38,7 @@ export type CollectionImageRecord = {
   originalName?: string;
   watermarked?: boolean;
   metadata?: Record<string, any>;
+  order?: number;
   createdAt?: string;
   collectionName?: string;
   setName?: string;
@@ -187,7 +188,23 @@ export function useCollectionDetail(collectionId?: string) {
     },
   });
 
-  return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage };
+  const reorderImages = useMutation({
+    mutationFn: async (imageIds: string[]) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PatchRequestAxios<
+        { data: { updated: number }; message: string }
+      >(`/collections/${collectionId}/images/reorder`, { imageIds } as any);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+    },
+  });
+
+  return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages };
 }
 
 export function useCollectionActivity(collectionId?: string) {

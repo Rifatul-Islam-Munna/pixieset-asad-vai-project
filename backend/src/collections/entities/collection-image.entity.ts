@@ -38,6 +38,9 @@ export class CollectionImage {
   @Prop({ default: false })
   watermarked: boolean;
 
+  @Prop({ default: 0, index: true })
+  order: number;
+
   @Prop()
   faceIndexedAt?: Date;
 
@@ -50,4 +53,4 @@ export class CollectionImage {
 
 export const CollectionImageSchema =
   SchemaFactory.createForClass(CollectionImage);
-CollectionImageSchema.index({ collectionId: 1, createdAt: -1 });
+CollectionImageSchema.index({ collectionId: 1, order: 1, createdAt: -1 });

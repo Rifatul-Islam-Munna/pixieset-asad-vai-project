@@ -194,6 +194,16 @@ export class CollectionsController {
     return { message: 'Images uploaded', data };
   }
 
+  @Patch(':id/images/reorder')
+  async reorderImages(
+    @Param('id') id: string,
+    @Body('imageIds') imageIds: string[],
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.reorderImages(req.user.id, id, imageIds);
+    return { message: 'Images reordered', data };
+  }
+
   @Delete(':id/images/:imageId')
   async removeImage(
     @Param('id') id: string,

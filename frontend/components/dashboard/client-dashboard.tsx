@@ -9,6 +9,7 @@ import UnderlineExtension from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { toast } from "sonner";
+import { ReactSortable } from "react-sortablejs";
 import {
   ArrowLeft,
   ArrowRight,
@@ -36,6 +37,7 @@ import {
   MailCheck,
   Megaphone,
   MoreHorizontal,
+  Monitor,
   Menu,
   Package,
   Palette,
@@ -53,6 +55,7 @@ import {
   Send,
   Star,
   Store,
+  Smartphone,
   Trash2,
   Underline,
   Unlink,
@@ -2990,8 +2993,29 @@ const colorOptions = [
   ["Olive", ["#f3f4f0", "#e9e9e3", "#96977a"]],
 ] as const;
 
+const collectionPreviewThemeMap = {
+  Light: ["#ffffff", "#111111", "#555555"],
+  White: ["#ffffff", "#111111", "#555555"],
+  Gold: ["#fffdf8", "#2a241b", "#a99167"],
+  Rose: ["#fbf7f6", "#2d2020", "#a9807c"],
+  Terracotta: ["#fbf8f5", "#352018", "#aa7b60"],
+  Sand: ["#f5f3f1", "#2f2924", "#9f8f82"],
+  Olive: ["#f3f4f0", "#24261b", "#96977a"],
+} as const;
+
+const collectionPreviewTypeMap = {
+  Sans: "Arial, sans-serif",
+  Serif: "Georgia, serif",
+  Modern: "Helvetica, sans-serif",
+  Timeless: "Times New Roman, serif",
+  Bold: "Arial Black, sans-serif",
+  Subtle: "Helvetica, sans-serif",
+  Classic: "Georgia, serif",
+} as const;
+
 function PresetDesignPanel({
   design,
+  activePanel,
   onChange,
 }: {
   design: {
@@ -3005,101 +3029,242 @@ function PresetDesignPanel({
     showCoverDate: boolean;
     showCoverButton: boolean;
     typography: string;
+    customFontName?: string;
+    customFontDataUrl?: string;
     color: string;
     gridStyle: "Vertical" | "Horizontal";
     thumbnailSize: "Regular" | "Large";
     gridSpacing: "Regular" | "Large";
     navigationStyle: "Icon Only" | "Icon & Text";
   };
+  activePanel: "cover" | "typography" | "color" | "grid";
   onChange: (value: Partial<typeof design>) => void;
 }) {
+  const readCustomFont = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      onChange({
+        customFontName: file.name.replace(/\.[^.]+$/, ""),
+        customFontDataUrl: String(reader.result ?? ""),
+        typography: "Custom",
+      } as Partial<typeof design>);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
-    <div className="max-w-[700px]">
-      <h2 className="text-2xl font-medium">Design</h2>
-      <div className="mt-8 overflow-hidden border bg-[#f7f7f7] p-3">
-        <CoverPreview design={design} className="min-h-[360px]" />
-      </div>
-      <OptionSection title="Cover Text">
-        <FieldGroup className="gap-5">
-          {([
-            ["Small Title", "coverSmallTitle", "showCoverSmallTitle"],
-            ["Title", "coverTitle", "showCoverTitle"],
-            ["Date", "coverDate", "showCoverDate"],
-            ["Button", "coverButtonText", "showCoverButton"],
-          ] as const).map(([label, key, toggle]) => (
-            <Field key={key}>
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  checked={design[toggle]}
-                  onCheckedChange={(value) => onChange({ [toggle]: Boolean(value) } as Partial<typeof design>)}
-                />
-                <FieldLabel className="font-bold">{label}</FieldLabel>
-              </div>
-              <Input
-                value={design[key]}
-                onChange={(event) => onChange({ [key]: event.target.value } as Partial<typeof design>)}
-                className="mt-2 h-11 rounded-none bg-white"
-              />
-            </Field>
-          ))}
-        </FieldGroup>
-      </OptionSection>
-      <p className="mt-10 text-sm font-bold">Cover</p>
-      <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3">
-        {coverOptions.map(([name]) => (
-          <button key={name} className="text-center" onClick={() => onChange({ cover: name })}>
-            <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-              <span className="relative block aspect-[1.45] overflow-hidden bg-white">
-                <CoverPreview design={{ ...design, cover: name }} compact className="min-h-0" />
-              </span>
-            </span>
-            <span className="mt-3 block text-sm">{name}</span>
-          </button>
-        ))}
-      </div>
-
-      <OptionSection title="Typography">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {typographyOptions.map(([name, sample, desc]) => (
-            <button key={name} className="text-center" onClick={() => onChange({ typography: name })}>
-              <span className={cn("block border p-8 text-left", design.typography === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-                <span className="block text-xl tracking-widest">{sample}</span>
-                <span className="mt-3 block text-sm text-[#555]">{desc}</span>
-              </span>
-              <span className="mt-3 block text-sm">{name}</span>
-            </button>
-          ))}
-        </div>
-      </OptionSection>
-
-      <OptionSection title="Color">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {colorOptions.map(([name, colors]) => (
-            <button key={name} className="text-center" onClick={() => onChange({ color: name })}>
-              <span className={cn("flex h-[118px] items-center justify-center gap-2 border", design.color === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-                {colors.map((color) => (
-                  <span key={color} className="size-10 rounded-full border" style={{ backgroundColor: color }} />
+    <div className="min-w-0 border bg-white p-7">
+        {activePanel === "cover" && (
+          <>
+            <h2 className="text-2xl font-medium">Cover</h2>
+            <OptionSection title="Cover Text">
+              <FieldGroup className="gap-5">
+                {([
+                  ["Small Title", "coverSmallTitle", "showCoverSmallTitle"],
+                  ["Title", "coverTitle", "showCoverTitle"],
+                  ["Date", "coverDate", "showCoverDate"],
+                  ["Button", "coverButtonText", "showCoverButton"],
+                ] as const).map(([label, key, toggle]) => (
+                  <Field key={key}>
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={design[toggle]}
+                        onCheckedChange={(value) => onChange({ [toggle]: Boolean(value) } as Partial<typeof design>)}
+                      />
+                      <FieldLabel className="font-bold">{label}</FieldLabel>
+                    </div>
+                    <Input
+                      value={design[key]}
+                      onChange={(event) => onChange({ [key]: event.target.value } as Partial<typeof design>)}
+                      className="mt-2 h-11 rounded-none bg-white"
+                    />
+                  </Field>
                 ))}
-              </span>
-              <span className="mt-3 block text-sm">{name}</span>
-            </button>
-          ))}
-        </div>
-      </OptionSection>
+              </FieldGroup>
+            </OptionSection>
+            <p className="mt-10 text-sm font-bold">Cover</p>
+            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8">
+              {coverOptions.map(([name]) => (
+                <button key={name} className="text-center" onClick={() => onChange({ cover: name })} type="button">
+                  <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                    <span className="relative block aspect-[1.45] overflow-hidden bg-white">
+                      <CoverPreview design={{ ...design, cover: name }} compact className="min-h-0" />
+                    </span>
+                  </span>
+                  <span className="mt-3 block text-sm">{name}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
-      <OptionSection title="Grid Style">
-        <TwoOption value={design.gridStyle} a="Vertical" b="Horizontal" onPick={(value) => onChange({ gridStyle: value as "Vertical" | "Horizontal" })} />
-      </OptionSection>
-      <OptionSection title="Thumbnail Size">
-        <TwoOption value={design.thumbnailSize} a="Regular" b="Large" onPick={(value) => onChange({ thumbnailSize: value as "Regular" | "Large" })} />
-      </OptionSection>
-      <OptionSection title="Grid Spacing">
-        <TwoOption value={design.gridSpacing} a="Regular" b="Large" onPick={(value) => onChange({ gridSpacing: value as "Regular" | "Large" })} />
-      </OptionSection>
-      <OptionSection title="Navigation Style">
-        <TwoOption value={design.navigationStyle} a="Icon Only" b="Icon & Text" onPick={(value) => onChange({ navigationStyle: value as "Icon Only" | "Icon & Text" })} />
-      </OptionSection>
+        {activePanel === "typography" && (
+          <>
+            <h2 className="text-2xl font-medium">Typography</h2>
+            <div className="mt-8 grid grid-cols-2 gap-3">
+              {typographyOptions.map(([name, sample, desc]) => (
+                <button key={name} className="text-center" onClick={() => onChange({ typography: name, customFontName: "", customFontDataUrl: "" } as Partial<typeof design>)} type="button">
+                  <span className={cn("block border p-8 text-left", design.typography === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                    <span className="block text-xl tracking-widest">{sample}</span>
+                    <span className="mt-3 block text-sm text-[#555]">{desc}</span>
+                  </span>
+                  <span className="mt-3 block text-sm">{name}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-8 border bg-[#fafafa] p-5">
+              <p className="font-bold">Custom Font</p>
+              <p className="mt-2 text-sm text-[#666]">{design.customFontName || "Upload WOFF, WOFF2, TTF, or OTF font."}</p>
+              <label className="mt-4 inline-flex h-10 cursor-pointer items-center gap-2 bg-[#111] px-4 text-sm font-bold text-white">
+                <Upload className="size-4" />
+                Upload Font
+                <input
+                  type="file"
+                  accept=".woff,.woff2,.ttf,.otf,font/*"
+                  className="hidden"
+                  onChange={(event) => readCustomFont(event.target.files?.[0])}
+                />
+              </label>
+              {design.customFontDataUrl && (
+                <button
+                  className="ml-3 h-10 border bg-white px-4 text-sm font-bold"
+                  onClick={() => onChange({ typography: "Classic", customFontName: "", customFontDataUrl: "" } as Partial<typeof design>)}
+                  type="button"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </>
+        )}
+
+        {activePanel === "color" && (
+          <>
+            <h2 className="text-2xl font-medium">Color</h2>
+            <div className="mt-8 grid grid-cols-2 gap-3">
+              {colorOptions.map(([name, colors]) => (
+                <button key={name} className="text-center" onClick={() => onChange({ color: name })} type="button">
+                  <span className={cn("flex h-[118px] items-center justify-center gap-2 border", design.color === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                    {colors.map((color) => (
+                      <span key={color} className="size-10 rounded-full border" style={{ backgroundColor: color }} />
+                    ))}
+                  </span>
+                  <span className="mt-3 block text-sm">{name}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {activePanel === "grid" && (
+          <>
+            <h2 className="text-2xl font-medium">Grid</h2>
+            <OptionSection title="Thumbnail Size">
+              <TwoOption value={design.thumbnailSize} a="Regular" b="Large" onPick={(value) => onChange({ thumbnailSize: value as "Regular" | "Large" })} />
+            </OptionSection>
+            <OptionSection title="Grid Spacing">
+              <TwoOption value={design.gridSpacing} a="Regular" b="Large" onPick={(value) => onChange({ gridSpacing: value as "Regular" | "Large" })} />
+            </OptionSection>
+            <OptionSection title="Navigation Style">
+              <TwoOption value={design.navigationStyle} a="Icon Only" b="Icon & Text" onPick={(value) => onChange({ navigationStyle: value as "Icon Only" | "Icon & Text" })} />
+            </OptionSection>
+          </>
+        )}
     </div>
+  );
+}
+
+function CollectionDesignLivePreview({
+  design,
+  collectionName,
+  eventDate,
+  coverImage,
+  images,
+  sets,
+  favoriteEnabled,
+  storeEnabled,
+}: {
+  design: PresetDesignSettings;
+  collectionName: string;
+  eventDate: string;
+  coverImage?: string;
+  images: CollectionImageRecord[];
+  sets: { id: string; name: string }[];
+  favoriteEnabled: boolean;
+  storeEnabled: boolean;
+}) {
+  const previewImages = images.length ? images.slice(0, 6) : [];
+  const firstSets = sets.slice(0, 5);
+  const masonryGapPx = design.gridSpacing === "Large" ? 8 : 3;
+  const masonryColumns = design.thumbnailSize === "Large" ? "columns-2" : "columns-3";
+  const [bg, fg, accent] =
+    collectionPreviewThemeMap[design.color as keyof typeof collectionPreviewThemeMap] ?? collectionPreviewThemeMap.Rose;
+  const fallbackFontFamily =
+    collectionPreviewTypeMap[design.typography as keyof typeof collectionPreviewTypeMap] ?? collectionPreviewTypeMap.Classic;
+  const customFontName = design.customFontName?.trim();
+  const fontFamily = customFontName
+    ? `"${customFontName.replace(/"/g, "")}", ${fallbackFontFamily}`
+    : fallbackFontFamily;
+
+  return (
+    <aside className="sticky top-0 hidden min-h-[calc(100dvh-9rem)] items-center justify-center bg-[#f4f4f4] px-8 py-10 xl:flex">
+      <div className="w-full max-w-[650px]">
+        {customFontName && design.customFontDataUrl && (
+          <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
+        )}
+        <div className="shadow-[0_28px_80px_rgba(0,0,0,0.18)]" style={{ backgroundColor: bg, color: fg, fontFamily }}>
+          <div className="overflow-hidden border border-white" style={{ backgroundColor: bg }}>
+            <div className="h-[350px] overflow-hidden">
+              <CoverPreview
+                design={{
+                  ...design,
+                  coverTitle: design.coverTitle || collectionName,
+                  coverDate: design.coverDate || eventDate,
+                }}
+                image={coverImage ? imageSrc(coverImage) : undefined}
+                className="min-h-full"
+              />
+            </div>
+            <div className="flex items-center justify-between border-b border-black/10 px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-[7px] uppercase tracking-[0.24em]" style={{ color: accent }}>Masonry Gallery</p>
+                <p className="mt-1 truncate text-[14px] font-semibold">{collectionName}</p>
+                <p className="mt-1 text-[7px] uppercase tracking-[0.18em]" style={{ color: accent }}>{design.coverSmallTitle || "Studio"}</p>
+              </div>
+              <div className="flex items-center gap-2" style={{ color: accent }}>
+                {favoriteEnabled && <Heart className="size-3" />}
+                <Download className="size-3" />
+                <Share2 className="size-3" />
+                {storeEnabled && <ShoppingBag className="size-3" />}
+              </div>
+            </div>
+            <div className="flex items-center gap-5 overflow-hidden px-3 py-2 text-[7px]" style={{ color: accent }}>
+              {firstSets.length ? firstSets.map((set) => (
+                <span key={set.id} className="shrink-0">{set.name}</span>
+              )) : <span>Highlights</span>}
+            </div>
+            <div className={masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
+              {previewImages.length ? previewImages.map((image, index) => (
+                <div key={image._id} className="break-inside-avoid overflow-hidden bg-[#ececec]" style={{ marginBottom: `${masonryGapPx}px` }}>
+                  <img
+                    src={imageSrc(image.thumbnailUrl || image.url)}
+                    alt=""
+                    className={cn("block w-full object-cover", index % 3 === 0 ? "aspect-[0.82]" : index % 3 === 1 ? "aspect-[1.3]" : "aspect-square")}
+                  />
+                </div>
+              )) : Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className={cn("break-inside-avoid bg-[#e8e8e8]", index % 2 ? "aspect-[1.25]" : "aspect-square")} style={{ marginBottom: `${masonryGapPx}px` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 flex items-center justify-center gap-5 text-[#777]">
+          <Monitor className="size-5 text-[#111]" />
+          <Smartphone className="size-5" />
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -6145,38 +6310,86 @@ function ProductEditorDialog({
 }
 
 function CollectionsPanel({ section }: { section: DashboardSection }) {
-  const { collectionsQuery, createCollection } = useCollections();
+  const { collectionsQuery } = useCollections();
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
+  const [searchTerm, setSearchTerm] = useState("");
+  const filteredCollections = collections.filter((collection) =>
+    [collection.name, collection.tags?.join(" "), collection.status]
+      .join(" ")
+      .toLowerCase()
+      .includes(searchTerm.trim().toLowerCase()),
+  );
+  const openCollectionPreview = (collection: CollectionRecord) => {
+    const path = `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
+    window.open(path, "_blank", "noopener,noreferrer");
+  };
 
   return (
-    <div>
-      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-        <div>
+    <div className="min-h-full bg-white">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-8">
           <h1 className="text-[28px] font-medium leading-none tracking-normal">
             {section === "client-gallery" ? "Collections" : "Products"}
           </h1>
-          <p className="mt-3 max-w-[600px] text-sm leading-6 text-[#666]">
+          <label className="flex h-10 min-w-[240px] items-center gap-3 text-[#8a8f98]">
+            <Search className="size-5" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search"
+              className="h-10 rounded-none border-0 bg-transparent px-0 text-sm focus-visible:ring-0"
+            />
+          </label>
+          <p className="hidden">
             Manage your collections — create, view, and organize your photos.
           </p>
         </div>
-        <Button
-          className="h-10 w-fit rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
-          onClick={() => router.push(`/dashboard/${section}/collection-new`)}
-        >
-          <PlusCircle className="mr-2 size-4" />
-          Create Collection
-        </Button>
+        <div className="flex flex-wrap items-center gap-5">
+          <button
+            className="text-sm font-semibold text-[#333]"
+            onClick={() => router.push(`/dashboard/${section}/settings/presets`)}
+            type="button"
+          >
+            View Presets
+          </button>
+          <Button
+            className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={() => router.push(`/dashboard/${section}/collection-new`)}
+          >
+            New Collection
+            <ChevronDown className="ml-3 size-4 border-l border-white/30 pl-3" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap gap-2">
+          {["Status", "Category Tag", "Event Date", "Expiry Date", "Starred"].map((filter) => (
+            <button
+              key={filter}
+              className="inline-flex h-8 items-center gap-2 rounded-full bg-[#f6f6f6] px-4 text-xs font-medium text-[#222]"
+              type="button"
+            >
+              {filter}
+              <ChevronDown className="size-3" />
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-4 text-[#777]">
+          <ListFilter className="size-5" />
+          <LayoutGrid className="size-5" />
+        </div>
       </div>
 
       {collectionsQuery.isLoading ? (
         <p className="mt-10 py-8 text-sm text-[#666]">Loading collections...</p>
-      ) : !collections.length ? (
+      ) : !filteredCollections.length ? (
         <div className="mt-10 flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
           <Images className="size-10 text-[#999]" />
-          <p className="mt-5 font-bold">No collections yet</p>
+          <p className="mt-5 font-bold">{collections.length ? "No matching collections" : "No collections yet"}</p>
           <p className="mt-2 text-sm leading-6 text-[#666]">
-            Create your first collection to get started.
+            {collections.length ? "Try another search or filter." : "Create your first collection to get started."}
           </p>
           <Button
             className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
@@ -6186,35 +6399,58 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
           </Button>
         </div>
       ) : (
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {collections.map((collection) => (
-            <button
+        <div className="mt-10 grid gap-x-8 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+          {filteredCollections.map((collection) => (
+            <article
               key={collection._id}
-              className="group overflow-hidden border border-[#e6e6e6] bg-white text-left transition-shadow hover:shadow-lg"
-              onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
+              className="group text-left"
             >
-              <span className="block aspect-[4/3] overflow-hidden bg-[#f2f2f2]">
+              <button
+                className="block w-full overflow-hidden bg-[#f2f2f2] text-left"
+                onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
+                type="button"
+              >
                 {collection.coverImage ? (
                   <img
                     src={imageSrc(collection.coverImage)}
                     alt=""
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    className="aspect-[1.33] w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 ) : (
-                  <span className="flex h-full items-center justify-center">
+                  <span className="flex aspect-[1.33] w-full items-center justify-center">
                     <Images className="size-10 text-[#ccc]" />
                   </span>
                 )}
-              </span>
-              <span className="block border-t border-[#e6e6e6] p-4">
-                <span className="block truncate text-base font-bold text-[#222]">
-                  {collection.name}
-                </span>
-                <span className="mt-1 block text-sm text-[#666]">
-                  {collection.imageCount ?? 0} images
-                </span>
-              </span>
-            </button>
+              </button>
+              <div className="pt-3">
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    className="min-w-0 flex-1 truncate text-left text-base font-semibold text-[#333]"
+                    onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
+                    type="button"
+                  >
+                    {collection.name}
+                  </button>
+                  <button
+                    className="shrink-0 text-xs font-bold text-[#00a997] opacity-0 transition-opacity group-hover:opacity-100"
+                    onClick={() => openCollectionPreview(collection)}
+                    type="button"
+                  >
+                    Preview
+                  </button>
+                </div>
+                <p className="mt-2 flex items-center gap-2 text-xs text-[#777]">
+                  <span className="size-2 rounded-full bg-[#22bda7]" />
+                  <span>{collection.imageCount ?? 0} items</span>
+                  {collection.eventDate && (
+                    <>
+                      <span>&bull;</span>
+                      <span>{formatDate(collection.eventDate)}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+            </article>
           ))}
         </div>
       )}
@@ -6370,7 +6606,7 @@ function CollectionDetailView({
   const storeWatermarkItems = useDashboardStore((state) => state.watermarkItems);
   const { starImage } = useImageActions();
   const { collectionsQuery } = useCollections();
-  const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage } = useCollectionDetail(collectionId);
+  const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
   const activityActions = useCollectionActivityActions(collectionId);
   const collections = collectionsQuery.data?.data ?? [];
@@ -6384,6 +6620,7 @@ function CollectionDetailView({
   );
   const [activeImageId, setActiveImageId] = useState("");
   const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "download">("photos");
+  const [activeDesignPanel, setActiveDesignPanel] = useState<"cover" | "typography" | "color" | "grid">("cover");
   const [activityPage, setActivityPage] = useState<"download" | "favorite">("favorite");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
@@ -6402,6 +6639,7 @@ function CollectionDetailView({
   const [uploadProgress, setUploadProgress] = useState({ active: false, total: 0, uploaded: 0, currentName: "" });
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
   const [form, setForm] = useState(() => collectionForm(collection));
   const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));
   const emailTemplates = useMemo(
@@ -6418,9 +6656,14 @@ function CollectionDetailView({
   );
   const activeImage =
     images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
+  const orderedImages = useMemo(() => {
+    if (!orderedImageIds.length) return images;
+    const rank = new Map(orderedImageIds.map((id, index) => [id, index]));
+    return [...images].sort((a, b) => (rank.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b._id) ?? Number.MAX_SAFE_INTEGER));
+  }, [images, orderedImageIds]);
   const activeSetImages = useMemo(
-    () => images.filter((image) => (image.setId || "highlights") === activeSetId),
-    [activeSetId, images],
+    () => orderedImages.filter((image) => (image.setId || "highlights") === activeSetId),
+    [activeSetId, orderedImages],
   );
   const imagePageSize = 24;
   const totalImagePages = Math.max(1, Math.ceil(activeSetImages.length / imagePageSize));
@@ -6465,6 +6708,14 @@ function CollectionDetailView({
   useEffect(() => {
     if (imagePage > totalImagePages) setImagePage(totalImagePages);
   }, [imagePage, totalImagePages]);
+
+  useEffect(() => {
+    setOrderedImageIds((current) => {
+      const imageIds = images.map((image) => image._id);
+      if (current.length === imageIds.length && current.every((id, index) => id === imageIds[index])) return current;
+      return imageIds;
+    });
+  }, [images]);
 
   const presetName = (id?: string) =>
     presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
@@ -6624,6 +6875,20 @@ function CollectionDetailView({
       setBulkDeleting(false);
     }
   };
+  const reorderSetImages = (nextSetImages: CollectionImageRecord[]) => {
+    const nextSetIds = nextSetImages.map((image) => image._id);
+    if (nextSetIds.length === activeSetImages.length && nextSetIds.every((id, index) => id === activeSetImages[index]?._id)) {
+      return;
+    }
+    const activeSetIdSet = new Set(activeSetImages.map((image) => image._id));
+    const nextAllIds = orderedImages.map((image) =>
+      activeSetIdSet.has(image._id) ? nextSetIds.shift() ?? image._id : image._id,
+    );
+    setOrderedImageIds(nextAllIds);
+    reorderImages.mutate(nextAllIds, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : "Image reorder failed"),
+    });
+  };
   if (!collection) {
     return <CollectionDetailSkeleton />;
   }
@@ -6664,6 +6929,14 @@ function CollectionDetailView({
           >
             <Store data-icon="inline-start" />
             Store
+          </Button>
+          <Button
+            variant="outline"
+            className="h-10 rounded-none"
+            onClick={() => window.open(publicPath, "_blank", "noopener,noreferrer")}
+          >
+            <Eye data-icon="inline-start" />
+            Preview
           </Button>
           <Button
             variant="outline"
@@ -6951,6 +7224,27 @@ function CollectionDetailView({
               </Dialog>
             </div>
           )}
+          {activeTab === "design" && !detailCollapsed && (
+            <div className="min-h-0 bg-[#fafafa]">
+              <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Design</p>
+              {([
+                ["cover", PanelTop, "Cover"],
+                ["typography", Bold, "Typography"],
+                ["color", Palette, "Color"],
+                ["grid", LayoutGrid, "Grid"],
+              ] as const).map(([panel, Icon, label]) => (
+                <button
+                  key={panel}
+                  className={cn("flex h-16 w-full items-center gap-4 px-5 text-left", activeDesignPanel === panel && "bg-white font-semibold")}
+                  onClick={() => setActiveDesignPanel(panel)}
+                  type="button"
+                >
+                  <Icon className="size-5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {activeTab === "download" && !detailCollapsed && (
             <div className="min-h-0 bg-[#fafafa]">
               <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Activities</p>
@@ -7032,16 +7326,29 @@ function CollectionDetailView({
                     Deleting images...
                   </div>
                 )}
-                <div className={cn("grid gap-2", form.design.gridStyle === "Horizontal" ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-3 md:grid-cols-5 xl:grid-cols-6", form.design.thumbnailSize === "Large" && "md:grid-cols-4 xl:grid-cols-5")}>
-                  {uploading && Array.from({ length: Math.min(uploadsLeft || 1, 6) }).map((_, index) => (
-                    <div key={`uploading-${index}`} className="relative flex aspect-square animate-in fade-in zoom-in-95 items-center justify-center overflow-hidden bg-[#eef9f7] duration-300">
-                      <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-[#d3f2ee]">
-                        <div className="h-full w-1/2 animate-pulse bg-[#22bda7]" />
+                {uploading && (
+                  <div className="mb-2 grid grid-cols-3 gap-2 md:grid-cols-5 xl:grid-cols-6">
+                    {Array.from({ length: Math.min(uploadsLeft || 1, 6) }).map((_, index) => (
+                      <div key={`uploading-${index}`} className="relative flex aspect-square animate-in fade-in zoom-in-95 items-center justify-center overflow-hidden bg-[#eef9f7] duration-300">
+                        <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-[#d3f2ee]">
+                          <div className="h-full w-1/2 animate-pulse bg-[#22bda7]" />
+                        </div>
+                        <Loader2 className="size-6 animate-spin text-[#22bda7]" />
                       </div>
-                      <Loader2 className="size-6 animate-spin text-[#22bda7]" />
-                    </div>
-                  ))}
-                  {visibleSetImages.map((image) => (
+                    ))}
+                  </div>
+                )}
+                <ReactSortable
+                  list={activeSetImages.map((image) => ({ ...image, id: image._id }))}
+                  setList={(nextImages) => reorderSetImages(nextImages as CollectionImageRecord[])}
+                  animation={180}
+                  delayOnTouchOnly
+                  ghostClass="sortable-image-ghost"
+                  chosenClass="sortable-image-chosen"
+                  dragClass="sortable-image-drag"
+                  className={cn("grid gap-2", form.design.gridStyle === "Horizontal" ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-3 md:grid-cols-5 xl:grid-cols-6", form.design.thumbnailSize === "Large" && "md:grid-cols-4 xl:grid-cols-5")}
+                >
+                  {activeSetImages.map((image) => (
                     <div
                       key={image._id}
                       className={cn(
@@ -7116,14 +7423,23 @@ function CollectionDetailView({
                       <button
                         className="absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block"
                         disabled={deletingImages}
-                        onClick={() => setForm((value) => ({ ...value, coverImage: image.url }))}
+                        onClick={() => {
+                          setForm((value) => ({ ...value, coverImage: image.url }));
+                          updateCollection.mutate(
+                            { coverImage: image.url },
+                            {
+                              onSuccess: () => toast.success("Cover photo updated"),
+                              onError: (error) => toast.error(error instanceof Error ? error.message : "Cover update failed"),
+                            },
+                          );
+                        }}
                       >
                         Make Cover
                       </button>
                     </div>
                   ))}
-                </div>
-                {totalImagePages > 1 && (
+                </ReactSortable>
+                {false && totalImagePages > 1 && (
                   <div className="mt-5 flex items-center justify-end gap-3 text-sm">
                     <Button
                       variant="outline"
@@ -7191,7 +7507,8 @@ function CollectionDetailView({
           )}
 
           {activeTab === "design" && (
-            <div className="max-w-[700px]">
+            <div className="grid min-h-full gap-8 xl:grid-cols-[minmax(440px,700px)_minmax(520px,1fr)]">
+              <div className="min-w-0">
                 <div className="mb-8 flex items-center gap-3">
                   <select
                     value={form.presetId}
@@ -7228,8 +7545,20 @@ function CollectionDetailView({
                 </div>
                 <PresetDesignPanel
                   design={form.design}
+                  activePanel={activeDesignPanel}
                   onChange={(value) => setForm((current) => ({ ...current, presetId: "", design: { ...current.design, ...value } }))}
                 />
+              </div>
+              <CollectionDesignLivePreview
+                design={form.design}
+                collectionName={form.name || collection.name}
+                eventDate={collection.eventDate ? formatDate(collection.eventDate) : form.design.coverDate}
+                coverImage={form.coverImage || images[0]?.url}
+                images={images}
+                sets={form.sets}
+                favoriteEnabled={form.favorite.favoritePhotos !== false}
+                storeEnabled={Boolean(form.presetId ? presetItems.find((preset) => preset.id === form.presetId)?.store?.storeStatus : collection.settings?.store?.storeStatus)}
+              />
             </div>
           )}
 
@@ -7924,6 +8253,8 @@ const collectionDefaultDesign: PresetDesignSettings = {
   showCoverDate: true,
   showCoverButton: true,
   typography: "Classic",
+  customFontName: "",
+  customFontDataUrl: "",
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",

@@ -19,6 +19,8 @@ export type PresetDesignSettings = {
   showCoverDate: boolean;
   showCoverButton: boolean;
   typography: string;
+  customFontName?: string;
+  customFontDataUrl?: string;
   color: string;
   gridStyle: "Vertical" | "Horizontal";
   thumbnailSize: "Regular" | "Large";
@@ -252,6 +254,8 @@ const emptyPresetDesign: PresetDesignSettings = {
   showCoverDate: true,
   showCoverButton: true,
   typography: "Classic",
+  customFontName: "",
+  customFontDataUrl: "",
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
