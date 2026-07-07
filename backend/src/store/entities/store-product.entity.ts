@@ -18,7 +18,7 @@ export class StoreProduct {
   @Prop({ required: true, trim: true })
   name: string;
 
-  @Prop({ required: true, trim: true, index: true })
+  @Prop({ trim: true, index: true, default: '' })
   slug: string;
 
   @Prop({ default: true, index: true })
@@ -105,5 +105,18 @@ export class StoreProduct {
 
 export const StoreProductSchema = SchemaFactory.createForClass(StoreProduct);
 
+StoreProductSchema.pre('validate', function setStoreProductSlug(next) {
+  if (!this.slug && this.name) {
+    this.slug = String(this.name)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+  if (!this.previewImages?.length && this.images?.length) {
+    this.previewImages = [...this.images];
+  }
+  next();
+});
 StoreProductSchema.index({ userId: 1, priceSheetId: 1, sortOrder: 1, createdAt: -1 });
 StoreProductSchema.index({ userId: 1, priceSheetId: 1, slug: 1 }, { unique: true });
