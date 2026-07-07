@@ -9,7 +9,9 @@ import { StoreShipping, StoreShippingSchema } from './entities/store-shipping.en
 import { StoreSetting, StoreSettingSchema } from './entities/store-setting.entity';
 import { StoreTax, StoreTaxSchema } from './entities/store-tax.entity';
 import { StoreActivity, StoreActivitySchema } from './entities/store-activity.entity';
-import { PublicCollectionStoreController, PublicStoreController, StoreController } from './store.controller';
+import { PublicStoreController, StoreController } from './store.controller';
+import { PublicPrintStoreController } from './public-print-store.controller';
+import { StorePrintAdminController } from './store-print-admin.controller';
 import { StoreService } from './store.service';
 import { PublicStoreService } from './public-store.service';
 import { StoreCatalogService } from './store-catalog.service';
@@ -38,7 +40,12 @@ import { User, UserSchema } from 'src/user/entities/user.entity';
       { name: User.name, schema: UserSchema },
     ]),
   ],
-  controllers: [StoreController, PublicStoreController, PublicCollectionStoreController],
+  controllers: [
+    StoreController,
+    PublicStoreController,
+    PublicPrintStoreController,
+    StorePrintAdminController,
+  ],
   providers: [
     StoreService,
     PublicStoreService,
