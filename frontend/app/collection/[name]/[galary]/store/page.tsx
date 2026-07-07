@@ -6,7 +6,7 @@ import { JsonLdScript, absoluteUrl, collectSeoText, pageMetadata } from "@/lib/s
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
 
 async function getStore(identifier: string) {
-  const response = await fetch(`${baseUrl}/public/store/${encodeURIComponent(identifier)}`, {
+  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}/store`, {
     cache: "no-store",
   }).catch(() => null);
   const payload = response?.ok ? await response.json() : null;
@@ -49,7 +49,7 @@ export async function generateMetadata({
     description,
     keywords: `${collectionName}, ${studio}, photo store, prints, digital downloads, wall art`,
     path: `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/store`,
-    image: imageSrc(firstProduct?.images?.[0]),
+    image: imageSrc(firstProduct?.previewImages?.[0] ?? firstProduct?.images?.[0]),
     seo: cms.seo,
     autoText,
   });
@@ -57,10 +57,13 @@ export async function generateMetadata({
 
 export default async function CollectionStorePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ name: string; galary: string }>;
+  searchParams: Promise<{ product?: string; imageId?: string }>;
 }) {
   const { name, galary } = await params;
+  const query = await searchParams;
   const data = await getStore(galary);
   const products = data?.products ?? [];
   const collectionName = data?.collection?.name ?? decodeURIComponent(galary);
@@ -72,13 +75,13 @@ export default async function CollectionStorePage({
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Photo products",
-      itemListElement: products.slice(0, 20).map((product: any) => ({
+      itemListElement: products.slice(0, 30).map((product: any) => ({
         "@type": "Offer",
         itemOffered: {
           "@type": "Product",
           name: product.name,
           description: plainText(product.description),
-          image: imageSrc(product.images?.[0]),
+          image: imageSrc(product.previewImages?.[0] ?? product.images?.[0]),
         },
         price: product.price,
         priceCurrency: data?.store?.currency ?? "EUR",
@@ -93,6 +96,8 @@ export default async function CollectionStorePage({
         data={data}
         identifier={galary}
         backHref={`/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}`}
+        initialProductSlug={query.product}
+        initialImageId={query.imageId}
       />
     </>
   );
