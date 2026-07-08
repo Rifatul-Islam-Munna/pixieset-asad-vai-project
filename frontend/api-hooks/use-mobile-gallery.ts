@@ -20,7 +20,11 @@ export type MobileGalleryCoverText = {
   dateLabel?: string;
   alignment?: "left" | "center" | "right";
   verticalPosition?: "top" | "center" | "bottom";
-  fontPreset?: "theme" | "serif" | "sans" | "mono" | "script";
+  positionX?: number;
+  positionY?: number;
+  fontPreset?: "theme" | "serif" | "sans" | "mono" | "script" | "custom";
+  customFontUrl?: string;
+  customFontName?: string;
   titleSize?: number;
   subtitleSize?: number;
   letterSpacing?: number;
@@ -68,6 +72,22 @@ export type MobileGalleryProfile = {
   phoneNumber?: string;
   businessAddress?: string;
   website?: string;
+};
+
+export type MobileGalleryInvitePayload = {
+  to: string;
+  subject: string;
+  message: string;
+  templateTitle: string;
+  link: string;
+  sendCopy?: boolean;
+};
+
+export type MobileGalleryInviteResult = {
+  sent: boolean;
+  skipped?: boolean;
+  reason?: "SMTP_NOT_CONFIGURED" | "SMTP_SEND_FAILED";
+  messageId?: string;
 };
 
 type Data<T> = { data: T; message?: string };
@@ -149,7 +169,18 @@ export function useMobileGalleryApp(appId?: string) {
     },
     onSuccess: refresh,
   });
-  return { appQuery, updateApp, uploadImages, reorderImages, deleteImage };
+  const sendInvite = useMutation({
+    mutationFn: async (payload: MobileGalleryInvitePayload) => {
+      if (!appId) throw new Error("App is required");
+      const [data, error] = await PostRequestAxios<Data<MobileGalleryInviteResult>>(
+        `/mobile-gallery/apps/${appId}/share-email`,
+        payload as any,
+      );
+      if (error || !data) throw new Error(error?.message || "Could not process invitation");
+      return data;
+    },
+  });
+  return { appQuery, updateApp, uploadImages, reorderImages, deleteImage, sendInvite };
 }
 
 export function useMobileGalleryProfile() {
