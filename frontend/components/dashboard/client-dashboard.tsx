@@ -121,6 +121,7 @@ import {
   type CollectionImageRecord,
   type CollectionRecord,
 } from "@/api-hooks/use-collections";
+import { PostRequestAxios } from "@/api-hooks/api-hooks";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import { logOutUser } from "@/actions/auth";
 import { checkoutPlan, confirmPlanCheckout, getBillingOverview, recordEmailUsage, type BillingUser } from "@/actions/billing";
@@ -163,13 +164,15 @@ import {
 } from "@/lib/dashboard-store";
 import type { BrandSettings, CustomCoverTemplate, HomeCmsData } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
+import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
+import { PlanFeatureLock, PlanFeatureNotice } from "@/components/dashboard/plan-feature-lock";
+import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
 export type DashboardPage =
   | "collections"
   | "collection-new"
   | "library"
-  | "favorites"
   | "starred"
   | "homepage"
   | "settings"
@@ -192,8 +195,7 @@ export type SettingsPage =
   | "presets"
   | "preset-new"
   | "email-templates"
-  | "preferences"
-  | "integrations";
+  | "preferences";
 
 const switcherItems = [
   {
@@ -212,13 +214,20 @@ const switcherItems = [
     mark: "bg-[#ff4f5d]",
     accent: "from-[#ff4f5d] to-[#ffc7cd]",
   },
+  {
+    key: "mobile-gallery",
+    title: "Mobile Gallery App",
+    text: "Create installable mobile-first photo apps",
+    href: "/dashboard/mobile-gallery",
+    mark: "bg-[#f5c421]",
+    accent: "from-[#f5c421] to-[#ffe99a]",
+  },
 ] as const;
 
 const sidebarItems = {
   "client-gallery": [
     { label: "Collections", icon: Images, page: "collections" },
     { label: "Library", icon: LayoutGrid, page: "library" },
-    { label: "Favorite", icon: Heart, page: "favorites" },
     { label: "Starred", icon: Star, page: "starred" },
     { label: "Homepage", icon: PanelTop, page: "homepage" },
     { label: "Settings", icon: Settings, page: "settings" },
@@ -261,6 +270,21 @@ const dashboardCopy = {
       "https://images.unsplash.com/photo-1529636798458-92182e662485?auto=format&fit=crop&w=1200&q=80",
   },
 };
+
+async function sendUniversalEmail(payload: {
+  to: string | string[];
+  subject: string;
+  text: string;
+  html?: string;
+  replyTo?: string;
+}) {
+  const [data, error] = await PostRequestAxios<{ data: { sent: boolean; skipped?: boolean; reason?: string } }>(
+    "/mail/send",
+    payload,
+  );
+  if (error || !data) throw new Error(error?.message || "Email send failed");
+  return data.data;
+}
 
 const libraryFilters = [
   {
@@ -657,14 +681,18 @@ export function ClientDashboard({
         )}
 
         <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : storeTopNavOpen ? "max-w-[1220px] px-4 py-10 sm:px-5 md:py-14" : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20")}>
+          <PlanFeatureLock
+            feature={section === "store-gallery" ? "store" : "marketingEmails"}
+            label={section === "store-gallery" ? "Store" : "Marketing email"}
+            className={section === "store-gallery" || page === "marketing" || campaignBuilderOpen ? "min-h-[520px]" : "contents"}
+            bypass={section !== "store-gallery" && page !== "marketing" && !campaignBuilderOpen}
+          >
           {campaignBuilderOpen ? (
             <CampaignBuilder onClose={closeCampaignBuilder} />
           ) : wizardOpen ? (
             <CollectionWizard />
           ) : page === "library" ? (
             <LibraryPanel onNewCollection={startWizard} />
-          ) : page === "favorites" ? (
-            <FavoriteCollectionsPanel />
           ) : page === "starred" ? (
             <StarredPanel />
           ) : section === "store-gallery" && page === "settings" ? (
@@ -714,6 +742,7 @@ export function ClientDashboard({
           ) : (
             <DashboardPlaceholder page={page} title={activeNav} />
           )}
+</PlanFeatureLock>
         </div>
       </section>
 
@@ -740,26 +769,24 @@ function StoreTopNavigation({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex min-w-0 items-center gap-2 text-sm font-semibold outline-none">
-                <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]">
-                  <span className="h-[2px] w-3 bg-white" />
-                </span>
-                <span>Store</span>
+                <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]"><span className="h-[2px] w-3 bg-white" /></span>
+                <span>Store Gallery</span>
                 <ChevronDown className="size-4 text-[#333]" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+            <DropdownMenuContent align="start" className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
               <DropdownMenuGroup className="p-5">
-                {switcherItems.map((item) => (
-                  <DropdownMenuItem key={item.key} asChild className="p-0">
-                    <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
-                      <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
-                      <span className="flex flex-col gap-1">
-                        <span className="font-bold text-[#151515]">{item.title}</span>
-                        <span className="text-xs leading-5 text-[#777]">{item.text}</span>
-                      </span>
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
+              {switcherItems.map((item) => (
+                <DropdownMenuItem key={item.key} asChild className="p-0">
+                  <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
+                    <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
+                    <span className="flex flex-col gap-1">
+                      <span className="font-bold text-[#151515]">{item.title}</span>
+                      <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                    </span>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
               </DropdownMenuGroup>
               <div className="bg-[#f7f7f7] p-5 text-center">
                 <Link href="/dashboard/store-gallery" className="inline-flex items-center gap-2 text-sm text-[#333]">
@@ -771,20 +798,10 @@ function StoreTopNavigation({
           </DropdownMenu>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 text-[#8a8a8a] sm:gap-4">
-          <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Help">
-            <Info className="size-5" />
-          </button>
-          <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Notifications">
-            <Bell className="size-5" />
-          </button>
-          <button
-            className="flex size-8 items-center justify-center rounded-full bg-white text-[#555] hover:text-red-600 disabled:opacity-50"
-            onClick={logout}
-            disabled={logoutPending}
-            aria-label="Logout"
-          >
-            <CircleUserRound className="size-5" />
+        <div className="flex shrink-0 items-center gap-3 text-[#666]">
+          <DashboardNotifications />
+          <button className="flex size-8 items-center justify-center rounded-full bg-white text-[#555] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50" onClick={logout} disabled={logoutPending} aria-label="Logout" title="Logout">
+            <LogOut className="size-5" />
           </button>
         </div>
         </div>
@@ -850,7 +867,7 @@ function StoreGetStartedPanel() {
       <div className="mt-3 grid gap-6 text-sm text-[#6a7280] md:grid-cols-2">
         {steps.map((step) => (
           <p key={step.title}>
-            {step.text} <button onClick={() => router.push(step.href)} className="text-[#00a997]">Learn more</button>
+            {step.text}
           </p>
         ))}
       </div>
@@ -861,6 +878,7 @@ function StoreGetStartedPanel() {
 function StoragePlanPanel() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [data, setData] = useState<{ plans: AdminPlan[]; user: BillingUser } | null>(null);
 
   useEffect(() => {
@@ -897,7 +915,10 @@ function StoragePlanPanel() {
       try {
         const result = await checkoutPlan(planId);
         if (result.checkoutUrl) window.location.href = result.checkoutUrl;
-        else setError("Stripe checkout URL missing");
+        else if (result.activated) {
+setData(await getBillingOverview());
+setNotice("Free plan activated successfully");
+        } else setError("Plan activation failed");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Checkout failed");
       }
@@ -913,6 +934,7 @@ function StoragePlanPanel() {
         </Button>
       </div>
       {error && <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">{error}</p>}
+      {notice && <p className="mt-5 border-l-2 border-[#22bda7] pl-3 text-sm font-semibold text-[#008f80]">{notice}</p>}
       <div className="mt-10 grid gap-5 lg:grid-cols-2">
         <UsagePanel
           icon={<Database className="size-5" />}
@@ -1419,6 +1441,22 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
     setSendError("");
     startSendTransition(async () => {
       try {
+        const emails = selectedRecipients.filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
+        if (emails.length) {
+          const body = [
+            campaignMessage,
+            "",
+            campaignButtonText && campaignButtonLink ? `${campaignButtonText}: ${campaignButtonLink}` : "",
+            "",
+            campaignFooterText,
+          ].filter(Boolean).join("\n");
+          await sendUniversalEmail({
+            to: emails,
+            subject: campaignSubject || campaignTemplate,
+            text: body || campaignPreviewText || campaignTemplate,
+          });
+          toast.success("Campaign sent by universal SMTP");
+        }
         await recordEmailUsage(Math.max(1, selectedRecipients.length));
         onClose();
       } catch (error) {
@@ -1962,7 +2000,7 @@ function StarredPanel() {
   const { collectionsQuery } = useCollections();
   const imagesQuery = useCollectionImages();
   const starredCollections = (collectionsQuery.data?.data ?? []).filter(
-    (collection) => collection.status === "starred" || collection.settings?.starred,
+    (collection) => collection.settings?.starred,
   );
   const starredPhotos = (imagesQuery.data?.data ?? []).filter(
     (image) => image.metadata?.starred === true,
@@ -2326,7 +2364,6 @@ const settingsTabs = [
   { label: "Presets", page: "presets" },
   { label: "Email Templates", page: "email-templates" },
   { label: "Preferences", page: "preferences" },
-  { label: "Integrations", page: "integrations" },
 ] as const;
 
 const watermarkFonts = [
@@ -2407,6 +2444,8 @@ function SettingsPanel({
           <PresetEditor section={section} />
         ) : settingsPage === "email-templates" ? (
           <EmailTemplatesPanel />
+        ) : settingsPage === "preferences" ? (
+          <PreferencesPanel />
         ) : (
           <div className="max-w-[560px] bg-[#fafafa] p-8">
             <p className="font-bold">
@@ -2418,6 +2457,55 @@ function SettingsPanel({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function PreferencesPanel() {
+  return (
+    <div className="max-w-[560px] space-y-12">
+      <FieldGroup>
+        <Field>
+          <FieldLabel className="font-bold">Default Collection Language</FieldLabel>
+          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+            <option>English</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">Select default language for newly created collections.</p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Filename Display</FieldLabel>
+          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+            <option>Show</option>
+            <option>Hide</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">Choose whether filenames show on collection photos.</p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Search Engine Visibility</FieldLabel>
+          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+            <option>Homepage Only</option>
+            <option>All Public Pages</option>
+            <option>Hidden</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">Choose whether collections can be searchable on search engines.</p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Sharpening Level</FieldLabel>
+          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+            <option>Optimal</option>
+            <option>Low</option>
+            <option>High</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">Applies to web display copies only. Originals stay unchanged.</p>
+        </Field>
+      </FieldGroup>
+
+      <FieldGroup>
+        <Field>
+          <FieldLabel className="font-bold">Terms of Service</FieldLabel>
+          <textarea className="min-h-36 rounded-none border bg-white p-4 text-sm" placeholder="Terms shown on collection pages" />
+        </Field>
+      </FieldGroup>
     </div>
   );
 }
@@ -3124,7 +3212,7 @@ function PresetGeneralPanel({
           />
           <p className="text-sm leading-6 text-[#666]">
             Add tags to categorize different collections e.g. wedding, outdoor,
-            summer. <span className="text-[#00a997]">Learn more</span>
+            summer.
           </p>
         </Field>
         <Field>
@@ -3199,7 +3287,7 @@ function PresetGeneralPanel({
                 <span>{general[typedKey] ? "On" : "Off"}</span>
               </div>
               <p className="text-sm leading-6 text-[#666]">
-                {text} <span className="text-[#00a997]">Learn more</span>
+                {text}
               </p>
               {key === "slideshow" && (
                 <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
@@ -3277,8 +3365,7 @@ function PresetFavoritePanel({
             <span>{favorite.favoriteNotes ? "On" : "Off"}</span>
           </div>
           <p className="text-sm leading-6 text-[#666]">
-            Allow clients to add notes to photos they have favorited.{" "}
-            <span className="text-[#00a997]">Learn more</span>
+            Allow clients to add notes to photos they have favorited.
           </p>
         </Field>
         <Field>
@@ -3324,6 +3411,7 @@ function PresetStorePanel({
   };
 }) {
   return (
+    <PlanFeatureLock feature="store" label="Store">
     <div className="max-w-[560px]">
       <h2 className="text-2xl font-medium">Store</h2>
       <div className="mt-8 bg-[#eef7f9] p-6">
@@ -3395,6 +3483,7 @@ function PresetStorePanel({
         </button>
       </div>
     </div>
+    </PlanFeatureLock>
   );
 }
 
@@ -3484,6 +3573,7 @@ function PresetDesignPanel({
   onChange: (value: Partial<typeof design>) => void;
 }) {
   const [adminCoverTemplates, setAdminCoverTemplates] = useState<CustomCoverTemplate[]>([]);
+  const customCoverAccess = usePlanFeatureAccess("customCover");
   const readCustomFont = (file?: File) => {
     if (!file) return;
     const reader = new FileReader();
@@ -3536,11 +3626,13 @@ function PresetDesignPanel({
               </FieldGroup>
             </OptionSection>
             <p className="mt-10 text-sm font-bold">Cover</p>
+            <PlanFeatureNotice feature="customCover" label="Custom cover templates" />
             <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8">
               {adminCoverTemplates.map((template) => (
                 <button
                   key={template.id}
-                  className="text-center"
+                  className={cn("relative text-center", customCoverAccess.locked && "cursor-not-allowed opacity-45")}
+                  disabled={customCoverAccess.locked}
                   onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}
                   type="button"
                 >
@@ -3567,7 +3659,7 @@ function PresetDesignPanel({
         )}
 
         {activePanel === "typography" && (
-          <>
+          <PlanFeatureLock feature="advancedDesign" label="Advanced design">
             <h2 className="text-2xl font-medium">Typography</h2>
             <div className="mt-8 grid grid-cols-2 gap-3">
               {typographyOptions.map(([name, sample, desc]) => (
@@ -3603,11 +3695,11 @@ function PresetDesignPanel({
                 </button>
               )}
             </div>
-          </>
+          </PlanFeatureLock>
         )}
 
         {activePanel === "color" && (
-          <>
+          <PlanFeatureLock feature="advancedDesign" label="Advanced design">
             <h2 className="text-2xl font-medium">Color</h2>
             <div className="mt-8 grid grid-cols-2 gap-3">
               {colorOptions.map(([name, colors]) => (
@@ -3621,11 +3713,11 @@ function PresetDesignPanel({
                 </button>
               ))}
             </div>
-          </>
+          </PlanFeatureLock>
         )}
 
         {activePanel === "grid" && (
-          <>
+          <PlanFeatureLock feature="layouts" label="Layouts">
             <h2 className="text-2xl font-medium">Grid</h2>
             <OptionSection title="Thumbnail Size">
               <TwoOption value={design.thumbnailSize} a="Regular" b="Large" onPick={(value) => onChange({ thumbnailSize: value as "Regular" | "Large" })} />
@@ -3636,7 +3728,7 @@ function PresetDesignPanel({
             <OptionSection title="Navigation Style">
               <TwoOption value={design.navigationStyle} a="Icon Only" b="Icon & Text" onPick={(value) => onChange({ navigationStyle: value as "Icon Only" | "Icon & Text" })} />
             </OptionSection>
-          </>
+          </PlanFeatureLock>
         )}
     </div>
   );
@@ -3807,6 +3899,8 @@ function PresetDownloadPanel({
   };
   onChange: (value: Partial<typeof download>) => void;
 }) {
+  const pinAccess = usePlanFeatureAccess("pinSet");
+  const limitAccess = usePlanFeatureAccess("downloadLimit");
   return (
     <div className="max-w-[620px]">
       <FieldGroup className="gap-12">
@@ -3854,19 +3948,20 @@ function PresetDownloadPanel({
             ))}
           </div>
           <p className="text-sm leading-6 text-[#666]">
-            Allow photos to be downloaded in select sizes.{" "}
-            <span className="text-[#00a997]">Learn more</span>
+            Allow photos to be downloaded in select sizes.
           </p>
         </Field>
 
+        <PlanFeatureNotice feature="pinSet" label="Download PIN" />
         {[
-          ["Video Download", "videoDownload", "Allow videos to be downloaded for offline viewing."],
+          ["Video Download", "videoDownload", "Control video download availability."],
           ["Download PIN", "downloadPin", "If enabled, all collections created from this preset will have a download PIN set automatically."],
         ].map(([label, key, text]) => (
-          <Field key={key}>
+          <Field key={key} className={cn(key === "downloadPin" && pinAccess.locked && "pointer-events-none opacity-45")}>
             <FieldLabel className="font-bold">{label}</FieldLabel>
             <div className="flex items-center gap-3">
               <Switch
+                disabled={key === "downloadPin" && pinAccess.locked}
                 checked={download[key as "videoDownload" | "downloadPin"]}
                 onCheckedChange={(value) =>
                   onChange({ [key]: value } as Partial<typeof download>)
@@ -3875,7 +3970,7 @@ function PresetDownloadPanel({
               <span>{download[key as "videoDownload" | "downloadPin"] ? "On" : "Off"}</span>
             </div>
             <p className="text-sm leading-6 text-[#666]">
-              {text} <span className="text-[#00a997]">Learn more</span>
+              {text}
             </p>
             {key === "downloadPin" && download.downloadPin && (
               <Input
@@ -3889,6 +3984,7 @@ function PresetDownloadPanel({
         ))}
 
         <div>
+          <PlanFeatureNotice feature="downloadLimit" label="Download limits" />
           <p className="mb-8 text-[11px] font-bold uppercase tracking-widest text-[#777]">
             Advanced Settings
           </p>
@@ -3897,10 +3993,11 @@ function PresetDownloadPanel({
               ["Restrict Downloads to Collection Contacts", "restrictDownloads", "Allow only assigned Collection Contacts to download photos."],
               ["Limit Photo Downloads", "limitDownloads", "Set number of photos that can be downloaded in these collections."],
             ].map(([label, key, text]) => (
-              <Field key={key}>
+              <Field key={key} className={cn(limitAccess.locked && "pointer-events-none opacity-45")}>
                 <FieldLabel className="font-bold">{label}</FieldLabel>
                 <div className="flex items-center gap-3">
                   <Switch
+                    disabled={limitAccess.locked}
                     checked={download[key as "restrictDownloads" | "limitDownloads"]}
                   onCheckedChange={(value) =>
                     onChange({ [key]: value } as Partial<typeof download>)
@@ -4371,145 +4468,7 @@ function DashboardPlaceholder({
 }
 
 function HomepageSettings() {
-  const [enabled, setEnabled] = useState(true);
-  const [bio, setBio] = useState("");
-  const [include, setInclude] = useState({
-    biography: true,
-    social: true,
-    website: false,
-    email: true,
-    phone: true,
-    address: true,
-  });
-
-  const toggleInclude = (key: keyof typeof include) =>
-    setInclude((value) => ({ ...value, [key]: !value[key] }));
-
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold md:text-[28px]">Homepage</h1>
-
-      <div className="mt-6 grid items-start gap-8 md:mt-8 lg:grid-cols-[minmax(320px,620px)_minmax(320px,1fr)] lg:gap-12">
-        <div className="max-w-[620px] min-w-0">
-          <section>
-            <p className="text-sm font-bold">Homepage Status</p>
-            <div className="mt-4 flex items-center gap-3">
-              <Switch checked={enabled} onCheckedChange={setEnabled} />
-              <span className="text-sm font-medium">{enabled ? "On" : "Off"}</span>
-            </div>
-            <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#667085]">
-              Your Homepage is a public page where your collections are listed. You can also select
-              which collections appear here under each collection's setting.{" "}
-              <button className="font-semibold text-[#00a997]">Learn more</button>
-            </p>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Homepage URL</p>
-            <div className="mt-4 flex min-h-14 flex-wrap items-center justify-between gap-3 bg-[#f6f6f6] px-4 py-3 sm:px-5">
-              <span className="truncate text-sm font-medium">https://rifat39.nikoset.com</span>
-              <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
-                <Copy className="size-4" />
-                Copy
-              </button>
-            </div>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Homepage Password</p>
-            <div className="mt-4 flex min-h-14 flex-wrap items-center justify-between gap-3 border px-4 py-3 sm:px-5">
-              <input
-                type="password"
-                placeholder="Add a password"
-                className="h-10 min-w-[180px] flex-1 bg-transparent text-sm outline-none"
-              />
-              <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
-                <RefreshCw className="size-4" />
-                Generate
-              </button>
-            </div>
-            <p className="mt-3 text-sm text-[#667085]">Protect your Homepage with a password</p>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Biography</p>
-            <div className="mt-4 border bg-white">
-              <Textarea
-                value={bio}
-                onChange={(event) => setBio(event.target.value.slice(0, 500))}
-                maxLength={500}
-                className="min-h-44 resize-none rounded-none border-0 focus-visible:ring-0"
-              />
-              <p className="px-5 pb-3 text-xs font-semibold text-[#667085]">{bio.length} / 500</p>
-            </div>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Homepage Info</p>
-            <div className="mt-4 grid gap-3">
-              {[
-                ["biography", "Biography"],
-                ["social", "Social Links"],
-                ["website", "Website"],
-                ["email", "Contact Email"],
-                ["phone", "Phone Number"],
-                ["address", "Business Address"],
-              ].map(([key, label]) => (
-                <label key={key} className="flex w-fit items-center gap-3 text-sm font-medium">
-                  <Checkbox
-                    checked={include[key as keyof typeof include]}
-                    onCheckedChange={() => toggleInclude(key as keyof typeof include)}
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-            <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#667085]">
-              To update details, go to your <button className="font-semibold text-[#00a997]">profile</button>.
-              Blank information will not appear on your homepage.
-            </p>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Collection Sort Order</p>
-            <select className="mt-4 h-14 w-full min-w-0 border bg-white px-4 text-sm font-bold outline-none sm:px-5">
-              <option>Date created: New to Old</option>
-              <option>Date created: Old to New</option>
-              <option>Collection name: A to Z</option>
-            </select>
-            <p className="mt-3 text-sm text-[#667085]">
-              Select order you wish collections to appear
-            </p>
-          </section>
-        </div>
-
-        <div className="sticky top-10 hidden min-h-[520px] items-center justify-center bg-[#f5f5f5] p-12 lg:flex">
-          <div className="w-full max-w-[390px] bg-white p-7 shadow-[0_28px_60px_rgba(0,0,0,0.12)]">
-            <div className="flex gap-2 text-[#b8b8b8]">
-              {[0, 1, 2, 3].map((item) => (
-                <span key={item} className="size-1.5 rounded-full bg-current" />
-              ))}
-            </div>
-            <div className="mt-6 text-center">
-              <p className="text-sm font-bold tracking-wide">RIFAT</p>
-              <p className="mt-3 text-[10px] font-semibold">email@nikoset.com</p>
-              <p className="mt-1 text-[10px] font-semibold">101 Main Street</p>
-              <p className="mt-1 text-[10px] font-semibold">123-456-7890</p>
-            </div>
-            <div className="mt-8 grid grid-cols-3 gap-5">
-              {Array.from({ length: 6 }).map((_, item) => (
-                <div key={item}>
-                  <div className="aspect-[1.45] bg-[#d8d8d8]" />
-                  <div className="mx-auto mt-3 h-1 w-12 bg-[#d8d8d8]" />
-                  <div className="mx-auto mt-1.5 h-1 w-9 bg-[#d8d8d8]" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <HomepageSettingsPanel />;
 }
 
 function SearchBox({
@@ -4565,10 +4524,7 @@ function SearchBox({
           ))}
           <p className="flex items-center gap-2 text-sm text-[#777]">
             <Info className="size-4" />
-            Need help searching?{" "}
-            <button className="text-[#00a997]" onClick={() => onQueryChange("Keyword")}>
-              Learn more
-            </button>
+            Need help searching? Use keywords, gallery names, or file info.
           </p>
         </div>
       </PopoverContent>
@@ -4688,7 +4644,10 @@ async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], 
     context.fillRect(0, 0, width, height);
     context.translate(width / 2 + (width * Number(item.crop.x ?? 0)) / 100, height / 2 + (height * Number(item.crop.y ?? 0)) / 100);
     context.rotate((Number(item.crop.rotation ?? 0) * Math.PI) / 180);
-    const scale = Math.max(width / image.width, height / image.height) * Number(item.crop.zoom ?? 1);
+    const baseScale = item.crop.fit === "contain"
+      ? Math.min(width / image.width, height / image.height)
+      : Math.max(width / image.width, height / image.height);
+    const scale = baseScale * Number(item.crop.zoom ?? 1);
     context.drawImage(image, -image.width * scale / 2, -image.height * scale / 2, image.width * scale, image.height * scale);
 
     const link = document.createElement("a");
@@ -4703,6 +4662,15 @@ async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], 
 function storeCropRatio(value?: string) {
   const [width, height] = String(value || "4:3").split(":").map(Number);
   return width > 0 && height > 0 ? width / height : 4 / 3;
+}
+
+async function downloadStoreOrderImages(order: StoreOrderRecord) {
+  for (const [index, item] of order.items.entries()) {
+    if (item.imageUrl) {
+      await downloadStoreOrderImage(item, `${order.orderNumber}-${index + 1}`);
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+    }
+  }
 }
 
 function StoreOrdersPanel() {
@@ -4846,6 +4814,16 @@ function StoreOrdersPanel() {
           </DialogHeader>
           {viewOrder && (
             <div className="max-h-[70vh] overflow-y-auto pr-1">
+              {viewOrder.items.some((item) => item.imageUrl) && (
+                <button
+                  className="mb-4 inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
+                  onClick={() => void downloadStoreOrderImages(viewOrder)}
+                  type="button"
+                >
+                  <Download className="size-4" />
+                  Download all images
+                </button>
+              )}
               <div className="grid gap-3 text-sm sm:grid-cols-3">
                 <div className="border p-3"><p className="text-xs text-[#777]">Status</p><StatusBadge value={viewOrder.status} /></div>
                 <div className="border p-3"><p className="text-xs text-[#777]">Payment</p><StatusBadge value={viewOrder.paymentStatus} /></div>
@@ -4859,8 +4837,9 @@ function StoreOrdersPanel() {
                         <img
                           src={storeOrderImageSrc(item.imageUrl)}
                           alt={item.name}
-                          className="absolute left-1/2 top-1/2 h-full w-full max-w-none object-cover"
+                          className="absolute left-1/2 top-1/2 h-full w-full max-w-none"
                           style={{
+                            objectFit: item.crop?.fit === "contain" ? "contain" : "cover",
                             transform: item.crop
                               ? `translate(calc(-50% + ${item.crop.x}%), calc(-50% + ${item.crop.y}%)) scale(${item.crop.zoom}) rotate(${item.crop.rotation}deg)`
                               : "translate(-50%, -50%)",
@@ -7429,7 +7408,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
   const [quickEdit, setQuickEdit] = useState<CollectionRecord | null>(null);
-  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "" });
+  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "", status: "draft" as "draft" | "published" });
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -7457,6 +7436,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     setQuickForm({
       name: quickEdit.name,
       eventDate: quickEdit.eventDate ? quickEdit.eventDate.slice(0, 10) : "",
+      status: quickEdit.status === "published" ? "published" : "draft",
     });
   }, [quickEdit]);
 
@@ -7484,7 +7464,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       if (expiryDateFilter === "expired" && (!expiry || expiry >= now)) return false;
       if (expiryDateFilter === "none" && expiry) return false;
 
-      const isStarred = collection.status === "starred" || collection.settings?.starred === true;
+      const isStarred = collection.settings?.starred === true;
       if (starredFilter === "yes" && !isStarred) return false;
       if (starredFilter === "no" && isStarred) return false;
       return true;
@@ -7512,9 +7492,17 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     setSortFilter("newest");
   };
   const openCollectionPreview = (collection: CollectionRecord) => {
+    if (collection.status !== "published") {
+      toast.error("Publish this collection before opening its public gallery.");
+      return;
+    }
     window.open(publicCollectionPath(collection), "_blank", "noopener,noreferrer");
   };
   const shareCollection = async (collection: CollectionRecord) => {
+    if (collection.status !== "published") {
+      toast.error("Publish this collection before sharing it.");
+      return;
+    }
     const url = `${window.location.origin}${publicCollectionPath(collection)}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -7536,6 +7524,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       payload: {
         name: quickForm.name.trim(),
         eventDate: quickForm.eventDate || undefined,
+        status: quickForm.status,
       },
     }, {
       onSuccess: () => {
@@ -7546,15 +7535,15 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     });
   };
   const toggleCollectionStar = (collection: CollectionRecord) => {
-    const isStarred = collection.status === "starred" || collection.settings?.starred === true;
-    const nextStatus = isStarred ? (collection.status === "starred" ? "draft" : collection.status) : "starred";
-    const nextSettings = {
-      ...(collection.settings ?? {}),
-      starred: !isStarred,
-    };
+    const isStarred = collection.settings?.starred === true;
     updateCollection.mutate({
       collectionId: collection._id,
-      payload: { status: nextStatus, settings: nextSettings },
+      payload: {
+        settings: {
+          ...(collection.settings ?? {}),
+          starred: !isStarred,
+        },
+      },
     });
   };
   const removeCollection = (collection: CollectionRecord) => {
@@ -7568,7 +7557,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
         <DialogContent className="rounded-none sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>Quick edit</DialogTitle>
-            <DialogDescription>Rename collection and update event date.</DialogDescription>
+            <DialogDescription>Rename the collection and choose Draft or Published.</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
@@ -7589,6 +7578,19 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 onChange={(event) => setQuickForm((current) => ({ ...current, eventDate: event.target.value }))}
                 className="rounded-none"
               />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="quick-status">Collection Status</FieldLabel>
+              <select
+                id="quick-status"
+                value={quickForm.status}
+                onChange={(event) => setQuickForm((current) => ({ ...current, status: event.target.value as "draft" | "published" }))}
+                className="h-11 w-full border bg-white px-3 text-sm outline-none"
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+              <p className="text-xs leading-5 text-[#777]">Only Published collections appear on your public homepage.</p>
             </Field>
           </FieldGroup>
           <DialogFooter>
@@ -7720,7 +7722,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 type="button"
                 aria-label="Star collection"
               >
-                <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
+                <Star className={cn("size-4", collection.settings?.starred === true && "fill-[#00a997] text-[#00a997]")} />
               </button>
               <CollectionActionMenu
                 collection={collection}
@@ -7793,7 +7795,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
                   <button className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f5] text-[#666] hover:text-[#00a997]" onClick={() => toggleCollectionStar(collection)} type="button" aria-label="Star collection">
-                    <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
+                    <Star className={cn("size-4", collection.settings?.starred === true && "fill-[#00a997] text-[#00a997]")} />
                   </button>
                   <button className="truncate text-left text-xl font-semibold" onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)} type="button">
                     {collection.name}
@@ -7917,7 +7919,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
   const presetSettings = useDashboardSettings("preset").query;
   const { hydrateDashboardSettings, presetItems } = useDashboardStore();
   const { createCollection } = useCollections();
-  const [form, setForm] = useState({ name: "", eventDate: "", presetId: "" });
+  const [form, setForm] = useState({ name: "", eventDate: "", presetId: "", status: "draft" as "draft" | "published" });
 
   useEffect(() => {
     const settings = presetSettings.data?.data ?? [];
@@ -7942,6 +7944,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
         name,
         eventDate: form.eventDate || undefined,
         presetId: form.presetId || undefined,
+        status: form.status,
         design,
         settings: {
           general: preset?.general ?? collectionDefaultGeneral,
@@ -8002,6 +8005,19 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
             />
           </Field>
           <Field>
+            <FieldLabel htmlFor="new-status" className="font-bold">Collection Status</FieldLabel>
+            <select
+              id="new-status"
+              value={form.status}
+              onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as "draft" | "published" }))}
+              className="mt-2 h-12 w-full border bg-white px-3 text-sm outline-none"
+            >
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+            </select>
+            <p className="mt-2 text-xs leading-5 text-[#777]">Published collections are listed on your unique homepage URL.</p>
+          </Field>
+          <Field>
             <FieldLabel htmlFor="new-preset" className="font-bold">
               Preset
             </FieldLabel>
@@ -8051,6 +8067,7 @@ function CollectionDetailView({
   collectionId: string;
 }) {
   const router = useRouter();
+  const coverImageAccess = usePlanFeatureAccess("coverImage");
   const presetSettings = useDashboardSettings("preset").query;
   const watermarkSettings = useDashboardSettings("watermark").query;
   const brandingSettings = useDashboardSettings<BrandSettings>("branding").query;
@@ -8097,6 +8114,7 @@ function CollectionDetailView({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
   const [form, setForm] = useState(() => collectionForm(collection));
+  const [collectionStatus, setCollectionStatus] = useState<"draft" | "published">(collection?.status === "published" ? "published" : "draft");
   const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));
   const emailTemplates = useMemo(
     () => (emailTemplateSettings.data?.data?.map((setting) => setting.data as EmailTemplateItem) ?? storeEmailTemplates),
@@ -8164,6 +8182,7 @@ function CollectionDetailView({
     if (syncedCollectionFormKeyRef.current === nextFormKey) return;
     syncedCollectionFormKeyRef.current = nextFormKey;
     setForm(nextForm);
+    setCollectionStatus(collection.status === "published" ? "published" : "draft");
   }, [collection, updateCollection.isPending]);
 
   useEffect(() => {
@@ -8190,6 +8209,7 @@ function CollectionDetailView({
       tags: form.general.collectionTags.split(",").map((tag) => tag.trim()).filter(Boolean),
       watermarkId: form.general.defaultWatermark === "No watermark" ? undefined : form.general.defaultWatermark,
       expiresAt: form.expiresAt || undefined,
+      status: collectionStatus,
       design: form.design,
       settings: {
         general: form.general,
@@ -8898,8 +8918,9 @@ function CollectionDetailView({
                         <Star className={cn("size-4", image.metadata?.starred === true && "fill-[#00a997] text-[#00a997]")} />
                       </button>
                       <button
-                        className="absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block"
-                        disabled={deletingImages}
+                        className={cn("absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block", coverImageAccess.locked && "cursor-not-allowed opacity-60")}
+                        disabled={deletingImages || coverImageAccess.locked}
+                        title={coverImageAccess.locked ? "Cover image is not included in your current plan" : "Make collection cover"}
                         onClick={() => {
                           setForm((value) => ({ ...value, coverImage: image.url }));
                           updateCollection.mutate(
@@ -9044,6 +9065,19 @@ function CollectionDetailView({
                 <Field>
                   <FieldLabel className="font-bold">Collection Name</FieldLabel>
                   <Input value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} className="h-12 rounded-none bg-white" />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="collection-status" className="font-bold">Collection Status</FieldLabel>
+                  <select
+                    id="collection-status"
+                    value={collectionStatus}
+                    onChange={(event) => setCollectionStatus(event.target.value as "draft" | "published")}
+                    className="h-12 w-full border bg-white px-3 text-sm outline-none"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
+                  <p className="text-xs leading-5 text-[#777]">Only Published collections are visible on your public homepage and public gallery URL.</p>
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold">Expire Date</FieldLabel>
@@ -9295,7 +9329,27 @@ function CollectionActivityPanel({
     if (!mailList) return;
     const template = emailTemplates.find((item) => item.id === selectedMailTemplateId) ?? emailTemplates[0];
     if (!template) return;
+    const body = [
+      template.message,
+      "",
+      `${template.buttonText || "Open Gallery"}: ${publicLink}`,
+      "",
+      template.footerText,
+    ].filter(Boolean).join("\n");
+    const html = [
+      `<h1>${template.title || collectionName}</h1>`,
+      `<p>${template.message || ""}</p>`,
+      `<p><a href="${publicLink}">${template.buttonText || "Open Gallery"}</a></p>`,
+      `<p>${template.footerText || ""}</p>`,
+    ].join("");
+    const result = await sendUniversalEmail({
+      to: mailList.email,
+      subject: template.subject || collectionName,
+      text: body,
+      html,
+    }).catch(() => null);
     await recordEmailUsage(1).catch(() => null);
+    if (result?.sent) toast.success("Email sent by universal SMTP");
     window.sessionStorage.setItem(
       "nikoset-mail-preview",
       JSON.stringify({

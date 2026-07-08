@@ -24,6 +24,9 @@ export class StoreProduct {
   @Prop({ default: true, index: true })
   active: boolean;
 
+  @Prop({ index: true })
+  defaultTemplateSlug?: string;
+
   @Prop({ default: 0 })
   sortOrder: number;
 

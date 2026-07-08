@@ -7,6 +7,7 @@ import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
+import { usePublicGalleryFavorites } from "./public-gallery-favorites";
 
 type PublicImage = {
   _id: string;
@@ -27,10 +28,6 @@ type PublicFace = {
   photoCount: number;
 };
 
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-};
 
 type PublicCollection = {
   _id: string;
@@ -190,6 +187,7 @@ export function PublicGallery({
   const [visitorEmail, setVisitorEmail] = useState("");
   const [visitorEmailSaved, setVisitorEmailSaved] = useState(false);
   const [zipDownloading, setZipDownloading] = useState(false);
+  const [zipStage, setZipStage] = useState("Preparing your photos");
   const [faceBusy, setFaceBusy] = useState(false);
   const [faceError, setFaceError] = useState("");
   const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
@@ -197,14 +195,7 @@ export function PublicGallery({
   const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
-  const [installRequested, setInstallRequested] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
-  const [collectionFavorited, setCollectionFavorited] = useState(false);
-  const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
-  const [favoriteBusy, setFavoriteBusy] = useState(false);
-  const [favoriteImageBusy, setFavoriteImageBusy] = useState("");
   const [downloadEmail, setDownloadEmail] = useState("");
   const activeGalleryImages = showSetTabs
     ? galleryImages.filter((image) => imageSetId(image) === activeSetId)
@@ -228,7 +219,22 @@ export function PublicGallery({
   const favoriteSettings = collection?.settings?.favorite;
   const favoritesEnabled = favoriteSettings?.favoritePhotos !== false;
   const maxFavoriteCount = Number(favoriteSettings?.maxFavorites || 0);
-  const canFavoriteMore = !maxFavoriteCount || favoriteImageIds.size < maxFavoriteCount;
+  const favoriteTools = usePublicGalleryFavorites({
+    collectionId: collection?._id,
+    identifier: collection?.slug ?? galary,
+    collectionTitle: title,
+    images: galleryImages,
+    enabled: favoritesEnabled,
+    maxFavorites: maxFavoriteCount,
+  });
+  const {
+    collectionFavorited,
+    favoriteImageIds,
+    favoriteBusy,
+    favoriteImageBusy,
+    toggleCollectionFavorite,
+    toggleImageFavorite,
+  } = favoriteTools;
   const pinRequired = downloadsEnabled && boolSetting(download.downloadPin);
   const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
@@ -300,13 +306,14 @@ export function PublicGallery({
     if (!canDownload || zipDownloading) return;
     const remaining = boolSetting(download.limitDownloads) && maxDownloads > 0
       ? Math.max(0, maxDownloads - downloadCount)
-      : visibleImages.length;
-    const downloadable = visibleImages.slice(0, remaining || visibleImages.length);
+      : galleryImages.length;
+    const downloadable = galleryImages.slice(0, remaining || galleryImages.length);
     if (!downloadable.length) return;
     const email = ensureDownloadEmail();
     if (!email) return;
 
     setZipDownloading(true);
+    setZipStage("Collecting gallery photos");
     try {
       await recordDownloadActivity(
         email,
@@ -322,6 +329,7 @@ export function PublicGallery({
       setShareNotice(error instanceof Error ? error.message : "Download activity failed");
       return;
     }
+    setZipStage("Creating ZIP archive");
     const response = await fetch("/api/public-download", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -342,6 +350,7 @@ export function PublicGallery({
     }
 
     try {
+      setZipStage("Starting download");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -357,6 +366,7 @@ export function PublicGallery({
       setShareNotice("Download failed");
     } finally {
       setZipDownloading(false);
+      setZipStage("Preparing your photos");
     }
   };
 
@@ -399,75 +409,6 @@ export function PublicGallery({
       { title: photo.originalName || title, text: title, url: currentPublicUrl(photo._id) },
       "Photo shared"
     );
-  const installApp = async () => {
-    if (installPrompt) {
-      await installPrompt.prompt().catch(() => {
-        setShareNotice("Tap Install to save this gallery app");
-      });
-      const choice = await installPrompt.userChoice.catch(() => null);
-      if (choice?.outcome === "accepted") setInstallPrompt(null);
-      setShareNotice(choice?.outcome === "accepted" ? "App installing" : "Install dismissed");
-      return;
-    }
-    setShareNotice("Use browser menu to add app");
-  };
-  const toggleCollectionFavorite = async () => {
-    if (favoriteBusy) return;
-    setFavoriteBusy(true);
-    const response = await fetch("/api/collection-favorites", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ identifier: collection?.slug ?? galary }),
-    }).catch(() => null);
-    setFavoriteBusy(false);
-    if (response?.status === 401) {
-      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-      return;
-    }
-    const payload = response ? await response.json().catch(() => null) : null;
-    if (!response?.ok) {
-      setShareNotice(payload?.message ?? "Favorite failed");
-      return;
-    }
-    setCollectionFavorited(Boolean(payload?.data?.favorited));
-    setShareNotice(payload?.data?.favorited ? "Collection favorited" : "Collection removed");
-  };
-  const toggleImageFavorite = async (photo: PublicImage) => {
-    if (!isPersistedImageId(photo._id)) return;
-    if (!favoritesEnabled) {
-      setShareNotice("Favorites disabled");
-      return;
-    }
-    if (favoriteImageBusy === photo._id) return;
-    if (!favoriteImageIds.has(photo._id) && !canFavoriteMore) {
-      setShareNotice(`Favorite limit reached (${maxFavoriteCount})`);
-      return;
-    }
-    setFavoriteImageBusy(photo._id);
-    const response = await fetch("/api/collection-image-favorites", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ imageId: photo._id }),
-    }).catch(() => null);
-    setFavoriteImageBusy("");
-    if (response?.status === 401) {
-      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-      return;
-    }
-    const payload = response ? await response.json().catch(() => null) : null;
-    if (!response?.ok) {
-      setShareNotice(payload?.message ?? "Favorite failed");
-      return;
-    }
-    const favorited = Boolean(payload?.data?.favorited);
-    setFavoriteImageIds((current) => {
-      const next = new Set(current);
-      if (favorited) next.add(photo._id);
-      else next.delete(photo._id);
-      return next;
-    });
-    setShareNotice(favorited ? "Photo favorited" : "Photo removed");
-  };
   const startSlideshow = () => {
     if (!visibleImages.length) return;
     setActiveImage(null);
@@ -539,28 +480,6 @@ export function PublicGallery({
   }, [shareNotice]);
 
   useEffect(() => {
-    setIsStandaloneApp(
-      window.matchMedia("(display-mode: standalone)").matches ||
-      Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone)
-    );
-    const onBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
-    };
-    const onAppInstalled = () => {
-      setInstallPrompt(null);
-      setIsStandaloneApp(true);
-      setShareNotice("App installed");
-    };
-    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-    window.addEventListener("appinstalled", onAppInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", onAppInstalled);
-    };
-  }, []);
-
-  useEffect(() => {
     const startUrl = `${window.location.pathname}${window.location.search}`;
     const manifestHref = `/manifest.webmanifest?start=${encodeURIComponent(startUrl)}`;
     let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -571,44 +490,6 @@ export function PublicGallery({
     }
     manifestLink.href = manifestHref;
   }, []);
-
-  useEffect(() => {
-    if (isStandaloneApp) return;
-    if (new URLSearchParams(window.location.search).get("install") !== "1") return;
-    setInstallRequested(true);
-    setShareNotice("Tap Install to save this gallery app");
-  }, [isStandaloneApp]);
-
-  useEffect(() => {
-    const identifier = collection?.slug ?? galary;
-    fetch("/api/collection-favorites", { cache: "no-store" })
-      .then(async (response) => {
-        if (response.status === 401) return null;
-        return response.ok ? response.json() : null;
-      })
-      .then((payload) => {
-        const items = Array.isArray(payload?.data) ? payload.data : [];
-        setCollectionFavorited(items.some((item: any) =>
-          item.collectionId === collection?._id || item.slug === identifier,
-        ));
-      })
-      .catch(() => undefined);
-    fetch("/api/collection-image-favorites", { cache: "no-store" })
-      .then(async (response) => {
-        if (response.status === 401) return null;
-        return response.ok ? response.json() : null;
-      })
-      .then((payload) => {
-        const ids = Array.isArray(payload?.data)
-          ? payload.data
-              .filter((item: any) => item.collectionId === collection?._id)
-              .map((item: any) => item.imageId)
-              .filter(Boolean)
-          : [];
-        setFavoriteImageIds(new Set(ids));
-      })
-      .catch(() => undefined);
-  }, [collection?._id, collection?.slug, galary]);
 
   useEffect(() => {
     if (slideshowIndex === null || visibleImages.length <= 1) return;
@@ -634,9 +515,12 @@ export function PublicGallery({
                   <Share2 className="size-4" /> Share
                 </button>
               )}
-              {!isStandaloneApp && (
-                <button className="flex items-center gap-2 text-sm" onClick={() => void installApp()} type="button">
-                  <Download className="size-4" /> Install
+              <button className="flex items-center gap-2 text-sm" onClick={favoriteTools.openFavorites} type="button">
+                <Heart className="size-4" /> My Favorites
+              </button>
+              {canDownload && (
+                <button className="flex items-center gap-2 text-sm disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button">
+                  {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} {zipDownloading ? "Preparing" : "Download All"}
                 </button>
               )}
             </>
@@ -647,9 +531,12 @@ export function PublicGallery({
                   <Share2 className="size-5" />
                 </button>
               )}
-              {!isStandaloneApp && (
-                <button onClick={() => void installApp()} type="button" aria-label="Install app">
-                  <Download className="size-5" />
+              <button onClick={favoriteTools.openFavorites} type="button" aria-label="My Favorites" title="My Favorites">
+                <Heart className="size-5" />
+              </button>
+              {canDownload && (
+                <button onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" aria-label={zipDownloading ? "Preparing ZIP download" : "Download all photos"} title="Download all photos">
+                  {zipDownloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
                 </button>
               )}
             </>
@@ -732,12 +619,10 @@ export function PublicGallery({
                 <span className="hidden sm:inline md:sr-only">Share</span>
               </button>
             )}
-            {!isStandaloneApp && (
-              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void installApp()} type="button" title="Install app" aria-label="Install app">
-                <Download className="size-4" />
-                <span className="hidden sm:inline md:sr-only">Install</span>
-              </button>
-            )}
+            <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={favoriteTools.openFavorites} type="button" title="My Favorites" aria-label="My Favorites">
+              <Heart className="size-4" />
+              <span className="hidden sm:inline md:sr-only">My Favorites</span>
+            </button>
             <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button" title="Favorite" aria-label="Favorite">
               <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
               <span className="hidden sm:inline md:sr-only">Favorite</span>
@@ -789,21 +674,6 @@ export function PublicGallery({
         )}
 
         {faceError && <p className="mx-4 mt-5 text-sm font-semibold text-red-600 md:mx-8">{faceError}</p>}
-        {installRequested && !isStandaloneApp && (
-          <div className="mx-4 mt-5 flex max-w-xl flex-wrap items-center justify-between gap-3 border border-black/10 bg-[#f4f4f2] px-4 py-3 md:mx-8">
-            <p className="text-sm font-semibold text-[#202326]">
-              Save this gallery as an app on this device.
-            </p>
-            <button
-              className="inline-flex h-10 items-center gap-2 bg-[#202326] px-4 text-sm font-bold text-white"
-              onClick={() => void installApp()}
-              type="button"
-            >
-              <Download className="size-4" />
-              Install
-            </button>
-          </div>
-        )}
         {shareNotice && (
           <p className="mx-4 mt-5 inline-flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white md:mx-8">
             <Check className="size-4" />
@@ -851,6 +721,22 @@ export function PublicGallery({
         </div>
       </section>
 
+      {favoriteTools.overlays}
+      {zipDownloading && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-white p-7 text-center text-[#202326] shadow-[0_28px_90px_rgba(0,0,0,0.32)]">
+            <div className="relative mx-auto flex size-20 items-center justify-center rounded-full bg-[#eef8f6] text-[#009b8c]">
+              <Download className="size-7 animate-bounce" />
+              <span className="absolute inset-0 animate-ping rounded-full border border-[#19bda8]/30" />
+            </div>
+            <h2 className="mt-6 text-xl font-semibold">Preparing ZIP download</h2>
+            <p className="mt-2 text-sm text-[#666]">{zipStage}</p>
+            <div className="mx-auto mt-6 flex w-28 items-end justify-center gap-1.5">
+              {[0, 1, 2, 3, 4].map((index) => <span key={index} className="h-2 w-3 animate-pulse rounded-full bg-[#18bfa6]" style={{ animationDelay: `${index * 120}ms` }} />)}
+            </div>
+          </div>
+        </div>
+      )}
       {pinDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="w-full max-w-[380px] bg-white p-6 text-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.28)]">

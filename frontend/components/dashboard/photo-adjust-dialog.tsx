@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type PointerEvent } from "react";
 import { RotateCcw, RotateCw, X } from "lucide-react";
 import { publicImageSrc, type PublicStoreCartItem, type StoreCrop } from "@/lib/public-store";
 
@@ -14,18 +14,41 @@ export function PhotoAdjustDialog({
   onSave: (crop: StoreCrop) => void;
 }) {
   const [crop, setCrop] = useState<StoreCrop>(
-    item.crop ?? { x: 0, y: 0, width: 100, height: 100, zoom: 1, rotation: 0, aspectRatio: "4:3" },
+    item.crop ?? { x: 0, y: 0, width: 100, height: 100, zoom: 1, rotation: 0, aspectRatio: "4:3", fit: "contain" },
   );
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ x: number; y: number; cropX: number; cropY: number } | null>(null);
+  const move = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    const frame = frameRef.current;
+    if (!drag || !frame) return;
+    const rect = frame.getBoundingClientRect();
+    const dx = ((event.clientX - drag.x) / rect.width) * 100;
+    const dy = ((event.clientY - drag.y) / rect.height) * 100;
+    setCrop((value) => ({ ...value, x: clamp(drag.cropX + dx, -100, 100), y: clamp(drag.cropY + dy, -100, 100) }));
+  };
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/65 p-4">
       <div className="grid w-full max-w-[900px] overflow-hidden bg-white md:grid-cols-[1fr_330px]">
         <div className="flex min-h-[420px] items-center justify-center bg-[#e9e9e7] p-7">
-          <div className="relative w-full overflow-hidden bg-white shadow-lg" style={{ aspectRatio: ratio(crop.aspectRatio) }}>
+          <div
+            ref={frameRef}
+            className="relative w-full touch-none overflow-hidden bg-white shadow-lg"
+            style={{ aspectRatio: ratio(crop.aspectRatio) }}
+            onPointerDown={(event) => {
+              dragRef.current = { x: event.clientX, y: event.clientY, cropX: crop.x, cropY: crop.y };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={move}
+            onPointerUp={() => { dragRef.current = null; }}
+            onPointerCancel={() => { dragRef.current = null; }}
+          >
             <img
               src={publicImageSrc(item.image?.url)}
               alt="Crop preview"
-              className="absolute left-1/2 top-1/2 h-full w-full max-w-none object-cover"
+              className="absolute left-1/2 top-1/2 h-full w-full max-w-none cursor-grab object-contain active:cursor-grabbing"
+              draggable={false}
               style={{ transform: `translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom}) rotate(${crop.rotation}deg)` }}
             />
             <div className="pointer-events-none absolute inset-0 border border-white/70" />
@@ -36,10 +59,10 @@ export function PhotoAdjustDialog({
             <h3 className="text-xl font-medium">Edit crop</h3>
             <button onClick={onClose} aria-label="Close"><X className="size-5" /></button>
           </div>
-          <p className="mt-2 text-sm leading-6 text-[#666]">Adjust the photograph without changing the original collection image.</p>
-          <Range label="Horizontal" min={-50} max={50} step={1} value={crop.x} onChange={(x) => setCrop((value) => ({ ...value, x }))} />
-          <Range label="Vertical" min={-50} max={50} step={1} value={crop.y} onChange={(y) => setCrop((value) => ({ ...value, y }))} />
-          <Range label="Zoom" min={1} max={3} step={0.05} value={crop.zoom} onChange={(zoom) => setCrop((value) => ({ ...value, zoom }))} />
+          <p className="mt-2 text-sm leading-6 text-[#666]">Whole photo shows first. Drag image, zoom in or out, rotate, then save.</p>
+          <Range label="Horizontal" min={-100} max={100} step={1} value={crop.x} onChange={(x) => setCrop((value) => ({ ...value, x }))} />
+          <Range label="Vertical" min={-100} max={100} step={1} value={crop.y} onChange={(y) => setCrop((value) => ({ ...value, y }))} />
+          <Range label="Zoom" min={0.2} max={4} step={0.05} value={crop.zoom} onChange={(zoom) => setCrop((value) => ({ ...value, zoom }))} />
           <div className="mt-6 flex gap-2">
             <button className="flex h-10 flex-1 items-center justify-center gap-2 border text-sm" onClick={() => setCrop((value) => ({ ...value, rotation: value.rotation - 90 }))}><RotateCcw className="size-4" /> Left</button>
             <button className="flex h-10 flex-1 items-center justify-center gap-2 border text-sm" onClick={() => setCrop((value) => ({ ...value, rotation: value.rotation + 90 }))}><RotateCw className="size-4" /> Right</button>
@@ -63,4 +86,8 @@ function Range({ label, min, max, step, value, onChange }: { label: string; min:
 function ratio(value: string) {
   const [width, height] = String(value || "4:3").split(":").map(Number);
   return width > 0 && height > 0 ? width / height : 4 / 3;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }

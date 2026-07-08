@@ -13,6 +13,7 @@ export type BillingUser = {
   monthlyEmailLimit?: number;
   storageUsedBytes?: number;
   monthlyEmailsUsed?: number;
+  planFeatures?: Record<string, boolean>;
 };
 
 function normalizePlans(value: unknown): AdminPlan[] {
@@ -74,7 +75,7 @@ export async function getPublicPlans() {
 
 export async function checkoutPlan(planId: string) {
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const data = await authedRequest<{ checkoutUrl?: string }>(`/billing/plans/${planId}/checkout`, {
+  const data = await authedRequest<{ checkoutUrl?: string | null; activated?: boolean; plan?: AdminPlan }>(`/billing/plans/${planId}/checkout`, {
     method: "POST",
     body: JSON.stringify({
       successUrl: `${origin}/dashboard/client-gallery/storage?plan=success&session_id={CHECKOUT_SESSION_ID}`,

@@ -13,7 +13,6 @@ const pages = [
   "presets",
   "email-templates",
   "preferences",
-  "integrations",
 ] as const;
 
 export default async function DashboardSettingsPage({
@@ -28,6 +27,10 @@ export default async function DashboardSettingsPage({
   }
 
   const [page, action] = settingsPage;
+
+  if (page === "integrations") {
+    redirect(`/dashboard/${section}/settings/preferences`);
+  }
 
   if (page === "presets" && action === "new") {
     return (

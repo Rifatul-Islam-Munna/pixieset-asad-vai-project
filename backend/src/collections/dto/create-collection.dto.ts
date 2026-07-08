@@ -1,4 +1,4 @@
-import { IsDateString, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsDateString, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CreateCollectionDto {
   @IsString()
@@ -13,6 +13,10 @@ export class CreateCollectionDto {
   @IsOptional()
   @IsString()
   presetId?: string;
+
+  @IsOptional()
+  @IsIn(['draft', 'published'])
+  status?: 'draft' | 'published';
 
   @IsOptional()
   @IsObject()

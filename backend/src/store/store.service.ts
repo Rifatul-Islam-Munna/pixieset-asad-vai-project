@@ -15,8 +15,8 @@ import { StoreSetting, StoreSettingDocument } from './entities/store-setting.ent
 import { StoreShipping, StoreShippingDocument } from './entities/store-shipping.entity';
 import { StoreTax, StoreTaxDocument } from './entities/store-tax.entity';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
+import { StoreDefaultProductService } from './store-default-product.service';
 import { User, UserDocument } from 'src/user/entities/user.entity';
-import { DEFAULT_STORE_PRODUCTS } from './store-defaults';
 
 @Injectable()
 export class StoreService {
@@ -41,6 +41,7 @@ export class StoreService {
     private readonly collectionModel: Model<CollectionDocument>,
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
+    private readonly defaultProducts: StoreDefaultProductService,
   ) {}
 
   async dashboard(userId: string) {
@@ -205,10 +206,12 @@ export class StoreService {
       fulfillment,
     });
     if (fulfillment === 'auto') {
+      const defaults = await this.defaultProducts.listActiveData();
       await this.productModel.insertMany(
-        DEFAULT_STORE_PRODUCTS.map((item) => ({
+        defaults.map((item: any) => ({
           userId,
           priceSheetId: sheet._id.toString(),
+          defaultTemplateSlug: item.slug,
           ...item,
         })),
       );

@@ -24,6 +24,7 @@ export class Plan {
     coverImage?: boolean;
     layouts?: boolean;
     advancedDesign?: boolean;
+    customCover?: boolean;
     store?: boolean;
     marketingEmails?: boolean;
   };

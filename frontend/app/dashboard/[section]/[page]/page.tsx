@@ -1,4 +1,4 @@
-import { ClientDashboard } from "@/components/dashboard/client-dashboard";
+import { ClientDashboard, type DashboardPage, type DashboardSection } from "@/components/dashboard/client-dashboard";
 import { notFound, redirect } from "next/navigation";
 
 const sections = ["client-gallery", "store-gallery"];
@@ -6,7 +6,6 @@ const pages = [
   "collections",
   "collection-new",
   "library",
-  "favorites",
   "starred",
   "homepage",
   "marketing",
@@ -32,10 +31,14 @@ export default async function DashboardSectionPage({
 }) {
   const { section, page } = await params;
   await searchParams;
-  if (!sections.includes(section) || !pages.includes(page)) notFound();
+  if (!sections.includes(section)) notFound();
+  if (section === "client-gallery" && page === "favorites") {
+    redirect("/dashboard/client-gallery/collections");
+  }
+  if (!pages.includes(page)) notFound();
   if (section === "store-gallery" && page === "pricing") {
     redirect("/dashboard/store-gallery/products");
   }
 
-  return <ClientDashboard section={section} page={page} />;
+  return <ClientDashboard section={section as DashboardSection} page={page as DashboardPage} />;
 }

@@ -81,6 +81,7 @@ export function useCollections() {
       name: string;
       eventDate?: string;
       presetId?: string;
+      status?: "draft" | "published";
       design?: Record<string, any>;
       settings?: Record<string, any>;
     }) => {

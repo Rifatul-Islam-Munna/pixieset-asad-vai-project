@@ -83,8 +83,8 @@ export function StoreCartPanel({
                       <img
                         src={publicImageSrc(item.image?.thumbnailUrl || item.image?.url || item.product.images?.[0])}
                         alt=""
-                        className="h-full w-full object-cover"
-                        style={item.crop ? { transform: `scale(${Math.min(1.35, item.crop.zoom)})` } : undefined}
+                        className="h-full w-full"
+                        style={item.crop ? { objectFit: item.crop.fit === "contain" ? "contain" : "cover", transform: `translate(${item.crop.x / 3}%, ${item.crop.y / 3}%) scale(${item.crop.zoom}) rotate(${item.crop.rotation}deg)` } : { objectFit: "cover" }}
                       />
                     )}
                   </div>

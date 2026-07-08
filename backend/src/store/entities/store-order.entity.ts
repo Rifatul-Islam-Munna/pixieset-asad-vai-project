@@ -18,6 +18,7 @@ export type StoreCropData = {
   zoom: number;
   rotation: number;
   aspectRatio: string;
+  fit?: 'contain' | 'cover';
 };
 
 @Schema({ _id: false })

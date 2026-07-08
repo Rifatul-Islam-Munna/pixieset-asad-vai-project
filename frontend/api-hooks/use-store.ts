@@ -86,6 +86,7 @@ export type StoreOrderRecord = {
       zoom: number;
       rotation: number;
       aspectRatio: string;
+      fit?: "contain" | "cover";
     };
     quantity: number;
     unitPrice: number;

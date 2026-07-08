@@ -11,10 +11,14 @@ import { CollectionsModule } from './collections/collections.module';
 import { StoreModule } from './store/store.module';
 import { AdminModule } from './admin/admin.module';
 import { HomeCmsModule } from './home-cms/home-cms.module';
+import { MobileGalleryModule } from './mobile-gallery/mobile-gallery.module';
+import { MailModule } from './mail/mail.module';
+import { HomepageModule } from './homepage/homepage.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    MailModule,
     JwtModule.registerAsync({
       global: true,
       inject: [ConfigService],
@@ -34,6 +38,8 @@ import { HomeCmsModule } from './home-cms/home-cms.module';
     StoreModule,
     AdminModule,
     HomeCmsModule,
+    MobileGalleryModule,
+    HomepageModule,
   ],
   controllers: [AppController],
   providers: [AppService],

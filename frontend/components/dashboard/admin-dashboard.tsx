@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ComponentType, type FormEvent, type PointerEvent, type ReactNode } from "react";
+import { useMemo, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BarChart3, DollarSign, Edit3, FileImage, Images, Loader2, LogOut, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
@@ -26,7 +27,7 @@ import { logOutUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { mergeHomeCms, type CustomCoverElement, type CustomCoverTemplate, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
+import { mergeHomeCms, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 type UserForm = {
@@ -77,6 +78,7 @@ const planFeatures = [
   ["coverImage", "Cover image"],
   ["layouts", "Layouts"],
   ["advancedDesign", "Advanced design"],
+  ["customCover", "Custom cover"],
   ["store", "Store"],
   ["marketingEmails", "Marketing email"],
 ] as const;
@@ -592,6 +594,9 @@ function AdminNav({ tab, setTab }: { tab: AdminTab; setTab: (tab: AdminTab) => v
           {item.label}
         </button>
       ))}
+      <div className="my-2 border-t" />
+      <Link href="/admin/cover-templates" className={navClass(false)}><FileImage className="size-4" />Cover Templates</Link>
+      <Link href="/admin/default-products" className={navClass(false)}><ShoppingBag className="size-4" />Default Products</Link>
     </nav>
   );
 }
@@ -959,7 +964,6 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
     extraMetaTags[index] = { ...extraMetaTags[index], ...value };
     setForm({ ...form, seo: { ...form.seo, extraMetaTags } });
   };
-  const setCoverTemplates = (coverTemplates: CustomCoverTemplate[]) => setForm({ ...form, coverTemplates });
 
   return (
     <div className="mt-6 grid gap-5">
@@ -1021,6 +1025,20 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
       </div>
 
       <div className="grid gap-5">
+        <CmsSection title="Navbar brand" defaultOpen>
+          <div className="grid gap-4 md:grid-cols-2">
+            <CmsInput label="Brand text" value={form.brand.brandText} onChange={(brandText) => setForm({ ...form, brand: { ...form.brand, brandText } })} />
+            <CmsImageInput label="Logo image" value={form.brand.logoUrl} onChange={(logoUrl) => setForm({ ...form, brand: { ...form.brand, logoUrl } })} onUpload={onUpload} busy={busy} />
+            <CmsInput label="Accent color" value={form.brand.accentColor} onChange={(accentColor) => setForm({ ...form, brand: { ...form.brand, accentColor } })} />
+            {(form.brand.logoUrl || form.brand.brandText) && (
+              <div className="flex items-center gap-3 border bg-[#171918] p-4 text-white">
+                {form.brand.logoUrl && <img src={form.brand.logoUrl} alt="" className="h-10 max-w-32 object-contain" />}
+                {form.brand.brandText && <span className="font-serif text-xl tracking-[0.28em]">{form.brand.brandText}</span>}
+              </div>
+            )}
+          </div>
+        </CmsSection>
+
         <CmsSection title="SEO and auth" defaultOpen>
           <div className="grid gap-5">
             <CmsRepeater title="Site SEO">
@@ -1107,15 +1125,6 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
           </div>
         </CmsSection>
 
-        <CmsSection title="Client gallery cover templates" defaultOpen>
-          <AdminCoverTemplateBuilder
-            templates={form.coverTemplates}
-            setTemplates={setCoverTemplates}
-            onUpload={onUpload}
-            busy={busy}
-          />
-        </CmsSection>
-
         <CmsSection eyebrow={lang.toUpperCase()} title="Navigation" defaultOpen>
           <div className="grid gap-4 md:grid-cols-2">
             <CmsInput label="Brand" value={content.nav.brand} onChange={(brand) => patchObject("nav", { brand })} />
@@ -1156,6 +1165,8 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
                 <div key={`${product.title}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
                   <CmsInput label="Title" value={product.title} onChange={(title) => patchProduct(index, { title })} />
                   <CmsInput label="Price" value={product.price} onChange={(price) => patchProduct(index, { price })} />
+                  <CmsInput label="Description" value={product.description ?? ""} onChange={(description) => patchProduct(index, { description })} />
+                  <CmsInput label="Link" value={product.href ?? ""} onChange={(href) => patchProduct(index, { href })} />
                 </div>
               ))}
             </CmsRepeater>
@@ -1267,172 +1278,6 @@ function CmsSection({ eyebrow, title, children, defaultOpen }: {
       </summary>
       <div className="p-4 sm:p-6">{children}</div>
     </details>
-  );
-}
-
-const blankCoverTemplate = (): CustomCoverTemplate => ({
-  id: `cover-${Date.now()}`,
-  name: "Custom Cover",
-  backgroundImage: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1400&q=80",
-  overlayOpacity: 24,
-  gridOpacity: 0,
-  lineOpacity: 70,
-  elements: [
-    { id: "title", type: "title", text: "Gallery Title", x: 50, y: 48, width: 70, height: 14, fontSize: 54, color: "#ffffff", opacity: 100, align: "center" },
-    { id: "brand", type: "brandText", text: "Brand", x: 50, y: 30, width: 42, height: 8, fontSize: 16, color: "#ffffff", opacity: 90, align: "center" },
-    { id: "button", type: "button", text: "View Gallery", x: 50, y: 66, width: 24, height: 8, fontSize: 12, color: "#ffffff", opacity: 100, align: "center" },
-  ],
-});
-
-function AdminCoverTemplateBuilder({
-  busy,
-  onUpload,
-  setTemplates,
-  templates,
-}: {
-  busy: boolean;
-  onUpload: (file: File) => Promise<string>;
-  setTemplates: (templates: CustomCoverTemplate[]) => void;
-  templates: CustomCoverTemplate[];
-}) {
-  const [activeId, setActiveId] = useState(templates[0]?.id ?? "");
-  const [selectedElementId, setSelectedElementId] = useState("");
-  const active = templates.find((template) => template.id === activeId) ?? templates[0] ?? blankCoverTemplate();
-  const setActive = (value: CustomCoverTemplate) => {
-    const exists = templates.some((template) => template.id === value.id);
-    setTemplates(exists ? templates.map((template) => template.id === value.id ? value : template) : [value, ...templates]);
-    setActiveId(value.id);
-  };
-  const selected = active.elements.find((element) => element.id === selectedElementId) ?? active.elements[0];
-  const patchElement = (id: string, value: Partial<CustomCoverElement>) =>
-    setActive({ ...active, elements: active.elements.map((element) => element.id === id ? { ...element, ...value } : element) });
-  const addElement = (type: CustomCoverElement["type"]) => {
-    const element: CustomCoverElement = {
-      id: `${type}-${Date.now()}`,
-      type,
-      text: type === "button" ? "View Gallery" : type === "line" ? "" : type === "logo" ? "" : "Text",
-      x: 50,
-      y: 50,
-      width: type === "line" ? 50 : 30,
-      height: type === "line" ? 1 : 8,
-      fontSize: type === "title" ? 48 : 18,
-      color: "#ffffff",
-      opacity: 100,
-      align: "center",
-    };
-    setSelectedElementId(element.id);
-    setActive({ ...active, elements: [...active.elements, element] });
-  };
-  const dragElement = (event: PointerEvent<HTMLButtonElement>, id: string) => {
-    const rect = event.currentTarget.parentElement?.getBoundingClientRect();
-    if (!rect) return;
-    const move = (clientX: number, clientY: number) => {
-      patchElement(id, {
-        x: Math.max(3, Math.min(97, ((clientX - rect.left) / rect.width) * 100)),
-        y: Math.max(3, Math.min(97, ((clientY - rect.top) / rect.height) * 100)),
-      });
-    };
-    move(event.clientX, event.clientY);
-    const onMove = (moveEvent: globalThis.PointerEvent) => move(moveEvent.clientX, moveEvent.clientY);
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
-
-  return (
-    <div className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)_280px]">
-      <div className="grid content-start gap-3">
-        <Button type="button" className="rounded-none bg-[#111] text-white" onClick={() => setActive(blankCoverTemplate())}>
-          Add template
-        </Button>
-        {templates.map((template) => (
-          <button key={template.id} className={cn("border bg-white p-3 text-left text-sm font-bold", active.id === template.id && "border-[#22bda7] text-[#008f80]")} onClick={() => setActiveId(template.id)} type="button">
-            {template.name}
-          </button>
-        ))}
-      </div>
-      <div className="min-w-0">
-        <div className="relative aspect-[1.55] overflow-hidden bg-[#111] text-white shadow-[0_24px_70px_rgba(0,0,0,0.16)]">
-          <img src={active.backgroundImage} alt="" className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-black" style={{ opacity: active.overlayOpacity / 100 }} />
-          {active.gridOpacity > 0 && (
-            <div className="absolute inset-0" style={{ opacity: active.gridOpacity / 100, backgroundImage: "linear-gradient(to right, rgba(255,255,255,.55) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.55) 1px, transparent 1px)", backgroundSize: "64px 64px" }} />
-          )}
-          {active.elements.map((element) => (
-            <button
-              key={element.id}
-              className={cn(
-                "absolute border border-white/35 text-white",
-                selected?.id === element.id && "ring-2 ring-[#22bda7]",
-                element.type === "button" && "px-3 uppercase tracking-[0.18em]",
-                element.type === "line" && "border-x-0 border-b-0",
-              )}
-              style={{
-                left: `${element.x}%`,
-                top: `${element.y}%`,
-                width: `${element.width}%`,
-                height: `${element.height}%`,
-                opacity: element.opacity / 100,
-                color: element.color,
-                borderColor: element.color,
-                fontSize: element.fontSize,
-                transform: "translate(-50%, -50%)",
-              }}
-              onPointerDown={(event) => {
-                setSelectedElementId(element.id);
-                dragElement(event, element.id);
-              }}
-              type="button"
-            >
-              {element.type === "logo" ? "Logo" : element.type === "line" ? "" : element.text}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {(["title", "subtitle", "date", "button", "brandText", "logo", "line"] as const).map((type) => (
-            <Button key={type} type="button" variant="outline" className="h-9 rounded-none" onClick={() => addElement(type)}>
-              {type}
-            </Button>
-          ))}
-        </div>
-      </div>
-      <div className="grid content-start gap-4">
-        <CmsInput label="Template name" value={active.name} onChange={(name) => setActive({ ...active, name })} />
-        <CmsImageInput label="Background" value={active.backgroundImage} onChange={(backgroundImage) => setActive({ ...active, backgroundImage })} onUpload={onUpload} busy={busy} />
-        <InputField label="Overlay opacity" type="number" value={String(active.overlayOpacity)} onChange={(value) => setActive({ ...active, overlayOpacity: Number(value) || 0 })} />
-        <InputField label="Grid opacity" type="number" value={String(active.gridOpacity)} onChange={(value) => setActive({ ...active, gridOpacity: Number(value) || 0 })} />
-        <InputField label="Line opacity" type="number" value={String(active.lineOpacity)} onChange={(value) => setActive({ ...active, lineOpacity: Number(value) || 0 })} />
-        {selected && (
-          <div className="grid gap-3 border bg-[#fbfbfa] p-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Layer edit</p>
-              <button
-                type="button"
-                className="text-xs font-bold text-red-600"
-                onClick={() => {
-                  setActive({ ...active, elements: active.elements.filter((element) => element.id !== selected.id) });
-                  setSelectedElementId("");
-                }}
-              >
-                Delete
-              </button>
-            </div>
-            <InputField label="Text" value={selected.text} onChange={(text) => patchElement(selected.id, { text })} />
-            <InputField label="Font size" type="number" value={String(selected.fontSize)} onChange={(value) => patchElement(selected.id, { fontSize: Number(value) || 12 })} />
-            <InputField label="Opacity" type="number" value={String(selected.opacity)} onChange={(value) => patchElement(selected.id, { opacity: Number(value) || 100 })} />
-            <InputField label="Width %" type="number" value={String(selected.width)} onChange={(value) => patchElement(selected.id, { width: Number(value) || 10 })} />
-            <InputField label="Height %" type="number" value={String(selected.height)} onChange={(value) => patchElement(selected.id, { height: Number(value) || 4 })} />
-            <label className="grid gap-2">
-              <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Color</span>
-              <Input type="color" value={selected.color} onChange={(event) => patchElement(selected.id, { color: event.target.value })} className="h-11 rounded-none" />
-            </label>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 

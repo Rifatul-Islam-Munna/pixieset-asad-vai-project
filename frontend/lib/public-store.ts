@@ -96,6 +96,7 @@ export type StoreCrop = {
   zoom: number;
   rotation: number;
   aspectRatio: string;
+  fit?: "contain" | "cover";
 };
 
 export type PublicStoreCartItem = {

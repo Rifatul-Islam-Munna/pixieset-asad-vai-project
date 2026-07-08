@@ -42,7 +42,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         <div className="absolute inset-0 bg-black/55" />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.68),rgba(0,0,0,0.18)_55%,rgba(0,0,0,0.5))]" />
 
-        <SiteNav nav={t.nav} lang={lang} dashboardHref={dashboardHref} />
+        <SiteNav brand={cms.brand} nav={t.nav} lang={lang} dashboardHref={dashboardHref} />
 
         <div className="relative z-10 mx-auto flex min-h-[620px] w-full max-w-[1240px] items-center px-5 pt-6 md:min-h-[720px] md:px-7 lg:px-8">
           <div className="max-w-[760px] pt-10 md:pt-16">
@@ -78,12 +78,12 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
                       {t.gallery.productTabs.map((item) => <span key={item}>{item}</span>)}
                     </div>
                     <div className="mt-5 grid grid-cols-1 gap-3 border-t pt-5 sm:grid-cols-3">
-                      {t.products.map((product) => (
-                        <div key={product.title}>
+                      {t.products.slice(0, 3).map((product) => (
+                        <a key={product.title} href={product.href || "#"}>
                           <img src={tab.image} alt={product.title} className="h-28 w-full object-cover" />
                           <p className="mt-3 text-sm font-medium text-[#333]">{product.title}</p>
                           <p className="mt-1 text-sm text-[#777]">{product.price}</p>
-                        </div>
+                        </a>
                       ))}
                     </div>
                     <p className="mt-6 text-2xl font-normal text-[#222]">{t.gallery.cartLabel}</p>
@@ -165,7 +165,10 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
       <footer className="bg-[#171918] px-5 py-14 text-white md:px-6 md:py-20">
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[1.5fr_2fr]">
           <div className="flex min-h-[360px] flex-col">
-            <a href="#" className="font-serif text-2xl tracking-[0.36em] text-white" aria-label={t.nav.brand}>{t.nav.brand}</a>
+            <a href="#" className="inline-flex items-center gap-3 text-white" aria-label={cms.brand.brandText || t.nav.brand}>
+              {(cms.brand.logoUrl || cms.brand.brandImageUrl) && <img src={cms.brand.logoUrl || cms.brand.brandImageUrl} alt="" className="h-10 max-w-32 object-contain" />}
+              {(cms.brand.brandText || t.nav.brand) && <span className="font-serif text-2xl tracking-[0.36em]">{cms.brand.brandText || t.nav.brand}</span>}
+            </a>
             <p className="mt-10 max-w-[470px] text-sm leading-6 text-white/80">{t.footer.description}</p>
             <p className="mt-auto pt-16 text-xs font-semibold text-white/80">{t.footer.copyright}</p>
           </div>
