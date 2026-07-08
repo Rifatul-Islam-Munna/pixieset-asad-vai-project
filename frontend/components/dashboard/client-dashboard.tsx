@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, isValid, parse, parseISO } from "date-fns";
@@ -8138,6 +8138,7 @@ function CollectionDetailView({
   const [pageOrigin, setPageOrigin] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ active: false, total: 0, uploaded: 0, currentName: "" });
+  const [draggingUpload, setDraggingUpload] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
@@ -8323,7 +8324,9 @@ function CollectionDetailView({
     startCampaignBuilder(templateId, publicLink);
     setShareOpen(false);
   };
-  const handleImageUpload = async (files: FileList | null) => {
+  const isFileDrag = (event: DragEvent<HTMLElement>) => Array.from(event.dataTransfer.types).includes("Files");
+  const droppedImageFiles = (files: FileList) => Array.from(files).filter((file) => file.type.startsWith("image/"));
+  const handleImageUpload = async (files: FileList | File[] | null) => {
     if (!files?.length || uploadImages.isPending || uploadProgress.active) return;
     const selectedFiles = Array.from(files);
     setUploadProgress({ active: true, total: selectedFiles.length, uploaded: 0, currentName: selectedFiles[0]?.name ?? "" });
@@ -8344,6 +8347,25 @@ function CollectionDetailView({
     } finally {
       setUploadProgress({ active: false, total: 0, uploaded: 0, currentName: "" });
     }
+  };
+  const handleUploadDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!isFileDrag(event) || uploading) return;
+    event.preventDefault();
+    setDraggingUpload(true);
+  };
+  const handleUploadDragLeave = (event: DragEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingUpload(false);
+  };
+  const handleUploadDrop = (event: DragEvent<HTMLElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    setDraggingUpload(false);
+    const imageFiles = droppedImageFiles(event.dataTransfer.files);
+    if (!imageFiles.length) {
+      toast.error("Drop image files only");
+      return;
+    }
+    void handleImageUpload(imageFiles);
   };
   const uploading = uploadProgress.active || uploadImages.isPending;
   const uploadsLeft = Math.max(0, uploadProgress.total - uploadProgress.uploaded);
@@ -8805,7 +8827,13 @@ function CollectionDetailView({
             imagesLoading ? (
               <CollectionImagesSkeleton />
             ) : !activeSetImages.length ? (
-              <label className={cn("flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center", uploading && "pointer-events-none opacity-75")}>
+              <label
+                className={cn("flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center transition", draggingUpload && "border-[#22bda7] bg-[#f2fffd]", uploading && "pointer-events-none opacity-75")}
+                onDragOver={handleUploadDragOver}
+                onDragEnter={handleUploadDragOver}
+                onDragLeave={handleUploadDragLeave}
+                onDrop={handleUploadDrop}
+              >
                 {uploading ? <Loader2 className="size-10 animate-spin text-[#22bda7]" /> : <Upload className="size-10 text-[#bbb]" />}
                 <p className="mt-5 font-bold">{uploading ? `Uploaded ${uploadProgress.uploaded} of ${uploadProgress.total || "selected"} images` : "Drag photos and videos here to upload"}</p>
                 <p className="mt-3 text-sm text-[#00a997]">{uploading ? `${uploadsLeft} left` : "or Browse files"}</p>
@@ -8822,7 +8850,18 @@ function CollectionDetailView({
                 />
               </label>
             ) : (
-              <div>
+              <div
+                className={cn("relative min-h-[420px] transition", draggingUpload && "outline outline-2 outline-[#22bda7] outline-offset-4")}
+                onDragOver={handleUploadDragOver}
+                onDragEnter={handleUploadDragOver}
+                onDragLeave={handleUploadDragLeave}
+                onDrop={handleUploadDrop}
+              >
+                {draggingUpload && (
+                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border border-dashed border-[#22bda7] bg-white/80 text-sm font-bold text-[#00a997]">
+                    Drop images to upload
+                  </div>
+                )}
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <p className="text-xs font-bold uppercase tracking-wide text-[#777]">
                     {collection.name} / {activeSet?.name ?? "Set"} / Images
