@@ -35,7 +35,7 @@ export function usePublicGalleryFavorites({
   images: FavoriteGalleryImage[];
   enabled: boolean;
   maxFavorites: number;
-  favoritesPath: string;
+  favoritesPath?: string;
 }) {
   const router = useRouter();
   const storageKey = `pixieset-public-favorites:${collectionId || identifier}`;
@@ -148,6 +148,11 @@ export function usePublicGalleryFavorites({
     if (action?.type === "image") applyImageToggle(action.imageId);
   }
 
+  const openFavorites = () => {
+    const target = favoritesPath || `${window.location.pathname.replace(/\/$/, "")}/favorites`;
+    router.push(target);
+  };
+
   const overlays: ReactNode = (
     <>
       {emailDialogOpen && (
@@ -188,7 +193,7 @@ export function usePublicGalleryFavorites({
     favoriteImages,
     toggleCollectionFavorite,
     toggleImageFavorite,
-    openFavorites: () => router.push(favoritesPath),
+    openFavorites,
     overlays,
   };
 }
