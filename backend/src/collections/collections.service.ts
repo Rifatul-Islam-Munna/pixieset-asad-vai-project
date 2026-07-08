@@ -55,6 +55,7 @@ export class CollectionsService {
       slug: await this.uniqueSlug(userId, safeDto.name),
       eventDate: safeDto.eventDate ? new Date(safeDto.eventDate) : undefined,
       presetId: safeDto.presetId,
+      status: safeDto.status ?? 'draft',
       design: safeDto.design ?? {},
       settings: safeDto.settings ?? {},
       sets: [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],
@@ -98,6 +99,7 @@ export class CollectionsService {
 
   async findPublic(identifier: string) {
     const collection = await this.findCollectionByIdentifier(identifier);
+    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
 
     const images = await this.imageModel
       .find({ collectionId: collection._id.toString() })
@@ -340,6 +342,7 @@ export class CollectionsService {
     body: { email?: string; items?: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>; downloadType?: 'single' | 'all' },
   ) {
     const collection = await this.findCollectionByIdentifier(identifier);
+    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
     const email = String(body?.email ?? '').trim().toLowerCase();
     if (!email || !email.includes('@')) throw new BadRequestException('Email is required');
     const items = Array.isArray(body?.items) ? body.items.slice(0, 250) : [];
@@ -452,7 +455,7 @@ export class CollectionsService {
       design: source.design ?? {},
       settings: source.settings ?? {},
       imageCount: images.length,
-      status: source.status ?? 'draft',
+      status: 'draft',
     });
     await this.imageModel.insertMany(images.map((image) => ({
       userId,
@@ -534,6 +537,7 @@ export class CollectionsService {
     if (dto.tags !== undefined) collection.tags = dto.tags;
     if (dto.watermarkId !== undefined) collection.watermarkId = dto.watermarkId || undefined;
     if (dto.expiresAt !== undefined) collection.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : undefined;
+    if (dto.status !== undefined) collection.status = dto.status;
     if (dto.design !== undefined) collection.design = dto.design;
     if (dto.settings !== undefined) collection.settings = dto.settings;
 
@@ -564,7 +568,7 @@ export class CollectionsService {
       design: source.design ?? {},
       settings: source.settings ?? {},
       imageCount: images.length,
-      status: source.status ?? 'draft',
+      status: 'draft',
     });
 
     if (images.length) {

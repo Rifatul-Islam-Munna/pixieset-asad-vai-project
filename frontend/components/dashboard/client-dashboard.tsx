@@ -165,6 +165,7 @@ import type { BrandSettings, CustomCoverTemplate, HomeCmsData } from "@/lib/home
 import { cn } from "@/lib/utils";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 import { PlanFeatureLock, PlanFeatureNotice } from "@/components/dashboard/plan-feature-lock";
+import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
 export type DashboardPage =
@@ -4381,145 +4382,7 @@ function DashboardPlaceholder({
 }
 
 function HomepageSettings() {
-  const [enabled, setEnabled] = useState(true);
-  const [bio, setBio] = useState("");
-  const [include, setInclude] = useState({
-    biography: true,
-    social: true,
-    website: false,
-    email: true,
-    phone: true,
-    address: true,
-  });
-
-  const toggleInclude = (key: keyof typeof include) =>
-    setInclude((value) => ({ ...value, [key]: !value[key] }));
-
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold md:text-[28px]">Homepage</h1>
-
-      <div className="mt-6 grid items-start gap-8 md:mt-8 lg:grid-cols-[minmax(320px,620px)_minmax(320px,1fr)] lg:gap-12">
-        <div className="max-w-[620px] min-w-0">
-          <section>
-            <p className="text-sm font-bold">Homepage Status</p>
-            <div className="mt-4 flex items-center gap-3">
-              <Switch checked={enabled} onCheckedChange={setEnabled} />
-              <span className="text-sm font-medium">{enabled ? "On" : "Off"}</span>
-            </div>
-            <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#667085]">
-              Your Homepage is a public page where your collections are listed. You can also select
-              which collections appear here under each collection's setting.{" "}
-              <button className="font-semibold text-[#00a997]">Learn more</button>
-            </p>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Homepage URL</p>
-            <div className="mt-4 flex min-h-14 flex-wrap items-center justify-between gap-3 bg-[#f6f6f6] px-4 py-3 sm:px-5">
-              <span className="truncate text-sm font-medium">https://rifat39.nikoset.com</span>
-              <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
-                <Copy className="size-4" />
-                Copy
-              </button>
-            </div>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Homepage Password</p>
-            <div className="mt-4 flex min-h-14 flex-wrap items-center justify-between gap-3 border px-4 py-3 sm:px-5">
-              <input
-                type="password"
-                placeholder="Add a password"
-                className="h-10 min-w-[180px] flex-1 bg-transparent text-sm outline-none"
-              />
-              <button className="flex items-center gap-2 text-sm font-bold text-[#00a997]">
-                <RefreshCw className="size-4" />
-                Generate
-              </button>
-            </div>
-            <p className="mt-3 text-sm text-[#667085]">Protect your Homepage with a password</p>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Biography</p>
-            <div className="mt-4 border bg-white">
-              <Textarea
-                value={bio}
-                onChange={(event) => setBio(event.target.value.slice(0, 500))}
-                maxLength={500}
-                className="min-h-44 resize-none rounded-none border-0 focus-visible:ring-0"
-              />
-              <p className="px-5 pb-3 text-xs font-semibold text-[#667085]">{bio.length} / 500</p>
-            </div>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Homepage Info</p>
-            <div className="mt-4 grid gap-3">
-              {[
-                ["biography", "Biography"],
-                ["social", "Social Links"],
-                ["website", "Website"],
-                ["email", "Contact Email"],
-                ["phone", "Phone Number"],
-                ["address", "Business Address"],
-              ].map(([key, label]) => (
-                <label key={key} className="flex w-fit items-center gap-3 text-sm font-medium">
-                  <Checkbox
-                    checked={include[key as keyof typeof include]}
-                    onCheckedChange={() => toggleInclude(key as keyof typeof include)}
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-            <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#667085]">
-              To update details, go to your <button className="font-semibold text-[#00a997]">profile</button>.
-              Blank information will not appear on your homepage.
-            </p>
-          </section>
-
-          <section className="mt-12">
-            <p className="text-sm font-bold">Collection Sort Order</p>
-            <select className="mt-4 h-14 w-full min-w-0 border bg-white px-4 text-sm font-bold outline-none sm:px-5">
-              <option>Date created: New to Old</option>
-              <option>Date created: Old to New</option>
-              <option>Collection name: A to Z</option>
-            </select>
-            <p className="mt-3 text-sm text-[#667085]">
-              Select order you wish collections to appear
-            </p>
-          </section>
-        </div>
-
-        <div className="sticky top-10 hidden min-h-[520px] items-center justify-center bg-[#f5f5f5] p-12 lg:flex">
-          <div className="w-full max-w-[390px] bg-white p-7 shadow-[0_28px_60px_rgba(0,0,0,0.12)]">
-            <div className="flex gap-2 text-[#b8b8b8]">
-              {[0, 1, 2, 3].map((item) => (
-                <span key={item} className="size-1.5 rounded-full bg-current" />
-              ))}
-            </div>
-            <div className="mt-6 text-center">
-              <p className="text-sm font-bold tracking-wide">RIFAT</p>
-              <p className="mt-3 text-[10px] font-semibold">email@nikoset.com</p>
-              <p className="mt-1 text-[10px] font-semibold">101 Main Street</p>
-              <p className="mt-1 text-[10px] font-semibold">123-456-7890</p>
-            </div>
-            <div className="mt-8 grid grid-cols-3 gap-5">
-              {Array.from({ length: 6 }).map((_, item) => (
-                <div key={item}>
-                  <div className="aspect-[1.45] bg-[#d8d8d8]" />
-                  <div className="mx-auto mt-3 h-1 w-12 bg-[#d8d8d8]" />
-                  <div className="mx-auto mt-1.5 h-1 w-9 bg-[#d8d8d8]" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <HomepageSettingsPanel />;
 }
 
 function SearchBox({
@@ -7439,7 +7302,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
   const [quickEdit, setQuickEdit] = useState<CollectionRecord | null>(null);
-  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "" });
+  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "", status: "draft" as "draft" | "published" });
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -7467,6 +7330,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     setQuickForm({
       name: quickEdit.name,
       eventDate: quickEdit.eventDate ? quickEdit.eventDate.slice(0, 10) : "",
+      status: quickEdit.status === "published" ? "published" : "draft",
     });
   }, [quickEdit]);
 
@@ -7522,9 +7386,17 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     setSortFilter("newest");
   };
   const openCollectionPreview = (collection: CollectionRecord) => {
+    if (collection.status !== "published") {
+      toast.error("Publish this collection before opening its public gallery.");
+      return;
+    }
     window.open(publicCollectionPath(collection), "_blank", "noopener,noreferrer");
   };
   const shareCollection = async (collection: CollectionRecord) => {
+    if (collection.status !== "published") {
+      toast.error("Publish this collection before sharing it.");
+      return;
+    }
     const url = `${window.location.origin}${publicCollectionPath(collection)}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -7546,6 +7418,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       payload: {
         name: quickForm.name.trim(),
         eventDate: quickForm.eventDate || undefined,
+        status: quickForm.status,
       },
     }, {
       onSuccess: () => {
@@ -7556,15 +7429,15 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     });
   };
   const toggleCollectionStar = (collection: CollectionRecord) => {
-    const isStarred = collection.status === "starred" || collection.settings?.starred === true;
-    const nextStatus = isStarred ? (collection.status === "starred" ? "draft" : collection.status) : "starred";
-    const nextSettings = {
-      ...(collection.settings ?? {}),
-      starred: !isStarred,
-    };
+    const isStarred = collection.settings?.starred === true;
     updateCollection.mutate({
       collectionId: collection._id,
-      payload: { status: nextStatus, settings: nextSettings },
+      payload: {
+        settings: {
+          ...(collection.settings ?? {}),
+          starred: !isStarred,
+        },
+      },
     });
   };
   const removeCollection = (collection: CollectionRecord) => {
@@ -7578,7 +7451,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
         <DialogContent className="rounded-none sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>Quick edit</DialogTitle>
-            <DialogDescription>Rename collection and update event date.</DialogDescription>
+            <DialogDescription>Rename the collection and choose Draft or Published.</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
@@ -7599,6 +7472,19 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 onChange={(event) => setQuickForm((current) => ({ ...current, eventDate: event.target.value }))}
                 className="rounded-none"
               />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="quick-status">Collection Status</FieldLabel>
+              <select
+                id="quick-status"
+                value={quickForm.status}
+                onChange={(event) => setQuickForm((current) => ({ ...current, status: event.target.value as "draft" | "published" }))}
+                className="h-11 w-full border bg-white px-3 text-sm outline-none"
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+              <p className="text-xs leading-5 text-[#777]">Only Published collections appear on your public homepage.</p>
             </Field>
           </FieldGroup>
           <DialogFooter>
@@ -7730,7 +7616,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 type="button"
                 aria-label="Star collection"
               >
-                <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
+                <Star className={cn("size-4", collection.settings?.starred === true && "fill-[#00a997] text-[#00a997]")} />
               </button>
               <CollectionActionMenu
                 collection={collection}
@@ -7803,7 +7689,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
                   <button className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f5] text-[#666] hover:text-[#00a997]" onClick={() => toggleCollectionStar(collection)} type="button" aria-label="Star collection">
-                    <Star className={cn("size-4", (collection.status === "starred" || collection.settings?.starred === true) && "fill-[#00a997] text-[#00a997]")} />
+                    <Star className={cn("size-4", collection.settings?.starred === true && "fill-[#00a997] text-[#00a997]")} />
                   </button>
                   <button className="truncate text-left text-xl font-semibold" onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)} type="button">
                     {collection.name}
@@ -7924,11 +7810,10 @@ function CollectionFilterSelect({
 
 function CollectionNewPanel({ section }: { section: DashboardSection }) {
   const router = useRouter();
-  const coverImageAccess = usePlanFeatureAccess("coverImage");
   const presetSettings = useDashboardSettings("preset").query;
   const { hydrateDashboardSettings, presetItems } = useDashboardStore();
   const { createCollection } = useCollections();
-  const [form, setForm] = useState({ name: "", eventDate: "", presetId: "" });
+  const [form, setForm] = useState({ name: "", eventDate: "", presetId: "", status: "draft" as "draft" | "published" });
 
   useEffect(() => {
     const settings = presetSettings.data?.data ?? [];
@@ -7953,6 +7838,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
         name,
         eventDate: form.eventDate || undefined,
         presetId: form.presetId || undefined,
+        status: form.status,
         design,
         settings: {
           general: preset?.general ?? collectionDefaultGeneral,
@@ -8013,6 +7899,19 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
             />
           </Field>
           <Field>
+            <FieldLabel htmlFor="new-status" className="font-bold">Collection Status</FieldLabel>
+            <select
+              id="new-status"
+              value={form.status}
+              onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as "draft" | "published" }))}
+              className="mt-2 h-12 w-full border bg-white px-3 text-sm outline-none"
+            >
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+            </select>
+            <p className="mt-2 text-xs leading-5 text-[#777]">Published collections are listed on your unique homepage URL.</p>
+          </Field>
+          <Field>
             <FieldLabel htmlFor="new-preset" className="font-bold">
               Preset
             </FieldLabel>
@@ -8062,6 +7961,7 @@ function CollectionDetailView({
   collectionId: string;
 }) {
   const router = useRouter();
+  const coverImageAccess = usePlanFeatureAccess("coverImage");
   const presetSettings = useDashboardSettings("preset").query;
   const watermarkSettings = useDashboardSettings("watermark").query;
   const brandingSettings = useDashboardSettings<BrandSettings>("branding").query;
@@ -8108,6 +8008,7 @@ function CollectionDetailView({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
   const [form, setForm] = useState(() => collectionForm(collection));
+  const [collectionStatus, setCollectionStatus] = useState<"draft" | "published">(collection?.status === "published" ? "published" : "draft");
   const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));
   const emailTemplates = useMemo(
     () => (emailTemplateSettings.data?.data?.map((setting) => setting.data as EmailTemplateItem) ?? storeEmailTemplates),
@@ -8175,6 +8076,7 @@ function CollectionDetailView({
     if (syncedCollectionFormKeyRef.current === nextFormKey) return;
     syncedCollectionFormKeyRef.current = nextFormKey;
     setForm(nextForm);
+    setCollectionStatus(collection.status === "published" ? "published" : "draft");
   }, [collection, updateCollection.isPending]);
 
   useEffect(() => {
@@ -8201,6 +8103,7 @@ function CollectionDetailView({
       tags: form.general.collectionTags.split(",").map((tag) => tag.trim()).filter(Boolean),
       watermarkId: form.general.defaultWatermark === "No watermark" ? undefined : form.general.defaultWatermark,
       expiresAt: form.expiresAt || undefined,
+      status: collectionStatus,
       design: form.design,
       settings: {
         general: form.general,
@@ -9056,6 +8959,19 @@ function CollectionDetailView({
                 <Field>
                   <FieldLabel className="font-bold">Collection Name</FieldLabel>
                   <Input value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} className="h-12 rounded-none bg-white" />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="collection-status" className="font-bold">Collection Status</FieldLabel>
+                  <select
+                    id="collection-status"
+                    value={collectionStatus}
+                    onChange={(event) => setCollectionStatus(event.target.value as "draft" | "published")}
+                    className="h-12 w-full border bg-white px-3 text-sm outline-none"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
+                  <p className="text-xs leading-5 text-[#777]">Only Published collections are visible on your public homepage and public gallery URL.</p>
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold">Expire Date</FieldLabel>
