@@ -9,10 +9,8 @@ import {
   ChevronDown,
   GripVertical,
   ImagePlus,
-  MoreHorizontal,
   Plus,
   Search,
-  Settings,
   Share2,
   Smartphone,
   Trash2,
@@ -61,7 +59,6 @@ function TopBar({ active }: { active: "apps" | "settings" }) {
               </div>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-3 text-[#777]"><Link href="/dashboard/mobile-gallery#search-apps" aria-label="Search mobile gallery apps" className="rounded p-1.5 hover:bg-white hover:text-[#18bfa6]"><Search className="size-5" /></Link><Link href="/dashboard/mobile-gallery/settings" aria-label="Mobile gallery settings" className="rounded p-1.5 hover:bg-white hover:text-[#18bfa6]"><Settings className="size-5" /></Link></div>
         </div>
       </div>
       <nav className="overflow-x-auto border-b px-4 sm:px-8">
@@ -82,6 +79,7 @@ function AppsPage() {
   const [name, setName] = useState("");
   const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
   const [query, setQuery] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<MobileGalleryApp | null>(null);
   const visibleApps = useMemo(() => apps.filter((app) => app.name.toLowerCase().includes(query.trim().toLowerCase())), [apps, query]);
 
   async function submit(event: FormEvent) {
@@ -107,7 +105,10 @@ function AppsPage() {
           {visibleApps.map((app) => (
             <article key={app._id}>
               <button onClick={() => router.push(`/dashboard/mobile-gallery/apps/${app._id}`)} className="block w-full bg-[#f5f4f3] p-7"><div className="mx-auto size-28 overflow-hidden rounded-[28px] bg-white shadow-sm">{app.iconUrl || app.coverImage ? <img src={app.iconUrl || app.coverImage} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Smartphone className="size-8 text-[#aaa]" /></div>}</div></button>
-              <div className="flex items-center justify-between pt-3"><button onClick={() => router.push(`/dashboard/mobile-gallery/apps/${app._id}`)} className="truncate pr-3 text-left text-sm font-semibold uppercase">{app.name}</button><button onClick={async () => { if (confirm(`Delete ${app.name}?`)) await deleteApp.mutateAsync(app._id).catch((error) => toast.error(error.message)); }} className="rounded-full p-2 text-[#18bfa6] hover:bg-[#f4f4f4]"><MoreHorizontal className="size-5" /></button></div>
+              <div className="flex items-center justify-between pt-3">
+                <button onClick={() => router.push(`/dashboard/mobile-gallery/apps/${app._id}`)} className="truncate pr-3 text-left text-sm font-semibold uppercase">{app.name}</button>
+                <button onClick={() => setDeleteTarget(app)} className="rounded-full p-2 text-red-500 transition hover:bg-red-50" aria-label={`Delete ${app.name}`} title="Delete app"><Trash2 className="size-5" /></button>
+              </div>
               <p className="mt-1 text-xs text-[#888]">{app.imageCount || 0} photos · {app.status === "draft" ? "Unpublished" : "Published"}</p>
             </article>
           ))}
@@ -115,6 +116,21 @@ function AppsPage() {
         {!appsQuery.isLoading && !visibleApps.length && <div className="py-24 text-center text-[#777]">{query ? "No matching mobile gallery apps." : "Create your first mobile gallery app."}</div>}
       </section>
       {createOpen && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/45 p-4"><form onSubmit={submit} className="w-full max-w-md bg-white p-6 shadow-2xl"><div className="flex items-center justify-between gap-4"><h2 className="text-xl font-semibold">Create Mobile Gallery App</h2><button type="button" onClick={() => setCreateOpen(false)}><X className="size-5" /></button></div><Field label="App Name" value={name} onChange={setName} required /><label className="mt-5 block text-sm font-semibold">Event Date<input type="date" value={eventDate} onChange={(event) => setEventDate(event.target.value)} className="mt-2 h-12 w-full border px-4 font-normal outline-none focus:border-[#18bfa6]" /></label><button disabled={createApp.isPending} className="mt-7 w-full bg-[#18bfa6] px-5 py-3 font-semibold text-white">{createApp.isPending ? "Creating…" : "Create App"}</button></form></div>}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onMouseDown={(event) => { if (event.currentTarget === event.target && !deleteApp.isPending) setDeleteTarget(null); }}>
+          <div className="w-full max-w-md bg-white p-6 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-red-500">Delete app</p><h2 className="mt-2 text-xl font-semibold">Delete {deleteTarget.name}?</h2></div>
+              <button type="button" disabled={deleteApp.isPending} onClick={() => setDeleteTarget(null)} aria-label="Close delete confirmation"><X className="size-5" /></button>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-[#666]">This permanently removes the mobile gallery app and its uploaded photos. This action cannot be undone.</p>
+            <div className="mt-7 flex justify-end gap-3">
+              <button type="button" disabled={deleteApp.isPending} onClick={() => setDeleteTarget(null)} className="border px-5 py-3 text-sm font-semibold">Cancel</button>
+              <button type="button" disabled={deleteApp.isPending} onClick={async () => { try { await deleteApp.mutateAsync(deleteTarget._id); toast.success("Mobile gallery app deleted"); setDeleteTarget(null); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not delete app"); } }} className="flex items-center gap-2 bg-red-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"><Trash2 className="size-4" />{deleteApp.isPending ? "Deleting…" : "Delete"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

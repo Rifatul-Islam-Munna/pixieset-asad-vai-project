@@ -748,51 +748,28 @@ function StoreTopNavigation({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex min-w-0 items-center gap-2 text-sm font-semibold outline-none">
-                <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]">
-                  <span className="h-[2px] w-3 bg-white" />
-                </span>
-                <span>Store</span>
+                <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]"><span className="h-[2px] w-3 bg-white" /></span>
+                <span>Store Gallery</span>
                 <ChevronDown className="size-4 text-[#333]" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
-              <DropdownMenuGroup className="p-5">
-                {switcherItems.map((item) => (
-                  <DropdownMenuItem key={item.key} asChild className="p-0">
-                    <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
-                      <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
-                      <span className="flex flex-col gap-1">
-                        <span className="font-bold text-[#151515]">{item.title}</span>
-                        <span className="text-xs leading-5 text-[#777]">{item.text}</span>
-                      </span>
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-              <div className="bg-[#f7f7f7] p-5 text-center">
-                <Link href="/dashboard/store-gallery" className="inline-flex items-center gap-2 text-sm text-[#333]">
-                  <LayoutGrid className="size-4 text-[#999]" />
-                  View Dashboard
-                </Link>
-              </div>
+            <DropdownMenuContent align="start" className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border bg-white p-3 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
+              {switcherItems.map((item) => (
+                <DropdownMenuItem key={item.key} asChild className="rounded-none p-0 focus:bg-transparent">
+                  <Link href={item.href} className={cn("block w-full px-4 py-3 hover:bg-[#f5f5f5]", item.key === "store-gallery" && "bg-[#fff4f5]")}>
+                    <span className="block font-bold text-[#151515]">{item.title}</span>
+                    <span className="mt-1 block text-xs leading-5 text-[#777]">{item.text}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 text-[#8a8a8a] sm:gap-4">
-          <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Help">
-            <Info className="size-5" />
-          </button>
-          <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Notifications">
-            <Bell className="size-5" />
-          </button>
-          <button
-            className="flex size-8 items-center justify-center rounded-full bg-white text-[#555] hover:text-red-600 disabled:opacity-50"
-            onClick={logout}
-            disabled={logoutPending}
-            aria-label="Logout"
-          >
-            <CircleUserRound className="size-5" />
+        <div className="flex shrink-0 items-center gap-3 text-[#666]">
+          <DashboardNotifications />
+          <button className="flex size-8 items-center justify-center rounded-full bg-white text-[#555] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50" onClick={logout} disabled={logoutPending} aria-label="Logout" title="Logout">
+            <LogOut className="size-5" />
           </button>
         </div>
         </div>
