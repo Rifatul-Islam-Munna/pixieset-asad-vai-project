@@ -50,7 +50,7 @@ export function StoreCartPanel({
     <div className="fixed inset-0 z-[100] bg-black/45" role="dialog" aria-modal="true">
       <button className="absolute inset-0 cursor-default" aria-label="Close cart" onClick={onClose} />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-[560px] flex-col bg-white shadow-2xl">
-        <header className="flex h-[72px] shrink-0 items-center justify-between border-b px-5 md:px-7">
+        <header className="flex h-[72px] shrink-0 items-center justify-between gap-3 border-b px-4 md:px-7">
           <div>
             <p className="text-lg font-medium">{orderOpen ? "Checkout" : "Your Cart"}</p>
             <p className="text-xs text-[#777]">{count} {count === 1 ? "item" : "items"}</p>
@@ -75,9 +75,9 @@ export function StoreCartPanel({
           />
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3 md:px-7">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 md:px-7">
               {items.map((item) => (
-                <article key={item.id} className="grid grid-cols-[92px_1fr] gap-4 border-b py-5">
+                <article key={item.id} className="grid grid-cols-[76px_1fr] gap-3 border-b py-5 sm:grid-cols-[92px_1fr] sm:gap-4">
                   <div className="aspect-square overflow-hidden bg-[#f1f1ef]">
                     {(item.image?.url || item.product.images?.[0]) && (
                       <img
@@ -112,7 +112,7 @@ export function StoreCartPanel({
                 </article>
               ))}
             </div>
-            <footer className="shrink-0 border-t px-5 py-5 md:px-7">
+            <footer className="shrink-0 border-t px-4 py-5 md:px-7">
               <div className="flex items-center justify-between text-base font-semibold"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
               <button
                 className="mt-4 h-12 w-full bg-[#303030] text-sm font-semibold text-white"

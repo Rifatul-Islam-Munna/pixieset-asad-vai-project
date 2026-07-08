@@ -621,11 +621,11 @@ export function PublicGallery({
       {customFontName && design.customFontDataUrl && (
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
-    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
-      <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-black/5 px-5 md:px-10">
+    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
+      <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-black/5 px-4 sm:px-5 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
         <p className="truncate text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
-        <div />
-        <div className="flex items-center justify-end gap-4" data-print-store-actions-host="true">
+        <div className="hidden lg:block" />
+        <div className="flex min-w-0 items-center justify-end gap-3 sm:gap-4" data-print-store-actions-host="true">
           <span data-public-store-cart-host="true" />
           {design.navigationStyle === "Icon & Text" ? (
             <>
@@ -657,7 +657,7 @@ export function PublicGallery({
         </div>
       </nav>
 
-      <section className="px-5 pb-10 md:px-10">
+      <section className="px-3 pb-7 sm:px-5 sm:pb-10 md:px-10">
         <CoverPreview
           design={{
             ...design,
@@ -671,20 +671,20 @@ export function PublicGallery({
       </section>
 
       <section className="px-0 py-0">
-        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-y border-black/10 bg-white/95 px-4 py-4 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] backdrop-blur md:px-8">
+        <div className="sticky top-0 z-20 flex flex-col items-stretch gap-3 border-y border-black/10 bg-white/95 px-3 py-3 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] backdrop-blur sm:px-4 md:px-8 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-4 lg:py-4">
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.26em] text-black/45">
               Masonry gallery
             </p>
-            <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-2">
-              <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
+            <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2 sm:gap-x-6">
+              <h1 className="min-w-0 break-words text-xl font-semibold sm:text-2xl md:text-3xl">{title}</h1>
               {showSetTabs && (
-                <div className="flex flex-1 flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-bold">
+                <div className="-mx-1 flex min-w-0 flex-1 gap-x-4 gap-y-2 overflow-x-auto px-1 pb-1 text-sm font-bold sm:flex-wrap sm:justify-center sm:gap-x-5 sm:overflow-visible sm:pb-0">
                   {gallerySets.map((set) => (
                     <button
                       key={set.id}
                       className={cn(
-                        "transition-opacity hover:opacity-100",
+                        "shrink-0 transition-opacity hover:opacity-100",
                         activeSetId === set.id ? "opacity-100" : "opacity-45",
                       )}
                       onClick={() => setActiveSetId(set.id)}
@@ -697,58 +697,58 @@ export function PublicGallery({
               )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 rounded-full border border-black/10 bg-[#f4f4f2] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur">
+          <div className="flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-full border border-black/10 bg-[#f4f4f2] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur lg:w-auto lg:flex-wrap lg:overflow-visible">
             {storeStatus && (
-              <button className="inline-flex h-10 items-center rounded-full px-4 text-sm font-bold transition hover:bg-black/5" type="button" data-public-store-open="true">
+              <button className="inline-flex h-10 shrink-0 items-center rounded-full px-4 text-sm font-bold transition hover:bg-black/5" type="button" data-public-store-open="true">
                 Print Store
               </button>
             )}
-            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90 md:w-10 md:justify-center md:px-0" title={faceBusy ? "Searching" : "Find me"}>
+            <label className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90 md:w-10 md:justify-center md:px-0" title={faceBusy ? "Searching" : "Find me"}>
               {faceBusy ? <Search className="size-4 animate-pulse" /> : <Camera className="size-4" />}
-              <span className="md:sr-only">{faceBusy ? "Searching" : "Find me"}</span>
+              <span className="hidden sm:inline md:sr-only">{faceBusy ? "Searching" : "Find me"}</span>
               <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
                 void searchByFace(event.target.files?.[0]);
                 event.target.value = "";
               }} />
             </label>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
+            <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
               <Search className="size-4" />
-              <span className="md:sr-only">Faces</span>
+              <span className="hidden sm:inline md:sr-only">Faces</span>
             </button>
             {faceResults && (
-              <button className="inline-flex h-10 items-center rounded-full border border-black/10 px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => setFaceResults(null)} type="button">
+              <button className="inline-flex h-10 shrink-0 items-center rounded-full border border-black/10 px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => setFaceResults(null)} type="button">
                 Show all
               </button>
             )}
             {slideshowEnabled && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
+              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
                 <Play className="size-4" />
-                <span className="md:sr-only">Slideshow</span>
+                <span className="hidden sm:inline md:sr-only">Slideshow</span>
               </button>
             )}
             {socialSharingEnabled && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
+              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
                 <Share2 className="size-4" />
-                <span className="md:sr-only">Share</span>
+                <span className="hidden sm:inline md:sr-only">Share</span>
               </button>
             )}
             {!isStandaloneApp && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void installApp()} type="button" title="Install app" aria-label="Install app">
+              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void installApp()} type="button" title="Install app" aria-label="Install app">
                 <Download className="size-4" />
-                <span className="md:sr-only">Install</span>
+                <span className="hidden sm:inline md:sr-only">Install</span>
               </button>
             )}
-            <button className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button" title="Favorite" aria-label="Favorite">
+            <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button" title="Favorite" aria-label="Favorite">
               <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
-              <span className="md:sr-only">Favorite</span>
+              <span className="hidden sm:inline md:sr-only">Favorite</span>
             </button>
             {canDownload && (
-              <button className="inline-flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
+              <button className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
                 {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               </button>
             )}
             {pinRequired && !pinOk && (
-              <button className="inline-flex h-10 items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90" onClick={() => setPinDialogOpen(true)} type="button">
+              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90" onClick={() => setPinDialogOpen(true)} type="button">
                 <Lock className="size-4" />
                 Unlock
               </button>
@@ -769,10 +769,10 @@ export function PublicGallery({
               value={visitorEmail}
               onChange={(event) => setVisitorEmail(event.target.value)}
               placeholder="Email for gallery access"
-              className="h-10 min-w-[240px] flex-1 border bg-white px-3 text-sm text-black outline-none"
+              className="h-10 min-w-0 flex-1 border bg-white px-3 text-sm text-black outline-none"
             />
             <button
-              className="h-10 bg-[#202326] px-4 text-sm font-bold text-white disabled:opacity-45"
+              className="h-10 shrink-0 bg-[#202326] px-4 text-sm font-bold text-white disabled:opacity-45"
               disabled={!visitorEmail.includes("@")}
               onClick={() => setVisitorEmailSaved(true)}
               type="button"
@@ -805,9 +805,9 @@ export function PublicGallery({
           </div>
         )}
         {shareNotice && (
-          <p className="mx-4 mt-5 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white md:mx-8">
+          <p className="mx-4 mt-5 inline-flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white md:mx-8">
             <Check className="size-4" />
-            {shareNotice}
+            <span className="min-w-0 break-words">{shareNotice}</span>
           </p>
         )}
         {favoriteSettings?.description && (
@@ -889,32 +889,32 @@ export function PublicGallery({
       )}
 
       {activeImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4">
-          <button className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => setActiveImage(null)} aria-label="Back to gallery">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 px-2 pb-4 pt-24 sm:p-4">
+          <button className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2.5 text-sm font-bold text-black sm:left-5 sm:top-5 sm:px-4 sm:py-3" onClick={() => setActiveImage(null)} aria-label="Back to gallery">
             <ChevronLeft className="size-5" />
             Back
           </button>
-          <div className="absolute right-5 top-5 flex flex-wrap justify-end gap-2">
+          <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
-              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" data-buy-photo-open={activeImage._id} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" data-buy-photo-open={activeImage._id} type="button">
                 <ShoppingBag className="size-4" />
                 Buy This Photo
               </button>
             )}
             {favoritesEnabled && isPersistedImageId(activeImage._id) && (
-              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void toggleImageFavorite(activeImage)} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => void toggleImageFavorite(activeImage)} type="button">
                 <Heart className={cn("size-4", favoriteImageIds.has(activeImage._id) && "fill-red-500 text-red-500")} />
                 Favorite
               </button>
             )}
             {socialSharingEnabled && (
-              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(activeImage)} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => void sharePhoto(activeImage)} type="button">
                 <Share2 className="size-4" />
                 Share
               </button>
             )}
             {canDownload && (
-              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => downloadPhoto(activeImage)} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => downloadPhoto(activeImage)} type="button">
                 <Download className="size-4" />
                 Download
               </button>
@@ -929,41 +929,41 @@ export function PublicGallery({
       )}
 
       {slideshowImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black p-4" onDoubleClick={closeSlideshow}>
-          <button className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-bold text-black" onClick={closeSlideshow} aria-label="Back to gallery">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black px-2 pb-4 pt-24 sm:p-4" onDoubleClick={closeSlideshow}>
+          <button className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2.5 text-sm font-bold text-black sm:left-5 sm:top-5 sm:px-4 sm:py-3" onClick={closeSlideshow} aria-label="Back to gallery">
             <ChevronLeft className="size-5" />
             Back
           </button>
-          <div className="absolute left-5 top-20 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white backdrop-blur">
+          <div className="absolute right-3 top-3 rounded-full bg-white/10 px-3 py-2 text-sm font-bold text-white backdrop-blur sm:left-5 sm:right-auto sm:top-20 sm:px-4">
             {slideshowPosition + 1} / {visibleImages.length}
           </div>
-          <button className="absolute left-5 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-3 text-black shadow" onClick={showPreviousSlide} aria-label="Previous slide" type="button">
-            <ChevronLeft className="size-6" />
+          <button className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-black shadow sm:left-5 sm:p-3" onClick={showPreviousSlide} aria-label="Previous slide" type="button">
+            <ChevronLeft className="size-5 sm:size-6" />
           </button>
-          <button className="absolute right-5 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-3 text-black shadow" onClick={showNextSlide} aria-label="Next slide" type="button">
-            <ChevronRight className="size-6" />
+          <button className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-black shadow sm:right-5 sm:p-3" onClick={showNextSlide} aria-label="Next slide" type="button">
+            <ChevronRight className="size-5 sm:size-6" />
           </button>
-          <div className="absolute right-5 top-5 flex flex-wrap justify-end gap-2">
+          <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
-              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" data-buy-photo-open={slideshowImage._id} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" data-buy-photo-open={slideshowImage._id} type="button">
                 <ShoppingBag className="size-4" />
                 Buy This Photo
               </button>
             )}
             {favoritesEnabled && isPersistedImageId(slideshowImage._id) && (
-              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void toggleImageFavorite(slideshowImage)} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => void toggleImageFavorite(slideshowImage)} type="button">
                 <Heart className={cn("size-4", favoriteImageIds.has(slideshowImage._id) && "fill-red-500 text-red-500")} />
                 Favorite
               </button>
             )}
             {socialSharingEnabled && (
-              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => void sharePhoto(slideshowImage)} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => void sharePhoto(slideshowImage)} type="button">
                 <Share2 className="size-4" />
                 Share
               </button>
             )}
             {canDownload && (
-              <button className="inline-flex items-center gap-2 bg-white px-4 py-3 text-sm font-bold text-black" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button">
                 <Download className="size-4" />
                 Download
               </button>
@@ -980,7 +980,7 @@ export function PublicGallery({
 
       {faceSheetOpen && (
         <div className="fixed inset-0 z-40 flex justify-end bg-black/30">
-          <aside className="h-full w-full max-w-[360px] overflow-y-auto bg-white p-6 text-[#111] shadow-[-18px_0_40px_rgba(0,0,0,0.18)]">
+          <aside className="h-full w-full max-w-[360px] overflow-y-auto bg-white p-5 text-[#111] shadow-[-18px_0_40px_rgba(0,0,0,0.18)] sm:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#777]">Face filter</p>
@@ -1001,10 +1001,10 @@ export function PublicGallery({
                 No indexed faces yet. New uploads index in background.
               </p>
             )}
-            <div className="mt-8 grid grid-cols-3 gap-5">
+            <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-5">
               {faces.map((face) => (
                 <button key={face.id} className="grid justify-items-center gap-2 text-center" onClick={() => void filterBySavedFace(face.id)}>
-                  <span className="block size-20 overflow-hidden rounded-full bg-[#eee] ring-2 ring-[#111]/10">
+                  <span className="block size-16 overflow-hidden rounded-full bg-[#eee] ring-2 ring-[#111]/10 sm:size-20">
                     {face.imageUrl ? (
                       <GalleryImage
                         src={imageSrc(face.imageUrl)}
@@ -1098,7 +1098,7 @@ function GalleryTile({
           className="block h-auto w-full"
         />
       </button>
-      <div className="absolute right-3 top-3 flex gap-2">
+      <div className="absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         {canFavorite && isPersistedImageId(photo._id) && (
           <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" type="button">
             <Heart className={cn("size-4", favorited && "fill-red-500 text-red-500")} />

@@ -323,7 +323,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   };
 
   return (
-    <main className="min-h-screen bg-[#f6f6f3] text-[#151515]">
+    <main className="min-h-screen overflow-x-hidden bg-[#f6f6f3] text-[#151515]">
       <div className="grid min-h-screen lg:grid-cols-[260px_1fr]">
         <aside className="hidden border-r bg-white px-5 py-6 lg:block">
           <div className="flex items-center gap-3 text-sm font-bold">
@@ -337,8 +337,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
           </Button>
         </aside>
 
-        <section className="min-w-0 px-4 py-4 md:px-8 md:py-6">
-          <div className="mb-5 flex items-center justify-between bg-white px-4 py-3 lg:hidden">
+        <section className="min-w-0 px-3 py-4 sm:px-4 md:px-8 md:py-6">
+          <div className="mb-5 flex items-center justify-between gap-3 bg-white px-3 py-3 sm:px-4 lg:hidden">
             <div className="flex items-center gap-3 text-sm font-bold">
               <span className="size-5 rounded-full bg-[#0dc6b5]" />
               Nikoset Admin
@@ -350,7 +350,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
 
           {adminMenuOpen && (
             <div className="fixed inset-0 z-50 bg-black/50 lg:hidden">
-              <aside className="h-full w-[82vw] max-w-[320px] bg-white px-5 py-6 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
+              <aside className="h-full w-[88vw] max-w-[320px] overflow-y-auto bg-white px-5 py-6 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 text-sm font-bold">
                     <span className="size-5 rounded-full bg-[#0dc6b5]" />
@@ -405,7 +405,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <select
                 value={selectedUserId}
                 onChange={(event) => setSelectedUserId(event.target.value)}
-                className="h-11 border bg-white px-3 text-sm outline-none"
+                className="h-11 w-full min-w-0 border bg-white px-3 text-sm outline-none sm:w-auto"
               >
                 <option value="">All users</option>
                 {users.map((user) => (
@@ -464,8 +464,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       </div>
 
       {userModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <form onSubmit={submitUser} className="w-full max-w-[460px] bg-white p-6 shadow-[0_28px_80px_rgba(0,0,0,0.18)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/55 p-3 sm:p-4">
+          <form onSubmit={submitUser} className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[460px] overflow-y-auto bg-white p-5 shadow-[0_28px_80px_rgba(0,0,0,0.18)] sm:p-6">
             <div className="mb-5 flex items-center justify-between gap-4 border-b pb-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">User Control</p>
@@ -512,8 +512,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       )}
 
       {planModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <form onSubmit={submitPlan} className="w-full max-w-[460px] bg-white p-6 shadow-[0_28px_80px_rgba(0,0,0,0.18)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/55 p-3 sm:p-4">
+          <form onSubmit={submitPlan} className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[460px] overflow-y-auto bg-white p-5 shadow-[0_28px_80px_rgba(0,0,0,0.18)] sm:p-6">
             <div className="mb-5 flex items-center justify-between gap-4 border-b pb-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Monthly Plan</p>
@@ -860,7 +860,7 @@ function StripeSettingsPanel({ form, setForm }: {
   setForm: (value: AdminStripeSetting) => void;
 }) {
   return (
-    <div className="mt-6 max-w-[760px] bg-white p-6">
+    <div className="mt-6 max-w-[760px] bg-white p-5 sm:p-6">
       <div className="border-b pb-5">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Stripe</p>
         <h2 className="mt-2 text-xl font-semibold">Plan checkout settings</h2>
@@ -963,14 +963,14 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
 
   return (
     <div className="mt-6 grid gap-5">
-      <div className="bg-white p-5 shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
+      <div className="bg-white p-4 shadow-[0_12px_35px_rgba(0,0,0,0.04)] sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">Home CMS</p>
             <h2 className="mt-2 text-2xl font-semibold">Page control</h2>
             <p className="mt-2 text-sm leading-6 text-[#666]">Editing {lang === "en" ? "English" : "Green / GR"} content</p>
           </div>
-          <div className="grid min-w-[260px] grid-cols-2 gap-1 bg-[#f4f4f1] p-1">
+          <div className="grid w-full grid-cols-2 gap-1 bg-[#f4f4f1] p-1 sm:min-w-[260px] sm:w-auto">
             <Button type="button" onClick={() => setLang("en")} className={cn("h-10 rounded-none shadow-none", lang === "en" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>English</Button>
             <Button type="button" onClick={() => setLang("gr")} className={cn("h-10 rounded-none shadow-none", lang === "gr" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>Green / GR</Button>
           </div>
@@ -1258,14 +1258,14 @@ function CmsSection({ eyebrow, title, children, defaultOpen }: {
 }) {
   return (
     <details className="group bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]" open={defaultOpen}>
-      <summary className="flex cursor-pointer list-none items-center justify-between border-b px-6 py-5">
-        <div>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 border-b px-4 py-4 sm:px-6 sm:py-5">
+        <div className="min-w-0">
           {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">{eyebrow}</p>}
-          <h3 className="mt-1 text-xl font-semibold">{title}</h3>
+          <h3 className="mt-1 break-words text-lg font-semibold sm:text-xl">{title}</h3>
         </div>
         <span className="flex size-8 items-center justify-center bg-[#f4f4f1] text-lg font-semibold text-[#555] group-open:rotate-45">+</span>
       </summary>
-      <div className="p-6">{children}</div>
+      <div className="p-4 sm:p-6">{children}</div>
     </details>
   );
 }

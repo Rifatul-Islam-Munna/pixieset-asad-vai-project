@@ -143,7 +143,7 @@ export function PublicStoreProductBuilder({
   return (
     <div className="fixed inset-0 z-[90] bg-black/65 p-0 md:p-5" role="dialog" aria-modal="true">
       <div className="mx-auto flex h-full max-h-[960px] w-full max-w-[1180px] flex-col overflow-hidden bg-white shadow-2xl">
-        <div className="flex h-16 shrink-0 items-center justify-between border-b px-5 md:px-8">
+        <div className="flex h-16 shrink-0 items-center justify-between gap-3 border-b px-4 md:px-8">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8c8c8c]">
               {step === "product"
@@ -160,8 +160,8 @@ export function PublicStoreProductBuilder({
         {step === "product" && (
           <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1.15fr)_minmax(390px,0.85fr)]">
             <ProductPreview product={product} selectedImage={buyPhotoMode ? selectedImages[0] : undefined} />
-            <div className="p-6 md:p-10">
-              <h2 className="text-3xl font-normal tracking-tight">{product.name}</h2>
+            <div className="p-5 sm:p-6 md:p-10">
+              <h2 className="break-words text-2xl font-normal tracking-tight sm:text-3xl">{product.name}</h2>
               <p className="mt-3 text-lg">From {formatMoney(price, currency)}</p>
               {product.description && (
                 <p className="mt-6 text-sm leading-7 text-[#565656]">{stripHtml(product.description)}</p>
@@ -246,9 +246,9 @@ export function PublicStoreProductBuilder({
                 <p className="text-sm font-medium">Select {canBulkSelect ? "one or more photos" : "one photo"}</p>
                 <p className="mt-1 text-xs text-[#777]">{selectedImageIds.length} selected</p>
               </div>
-              <div className="flex gap-3">
-                <button className="h-10 border px-5 text-sm" onClick={() => setStep("product")}>Back</button>
-                <button className="h-10 bg-[#2f2f2f] px-6 text-sm font-semibold text-white disabled:opacity-40" disabled={!selectedImageIds.length} onClick={continueFromPhotos}>
+              <div className="flex shrink-0 gap-2 sm:gap-3">
+                <button className="h-10 border px-4 text-sm sm:px-5" onClick={() => setStep("product")}>Back</button>
+                <button className="h-10 bg-[#2f2f2f] px-4 text-sm font-semibold text-white disabled:opacity-40 sm:px-6" disabled={!selectedImageIds.length} onClick={continueFromPhotos}>
                   Continue
                 </button>
               </div>
@@ -276,7 +276,7 @@ export function PublicStoreProductBuilder({
 
         {step === "crop" && activeCropImage && (
           <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_390px]">
-            <div className="flex min-h-[420px] items-center justify-center bg-[#ececea] p-8">
+            <div className="flex min-h-[320px] items-center justify-center bg-[#ececea] p-4 sm:min-h-[420px] sm:p-8">
               <div
                 className="relative w-full max-w-[720px] overflow-hidden bg-white shadow-xl"
                 style={{ aspectRatio: cropAspectNumber(crop.aspectRatio) }}
@@ -290,7 +290,7 @@ export function PublicStoreProductBuilder({
                 <div className="pointer-events-none absolute inset-0 border border-white/70 shadow-[inset_0_0_0_999px_rgba(0,0,0,0.04)]" />
               </div>
             </div>
-            <div className="p-7 md:p-9">
+            <div className="p-5 sm:p-7 md:p-9">
               <h3 className="text-2xl font-normal">Adjust your photo</h3>
               <p className="mt-3 text-sm leading-6 text-[#666]">Move, zoom and rotate the photograph to fit the selected product ratio.</p>
               <CropSlider label="Horizontal" min={-50} max={50} step={1} value={crop.x} onChange={(x) => setCrop((value) => ({ ...value, x }))} />
@@ -334,8 +334,8 @@ function ProductPreview({
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [product._id, selectedImage?._id]);
   return (
-    <div className="flex min-h-[420px] flex-col bg-[#f3f3f2] p-6 md:p-10">
-      <div className="flex min-h-[380px] flex-1 items-center justify-center">
+    <div className="flex min-h-[320px] flex-col bg-[#f3f3f2] p-5 sm:min-h-[420px] sm:p-6 md:p-10">
+      <div className="flex min-h-[260px] flex-1 items-center justify-center sm:min-h-[380px]">
         {previews[active] ? (
           <img src={publicImageSrc(previews[active])} alt={selectedImage?.originalName || product.name} className="max-h-[680px] w-full object-contain" />
         ) : (

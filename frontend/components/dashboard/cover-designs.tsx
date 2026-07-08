@@ -91,10 +91,10 @@ export function CoverPreview({
   const text = (
     <div className={cn("flex flex-col gap-2", compact && "gap-1")}>
       {!compact && showSmall && <p className="text-xs uppercase tracking-[0.28em]">{smallTitle}</p>}
-      {showTitle && <h3 className={cn("font-semibold uppercase", compact ? "text-[11px] tracking-[0.24em]" : "text-4xl tracking-[0.18em] md:text-6xl")}>{sampleTitle}</h3>}
+      {showTitle && <h3 className={cn("break-words font-semibold uppercase", compact ? "text-[11px] tracking-[0.24em]" : "text-2xl tracking-[0.12em] sm:text-4xl sm:tracking-[0.18em] md:text-6xl")}>{sampleTitle}</h3>}
       {!compact && showDate && <p className="text-sm uppercase tracking-[0.22em]">{date}</p>}
       {!compact && showButton && (
-        <span className="mt-4 inline-flex w-fit max-w-full border px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em]">
+        <span className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]">
           {buttonText}
         </span>
       )}
@@ -106,13 +106,13 @@ export function CoverPreview({
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
         <img src={src} alt="" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/38 via-black/10 to-black/20" />
-        <div className={cn("absolute left-8 top-[58%] max-w-[72%] -translate-y-1/2", compact && "left-3 max-w-[68%]")}>
+        <div className={cn("absolute left-5 top-[58%] max-w-[82%] -translate-y-1/2 sm:left-8 sm:max-w-[72%]", compact && "left-3 max-w-[68%]")}>
           {!compact && showSmall && <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em]">{smallTitle}</p>}
-          {showTitle && <h3 className={cn("font-medium uppercase leading-[0.96]", compact ? "text-[13px] tracking-[0.12em]" : "text-4xl tracking-[0.04em] md:text-6xl")}>{sampleTitle}</h3>}
+          {showTitle && <h3 className={cn("break-words font-medium uppercase leading-[0.96]", compact ? "text-[13px] tracking-[0.12em]" : "text-3xl tracking-[0.04em] sm:text-4xl md:text-6xl")}>{sampleTitle}</h3>}
           {!compact && showDate && <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em]">{date}</p>}
         </div>
         {!compact && showButton && (
-          <span className="absolute bottom-10 right-8 inline-flex border border-white px-7 py-3 text-xs font-semibold uppercase tracking-[0.16em]">
+          <span className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]">
             {buttonText}
           </span>
         )}
@@ -128,7 +128,7 @@ export function CoverPreview({
         <div className="absolute inset-x-0 bottom-0 h-[16%] bg-black/55" />
         <div className="absolute inset-x-[8%] top-[19%] border-t border-white/70" />
         <div className="absolute inset-x-[8%] bottom-[19%] border-t border-white/70" />
-        <div className={cn("absolute bottom-[23%] left-[10%] max-w-[62%]", compact && "bottom-3 left-3 max-w-[70%]")}>{text}</div>
+        <div className={cn("absolute bottom-[23%] left-[8%] max-w-[78%] sm:left-[10%] sm:max-w-[62%]", compact && "bottom-3 left-3 max-w-[70%]")}>{text}</div>
       </div>
     );
   }
@@ -139,7 +139,7 @@ export function CoverPreview({
         <img src={src} alt="" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
         {design.cover === "Lower Split" && <div className="absolute bottom-0 left-0 right-0 h-[34%] bg-white/92" />}
-        <div className={cn("absolute bottom-8 left-8 max-w-[64%]", design.cover === "Lower Split" && "text-[#222] [text-shadow:none]", compact && "bottom-3 left-3 max-w-[75%]")}>{text}</div>
+        <div className={cn("absolute bottom-5 left-5 max-w-[82%] sm:bottom-8 sm:left-8 sm:max-w-[64%]", design.cover === "Lower Split" && "text-[#222] [text-shadow:none]", compact && "bottom-3 left-3 max-w-[75%]")}>{text}</div>
       </div>
     );
   }
@@ -150,9 +150,9 @@ export function CoverPreview({
         <img src={src} alt="" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-black/24" />
         <div className={cn("absolute inset-6 border border-white/75", compact && "inset-2")} />
-        <div className={cn("absolute left-8 top-8 max-w-[70%]", compact && "left-3 top-3 max-w-[74%]")}>{text}</div>
+        <div className={cn("absolute left-5 top-5 max-w-[82%] sm:left-8 sm:top-8 sm:max-w-[70%]", compact && "left-3 top-3 max-w-[74%]")}>{text}</div>
         {design.cover === "Side Button" && !compact && showButton && (
-          <span className="absolute bottom-8 right-8 border border-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.18em]">
+          <span className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]">
             {buttonText}
           </span>
         )}
@@ -179,12 +179,12 @@ export function CoverPreview({
         <div
           className={cn(
             "absolute p-6",
-            design.cover === "Soft Center" && "left-1/2 top-1/2 max-w-[70%] -translate-x-1/2 -translate-y-1/2 text-center",
-            design.cover === "Edge Title" && "bottom-8 left-8 max-w-[64%]",
+            design.cover === "Soft Center" && "left-1/2 top-1/2 max-w-[88%] -translate-x-1/2 -translate-y-1/2 text-center sm:max-w-[70%]",
+            design.cover === "Edge Title" && "bottom-5 left-5 max-w-[82%] sm:bottom-8 sm:left-8 sm:max-w-[64%]",
             design.cover === "Fine Art" && "bottom-[16%] left-1/2 -translate-x-1/2 text-center",
-            design.cover === "Magazine" && "left-6 top-1/2 max-w-[36%] -translate-y-1/2 text-[#222] [text-shadow:none]",
-            design.cover === "Mono Frame" && "right-8 top-8 max-w-[52%] text-right",
-            design.cover === "Quiet Luxury" && "bottom-[20%] left-[10%] max-w-[62%]",
+            design.cover === "Magazine" && "left-4 top-1/2 max-w-[48%] -translate-y-1/2 text-[#222] [text-shadow:none] sm:left-6 sm:max-w-[36%]",
+            design.cover === "Mono Frame" && "right-5 top-5 max-w-[70%] text-right sm:right-8 sm:top-8 sm:max-w-[52%]",
+            design.cover === "Quiet Luxury" && "bottom-[20%] left-[8%] max-w-[78%] sm:left-[10%] sm:max-w-[62%]",
             compact && "p-2",
           )}
         >
@@ -196,7 +196,7 @@ export function CoverPreview({
 
   if (design.cover === "Novel") {
     return (
-      <div className={cn("relative grid h-full min-h-[62vh] grid-cols-2 bg-white text-[#222]", compact && "min-h-0", className)}>
+      <div className={cn("relative grid h-full min-h-[62vh] grid-cols-1 bg-white text-[#222] sm:grid-cols-2", compact && "min-h-0", className)}>
         <div className={cn("flex items-center justify-center p-4 text-center", compact && "p-2")}>{text}</div>
         <img src={src} alt="" className={cn("h-full w-full object-cover p-3", compact && "p-2")} />
       </div>
@@ -205,7 +205,7 @@ export function CoverPreview({
 
   if (design.cover === "Split" || design.cover === "Journal" || design.cover === "Editorial") {
     return (
-      <div className={cn("relative grid h-full min-h-[62vh] grid-cols-2 bg-white text-[#222]", compact && "min-h-0", className)}>
+      <div className={cn("relative grid h-full min-h-[62vh] grid-cols-1 bg-white text-[#222] sm:grid-cols-2", compact && "min-h-0", className)}>
         <img src={src} alt="" className="h-full w-full object-cover" />
         <div className={cn("flex items-center p-6", design.cover === "Journal" ? "justify-start" : "justify-center text-center", compact && "p-2")}>{text}</div>
       </div>
@@ -231,10 +231,10 @@ export function CoverPreview({
         <div className={cn("absolute bottom-[22%] left-[12%] right-[12%] top-[22%] flex items-center justify-center p-6 text-center [text-shadow:0_2px_14px_rgba(0,0,0,0.55)]", compact && "p-3")}>
           <div className={cn("flex max-w-full flex-col items-center gap-3", compact && "gap-1")}>
             {!compact && showSmall && <p className="text-xs uppercase tracking-[0.28em]">{smallTitle}</p>}
-            {showTitle && <h3 className={cn("font-semibold uppercase", compact ? "text-[11px] tracking-[0.24em]" : "text-4xl tracking-[0.18em] md:text-6xl")}>{sampleTitle}</h3>}
+            {showTitle && <h3 className={cn("break-words font-semibold uppercase", compact ? "text-[11px] tracking-[0.24em]" : "text-2xl tracking-[0.12em] sm:text-4xl sm:tracking-[0.18em] md:text-6xl")}>{sampleTitle}</h3>}
             {!compact && showDate && <p className="text-sm uppercase tracking-[0.22em]">{date}</p>}
             {!compact && showButton && (
-              <span className="mt-3 inline-flex w-fit max-w-full border px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em]">
+              <span className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]">
                 {buttonText}
               </span>
             )}
@@ -257,11 +257,11 @@ export function CoverPreview({
         className={cn(
           "absolute p-6",
           ["Center", "Frame", "Outline", "Portal"].includes(design.cover) && "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center",
-          ["Left", "Classic"].includes(design.cover) && "bottom-8 left-8 text-left",
-          ["Vintage", "Gallery"].includes(design.cover) && "bottom-8 left-1/2 -translate-x-1/2 text-center text-[#222]",
-          design.cover === "Divider" && "bottom-8 left-8 text-left",
+          ["Left", "Classic"].includes(design.cover) && "bottom-5 left-5 max-w-[82%] text-left sm:bottom-8 sm:left-8 sm:max-w-none",
+          ["Vintage", "Gallery"].includes(design.cover) && "bottom-5 left-1/2 max-w-[88%] -translate-x-1/2 text-center text-[#222] sm:bottom-8 sm:max-w-none",
+          design.cover === "Divider" && "bottom-5 left-5 max-w-[82%] text-left sm:bottom-8 sm:left-8 sm:max-w-none",
           design.cover === "Banner" && "bottom-[18%] left-1/2 -translate-x-1/2 translate-y-1/2 text-center text-[#222]",
-          design.cover === "Maison" && "right-8 top-8 text-right",
+          design.cover === "Maison" && "right-5 top-5 max-w-[82%] text-right sm:right-8 sm:top-8 sm:max-w-none",
           !["Vintage", "Gallery", "Banner"].includes(design.cover) && "[text-shadow:0_2px_14px_rgba(0,0,0,0.55)]",
           compact && "p-3"
         )}

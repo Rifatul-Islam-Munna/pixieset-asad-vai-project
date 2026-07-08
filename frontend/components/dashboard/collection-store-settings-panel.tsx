@@ -29,13 +29,13 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
 }) {
   const sheets = priceSheets ?? [];
   return (
-    <section className="mt-6 max-w-[760px] border bg-white p-6 md:p-8">
+    <section className="mt-6 max-w-[760px] border bg-white p-4 sm:p-6 md:p-8">
       <h2 className="text-xl font-medium">Collection storefront</h2>
       <p className="mt-2 text-sm leading-6 text-[#666]">
         Enable the store for this collection. Prints, wall art, sizes and default prices are prepared automatically.
       </p>
       <div className="mt-7 grid gap-5">
-        <label className="flex cursor-pointer items-center justify-between gap-5 border px-5 py-5">
+        <label className="flex cursor-pointer items-start justify-between gap-4 border px-4 py-5 sm:items-center sm:gap-5 sm:px-5">
           <span>
             <span className="block text-base font-medium">Enable store</span>
             <span className="mt-1 block text-xs leading-5 text-[#777]">
@@ -62,7 +62,7 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
             Choose which sheet this collection sells from.
           </span>
         </label>
-        <label className="flex cursor-pointer items-center justify-between gap-5 border px-5 py-5">
+        <label className="flex cursor-pointer items-start justify-between gap-4 border px-4 py-5 sm:items-center sm:gap-5 sm:px-5">
           <span>
             <span className="block text-base font-medium">Show Print Store nav</span>
             <span className="mt-1 block text-xs leading-5 text-[#777]">
@@ -71,7 +71,7 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
           </span>
           <input type="checkbox" checked={form.showPrintStoreNav} onChange={(event) => onChange({ showPrintStoreNav: event.target.checked })} className="size-4" />
         </label>
-        <label className="flex cursor-pointer items-center justify-between gap-5 border px-5 py-5">
+        <label className="flex cursor-pointer items-start justify-between gap-4 border px-4 py-5 sm:items-center sm:gap-5 sm:px-5">
           <span>
             <span className="block text-base font-medium">Buy this photo</span>
             <span className="mt-1 block text-xs leading-5 text-[#777]">
@@ -80,7 +80,7 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
           </span>
           <input type="checkbox" checked={form.showBuyPhotoButton} onChange={(event) => onChange({ showBuyPhotoButton: event.target.checked })} className="size-4" />
         </label>
-        <label className="flex cursor-pointer items-center justify-between gap-5 border px-5 py-5">
+        <label className="flex cursor-pointer items-start justify-between gap-4 border px-4 py-5 sm:items-center sm:gap-5 sm:px-5">
           <span>
             <span className="block text-base font-medium">Bulk purchase</span>
             <span className="mt-1 block text-xs leading-5 text-[#777]">

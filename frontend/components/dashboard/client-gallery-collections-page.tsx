@@ -102,7 +102,7 @@ export function ClientGalleryCollectionsPage() {
   );
 
   return (
-    <main className="min-h-screen bg-white text-[#171717]">
+    <main className="min-h-screen overflow-x-hidden bg-white text-[#171717]">
       <aside className="fixed inset-y-0 left-0 hidden w-[292px] flex-col border-r bg-white md:flex">
         <div className="flex h-[62px] items-center gap-3 border-b px-5 text-sm font-semibold">
           <span className="size-5 rounded-full bg-[#0dc6b5]" /> Client Gallery
@@ -123,12 +123,12 @@ export function ClientGalleryCollectionsPage() {
         </nav>
       </aside>
 
-      <section className="min-h-screen px-4 py-10 md:pl-[332px] md:pr-10 md:py-20">
+      <section className="min-h-screen px-3 py-8 sm:px-4 sm:py-10 md:pl-[332px] md:pr-10 md:py-20">
         <div className="mx-auto max-w-[1500px]">
           <header className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-7">
+            <div className="flex w-full flex-wrap items-center gap-4 sm:gap-7 lg:w-auto">
               <h1 className="text-[28px] font-medium">Collections</h1>
-              <label className="flex h-10 min-w-[260px] items-center gap-3 border-b text-[#777]">
+              <label className="flex h-10 w-full min-w-0 items-center gap-3 border-b text-[#777] sm:min-w-[260px] sm:w-auto">
                 <Search className="size-5" />
                 <input
                   value={search}
@@ -138,14 +138,14 @@ export function ClientGalleryCollectionsPage() {
                 />
               </label>
             </div>
-            <div className="flex items-center gap-5">
+            <div className="flex w-full flex-wrap items-center gap-3 sm:gap-5 lg:w-auto">
               <Link href="/dashboard/client-gallery/settings/presets" className="text-sm font-semibold">View Presets</Link>
-              <Link href="/dashboard/client-gallery/collection-new" className="inline-flex h-10 items-center bg-[#22bda7] px-7 text-sm font-bold text-white">New Collection</Link>
+              <Link href="/dashboard/client-gallery/collection-new" className="inline-flex h-10 items-center bg-[#22bda7] px-5 text-sm font-bold text-white sm:px-7">New Collection</Link>
             </div>
           </header>
 
           <div className="mt-8 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap gap-2">
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
               <Filter value={status} onChange={setStatus} label="Status">
                 <option value="all">Status: All</option>
                 {statuses.map((value) => <option key={value} value={value}>Status: {titleCase(value)}</option>)}
@@ -177,7 +177,7 @@ export function ClientGalleryCollectionsPage() {
                 <option value="name-asc">Sort: Name A-Z</option>
                 <option value="name-desc">Sort: Name Z-A</option>
               </Filter>
-              {filtersActive && <button className="h-9 px-3 text-xs font-semibold text-[#00a997]" onClick={clearFilters}>Clear filters</button>}
+              {filtersActive && <button className="h-9 shrink-0 px-3 text-xs font-semibold text-[#00a997]" onClick={clearFilters}>Clear filters</button>}
             </div>
             <div className="flex items-center gap-2">
               <button className={cn("flex size-9 items-center justify-center border", view === "grid" && "bg-[#222] text-white")} onClick={() => setView("grid")} aria-label="Grid view"><Grid2X2 className="size-4" /></button>
@@ -220,7 +220,7 @@ function Filter({ value, onChange, label, children }: {
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="h-9 rounded-full border-0 bg-[#f5f5f5] px-4 text-xs font-medium outline-none"
+      className="h-9 shrink-0 rounded-full border-0 bg-[#f5f5f5] px-4 text-xs font-medium outline-none"
       aria-label={label}
     >
       {children}

@@ -372,7 +372,7 @@ export function ClientDashboard({
   };
 
   return (
-    <main className="min-h-screen bg-white text-[#151515]">
+    <main className="min-h-screen overflow-x-hidden bg-white text-[#151515]">
       {dashboardChromeOpen && !storeTopNavOpen && <aside
         className={cn(
           "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
@@ -388,7 +388,7 @@ export function ClientDashboard({
                 {!collapsed && <ChevronDown className="size-3 text-[#777]" />}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+            <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
               <DropdownMenuGroup className="p-5">
                 {switcherItems.map((item) => (
                   <DropdownMenuItem key={item.key} asChild className="p-0">
@@ -556,7 +556,7 @@ export function ClientDashboard({
 
         {mobileMenuOpen && dashboardChromeOpen && !storeTopNavOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
-            <aside className="h-full w-[84vw] max-w-[330px] overflow-y-auto bg-white px-5 py-5 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
+            <aside className="h-full w-[88vw] max-w-[330px] overflow-y-auto bg-white px-5 py-5 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
               <div className="flex items-center justify-between border-b pb-4">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -566,7 +566,7 @@ export function ClientDashboard({
                       <ChevronDown className="size-3" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[300px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+                  <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[300px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
                     <DropdownMenuGroup>
                       {switcherItems.map((item) => (
                         <DropdownMenuItem key={item.key} asChild className="p-0">
@@ -734,9 +734,9 @@ function StoreTopNavigation({
 
   return (
     <header className="border-t-[5px] border-[#202020] bg-white text-[#1e1e1e]">
-      <div className="bg-[#f7f7f7] px-5 sm:px-8">
-        <div className="mx-auto flex h-[50px] max-w-[1220px] items-center justify-between">
-        <div className="flex min-w-0 items-center gap-5">
+      <div className="bg-[#f7f7f7] px-4 sm:px-8">
+        <div className="mx-auto flex h-[50px] max-w-[1220px] items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex min-w-0 items-center gap-2 text-sm font-semibold outline-none">
@@ -747,7 +747,7 @@ function StoreTopNavigation({
                 <ChevronDown className="size-4 text-[#333]" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+            <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
               <DropdownMenuGroup className="p-5">
                 {switcherItems.map((item) => (
                   <DropdownMenuItem key={item.key} asChild className="p-0">
@@ -771,7 +771,7 @@ function StoreTopNavigation({
           </DropdownMenu>
         </div>
 
-        <div className="flex items-center gap-4 text-[#8a8a8a]">
+        <div className="flex shrink-0 items-center gap-2 text-[#8a8a8a] sm:gap-4">
           <button className="hidden size-8 items-center justify-center rounded-full hover:bg-white sm:flex" aria-label="Help">
             <Info className="size-5" />
           </button>
@@ -789,7 +789,7 @@ function StoreTopNavigation({
         </div>
         </div>
       </div>
-      <nav className="overflow-x-auto border-b border-[#ececec] bg-white px-5 sm:px-8">
+      <nav className="overflow-x-auto border-b border-[#ececec] bg-white px-4 sm:px-8">
         <div className="mx-auto max-w-[1220px]">
         <div className="flex min-w-max items-center gap-7">
           {items.map((item) => (
@@ -1094,7 +1094,7 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[380px] rounded-xl p-0 shadow-[0_22px_55px_rgba(0,0,0,0.18)]">
+      <DropdownMenuContent align="end" className="w-[calc(100vw-1.5rem)] max-w-[380px] rounded-xl p-0 shadow-[0_22px_55px_rgba(0,0,0,0.18)]">
         <div className="flex items-start justify-between gap-4 border-b px-4 py-4">
           <div>
             <p className="text-sm font-bold text-[#222]">Notifications</p>
@@ -1176,7 +1176,7 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
     return (
       <div>
         <PageHeader action="Save Settings" title="Marketing Settings" />
-        <div className="mt-12 max-w-[680px] bg-[#fafafa] p-10">
+        <div className="mt-8 max-w-[680px] bg-[#fafafa] p-5 sm:mt-12 sm:p-10">
           <FieldGroup className="gap-8">
             <Field>
               <FieldLabel className="font-bold">Sender Name</FieldLabel>
@@ -1229,10 +1229,10 @@ function CampaignListHeader({
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between gap-6">
-        <div className="flex items-center gap-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
           <h1 className="text-[28px] font-medium leading-none">Email Campaigns</h1>
-          <div className="flex h-10 w-[280px] items-center gap-3 bg-white">
+          <div className="flex h-10 w-full items-center gap-3 bg-white sm:w-[280px]">
             <Search className="size-5 text-[#333]" />
             <Input
               value={query}
@@ -1300,7 +1300,7 @@ function CampaignTable({
 
   return (
     <div className="mt-8">
-      <div className="grid grid-cols-[2fr_130px_1.2fr_1.2fr_1.2fr_1.4fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777]">
+      <div className="hidden grid-cols-[2fr_130px_1.2fr_1.2fr_1.2fr_1.4fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777] md:grid">
         <span>Name</span>
         <span />
         <span>Send Date</span>
@@ -1312,7 +1312,7 @@ function CampaignTable({
       {campaigns.map((campaign) => (
         <button
           key={campaign.name}
-          className="grid w-full grid-cols-[2fr_130px_1.2fr_1.2fr_1.2fr_1.4fr_40px] items-center border-b py-5 text-left text-sm"
+          className="grid w-full gap-2 border-b py-5 text-left text-sm md:grid-cols-[2fr_130px_1.2fr_1.2fr_1.2fr_1.4fr_40px] md:items-center md:gap-0"
           onClick={() => onEdit(campaign.name)}
         >
           <span className="font-bold">{campaign.name}</span>
@@ -1650,10 +1650,10 @@ function CampaignPreview({
   template: string;
 }) {
   return (
-    <section className="flex justify-center overflow-auto p-10">
-      <div className="w-[600px] bg-white">
-        <div className="bg-[#080c0e] px-10 py-10 text-center text-white">
-          <h1 className="text-5xl font-bold uppercase tracking-wide">
+    <section className="flex justify-center overflow-auto p-4 sm:p-10">
+      <div className="w-full max-w-[600px] bg-white">
+        <div className="bg-[#080c0e] px-5 py-8 text-center text-white sm:px-10 sm:py-10">
+          <h1 className="break-words text-3xl font-bold uppercase tracking-wide sm:text-5xl">
             {template}
           </h1>
         </div>
@@ -1696,10 +1696,10 @@ function CampaignPreview({
 
 function PageHeader({ title, action }: { title: string; action: string }) {
   return (
-    <div className="flex items-center justify-between gap-6">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <h1 className="text-[28px] font-medium leading-none">{title}</h1>
-      <div className="flex items-center gap-5">
-        <Button className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+        <Button className="h-10 rounded-none bg-[#22bda7] px-5 text-sm font-bold text-white hover:bg-[#19a995] sm:px-7">
           {action}
         </Button>
         <Button className="h-7 rounded-full bg-[#e3f6f1] px-4 text-[11px] font-bold uppercase tracking-widest text-[#00a997] hover:bg-[#d6f2eb]">
@@ -2565,10 +2565,10 @@ function EmailTemplatesPanel() {
   if (!editorOpen) {
     return (
       <div>
-        <div className="flex items-center justify-between gap-6">
-          <div className="flex items-center gap-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
             <h2 className="text-[28px] font-medium leading-none">Email Templates</h2>
-            <div className="flex h-10 w-[280px] items-center gap-3 bg-white">
+            <div className="flex h-10 w-full items-center gap-3 bg-white sm:w-[280px]">
               <Search className="size-5 text-[#333]" />
               <Input
                 value={templateSearch}
@@ -2606,7 +2606,7 @@ function EmailTemplatesPanel() {
           </div>
         ) : (
           <div className="mt-8 overflow-x-auto">
-            <div className="min-w-[860px]">
+            <div className="min-w-[760px] md:min-w-[860px]">
               <div className="grid grid-cols-[2fr_2fr_1.2fr_1.2fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777]">
                 <span>Name</span>
                 <span>Subject</span>
@@ -2662,7 +2662,7 @@ function EmailTemplatesPanel() {
                 title: event.target.value,
               })
             }
-            className="h-10 w-[260px] rounded-none border-0 px-0 text-lg font-semibold focus-visible:ring-0"
+            className="h-10 min-w-0 flex-1 rounded-none border-0 px-0 text-lg font-semibold focus-visible:ring-0 sm:w-[260px] sm:flex-none"
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -2697,7 +2697,7 @@ function EmailTemplatesPanel() {
       </div>
 
       <div className="grid min-h-[720px] lg:grid-cols-[minmax(420px,0.85fr)_minmax(460px,1fr)]">
-        <section className="border-r p-7">
+        <section className="border-r p-4 sm:p-7">
           <FieldGroup className="gap-7">
             <Field>
               <FieldLabel className="font-bold uppercase text-[#777]">Subject</FieldLabel>
@@ -2850,7 +2850,7 @@ function PresetList({ section }: { section: DashboardSection }) {
         </div>
       ) : (
         <div className="mt-8 overflow-x-auto">
-          <div className="min-w-[820px]">
+          <div className="min-w-[740px] md:min-w-[820px]">
             <div className="grid grid-cols-[1.6fr_1.2fr_1.2fr_1.3fr_1.1fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777]">
               <span>Name</span>
               <span>Collection ID</span>
@@ -2958,24 +2958,24 @@ function PresetEditor({ section }: { section: DashboardSection }) {
 
   return (
     <div className="-mx-5 -mt-9 md:-mx-5">
-      <div className="flex min-h-[72px] items-center justify-between border-b border-[#eee] bg-white px-5">
-        <div className="flex items-center gap-4">
+      <div className="flex min-h-[72px] flex-col gap-3 border-b border-[#eee] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-4">
           <Link href={`/dashboard/${section}/settings/presets`}>
             <ArrowLeft className="size-5 text-[#777]" />
           </Link>
           <Input
             value={presetName}
             onChange={(event) => setPresetName(event.target.value)}
-            className="h-10 w-[260px] rounded-none border-0 px-0 text-lg font-semibold focus-visible:ring-0"
+            className="h-10 min-w-[180px] flex-1 rounded-none border-0 px-0 text-lg font-semibold focus-visible:ring-0 sm:w-[260px] sm:flex-none"
           />
           <Input
             value={presetCollectionId}
             onChange={(event) => setPresetCollectionId(event.target.value)}
             placeholder="Collection ID (optional)"
-            className="h-10 w-[230px] rounded-none border-0 px-0 text-sm focus-visible:ring-0"
+            className="h-10 min-w-[180px] flex-1 rounded-none border-0 px-0 text-sm focus-visible:ring-0 sm:w-[230px] sm:flex-none"
           />
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           {presetSaved && (
             <span className="text-sm font-semibold text-[#00a997]">Saved</span>
           )}
@@ -4543,7 +4543,7 @@ function SearchBox({
           </PopoverContent>
         </Popover>
       </div>
-      <PopoverContent className="w-[480px] rounded-none border-0 p-6 shadow-[0_18px_45px_rgba(0,0,0,0.12)]" align="start">
+      <PopoverContent className="w-[calc(100vw-2rem)] max-w-[480px] rounded-none border-0 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.12)] sm:p-6" align="start">
         <div className="flex flex-col gap-6">
           {libraryFilters.map((group) => (
             <div key={group.title}>
@@ -6059,7 +6059,7 @@ function StorePricingPanel() {
               Add Product
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
+          <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
             <DropdownMenuGroup className="flex flex-col gap-4">
               <DropdownMenuItem
                 className="cursor-pointer items-start gap-4 rounded-none p-2"
@@ -6513,7 +6513,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                 Add Product
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
+            <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
               <DropdownMenuGroup className="flex flex-col gap-4">
                 {([
                   {
@@ -7604,7 +7604,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
           <h1 className="text-[28px] font-medium leading-none tracking-normal">
             {section === "client-gallery" ? "Collections" : "Products"}
           </h1>
-          <label className="flex h-10 min-w-[240px] items-center gap-3 text-[#8a8f98]">
+          <label className="flex h-10 w-full min-w-0 items-center gap-3 text-[#8a8f98] sm:min-w-[240px] sm:w-auto">
             <Search className="size-5" />
             <Input
               value={searchTerm}
@@ -10114,7 +10114,7 @@ function GetStartedPanel({
         {active.cta}
       </Button>
 
-      <div className={cn("mt-8 w-full max-w-[686px] p-8 md:mt-8 md:p-12", active.bg)}>
+      <div className={cn("mt-8 w-full max-w-[686px] p-4 sm:p-8 md:mt-8 md:p-12", active.bg)}>
         <GalleryPreview active={active} />
       </div>
     </div>
@@ -10125,14 +10125,14 @@ function GalleryPreview({ active }: { active: (typeof dashboardCopy)[DashboardSe
   return (
     <div className="relative mx-auto aspect-[1.18] max-w-[555px]">
       <div className="absolute left-0 top-10 h-[78%] w-[82%] bg-white/45 shadow-sm" />
-      <div className="absolute left-5 top-6 h-[86%] w-[90%] bg-white/65 shadow-sm" />
-      <div className="absolute inset-x-10 top-0 overflow-hidden bg-white shadow-[0_8px_18px_rgba(0,0,0,0.08)]">
+      <div className="absolute left-3 top-6 h-[86%] w-[90%] bg-white/65 shadow-sm sm:left-5" />
+      <div className="absolute inset-x-3 top-0 overflow-hidden bg-white shadow-[0_8px_18px_rgba(0,0,0,0.08)] sm:inset-x-10">
         <div className="flex h-3 items-center gap-1 bg-[#f5f5f5] px-3">
           <span className="size-1 rounded-full bg-[#d8d8d8]" />
           <span className="size-1 rounded-full bg-[#d8d8d8]" />
           <span className="size-1 rounded-full bg-[#d8d8d8]" />
         </div>
-        <div className="relative h-[270px] md:h-[280px]">
+        <div className="relative h-[190px] sm:h-[270px] md:h-[280px]">
           <img src={active.image} alt={active.hero} className="h-full w-full object-cover" />
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/10 text-white">
             <p className="text-xl font-bold tracking-wide">{active.hero}</p>
@@ -10179,7 +10179,7 @@ function CollectionWizard() {
       <div className="mx-auto max-w-[686px]">
         <p className="text-sm text-[#777]">Step 1 of 3</p>
         <h1 className="mt-4 text-[28px] font-medium">Pick a name and date</h1>
-        <div className="mt-8 bg-[#fafafa] p-12">
+        <div className="mt-8 bg-[#fafafa] p-5 sm:p-8 md:p-12">
           <FieldGroup className="gap-12">
             <Field>
               <FieldLabel htmlFor="collection-name" className="font-bold">
@@ -10241,7 +10241,7 @@ function CollectionWizard() {
       <div className="mx-auto max-w-[686px]">
         <p className="text-sm text-[#777]">Step 2 of 3</p>
         <h1 className="mt-4 text-[28px] font-medium">Add your photos</h1>
-        <div className="mt-8 bg-[#fafafa] p-12">
+        <div className="mt-8 bg-[#fafafa] p-5 sm:p-8 md:p-12">
           <button
             className="flex min-h-[250px] w-full flex-col items-center justify-center border border-dashed border-[#cfcfcf] bg-white text-center"
             onClick={addSamplePhotos}
@@ -10283,8 +10283,8 @@ function CollectionWizard() {
     <div className="mx-auto max-w-[686px]">
       <p className="text-sm text-[#777]">Step 3 of 3</p>
       <h1 className="mt-4 text-[28px] font-medium">Choose a cover photo design</h1>
-      <div className="mt-8 bg-[#fafafa] p-8">
-        <div className="relative h-[322px] bg-[#ddd]">
+      <div className="mt-8 bg-[#fafafa] p-5 sm:p-8">
+        <div className="relative h-[240px] bg-[#ddd] sm:h-[322px]">
           <CoverPreview
             design={{
               ...collectionDefaultDesign,

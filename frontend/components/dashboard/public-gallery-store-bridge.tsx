@@ -386,10 +386,10 @@ function BuyPhotoDialog({
         </div>
 
         <div className="min-h-0 overflow-y-auto bg-white">
-          <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-5 md:px-10">
-            <h2 className="text-lg font-medium">Buy This Photo</h2>
-            <div className="flex items-center gap-5">
-              <button type="button" onClick={onOpenStore} className="text-sm text-[#777] hover:text-black">
+          <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-white px-4 py-4 md:px-10 md:py-5">
+            <h2 className="min-w-0 text-lg font-medium">Buy This Photo</h2>
+            <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+              <button type="button" onClick={onOpenStore} className="whitespace-nowrap text-sm text-[#777] hover:text-black">
                 Visit Store <ChevronRight className="ml-1 inline size-4" />
               </button>
               <button className="flex size-9 items-center justify-center" onClick={onClose} aria-label="Close">
@@ -398,12 +398,12 @@ function BuyPhotoDialog({
             </div>
           </header>
 
-          <div className="px-6 pb-10 pt-5 md:px-10">
-            <div className="flex gap-7 border-b">
+          <div className="px-4 pb-10 pt-5 md:px-10">
+            <div className="flex gap-5 overflow-x-auto border-b md:gap-7 md:overflow-visible">
               {categories.map((category) => (
                 <button
                   key={category}
-                  className={`border-b-2 pb-3 text-sm ${
+                  className={`shrink-0 border-b-2 pb-3 text-sm ${
                     tab === category
                       ? "border-black font-semibold text-black"
                       : "border-transparent text-[#888]"
@@ -511,12 +511,12 @@ function StoreOverlay({
   return (
     <div className="fixed inset-0 z-[110] bg-black/55 p-0 md:p-5" role="dialog" aria-modal="true">
       <div className="mx-auto flex h-full max-h-[940px] w-full max-w-[1180px] flex-col overflow-hidden bg-white shadow-2xl">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b px-5 md:px-8">
-          <div>
+        <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b px-4 md:px-8">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#888]">Store</p>
-            <h2 className="text-lg font-medium">{data?.collection?.name || "Collection Store"}</h2>
+            <h2 className="truncate text-lg font-medium">{data?.collection?.name || "Collection Store"}</h2>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <button className="inline-flex h-10 items-center gap-2 border px-4 text-sm" onClick={onOpenCart} type="button">
               <ShoppingBag className="size-4" /> {cartCount}
             </button>

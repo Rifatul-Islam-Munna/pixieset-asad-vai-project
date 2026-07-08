@@ -41,12 +41,12 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
   )}/store`;
 
   return (
-    <div className="min-h-screen bg-[#f6f6f4] px-4 py-6 text-[#202020] md:px-8">
+    <div className="min-h-screen overflow-x-hidden bg-[#f6f6f4] px-3 py-6 text-[#202020] sm:px-4 md:px-8">
       <div className="mx-auto max-w-[1280px]">
         <header className="flex flex-wrap items-end justify-between gap-5 border-b border-[#d9d9d5] pb-6">
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-[0.22em] text-[#777]">Collection Store</p>
-            <h1 className="mt-2 text-3xl">{admin.collection.name}</h1>
+            <h1 className="mt-2 break-words text-2xl sm:text-3xl">{admin.collection.name}</h1>
             <p className="mt-2 text-sm text-[#666]">
               Enable collection store and activity. Product pricing is managed in Store Gallery Pricing.
             </p>
