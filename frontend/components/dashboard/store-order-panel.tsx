@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Download, Loader2, Package } from "lucide-react";
 import {
   cartItemPrice,
   formatMoney,
@@ -37,6 +37,26 @@ export function StoreOrderPanel({
   const [placingOrder, setPlacingOrder] = useState(false);
   const [message, setMessage] = useState("");
   const localSubtotal = items.reduce((sum, item) => sum + cartItemPrice(item) * item.quantity, 0);
+  const requiresShipping = useMemo(
+    () => items.some((item) => item.product.type !== "digital-download"),
+    [items],
+  );
+  const availableShipping = useMemo(() => {
+    if (!requiresShipping) return [];
+    const country = customer.country.trim().toLowerCase();
+    return (data?.shipping ?? []).filter((method) => {
+      const region = String(method.region ?? "").trim().toLowerCase();
+      if (!country || !region || region === "all" || region === "worldwide") return true;
+      return region === country || Boolean(method.shipInternational);
+    });
+  }, [customer.country, data?.shipping, requiresShipping]);
+
+  useEffect(() => {
+    if (!requiresShipping) setShippingMethodId("");
+    else if (shippingMethodId && !availableShipping.some((method) => method._id === shippingMethodId)) {
+      setShippingMethodId("");
+    }
+  }, [availableShipping, requiresShipping, shippingMethodId]);
 
   const requestBody = () => ({
     checkoutSource: "public-store",
@@ -54,7 +74,7 @@ export function StoreOrderPanel({
       },
     },
     professionalInfo: professional,
-    shippingMethodId: shippingMethodId || undefined,
+    shippingMethodId: requiresShipping && shippingMethodId ? shippingMethodId : undefined,
     couponCode,
     items: items.map((item) => ({
       productId: item.product._id,
@@ -99,7 +119,7 @@ export function StoreOrderPanel({
       setMessage("Company or professional information is required.");
       return;
     }
-    if ((data?.shipping?.length ?? 0) > 0 && !shippingMethodId) {
+    if (requiresShipping && availableShipping.length > 0 && !shippingMethodId) {
       setMessage("Choose a shipping method.");
       return;
     }
@@ -143,14 +163,29 @@ export function StoreOrderPanel({
           <Field placeholder="Phone" value={customer.phone} onChange={(phone) => setCustomer((v) => ({ ...v, phone }))} wide />
         </div>
       </Section>
-      <Section title="Shipping address">
+
+      <div className="mt-7 flex items-start gap-3 border bg-[#f8f8f6] p-4 text-sm">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white">
+          {requiresShipping ? <Package className="size-4" /> : <Download className="size-4" />}
+        </span>
+        <div>
+          <p className="font-semibold">{requiresShipping ? "Physical delivery" : "Digital delivery"}</p>
+          <p className="mt-1 leading-5 text-[#666]">{requiresShipping ? "Shipping is calculated from the selected shipping method and product settings." : "No shipping fee is charged for a cart containing only digital products."}</p>
+        </div>
+      </div>
+
+      <Section title={requiresShipping ? "Shipping address" : "Billing / tax location"}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field placeholder="Country" value={customer.country} onChange={(country) => setCustomer((v) => ({ ...v, country }))} wide />
-          <Field placeholder="Address line 1" value={customer.line1} onChange={(line1) => setCustomer((v) => ({ ...v, line1 }))} wide />
-          <Field placeholder="Address line 2" value={customer.line2} onChange={(line2) => setCustomer((v) => ({ ...v, line2 }))} wide />
-          <Field placeholder="City" value={customer.city} onChange={(city) => setCustomer((v) => ({ ...v, city }))} />
-          <Field placeholder="State / region" value={customer.state} onChange={(state) => setCustomer((v) => ({ ...v, state }))} />
-          <Field placeholder="Postal code" value={customer.postalCode} onChange={(postalCode) => setCustomer((v) => ({ ...v, postalCode }))} />
+          {requiresShipping && (
+            <>
+              <Field placeholder="Address line 1" value={customer.line1} onChange={(line1) => setCustomer((v) => ({ ...v, line1 }))} wide />
+              <Field placeholder="Address line 2" value={customer.line2} onChange={(line2) => setCustomer((v) => ({ ...v, line2 }))} wide />
+              <Field placeholder="City" value={customer.city} onChange={(city) => setCustomer((v) => ({ ...v, city }))} />
+              <Field placeholder="State / region" value={customer.state} onChange={(state) => setCustomer((v) => ({ ...v, state }))} />
+              <Field placeholder="Postal code" value={customer.postalCode} onChange={(postalCode) => setCustomer((v) => ({ ...v, postalCode }))} />
+            </>
+          )}
         </div>
       </Section>
       {data?.store?.requireProfessionalInfo && (
@@ -162,10 +197,10 @@ export function StoreOrderPanel({
           </div>
         </Section>
       )}
-      {(data?.shipping?.length ?? 0) > 0 && (
+      {requiresShipping && availableShipping.length > 0 && (
         <Section title="Shipping method">
           <div className="grid gap-2">
-            {data?.shipping?.map((method) => (
+            {availableShipping.map((method) => (
               <label key={method._id} className="flex cursor-pointer items-center justify-between border px-4 py-4 text-sm">
                 <span className="flex items-center gap-3">
                   <input type="radio" name="shipping" checked={shippingMethodId === method._id} onChange={() => setShippingMethodId(method._id)} />
@@ -186,7 +221,7 @@ export function StoreOrderPanel({
       <Section title="Order total">
         <div className="grid gap-2 text-sm">
           <PriceRow label="Subtotal" value={pricing?.subtotal ?? localSubtotal} currency={currency} />
-          <PriceRow label="Shipping" value={pricing?.shipping ?? 0} currency={currency} />
+          {(requiresShipping || Number(pricing?.shipping ?? 0) > 0) && <PriceRow label="Shipping" value={pricing?.shipping ?? 0} currency={currency} />}
           <PriceRow label="Tax" value={pricing?.tax ?? 0} currency={currency} />
           {(pricing?.discount ?? 0) > 0 && <PriceRow label="Discount" value={-pricing.discount} currency={currency} />}
           <div className="mt-2 flex justify-between border-t pt-4 text-base font-semibold">
