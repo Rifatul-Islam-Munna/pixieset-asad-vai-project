@@ -1059,6 +1059,19 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
       });
     });
 
+    collections.forEach((collection) => {
+      const requests = (collection.settings?.access as CollectionAccessSettings | undefined)?.requests ?? [];
+      requests.filter((request) => (request.status ?? "pending") === "pending").forEach((request) => {
+        items.push({
+          id: `access-${collection._id}-${request.id || request.email}`,
+          title: `${collection.name}: access request`,
+          meta: `${request.email} requested gallery access`,
+          time: request.createdAt,
+          timestamp: new Date(request.createdAt ?? 0).getTime(),
+        });
+      });
+    });
+
     (ordersQuery.data?.data ?? []).forEach((order) => {
       const collection = order.collectionId ? collectionMap.get(order.collectionId) : null;
       items.push({
@@ -7793,28 +7806,28 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                   </span>
                 )}
               </button>
-              <div className="pt-4">
+              <div className="pt-3">
                 <div className="flex items-start justify-between gap-3">
                   <button
-                    className="min-w-0 flex-1 truncate text-left text-[22px] font-semibold leading-none text-[#333]"
+                    className="min-w-0 flex-1 truncate text-left text-lg font-semibold leading-tight text-[#333]"
                     onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
                     type="button"
                   >
                     {collection.name}
                   </button>
                 </div>
-                <p className="mt-3 flex items-center gap-2 text-sm text-[#777]">
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-[#777]">
                   <span className="size-2 rounded-full bg-[#22bda7]" />
                   <span>{collection.imageCount ?? 0} items</span>
                   {collection.status && (
                     <>
-                      <span>&bull;</span>
+                      <span className="text-[#bbb]">&bull;</span>
                       <span>{titleCase(collection.status)}</span>
                     </>
                   )}
                   {collection.eventDate && (
                     <>
-                      <span>&bull;</span>
+                      <span className="text-[#bbb]">&bull;</span>
                       <span>{formatDate(collection.eventDate)}</span>
                     </>
                   )}
@@ -8136,7 +8149,7 @@ function CollectionDetailView({
   const [activeImageId, setActiveImageId] = useState("");
   const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "download">("photos");
   const [activeDesignPanel, setActiveDesignPanel] = useState<"cover" | "typography" | "color" | "grid">("cover");
-  const [activityPage, setActivityPage] = useState<"download" | "favorite" | "orders">("favorite");
+  const [activityPage, setActivityPage] = useState<"download" | "favorite" | "orders" | "email">("favorite");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
   const [addSetOpen, setAddSetOpen] = useState(false);
@@ -8259,6 +8272,7 @@ function CollectionDetailView({
         download: form.download,
         favorite: form.favorite,
         store: selectedPreset?.store ?? collection?.settings?.store,
+        access: collection?.settings?.access,
       },
     };
     updateCollection.mutate(payload, {
@@ -8825,6 +8839,14 @@ function CollectionDetailView({
                 <ShoppingCart className="size-4" />
                 Store Orders
               </button>
+              <button
+                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "email" && "bg-white font-bold")}
+                onClick={() => setActivityPage("email")}
+                type="button"
+              >
+                <Mail className="size-4" />
+                Email Access
+              </button>
             </div>
           )}
           <button
@@ -9218,6 +9240,7 @@ function CollectionDetailView({
               activityPage={activityPage}
               emailTemplates={emailTemplates}
               favoriteSettings={form.favorite}
+              accessSettings={(collection.settings?.access as CollectionAccessSettings | undefined) ?? {}}
               saveFavoriteSettings={async (favorite) => {
                 const nextFavorite = { ...form.favorite, ...favorite };
                 setForm((value) => ({ ...value, favorite: nextFavorite }));
@@ -9229,6 +9252,18 @@ function CollectionDetailView({
                     favorite: nextFavorite,
                   },
                 });
+              }}
+              saveAccessSettings={async (access) => {
+                await updateCollection.mutateAsync({
+                  settings: {
+                    ...(collection.settings ?? {}),
+                    general: form.general,
+                    download: form.download,
+                    favorite: form.favorite,
+                    access,
+                  },
+                });
+                await collectionQuery.refetch();
               }}
               deleteFavoriteInfo={activityActions.deleteFavoriteInfo.mutateAsync}
               deleteFavoriteImageInfo={activityActions.deleteFavoriteImageInfo.mutateAsync}
@@ -9305,7 +9340,9 @@ function CollectionActivityPanel({
   activityPage,
   emailTemplates,
   favoriteSettings,
+  accessSettings,
   saveFavoriteSettings,
+  saveAccessSettings,
   deleteFavoriteInfo,
   deleteFavoriteImageInfo,
   copyFavoriteListToSet,
@@ -9318,10 +9355,12 @@ function CollectionActivityPanel({
   collectionName: string;
   collectionImages: CollectionImageRecord[];
   publicLink: string;
-  activityPage: "download" | "favorite" | "orders";
+  activityPage: "download" | "favorite" | "orders" | "email";
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
+  accessSettings: CollectionAccessSettings;
   saveFavoriteSettings: (favorite: Partial<PresetFavoriteSettings>) => Promise<void>;
+  saveAccessSettings: (access: CollectionAccessSettings) => Promise<void>;
   deleteFavoriteInfo: (favoriteUserId: string) => Promise<unknown>;
   deleteFavoriteImageInfo: (payload: { favoriteUserId: string; imageId: string }) => Promise<unknown>;
   copyFavoriteListToSet: (payload: { favoriteUserId: string; name?: string }) => Promise<unknown>;
@@ -9334,6 +9373,8 @@ function CollectionActivityPanel({
   const [copyingListId, setCopyingListId] = useState("");
   const [favoriteLimitDraft, setFavoriteLimitDraft] = useState(favoriteSettings.maxFavorites);
   const [favoriteDescriptionDraft, setFavoriteDescriptionDraft] = useState(favoriteSettings.description);
+  const [allowedEmailDraft, setAllowedEmailDraft] = useState((accessSettings.allowedEmails ?? []).join("\n"));
+  const accessRequests = accessSettings.requests ?? [];
   const downloadFavoritesCsv = (list?: CollectionFavoriteActivityRecord) => {
     const rows = (list ? [list] : favoriteLists).map((item) => ({
       email: item.email,
@@ -9447,6 +9488,29 @@ function CollectionActivityPanel({
     setFavoriteLimitDraft(favoriteSettings.maxFavorites);
     setFavoriteDescriptionDraft(favoriteSettings.description);
   }, [favoriteSettings.description, favoriteSettings.maxFavorites]);
+  useEffect(() => {
+    setAllowedEmailDraft((accessSettings.allowedEmails ?? []).join("\n"));
+  }, [accessSettings.allowedEmails]);
+  const parseAccessEmails = (value: string) => [...new Set(value.split(/[\s,;]+/).map((item) => item.trim().toLowerCase()).filter((item) => item.includes("@")))];
+  const saveAllowedEmails = async (emails = parseAccessEmails(allowedEmailDraft)) => {
+    await saveAccessSettings({ ...accessSettings, allowedEmails: emails, requests: accessRequests });
+    setAllowedEmailDraft(emails.join("\n"));
+    toast.success("Email access saved");
+  };
+  const importAccessFile = async (file?: File) => {
+    if (!file) return;
+    const text = await file.text();
+    const emails = [...new Set([...parseAccessEmails(allowedEmailDraft), ...parseAccessEmails(text)])];
+    await saveAllowedEmails(emails);
+  };
+  const updateAccessRequest = async (request: CollectionAccessRequest, status: "approved" | "declined") => {
+    const email = request.email.trim().toLowerCase();
+    const allowed = status === "approved" ? [...new Set([...parseAccessEmails(allowedEmailDraft), email])] : parseAccessEmails(allowedEmailDraft).filter((item) => item !== email);
+    const requests = accessRequests.map((item) => (item.email === request.email ? { ...item, status, updatedAt: new Date().toISOString() } : item));
+    await saveAccessSettings({ ...accessSettings, allowedEmails: allowed, requests });
+    setAllowedEmailDraft(allowed.join("\n"));
+    toast.success(status === "approved" ? "Access approved" : "Access declined");
+  };
   const saveFavoriteListRules = async () => {
     try {
       await saveFavoriteSettings({
@@ -9536,7 +9600,51 @@ function CollectionActivityPanel({
   return (
     <>
     <section className="min-w-0">
-        {activityPage === "download" ? (
+        {activityPage === "email" ? (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-medium">Email Access</h2>
+                <p className="mt-2 text-sm text-[#666]">Only listed or approved emails can open this collection when Email Registration is on.</p>
+              </div>
+              <label className="inline-flex h-9 cursor-pointer items-center gap-2 border bg-white px-3 text-sm font-bold">
+                <FileUp className="size-4" />
+                Upload CSV/TXT
+                <input type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(event) => { void importAccessFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+              </label>
+            </div>
+            <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <section className="border bg-white p-5">
+                <h3 className="font-bold">Allowed emails</h3>
+                <Textarea value={allowedEmailDraft} onChange={(event) => setAllowedEmailDraft(event.target.value)} className="mt-4 min-h-[260px] rounded-none" placeholder="one@email.com&#10;two@email.com" />
+                <Button className="mt-4 h-10 rounded-none bg-[#22bda7] text-white" onClick={() => void saveAllowedEmails()}>
+                  Save Emails
+                </Button>
+              </section>
+              <section className="border bg-white p-5">
+                <h3 className="font-bold">Access requests</h3>
+                <div className="mt-4 max-h-[340px] overflow-y-auto border">
+                  {accessRequests.map((request) => (
+                    <div key={request.id || request.email} className="border-b p-4 last:border-b-0">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-bold">{request.email}</p>
+                          <p className="mt-1 text-xs uppercase tracking-wide text-[#777]">{request.status || "pending"}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" className="h-8 rounded-none px-3 text-xs" onClick={() => void updateAccessRequest(request, "approved")}>Approve</Button>
+                          <Button variant="outline" className="h-8 rounded-none px-3 text-xs text-red-600" onClick={() => void updateAccessRequest(request, "declined")}>Decline</Button>
+                        </div>
+                      </div>
+                      {request.reason && <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[#555]">{request.reason}</p>}
+                    </div>
+                  ))}
+                  {!accessRequests.length && <p className="px-4 py-10 text-center text-sm text-[#777]">No access requests yet.</p>}
+                </div>
+              </section>
+            </div>
+          </>
+        ) : activityPage === "download" ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-2xl font-medium">Download Activity</h2>
@@ -9943,6 +10051,20 @@ const collectionDefaultFavorite: PresetFavoriteSettings = {
   favoriteNotes: true,
   maxFavorites: "",
   description: "",
+};
+
+type CollectionAccessRequest = {
+  id?: string;
+  email: string;
+  reason?: string;
+  status?: "pending" | "approved" | "declined";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type CollectionAccessSettings = {
+  allowedEmails?: string[];
+  requests?: CollectionAccessRequest[];
 };
 
 type CollectionFormState = {

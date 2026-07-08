@@ -97,15 +97,9 @@ export class CollectionsService {
     return { ...collection, images: this.sortImagesForGallery(images) };
   }
 
-  async findPublic(identifier: string) {
+  async findPublic(identifier: string, email?: string) {
     const collection = await this.findCollectionByIdentifier(identifier);
     if (collection.status !== 'published') throw new NotFoundException('Collection not found');
-
-    const images = await this.imageModel
-      .find({ collectionId: collection._id.toString() })
-      .sort({ order: 1, createdAt: -1 })
-      .lean();
-    void this.ensureCollectionPreviews(collection._id.toString());
     const preset = collection.presetId
       ? await this.settingModel
           .findOne({
@@ -116,6 +110,21 @@ export class CollectionsService {
           .lean()
       : null;
     const presetData = preset?.data as any;
+    const accessSourceSettings = {
+      ...((collection.settings as any) ?? {}),
+      general: {
+        ...(presetData?.general ?? presetData?.presetGeneral ?? {}),
+        ...((collection.settings as any)?.general ?? {}),
+      },
+    };
+    const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
+    const images = emailAccess.authorized
+      ? await this.imageModel
+          .find({ collectionId: collection._id.toString() })
+          .sort({ order: 1, createdAt: -1 })
+          .lean()
+      : [];
+    if (emailAccess.authorized) void this.ensureCollectionPreviews(collection._id.toString());
     const branding = await this.settingModel
       .findOne({
         userId: collection.userId,
@@ -124,33 +133,69 @@ export class CollectionsService {
       })
       .lean();
 
+    const mergedSettings = {
+      general: {
+        ...(presetData?.general ?? presetData?.presetGeneral ?? {}),
+        ...((collection.settings as any)?.general ?? {}),
+      },
+      download: {
+        ...(presetData?.download ?? presetData?.presetDownload ?? {}),
+        ...((collection.settings as any)?.download ?? {}),
+      },
+      favorite: {
+        ...(presetData?.favorite ?? presetData?.presetFavorite ?? {}),
+        ...((collection.settings as any)?.favorite ?? {}),
+      },
+      store: {
+        ...(presetData?.store ?? presetData?.presetStore ?? {}),
+        ...((collection.settings as any)?.store ?? {}),
+      },
+      access: {
+        emailRequired: emailAccess.required,
+        emailAuthorized: emailAccess.authorized,
+        emailStatus: emailAccess.status,
+        email: emailAccess.email,
+      },
+    };
+
     return {
       ...collection,
       design: {
         ...(presetData?.design ?? presetData?.presetDesign ?? {}),
         ...(collection.design ?? {}),
       },
-      settings: {
-        general: {
-          ...(presetData?.general ?? presetData?.presetGeneral ?? {}),
-          ...((collection.settings as any)?.general ?? {}),
-        },
-        download: {
-          ...(presetData?.download ?? presetData?.presetDownload ?? {}),
-          ...((collection.settings as any)?.download ?? {}),
-        },
-        favorite: {
-          ...(presetData?.favorite ?? presetData?.presetFavorite ?? {}),
-          ...((collection.settings as any)?.favorite ?? {}),
-        },
-        store: {
-          ...(presetData?.store ?? presetData?.presetStore ?? {}),
-          ...((collection.settings as any)?.store ?? {}),
-        },
-      },
+      settings: mergedSettings,
       branding: (branding?.data as any) ?? {},
       images: this.sortImagesForGallery(images),
     };
+  }
+
+  async requestPublicAccess(identifier: string, body: { email?: string; reason?: string }) {
+    const collection = await this.findCollectionByIdentifier(identifier);
+    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    const email = this.cleanEmail(body.email);
+    if (!email) throw new BadRequestException('Email is required');
+    const reason = String(body.reason ?? '').trim().slice(0, 1000);
+    const settings = (collection.settings as any) ?? {};
+    const access = settings.access ?? {};
+    const requests = Array.isArray(access.requests) ? access.requests : [];
+    const existingIndex = requests.findIndex((request: any) => this.cleanEmail(request.email) === email);
+    const nextRequest = {
+      id: existingIndex >= 0 ? requests[existingIndex].id : `req-${Date.now()}`,
+      email,
+      reason,
+      status: 'pending',
+      createdAt: existingIndex >= 0 ? requests[existingIndex].createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const nextRequests = existingIndex >= 0
+      ? requests.map((request: any, index: number) => index === existingIndex ? nextRequest : request)
+      : [nextRequest, ...requests];
+    await this.collectionModel.updateOne(
+      { _id: collection._id },
+      { $set: { settings: { ...settings, access: { ...access, requests: nextRequests } } } },
+    );
+    return { requested: true, email };
   }
 
   async listFavoriteCollections(userId: string) {
@@ -1158,6 +1203,37 @@ export class CollectionsService {
     if (used + incomingBytes > limitBytes) {
       throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');
     }
+  }
+
+  private cleanEmail(value?: string) {
+    const email = String(value ?? '').trim().toLowerCase();
+    return email.includes('@') ? email : '';
+  }
+
+  private resolveEmailAccess(settings: any, email?: string) {
+    const general = settings?.general ?? {};
+    const access = settings?.access ?? {};
+    const required = this.boolSetting(general.emailRegistration);
+    if (!required) return { required: false, authorized: true, status: 'open', email: '' };
+    const clean = this.cleanEmail(email);
+    if (!clean) return { required: true, authorized: false, status: 'required', email: '' };
+    const allowedEmails = Array.isArray(access.allowedEmails) ? access.allowedEmails.map((item: string) => this.cleanEmail(item)).filter(Boolean) : [];
+    const requests = Array.isArray(access.requests) ? access.requests : [];
+    const request = requests.find((item: any) => this.cleanEmail(item.email) === clean);
+    const approved = request?.status === 'approved';
+    const denied = request?.status === 'declined';
+    return {
+      required: true,
+      authorized: allowedEmails.includes(clean) || approved,
+      status: allowedEmails.includes(clean) || approved ? 'approved' : denied ? 'declined' : request ? 'pending' : 'unknown',
+      email: clean,
+    };
+  }
+
+  private boolSetting(value: unknown) {
+    if (typeof value === 'boolean') return value;
+    const text = String(value ?? '').toLowerCase();
+    return ['true', 'on', 'yes', '1', 'enabled'].includes(text);
   }
 
   private async sanitizeCollectionCapabilities<T extends CreateCollectionDto | UpdateCollectionDto>(userId: string, dto: T): Promise<T> {

@@ -5,6 +5,9 @@ import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Heart, Loader2
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
@@ -51,6 +54,7 @@ type PublicCollection = {
     download?: Partial<PresetDownloadSettings>;
     favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string };
     store?: { storeStatus?: boolean; enabled?: boolean; showPrintStoreNav?: boolean; showBuyPhotoButton?: boolean };
+    access?: { emailRequired?: boolean; emailAuthorized?: boolean; emailStatus?: string; email?: string };
   };
 };
 
@@ -117,12 +121,14 @@ const defaultDownload: PresetDownloadSettings = {
 export function PublicGallery({
   name,
   galary,
-  collection,
+  collection: initialCollection,
 }: {
   name: string;
   galary: string;
   collection?: PublicCollection | null;
 }) {
+  const [collection, setCollection] = useState(initialCollection);
+  useEffect(() => setCollection(initialCollection), [initialCollection]);
   const fallbackPresetDesign = useDashboardStore((state) => state.presetDesign);
   const fallbackPresetDownload = useDashboardStore((state) => state.presetDownload);
   const fallbackPresetStore = useDashboardStore((state) => state.presetStore);
@@ -159,8 +165,8 @@ export function PublicGallery({
   const galleryAssistEnabled = boolSetting(generalSettings.galleryAssist);
   const emailRegistrationEnabled = boolSetting(generalSettings.emailRegistration);
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
-  const images = collection?.images?.length
-    ? collection.images
+  const images = collection
+    ? (collection.images ?? [])
     : fallbackPhotos.map((url, index) => ({ _id: `sample-${index}`, url }));
   const collectionCoverImage = collection?.coverImage;
   const coverMatch = collectionCoverImage
@@ -199,6 +205,12 @@ export function PublicGallery({
   const [shareNotice, setShareNotice] = useState("");
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [downloadEmail, setDownloadEmail] = useState("");
+  const [accessEmail, setAccessEmail] = useState("");
+  const [accessReason, setAccessReason] = useState("");
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessNotice, setAccessNotice] = useState("");
+  const accessSettings = collection?.settings?.access;
+  const emailAccessLocked = Boolean(collection && emailRegistrationEnabled && !accessSettings?.emailAuthorized);
   const activeGalleryImages = showSetTabs
     ? galleryImages.filter((image) => imageSetId(image) === activeSetId)
     : galleryImages;
@@ -388,6 +400,47 @@ export function PublicGallery({
     setSlideshowIndex(null);
   }, [activeSetId]);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  const verifyAccessEmail = async () => {
+    const email = accessEmail.trim().toLowerCase();
+    if (!email.includes("@") || accessBusy) return;
+    setAccessBusy(true);
+    setAccessNotice("");
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}`).catch(() => null);
+    const payload = response ? await response.json().catch(() => null) : null;
+    setAccessBusy(false);
+    if (!response?.ok || !payload?.data) {
+      setAccessNotice(payload?.message ?? "Access check failed");
+      return;
+    }
+    setCollection(payload.data);
+    if (payload.data?.settings?.access?.emailAuthorized) {
+      setVisitorEmail(email);
+      setVisitorEmailSaved(true);
+      setDownloadEmail(email);
+      window.localStorage.setItem(`collection-access-email:${galary}`, email);
+      setAccessNotice("");
+    } else {
+      setAccessNotice(payload.data?.settings?.access?.emailStatus === "declined" ? "Access declined for this email." : "Email not approved for this gallery.");
+    }
+  };
+  const requestAccess = async () => {
+    const email = accessEmail.trim().toLowerCase();
+    if (!email.includes("@") || accessBusy) return;
+    setAccessBusy(true);
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}/access-request`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, reason: accessReason }),
+    }).catch(() => null);
+    const payload = response ? await response.json().catch(() => null) : null;
+    setAccessBusy(false);
+    setAccessNotice(response?.ok ? "Access request sent. You will be approved by gallery owner." : payload?.message ?? "Request failed");
+  };
+  useEffect(() => {
+    if (!emailAccessLocked || accessEmail || accessBusy) return;
+    const saved = window.localStorage.getItem(`collection-access-email:${galary}`) || "";
+    if (saved) setAccessEmail(saved);
+  }, [accessBusy, accessEmail, emailAccessLocked, galary]);
   const currentPublicUrl = (photoId?: string) => {
     const url = `${window.location.origin}${window.location.pathname}`;
     return photoId ? `${url}#photo-${encodeURIComponent(photoId)}` : url;
@@ -505,6 +558,27 @@ export function PublicGallery({
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
       <ScreenCaptureGuard />
+      {emailAccessLocked ? (
+        <main className="flex min-h-screen items-center justify-center bg-[#fafafa] p-6">
+          <section className="w-full max-w-md border bg-white p-7 shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#00a997]">Email access</p>
+            <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
+            <p className="mt-3 text-sm leading-6 text-[#666]">Enter an approved email to view this gallery.</p>
+            <Input value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} placeholder="you@example.com" className="mt-6 h-11 rounded-none" />
+            <Button className="mt-3 h-11 w-full rounded-none bg-[#22bda7] text-white" disabled={accessBusy || !accessEmail.includes("@")} onClick={() => void verifyAccessEmail()}>
+              {accessBusy ? "Checking..." : "Enter gallery"}
+            </Button>
+            <div className="mt-6 border-t pt-5">
+              <p className="text-sm font-bold">Request access</p>
+              <Textarea value={accessReason} onChange={(event) => setAccessReason(event.target.value)} placeholder="Tell the gallery owner why you need access" className="mt-3 min-h-24 rounded-none" />
+              <Button variant="outline" className="mt-3 h-10 w-full rounded-none bg-white" disabled={accessBusy || !accessEmail.includes("@")} onClick={() => void requestAccess()}>
+                Send request
+              </Button>
+            </div>
+            {accessNotice && <p className="mt-4 text-sm font-semibold text-[#666]">{accessNotice}</p>}
+          </section>
+        </main>
+      ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-black/5 px-4 sm:px-5 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
         <p className="truncate text-sm uppercase tracking-[0.24em]">{studioName}</p>
@@ -911,6 +985,7 @@ export function PublicGallery({
         </div>
       )}
     </main>
+      )}
     </>
   );
 }

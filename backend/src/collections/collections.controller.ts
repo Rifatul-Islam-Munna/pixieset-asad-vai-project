@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFiles,
   UseGuards,
@@ -43,9 +44,18 @@ export class PublicCollectionsController {
   constructor(private readonly collectionsService: CollectionsService) {}
 
   @Get(':identifier')
-  async findPublic(@Param('identifier') identifier: string) {
-    const data = await this.collectionsService.findPublic(identifier);
+  async findPublic(@Param('identifier') identifier: string, @Query('email') email?: string) {
+    const data = await this.collectionsService.findPublic(identifier, email);
     return { data };
+  }
+
+  @Post(':identifier/access-request')
+  async requestAccess(
+    @Param('identifier') identifier: string,
+    @Body() body: { email?: string; reason?: string },
+  ) {
+    const data = await this.collectionsService.requestPublicAccess(identifier, body);
+    return { message: 'Access request sent', data };
   }
 
   @Post(':identifier/download-activity')
