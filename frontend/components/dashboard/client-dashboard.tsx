@@ -3865,14 +3865,16 @@ function PresetDownloadPanel({
           </p>
         </Field>
 
+        <PlanFeatureNotice feature="pinSet" label="Download PIN" />
         {[
           ["Video Download", "videoDownload", "Allow videos to be downloaded for offline viewing."],
           ["Download PIN", "downloadPin", "If enabled, all collections created from this preset will have a download PIN set automatically."],
         ].map(([label, key, text]) => (
-          <Field key={key}>
+          <Field key={key} className={cn(key === "downloadPin" && pinAccess.locked && "pointer-events-none opacity-45")}>
             <FieldLabel className="font-bold">{label}</FieldLabel>
             <div className="flex items-center gap-3">
               <Switch
+                disabled={key === "downloadPin" && pinAccess.locked}
                 checked={download[key as "videoDownload" | "downloadPin"]}
                 onCheckedChange={(value) =>
                   onChange({ [key]: value } as Partial<typeof download>)
@@ -3895,6 +3897,7 @@ function PresetDownloadPanel({
         ))}
 
         <div>
+          <PlanFeatureNotice feature="downloadLimit" label="Download limits" />
           <p className="mb-8 text-[11px] font-bold uppercase tracking-widest text-[#777]">
             Advanced Settings
           </p>
@@ -3903,10 +3906,11 @@ function PresetDownloadPanel({
               ["Restrict Downloads to Collection Contacts", "restrictDownloads", "Allow only assigned Collection Contacts to download photos."],
               ["Limit Photo Downloads", "limitDownloads", "Set number of photos that can be downloaded in these collections."],
             ].map(([label, key, text]) => (
-              <Field key={key}>
+              <Field key={key} className={cn(limitAccess.locked && "pointer-events-none opacity-45")}>
                 <FieldLabel className="font-bold">{label}</FieldLabel>
                 <div className="flex items-center gap-3">
                   <Switch
+                    disabled={limitAccess.locked}
                     checked={download[key as "restrictDownloads" | "limitDownloads"]}
                   onCheckedChange={(value) =>
                     onChange({ [key]: value } as Partial<typeof download>)
@@ -7920,6 +7924,7 @@ function CollectionFilterSelect({
 
 function CollectionNewPanel({ section }: { section: DashboardSection }) {
   const router = useRouter();
+  const coverImageAccess = usePlanFeatureAccess("coverImage");
   const presetSettings = useDashboardSettings("preset").query;
   const { hydrateDashboardSettings, presetItems } = useDashboardStore();
   const { createCollection } = useCollections();
@@ -8904,8 +8909,9 @@ function CollectionDetailView({
                         <Star className={cn("size-4", image.metadata?.starred === true && "fill-[#00a997] text-[#00a997]")} />
                       </button>
                       <button
-                        className="absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block"
-                        disabled={deletingImages}
+                        className={cn("absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block", coverImageAccess.locked && "cursor-not-allowed opacity-60")}
+                        disabled={deletingImages || coverImageAccess.locked}
+                        title={coverImageAccess.locked ? "Cover image is not included in your current plan" : "Make collection cover"}
                         onClick={() => {
                           setForm((value) => ({ ...value, coverImage: image.url }));
                           updateCollection.mutate(
