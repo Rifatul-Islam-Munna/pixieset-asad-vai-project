@@ -1,4 +1,4 @@
-import { IsArray, IsDateString, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsDateString, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateCollectionDto {
   @IsOptional()
@@ -34,6 +34,10 @@ export class UpdateCollectionDto {
   @IsOptional()
   @IsDateString()
   expiresAt?: string;
+
+  @IsOptional()
+  @IsIn(['draft', 'published'])
+  status?: 'draft' | 'published';
 
   @IsOptional()
   @IsObject()
