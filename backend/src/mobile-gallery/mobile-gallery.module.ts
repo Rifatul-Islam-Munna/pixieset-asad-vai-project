@@ -5,7 +5,6 @@ import { MobileGalleryApp, MobileGalleryAppSchema } from './entities/mobile-gall
 import { MobileGalleryImage, MobileGalleryImageSchema } from './entities/mobile-gallery-image.entity';
 import { MobileGallerySetting, MobileGallerySettingSchema } from './entities/mobile-gallery-setting.entity';
 import { MobileGalleryController, PublicMobileGalleryController } from './mobile-gallery.controller';
-import { MobileGalleryMailService } from './mobile-gallery-mail.service';
 import { MobileGalleryService } from './mobile-gallery.service';
 
 @Module({
@@ -17,6 +16,6 @@ import { MobileGalleryService } from './mobile-gallery.service';
     ]),
   ],
   controllers: [MobileGalleryController, PublicMobileGalleryController],
-  providers: [MobileGalleryService, MobileGalleryMailService, MinioService],
+  providers: [MobileGalleryService, MinioService],
 })
 export class MobileGalleryModule {}
