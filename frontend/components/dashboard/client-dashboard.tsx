@@ -106,6 +106,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -9374,6 +9375,8 @@ function CollectionActivityPanel({
   const [favoriteLimitDraft, setFavoriteLimitDraft] = useState(favoriteSettings.maxFavorites);
   const [favoriteDescriptionDraft, setFavoriteDescriptionDraft] = useState(favoriteSettings.description);
   const [allowedEmailDraft, setAllowedEmailDraft] = useState((accessSettings.allowedEmails ?? []).join("\n"));
+  const [emailEntryDraft, setEmailEntryDraft] = useState("");
+  const [accessFilter, setAccessFilter] = useState<"all" | "allowed" | "requests">("all");
   const accessRequests = accessSettings.requests ?? [];
   const downloadFavoritesCsv = (list?: CollectionFavoriteActivityRecord) => {
     const rows = (list ? [list] : favoriteLists).map((item) => ({
@@ -9497,6 +9500,15 @@ function CollectionActivityPanel({
     setAllowedEmailDraft(emails.join("\n"));
     toast.success("Email access saved");
   };
+  const addAllowedEmails = async () => {
+    const added = parseAccessEmails(emailEntryDraft);
+    if (!added.length) {
+      toast.error("Enter at least one valid email");
+      return;
+    }
+    await saveAllowedEmails([...new Set([...parseAccessEmails(allowedEmailDraft), ...added])]);
+    setEmailEntryDraft("");
+  };
   const importAccessFile = async (file?: File) => {
     if (!file) return;
     const text = await file.text();
@@ -9511,6 +9523,22 @@ function CollectionActivityPanel({
     setAllowedEmailDraft(allowed.join("\n"));
     toast.success(status === "approved" ? "Access approved" : "Access declined");
   };
+  const removeAllowedEmail = async (email: string) => {
+    await saveAllowedEmails(parseAccessEmails(allowedEmailDraft).filter((item) => item !== email));
+  };
+  const accessRows = useMemo(() => {
+    const rows = new Map<string, { email: string; request?: CollectionAccessRequest }>();
+    parseAccessEmails(allowedEmailDraft).forEach((email) => rows.set(email, { email }));
+    accessRequests.forEach((request) => {
+      const email = request.email.trim().toLowerCase();
+      rows.set(email, { email, request });
+    });
+    return [...rows.values()].filter((row) => {
+      if (accessFilter === "allowed") return parseAccessEmails(allowedEmailDraft).includes(row.email);
+      if (accessFilter === "requests") return Boolean(row.request);
+      return true;
+    });
+  }, [accessFilter, accessRequests, allowedEmailDraft]);
   const saveFavoriteListRules = async () => {
     try {
       await saveFavoriteSettings({
@@ -9613,36 +9641,84 @@ function CollectionActivityPanel({
                 <input type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(event) => { void importAccessFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
               </label>
             </div>
-            <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <section className="border bg-white p-5">
-                <h3 className="font-bold">Allowed emails</h3>
-                <Textarea value={allowedEmailDraft} onChange={(event) => setAllowedEmailDraft(event.target.value)} className="mt-4 min-h-[260px] rounded-none" placeholder="one@email.com&#10;two@email.com" />
-                <Button className="mt-4 h-10 rounded-none bg-[#22bda7] text-white" onClick={() => void saveAllowedEmails()}>
-                  Save Emails
-                </Button>
-              </section>
-              <section className="border bg-white p-5">
-                <h3 className="font-bold">Access requests</h3>
-                <div className="mt-4 max-h-[340px] overflow-y-auto border">
-                  {accessRequests.map((request) => (
-                    <div key={request.id || request.email} className="border-b p-4 last:border-b-0">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-bold">{request.email}</p>
-                          <p className="mt-1 text-xs uppercase tracking-wide text-[#777]">{request.status || "pending"}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" className="h-8 rounded-none px-3 text-xs" onClick={() => void updateAccessRequest(request, "approved")}>Approve</Button>
-                          <Button variant="outline" className="h-8 rounded-none px-3 text-xs text-red-600" onClick={() => void updateAccessRequest(request, "declined")}>Decline</Button>
-                        </div>
-                      </div>
-                      {request.reason && <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[#555]">{request.reason}</p>}
-                    </div>
-                  ))}
-                  {!accessRequests.length && <p className="px-4 py-10 text-center text-sm text-[#777]">No access requests yet.</p>}
+            <section className="mt-7 border bg-white">
+              <div className="border-b p-5">
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="access-emails">Add emails</FieldLabel>
+                    <Textarea
+                      id="access-emails"
+                      value={emailEntryDraft}
+                      onChange={(event) => setEmailEntryDraft(event.target.value)}
+                      className="min-h-24 rounded-none"
+                      placeholder="client@example.com, family@example.com"
+                    />
+                  </Field>
+                </FieldGroup>
+                <div className="mt-3 flex justify-end">
+                  <Button className="h-10 rounded-none bg-[#22bda7] text-white" onClick={() => void addAllowedEmails()}>
+                    Add emails
+                  </Button>
                 </div>
-              </section>
-            </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
+                <p className="text-sm font-bold">{accessRows.length} emails</p>
+                <div className="flex gap-1" aria-label="Filter email access">
+                  {(["all", "allowed", "requests"] as const).map((filter) => (
+                    <Button
+                      key={filter}
+                      type="button"
+                      size="sm"
+                      variant={accessFilter === filter ? "default" : "ghost"}
+                      className="rounded-none capitalize"
+                      onClick={() => setAccessFilter(filter)}
+                    >
+                      {filter === "requests" ? "Access requests" : filter}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="px-5">Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Request note</TableHead>
+                    <TableHead className="px-5 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {accessRows.map(({ email, request }) => {
+                    const isAllowed = parseAccessEmails(allowedEmailDraft).includes(email);
+                    return (
+                      <TableRow key={email}>
+                        <TableCell className="px-5 font-semibold">{email}</TableCell>
+                        <TableCell className="capitalize">{request?.status || (isAllowed ? "allowed" : "pending")}</TableCell>
+                        <TableCell className="max-w-80 whitespace-normal text-[#666]">{request?.reason || "—"}</TableCell>
+                        <TableCell className="px-5">
+                          <div className="flex justify-end gap-2">
+                            {request && request.status !== "approved" && (
+                              <Button size="sm" variant="outline" className="rounded-none" onClick={() => void updateAccessRequest(request, "approved")}>Approve</Button>
+                            )}
+                            {request && request.status !== "declined" && (
+                              <Button size="sm" variant="outline" className="rounded-none text-red-600" onClick={() => void updateAccessRequest(request, "declined")}>Decline</Button>
+                            )}
+                            {isAllowed && (
+                              <Button size="sm" variant="ghost" className="rounded-none text-red-600" onClick={() => void removeAllowedEmail(email)}>Remove</Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {!accessRows.length && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-28 text-center text-[#777]">No emails in this view.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </section>
           </>
         ) : activityPage === "download" ? (
           <>
