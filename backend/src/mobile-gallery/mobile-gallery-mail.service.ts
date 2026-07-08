@@ -47,6 +47,7 @@ export class MobileGalleryMailService {
     }
 
     const iconUrl = this.safeHttpUrl(String(app.iconUrl || app.coverImage || ''));
+    const brandLogoUrl = this.safeHttpUrl(String(profile?.logoUrl || ''));
     const replyTo = this.isEmail(String(profile?.contactEmail || '').trim())
       ? String(profile?.contactEmail).trim()
       : undefined;
@@ -70,6 +71,7 @@ export class MobileGalleryMailService {
           message,
           publicUrl,
           iconUrl,
+          brandLogoUrl,
           businessName: profile?.website || profile?.contactEmail || '',
         }),
       }),
@@ -94,10 +96,14 @@ export class MobileGalleryMailService {
     message: string;
     publicUrl: string;
     iconUrl: string;
+    brandLogoUrl: string;
     businessName: string;
   }) {
     const icon = input.iconUrl
       ? `<img src="${this.escapeAttribute(input.iconUrl)}" alt="" width="136" height="136" style="display:block;width:136px;height:136px;object-fit:cover;border-radius:28px;margin:0 auto 22px;" />`
+      : '';
+    const brandLogo = input.brandLogoUrl
+      ? `<img src="${this.escapeAttribute(input.brandLogoUrl)}" alt="Business logo" style="display:block;max-width:180px;max-height:52px;object-fit:contain;margin:0 auto 24px;" />`
       : '';
     return `<!doctype html>
 <html>
@@ -105,6 +111,7 @@ export class MobileGalleryMailService {
     <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
       <div style="background:#fff;border:1px solid #ececea;">
         <div style="padding:42px 28px;text-align:center;border-bottom:1px solid #eee;">
+          ${brandLogo}
           <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#777;">${this.escapeHtml(input.templateTitle)}</div>
           <h1 style="font-size:31px;font-weight:400;line-height:1.25;margin:22px 0 0;">${this.escapeHtml(input.templateTitle)}</h1>
         </div>
