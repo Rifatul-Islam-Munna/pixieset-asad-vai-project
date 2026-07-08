@@ -21,31 +21,6 @@ jobs:
           ref: development
           fetch-depth: 0
 
-      - name: Wire global SMTP mutation into admin
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('frontend/components/mobile-gallery/mobile-gallery-admin.tsx')
-          text = path.read_text()
-          replacements = [
-            (
-              '  const { appQuery, updateApp, uploadImages, reorderImages, deleteImage } = useMobileGalleryApp(appId);',
-              '  const { appQuery, updateApp, uploadImages, reorderImages, deleteImage, sendInvite } = useMobileGalleryApp(appId);',
-              'sendInvite hook',
-            ),
-            (
-              '  if (view === "share") return <MobileGalleryShareScreen app={app} profile={profile} />;',
-              '  if (view === "share") return <MobileGalleryShareScreen app={app} profile={profile} sendInvite={sendInvite} />;',
-              'sendInvite prop',
-            ),
-          ]
-          for old, new, label in replacements:
-            if old not in text:
-              raise SystemExit(f'Missing expected admin block: {label}')
-            text = text.replace(old, new, 1)
-          path.write_text(text)
-          PY
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -100,6 +75,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/package-lock.json frontend/components/mobile-gallery/mobile-gallery-admin.tsx docs/mobile-gallery-drag-font-smtp-verification.md
+          git add backend/package-lock.json docs/mobile-gallery-drag-font-smtp-verification.md
           git commit -m "fix(mobile-gallery): verify direct controls fonts and global SMTP"
           git push origin HEAD:development
