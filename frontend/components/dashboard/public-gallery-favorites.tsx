@@ -1,7 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Heart, Mail, Trash2, X } from "lucide-react";
+import { Mail, X } from "lucide-react";
 
 export type FavoriteGalleryImage = {
   _id: string;
@@ -23,10 +24,10 @@ type StoredFavorites = {
 export function usePublicGalleryFavorites({
   collectionId,
   identifier,
-  collectionTitle,
   images,
   enabled,
   maxFavorites,
+  favoritesPath,
 }: {
   collectionId?: string;
   identifier: string;
@@ -34,13 +35,14 @@ export function usePublicGalleryFavorites({
   images: FavoriteGalleryImage[];
   enabled: boolean;
   maxFavorites: number;
+  favoritesPath: string;
 }) {
+  const router = useRouter();
   const storageKey = `pixieset-public-favorites:${collectionId || identifier}`;
   const emailStorageKey = "pixieset-favorite-email";
   const [favoriteEmail, setFavoriteEmail] = useState("");
   const [emailDraft, setEmailDraft] = useState("");
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [pendingFavorite, setPendingFavorite] = useState<PendingFavorite>(null);
   const [collectionFavorited, setCollectionFavorited] = useState(false);
   const [favoriteImageIds, setFavoriteImageIds] = useState<Set<string>>(() => new Set());
@@ -173,42 +175,6 @@ export function usePublicGalleryFavorites({
         </div>
       )}
 
-      {favoritesOpen && (
-        <div className="fixed inset-0 z-[75] flex justify-end bg-black/45" onMouseDown={(event) => { if (event.currentTarget === event.target) setFavoritesOpen(false); }}>
-          <aside className="h-full w-full max-w-[520px] overflow-y-auto bg-white p-5 text-[#202326] shadow-[-25px_0_70px_rgba(0,0,0,0.22)] sm:p-7">
-            <div className="flex items-start justify-between gap-4 border-b pb-5">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#16a894]">My Favorites</p>
-                <h2 className="mt-2 text-2xl font-semibold">{collectionTitle}</h2>
-                <p className="mt-2 text-xs text-[#777]">{favoriteEmail || "Favorites saved on this device"}</p>
-              </div>
-              <button type="button" onClick={() => setFavoritesOpen(false)} aria-label="Close My Favorites"><X className="size-5" /></button>
-            </div>
-
-            {collectionFavorited && (
-              <div className="mt-6 flex items-center justify-between gap-4 border bg-[#f5fbf9] p-4">
-                <div className="flex items-center gap-3"><Heart className="size-5 fill-red-500 text-red-500" /><div><p className="font-semibold">Entire collection</p><p className="mt-1 text-xs text-[#777]">This collection is in My Favorites.</p></div></div>
-                <button type="button" onClick={applyCollectionToggle} className="flex size-9 items-center justify-center text-red-600" aria-label="Remove collection favorite"><Trash2 className="size-4" /></button>
-              </div>
-            )}
-
-            <div className="mt-7 flex items-center justify-between gap-4"><h3 className="font-semibold">Favorite photos</h3><span className="rounded-full bg-[#f1f1ef] px-3 py-1 text-xs font-bold">{favoriteImages.length}</span></div>
-            {favoriteImages.length ? (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {favoriteImages.map((image) => (
-                  <article key={image._id} className="group relative overflow-hidden bg-[#f1f1ef]">
-                    <img src={favoriteImageSrc(image.thumbnailUrl || image.url)} alt={image.originalName || "Favorite photo"} className="aspect-square h-full w-full object-cover" />
-                    <button type="button" onClick={() => applyImageToggle(image._id)} className="absolute right-2 top-2 flex size-9 items-center justify-center rounded-full bg-white/95 text-red-600 shadow" aria-label="Remove favorite photo"><Trash2 className="size-4" /></button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4 border border-dashed p-10 text-center"><Heart className="mx-auto size-7 text-[#aaa]" /><p className="mt-3 text-sm text-[#777]">Favorite photos will appear here.</p></div>
-            )}
-          </aside>
-        </div>
-      )}
-
       {notice && <div className="fixed bottom-5 left-1/2 z-[90] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl">{notice}</div>}
     </>
   );
@@ -222,16 +188,7 @@ export function usePublicGalleryFavorites({
     favoriteImages,
     toggleCollectionFavorite,
     toggleImageFavorite,
-    openFavorites: () => setFavoritesOpen(true),
+    openFavorites: () => router.push(favoritesPath),
     overlays,
   };
-}
-
-function favoriteImageSrc(url?: string) {
-  if (!url) return "";
-  if (url.startsWith("/uploads/")) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-    return `${baseUrl}${url}`;
-  }
-  return url;
 }
