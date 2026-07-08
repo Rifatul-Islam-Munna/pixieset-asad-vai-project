@@ -1,5 +1,5 @@
 Traceback (most recent call last):
-  File "<stdin>", line 8, in <module>
-  File "admin-plan-finalizer.py", line 1
-    from pathlib import Path
-IndentationError: unexpected indent
+  File "<stdin>", line 9, in <module>
+  File "admin-plan-finalizer.py", line 709, in <module>
+  File "admin-plan-finalizer.py", line 13, in replace_once
+SystemExit: Missing expected block: remove cover builder from home cms
