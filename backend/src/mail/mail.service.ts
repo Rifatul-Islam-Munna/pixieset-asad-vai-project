@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { createConnection, type Socket } from 'node:net';
-import { connect as createTlsConnection, type TLSSocket } from 'node:tls';
+import { connect as createTlsConnection, TLSSocket } from 'node:tls';
 
 export type GlobalMailPayload = {
   to: string | string[];
@@ -216,8 +216,8 @@ class SmtpSession {
   }
 
   async upgradeToTls() {
-    if (!this.socket || this.socket instanceof (createTlsConnection({} as never).constructor as never)) return;
-    const previous = this.socket as Socket;
+    if (!this.socket || this.socket instanceof TLSSocket) return;
+    const previous = this.socket;
     previous.removeAllListeners('data');
     const tlsSocket = createTlsConnection({
       socket: previous,
@@ -255,10 +255,11 @@ class SmtpSession {
   }
 
   close() {
-    if (this.pending) {
-      clearTimeout(this.pending.timer);
-      this.pending.reject(new Error('SMTP connection closed'));
-      this.pending = undefined;
+    const pending = this.pending;
+    this.pending = undefined;
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('SMTP connection closed'));
     }
     this.socket?.end();
     this.socket?.destroy();
@@ -268,7 +269,12 @@ class SmtpSession {
   private attach(socket: Socket | TLSSocket) {
     this.socket = socket;
     socket.setTimeout(this.config.timeout, () => {
-      this.pending?.reject(new Error('SMTP socket timed out'));
+      const pending = this.pending;
+      this.pending = undefined;
+      if (pending) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error('SMTP socket timed out'));
+      }
       this.close();
     });
     socket.on('data', (chunk) => {
@@ -276,10 +282,11 @@ class SmtpSession {
       this.processBuffer();
     });
     socket.on('error', (error) => {
-      if (this.pending) {
-        clearTimeout(this.pending.timer);
-        this.pending.reject(error);
-        this.pending = undefined;
+      const pending = this.pending;
+      this.pending = undefined;
+      if (pending) {
+        clearTimeout(pending.timer);
+        pending.reject(error);
       }
     });
   }
