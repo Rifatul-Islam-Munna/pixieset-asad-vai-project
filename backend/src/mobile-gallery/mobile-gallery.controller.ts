@@ -19,6 +19,7 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { cwd } from 'process';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
+import { MobileGalleryMailService } from './mobile-gallery-mail.service';
 import { MobileGalleryService } from './mobile-gallery.service';
 
 const uploadDir = join(cwd(), 'uploads');
@@ -48,7 +49,10 @@ export class PublicMobileGalleryController {
 @Controller('mobile-gallery')
 @UseGuards(AuthGuard)
 export class MobileGalleryController {
-  constructor(private readonly service: MobileGalleryService) {}
+  constructor(
+    private readonly service: MobileGalleryService,
+    private readonly mailService: MobileGalleryMailService,
+  ) {}
 
   @Get('apps')
   async apps(@Req() req: ExpressRequest) {
@@ -73,6 +77,18 @@ export class MobileGalleryController {
   @Delete('apps/:id')
   async remove(@Param('id') id: string, @Req() req: ExpressRequest) {
     return { message: 'Mobile gallery app deleted', data: await this.service.remove(req.user.id, id) };
+  }
+
+  @Post('apps/:id/share-email')
+  async shareEmail(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: ExpressRequest,
+  ) {
+    return {
+      message: 'Mobile gallery invitation processed',
+      data: await this.mailService.sendInvite(req.user.id, id, body),
+    };
   }
 
   @Post('apps/:id/images')
