@@ -22,64 +22,7 @@ jobs:
       - name: Execute grouped implementation
         id: implement
         continue-on-error: true
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import os, traceback
-          try:
-              workflow = Path('.github/workflows/finalize-admin-plan-features.yml').read_text()
-              marker = "          python - <<'PY'\n"
-              end_marker = "\n          PY\n"
-              raw = workflow.split(marker, 1)[1].split(end_marker, 1)[0]
-              script = "\n".join(line[10:] if line.startswith("          ") else line for line in raw.splitlines())
-              old = "\n".join([
-                  "    if old not in text:",
-                  "        raise SystemExit(f\"Missing expected block: {label}\")",
-                  "    return text.replace(old, new, 1)",
-              ])
-              new = "\n".join([
-                  "    if old not in text:",
-                  "        if label == \"remove cover builder from home cms\":",
-                  "            begin = text.index('        <CmsSection title=\"Client gallery cover templates\" defaultOpen>')",
-                  "            finish = text.index('        </CmsSection>', begin) + len('        </CmsSection>')",
-                  "            if finish < len(text) and text[finish:finish + 2] == \\"\\n\\n\\\":",
-                  "                finish += 2",
-                  "            return text[:begin] + text[finish:]",
-                  "        if label == \"admin resource links\":",
-                  "            nav_start = text.index('    <nav className=\"mt-10 grid gap-2\">', text.index('function AdminNav'))",
-                  "            nav_end = text.index('    </nav>', nav_start)",
-                  "            links = '      <div className=\"my-2 border-t\" />\\n      <Link href=\"/admin/cover-templates\" className={navClass(false)}><FileImage className=\"size-4\" />Cover Templates</Link>\\n      <Link href=\"/admin/default-products\" className={navClass(false)}><ShoppingBag className=\"size-4\" />Default Products</Link>\\n'",
-                  "            return text[:nav_end] + links + text[nav_end:]",
-                  "        if label == \"dashboard feature boundary open\":",
-                  "            target = '          {campaignBuilderOpen ? (\\n            <CampaignBuilder onClose={closeCampaignBuilder} />'",
-                  "            insertion = '          <PlanFeatureLock\\n            feature={section === \\"store-gallery\\" ? \\"store\\" : \\"marketingEmails\\"}\\n            label={section === \\"store-gallery\\" ? \\"Store\\" : \\"Marketing email\\"}\\n            className={section === \\"store-gallery\\" || page === \\"marketing\\" || campaignBuilderOpen ? \\"min-h-[520px]\\" : \\"contents\\"}\\n            bypass={section !== \\"store-gallery\\" && page !== \\"marketing\\" && !campaignBuilderOpen}\\n          >\\n' + target",
-                  "            position = text.index(target)",
-                  "            return text[:position] + insertion + text[position + len(target):]",
-                  "        if label == \"dashboard feature boundary close\":",
-                  "            anchor = '          )}\\n        </div>\\n      </section>'",
-                  "            position = text.index(anchor, text.index('<PlanFeatureLock'))",
-                  "            replacement = '          )}\\n          </PlanFeatureLock>\\n        </div>\\n      </section>'",
-                  "            return text[:position] + replacement + text[position + len(anchor):]",
-                  "        if label == \"custom covers disabled\":",
-                  "            heading = '            <p className=\"mt-10 text-sm font-bold\">Cover</p>\\n'",
-                  "            text = text.replace(heading, heading + '            <PlanFeatureNotice feature=\"customCover\" label=\"Custom cover templates\" />\\n', 1)",
-                  "            button = '\\n'.join(['                <button', '                  key={template.id}', '                  className=\"text-center\"', '                  onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}', '                  type=\"button\"', '                >'])",
-                  "            locked_button = '\\n'.join(['                <button', '                  key={template.id}', '                  className={cn(\"relative text-center\", customCoverAccess.locked && \"cursor-not-allowed opacity-45\")}', '                  disabled={customCoverAccess.locked}', '                  onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}', '                  type=\"button\"', '                >'])",
-                  "            if button in text:",
-                  "                return text.replace(button, locked_button, 1)",
-                  "            return text",
-                  "        return text",
-                  "    return text.replace(old, new, 1)",
-              ])
-              if old not in script:
-                  raise RuntimeError('Could not patch finalizer helper')
-              script = script.replace(old, new, 1)
-              exec(compile(script, 'admin-plan-finalizer.py', 'exec'))
-          except BaseException:
-              diagnostic = traceback.format_exc() + f"\nRun: {os.environ.get('GITHUB_RUN_ID', 'unknown')}\n"
-              Path('docs/admin-finalizer-error.txt').write_text(diagnostic)
-              raise
-          PY
+        run: python scripts/run_admin_plan_finalizer.py
 
       - name: Commit diagnostic on implementation failure
         if: steps.implement.outcome == 'failure'
@@ -99,6 +42,7 @@ jobs:
           rm -f .github/workflows/run-admin-plan-finalizer-pr.yml
           rm -f .github/workflows/run-admin-plan-finalizer.yml
           rm -f .github/ADMIN_PLAN_FEATURE_TRIGGER.md
+          rm -f scripts/run_admin_plan_finalizer.py
           rm -f docs/admin-plan-feature-work-note.md
           rm -f docs/.keep-admin-feature-run
           rm -f docs/.admin-feature-status
