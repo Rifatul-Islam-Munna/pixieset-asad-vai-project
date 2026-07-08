@@ -12,10 +12,12 @@ import { StoreModule } from './store/store.module';
 import { AdminModule } from './admin/admin.module';
 import { HomeCmsModule } from './home-cms/home-cms.module';
 import { MobileGalleryModule } from './mobile-gallery/mobile-gallery.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    MailModule,
     JwtModule.registerAsync({
       global: true,
       inject: [ConfigService],
