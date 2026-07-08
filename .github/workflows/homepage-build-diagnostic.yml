@@ -8,12 +8,16 @@ on:
       - frontend/components/dashboard/homepage-settings-panel.tsx
       - frontend/components/dashboard/public-homepage.tsx
       - .github/workflows/homepage-build-diagnostic.yml
+  pull_request:
+    branches: [main]
+    types: [opened, reopened]
 
 permissions:
   contents: write
 
 jobs:
   verify:
+    if: github.event_name == 'push' || github.head_ref == 'development'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
