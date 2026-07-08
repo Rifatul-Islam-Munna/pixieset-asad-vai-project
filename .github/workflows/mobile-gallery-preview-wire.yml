@@ -1,0 +1,82 @@
+name: Wire Mobile Gallery Preview Controls
+
+on:
+  push:
+    branches:
+      - development
+    paths:
+      - .github/workflows/mobile-gallery-preview-wire.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout development
+        uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+
+      - name: Wire preview and top actions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/components/mobile-gallery/mobile-gallery-admin.tsx')
+          text = path.read_text()
+          replacements = [
+            (
+              'import { MobileGalleryShareScreen } from "./mobile-gallery-share-screen";',
+              'import { MobileGalleryShareScreen } from "./mobile-gallery-share-screen";\nimport { MobileGalleryPreviewScreen } from "./mobile-gallery-preview-screen";',
+              'preview import',
+            ),
+            (
+              '  if (view === "preview") return <PreviewScreen app={app} profile={profile} />;',
+              '  if (view === "preview") return <MobileGalleryPreviewScreen app={app} profile={profile} />;',
+              'preview component',
+            ),
+            (
+              '<div className="flex shrink-0 items-center gap-3 text-[#777]"><Search className="size-5" /><Settings className="size-5" /></div>',
+              '<div className="flex shrink-0 items-center gap-3 text-[#777]"><Link href="/dashboard/mobile-gallery#search-apps" aria-label="Search mobile gallery apps" className="rounded p-1.5 hover:bg-white hover:text-[#18bfa6]"><Search className="size-5" /></Link><Link href="/dashboard/mobile-gallery/settings" aria-label="Mobile gallery settings" className="rounded p-1.5 hover:bg-white hover:text-[#18bfa6]"><Settings className="size-5" /></Link></div>',
+              'top action links',
+            ),
+            (
+              '<div className="mt-5 flex justify-end">',
+              '<div id="search-apps" className="mt-5 flex scroll-mt-24 justify-end">',
+              'search anchor',
+            ),
+          ]
+          for old, new, label in replacements:
+            if old not in text:
+              raise SystemExit(f'Missing expected block: {label}')
+            text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build backend
+        working-directory: backend
+        run: npm ci && npm run build
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          BASE_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_BASE_URL: http://127.0.0.1:4000
+        run: npm ci && npm run build
+
+      - name: Commit preview wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/components/mobile-gallery/mobile-gallery-admin.tsx
+          git commit -m "fix(mobile-gallery): add device preview and top navigation actions"
+          git push origin HEAD:development
