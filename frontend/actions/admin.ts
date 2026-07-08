@@ -237,7 +237,6 @@ export async function uploadHomeCmsFile(formData: FormData) {
   return payload?.data as string;
 }
 
-
 export async function getAdminHomeCms() {
   return adminRequest<HomeCmsData>("/home-cms");
 }
@@ -246,9 +245,28 @@ export async function getAdminDefaultStoreProducts() {
   return adminRequest<AdminDefaultStoreProduct[]>("/admin/default-store-products");
 }
 
+export async function createAdminDefaultStoreProduct(payload: Partial<AdminDefaultStoreProduct>) {
+  const data = await adminRequest<AdminDefaultStoreProduct>("/admin/default-store-products", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/admin/default-products");
+  return data;
+}
+
 export async function updateAdminDefaultStoreProduct(id: string, payload: Partial<AdminDefaultStoreProduct>) {
-  return adminRequest<AdminDefaultStoreProduct>(`/admin/default-store-products/${id}`, {
+  const data = await adminRequest<AdminDefaultStoreProduct>(`/admin/default-store-products/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+  revalidatePath("/admin/default-products");
+  return data;
+}
+
+export async function deleteAdminDefaultStoreProduct(id: string) {
+  const data = await adminRequest<AdminDefaultStoreProduct>(`/admin/default-store-products/${id}`, {
+    method: "DELETE",
+  });
+  revalidatePath("/admin/default-products");
+  return data;
 }
