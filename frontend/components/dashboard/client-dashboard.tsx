@@ -1962,7 +1962,7 @@ function StarredPanel() {
   const { collectionsQuery } = useCollections();
   const imagesQuery = useCollectionImages();
   const starredCollections = (collectionsQuery.data?.data ?? []).filter(
-    (collection) => collection.status === "starred" || collection.settings?.starred,
+    (collection) => collection.settings?.starred,
   );
   const starredPhotos = (imagesQuery.data?.data ?? []).filter(
     (image) => image.metadata?.starred === true,
@@ -7358,7 +7358,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       if (expiryDateFilter === "expired" && (!expiry || expiry >= now)) return false;
       if (expiryDateFilter === "none" && expiry) return false;
 
-      const isStarred = collection.status === "starred" || collection.settings?.starred === true;
+      const isStarred = collection.settings?.starred === true;
       if (starredFilter === "yes" && !isStarred) return false;
       if (starredFilter === "no" && isStarred) return false;
       return true;
