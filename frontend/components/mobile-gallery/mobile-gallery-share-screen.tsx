@@ -48,9 +48,9 @@ export function MobileGalleryShareScreen({
   const [templateId, setTemplateId] = useState<(typeof shareTemplates)[number]["id"]>("ready");
   const selectedTemplate = shareTemplates.find((template) => template.id === templateId) || shareTemplates[0];
   const [subject, setSubject] = useState(selectedTemplate.subject(app.name));
+  const [message, setMessage] = useState(selectedTemplate.intro(app.name));
   const link = typeof window === "undefined" ? `/mobile-gallery/${app.slug}` : `${window.location.origin}/mobile-gallery/${app.slug}`;
-  const intro = selectedTemplate.intro(app.name);
-  const body = `Hi,\n\n${intro}\n\nInstall App: ${link}\n\nThanks`;
+  const body = `Hi,\n\n${message}\n\nInstall App: ${link}\n\nThanks`;
   const isPublished = app.status !== "draft";
 
   function goBack() {
@@ -65,6 +65,7 @@ export function MobileGalleryShareScreen({
     const template = shareTemplates.find((item) => item.id === id) || shareTemplates[0];
     setTemplateId(id);
     setSubject(template.subject(app.name));
+    setMessage(template.intro(app.name));
     setStep("compose");
   }
 
@@ -83,7 +84,7 @@ export function MobileGalleryShareScreen({
       const result = await sendInvite.mutateAsync({
         to: email,
         subject,
-        message: intro,
+        message,
         templateTitle: selectedTemplate.title,
         link,
         sendCopy,
@@ -154,7 +155,8 @@ export function MobileGalleryShareScreen({
             <h1 className="mt-2 text-2xl font-light">Share by Email</h1>
             <Field label="Email" value={email} onChange={setEmail} type="email" required placeholder="e.g. johnsmith@email.com" />
             <Field label="Subject" value={subject} onChange={setSubject} />
-            <textarea readOnly value={body} rows={9} className="mt-5 w-full border p-4 text-sm leading-6 text-[#555]" />
+            <label className="mt-5 block text-sm font-semibold">Message<textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={7} className="mt-2 w-full border p-4 font-normal leading-6 outline-none focus:border-[#18bfa6]" /></label>
+            <div className="mt-4 rounded border bg-[#fafafa] p-3 text-xs leading-5 text-[#777]">The Install App button automatically uses this link: <span className="break-all">{link}</span></div>
             {profile.contactEmail && <label className="mt-4 flex items-center gap-2 text-sm text-[#666]"><input type="checkbox" checked={sendCopy} onChange={(event) => setSendCopy(event.target.checked)} /> Send a copy to {profile.contactEmail}</label>}
             <div className="mt-5 flex flex-wrap gap-3"><button disabled={sendInvite.isPending || !isPublished} className="flex items-center gap-2 bg-[#18bfa6] px-6 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"><Mail className="size-4" /> {sendInvite.isPending ? "Sending…" : "Send Invite"}</button><button type="button" onClick={copyLink} className="flex items-center gap-2 border px-5 py-3"><Copy className="size-4" /> Copy Link</button></div>
             <p className="mt-4 text-xs leading-5 text-[#888]">When server email delivery is configured, the invitation is sent directly. Otherwise the prepared invitation opens in your email application.</p>
@@ -162,11 +164,15 @@ export function MobileGalleryShareScreen({
 
           <div className="flex items-center justify-center p-5 sm:p-8">
             <div className="w-full max-w-xl bg-white shadow">
-              <div className="border-b p-8 text-center sm:p-10"><p className="text-xs uppercase tracking-widest text-[#777]">{selectedTemplate.label}</p><h2 className="mt-6 text-2xl sm:text-3xl">{selectedTemplate.title}</h2></div>
+              <div className="border-b p-8 text-center sm:p-10">
+                {profile.logoUrl && <img src={profile.logoUrl} alt="Business logo" className="mx-auto mb-6 h-12 max-w-[180px] object-contain" />}
+                <p className="text-xs uppercase tracking-widest text-[#777]">{selectedTemplate.label}</p>
+                <h2 className="mt-6 text-2xl sm:text-3xl">{selectedTemplate.title}</h2>
+              </div>
               <div className="p-8 text-center sm:p-10">
                 {app.iconUrl || app.coverImage ? <img src={app.iconUrl || app.coverImage} alt="" className="mx-auto size-32 rounded-[28px] object-cover sm:size-36 sm:rounded-[30px]" /> : <div className="mx-auto flex size-32 items-center justify-center rounded-[28px] bg-[#eee]"><Smartphone className="size-9" /></div>}
                 <h3 className="mt-4 uppercase tracking-widest">{app.name}</h3>
-                <p className="mx-auto mt-6 max-w-md text-sm leading-6 text-[#666]">{intro}</p>
+                <p className="mx-auto mt-6 whitespace-pre-line max-w-md text-sm leading-6 text-[#666]">{message}</p>
                 <a href={link} className="mt-8 inline-block bg-[#18bfa6] px-7 py-3 font-semibold text-white">Install App</a>
               </div>
             </div>
