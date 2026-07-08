@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Copy, ExternalLink, Link2, Mail, Smartphone } from "lucide-react";
 import { toast } from "sonner";
-import type { MobileGalleryApp, MobileGalleryProfile } from "@/api-hooks/use-mobile-gallery";
+import { type MobileGalleryApp, type MobileGalleryProfile, useMobileGalleryApp } from "@/api-hooks/use-mobile-gallery";
 
 type ShareStep = "method" | "templates" | "compose" | "link";
 
@@ -32,16 +32,9 @@ const shareTemplates = [
   },
 ] as const;
 
-export function MobileGalleryShareScreen({
-  app,
-  profile,
-  sendInvite,
-}: {
-  app: MobileGalleryApp;
-  profile: MobileGalleryProfile;
-  sendInvite: any;
-}) {
+export function MobileGalleryShareScreen({ app, profile }: { app: MobileGalleryApp; profile: MobileGalleryProfile }) {
   const router = useRouter();
+  const { sendInvite } = useMobileGalleryApp(app._id);
   const [step, setStep] = useState<ShareStep>("method");
   const [email, setEmail] = useState("");
   const [sendCopy, setSendCopy] = useState(true);
