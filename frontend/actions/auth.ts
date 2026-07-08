@@ -51,7 +51,6 @@ export const loginWithGoogle = async (idToken:string)=>{
 
     const [data, error] = await PostRequestAxios<userData>("/user/login-user-with-google",{id:idToken});
     if(data){
-        console.log("getting-data",data)
     const cookie = await cookies();
    cookie.set("access_token", data?.access_token || "", cookieOptions);
    const userSaveData = {

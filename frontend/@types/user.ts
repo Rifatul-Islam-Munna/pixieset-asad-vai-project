@@ -120,6 +120,8 @@ export interface User {
   userId?: string;
   role: UserType;
   email?: string;
+  googleId?: string;
+  avatar?: string;
   phoneNumber: string;
   whatsapp?: string;
   password: string;
@@ -155,6 +157,8 @@ export interface UserInfo {
   userId: string;             // "user123"
   role: UserType;             // UserType.USER
   email: string;              // "rifat@example.com"
+  googleId?: string;
+  avatar?: string;
   phoneNumber: string;        // "+8801712345678"
   whatsapp?: string;
   password: string;           // "securePassword123"

@@ -4,6 +4,7 @@ import { useState, useTransition, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, Mail, Phone, UserRound, VenusAndMars } from "lucide-react";
 import { loginUser, registerUser } from "@/actions/auth";
+import { GoogleLoginButton } from "@/components/auth/google-login-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AuthCms } from "@/lib/home-cms";
@@ -59,6 +60,12 @@ export function LoginPageClient({ auth }: { auth: AuthCms }) {
             {pending ? <Loader2 className="size-4 animate-spin" /> : "Log in"}
             {!pending && <ArrowRight className="size-4" />}
           </Button>
+          <div className="my-6 flex items-center gap-3 text-xs font-bold uppercase text-[#999]">
+            <span className="h-px flex-1 bg-[#e5e5e5]" />
+            or
+            <span className="h-px flex-1 bg-[#e5e5e5]" />
+          </div>
+          <GoogleLoginButton />
           <p className="mt-6 text-sm text-[#667085]">New here? <Link href="/register" className="font-bold text-[#00a997]">Create an account</Link></p>
         </form>
       </div>
@@ -113,6 +120,12 @@ export function RegisterPageClient({ auth }: { auth: AuthCms }) {
             {pending ? <Loader2 className="size-4 animate-spin" /> : "Create account"}
             {!pending && <ArrowRight className="size-4" />}
           </Button>
+          <div className="my-6 flex items-center gap-3 text-xs font-bold uppercase text-[#999]">
+            <span className="h-px flex-1 bg-[#e5e5e5]" />
+            or
+            <span className="h-px flex-1 bg-[#e5e5e5]" />
+          </div>
+          <GoogleLoginButton />
           <p className="mt-6 text-sm text-[#667085]">Already have account? <Link href="/login" className="font-bold text-[#00a997]">Log in</Link></p>
         </form>
       </div>

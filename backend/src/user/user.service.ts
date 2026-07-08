@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 import { Model } from 'mongoose';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/update-user.dto';
@@ -86,6 +87,60 @@ export class UserService implements OnModuleInit {
     }
 
     const { password, ...safeUser } = user;
+    const access_token = await this.signToken(safeUser);
+
+    return { message: 'User logged in successfully', access_token, user: safeUser };
+  }
+
+  async loginWithGoogle(tokenId: string) {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!googleClientId) {
+      throw new HttpException('Google login is not configured', HttpStatus.BAD_REQUEST);
+    }
+
+    const client = new OAuth2Client(googleClientId);
+    let payload: { sub?: string; email?: string; name?: string; picture?: string; email_verified?: boolean } | undefined;
+
+    try {
+      const ticket = await client.verifyIdToken({ idToken: tokenId, audience: googleClientId });
+      payload = ticket.getPayload();
+    } catch {
+      throw new HttpException('Invalid Google token', HttpStatus.BAD_REQUEST);
+    }
+
+    const email = payload?.email?.trim().toLowerCase();
+    if (!email || !payload?.email_verified) {
+      throw new HttpException('Google email is not verified', HttpStatus.BAD_REQUEST);
+    }
+
+    const googleId = payload.sub ?? '';
+    const existing = await this.userModel.findOne({
+      $or: [{ email }, { phoneNumber: email }, ...(googleId ? [{ googleId }] : [])],
+    });
+
+    const user =
+      existing ??
+      (await this.userModel.create({
+        name: payload.name || email.split('@')[0],
+        email,
+        phoneNumber: email,
+        password: await bcrypt.hash(`${googleId || email}:${Date.now()}`, 10),
+        googleId,
+        avatar: payload.picture,
+        role: UserType.USER,
+        isOtpVerified: true,
+        otpNumber: '000000',
+      }));
+
+    if (existing) {
+      existing.email = existing.email || email;
+      existing.googleId = existing.googleId || googleId;
+      existing.avatar = payload.picture || existing.avatar;
+      existing.isOtpVerified = true;
+      await existing.save();
+    }
+
+    const { password, ...safeUser } = user.toObject();
     const access_token = await this.signToken(safeUser);
 
     return { message: 'User logged in successfully', access_token, user: safeUser };

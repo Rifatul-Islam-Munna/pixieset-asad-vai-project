@@ -17,6 +17,12 @@ export class User {
   @Prop({ trim: true, lowercase: true })
   email?: string;
 
+  @Prop({ trim: true })
+  googleId?: string;
+
+  @Prop()
+  avatar?: string;
+
   @Prop({ required: true, unique: true, trim: true })
   phoneNumber: string;
 

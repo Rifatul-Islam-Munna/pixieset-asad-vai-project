@@ -25,7 +25,7 @@ export class UserController {
 
   @Post('login-user-with-google')
   loginWithGoogle(@Body() dto: FindOneTokenDto) {
-    return this.userService.loginUser({ phoneNumber: dto.id, password: dto.id });
+    return this.userService.loginWithGoogle(dto.id);
   }
 
   @Get('get-my-profile')
