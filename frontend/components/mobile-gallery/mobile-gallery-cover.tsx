@@ -17,14 +17,18 @@ export function MobileGalleryCover({ app, design, images }: { app: MobileGallery
   const cover = app.coverImage || images[0]?.url;
   const focal = design.focal || { x: 50, y: 50 };
   const text = getMobileGalleryCoverDefaults(app, themeName, coverStyle, design.coverText);
+  const customFamily = customFontFamily(app, text);
 
   if (coverStyle === "full" && cover) {
-    const vertical = text.verticalPosition === "top" ? "items-start pt-12" : text.verticalPosition === "center" ? "items-center" : "items-end pb-12";
+    const anchorX = text.alignment === "center" ? -50 : text.alignment === "right" ? -100 : 0;
     return (
       <header className="relative h-[56vh] min-h-[360px] overflow-hidden">
+        {customFamily && <CustomFontStyle family={customFamily} url={text.customFontUrl} />}
         <img src={cover} alt="" className="h-full w-full object-cover" style={{ objectPosition: `${focal.x}% ${focal.y}%` }} />
         <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(text.overlayColor, text.overlayOpacity / 100) }} />
-        <div className={`absolute inset-0 flex px-6 ${vertical}`}><CoverCopy app={app} theme={themeName} text={text} inverse /></div>
+        <div className="absolute z-10 w-[92%] max-w-3xl" style={{ left: `${text.positionX}%`, top: `${text.positionY}%`, transform: `translate(${anchorX}%, -50%)` }}>
+          <CoverCopy app={app} theme={themeName} text={text} customFamily={customFamily} inverse />
+        </div>
       </header>
     );
   }
@@ -32,19 +36,25 @@ export function MobileGalleryCover({ app, design, images }: { app: MobileGallery
   if (coverStyle === "third" && cover) {
     return (
       <header>
-        <div className="px-6 pb-8 pt-12"><CoverCopy app={app} theme={themeName} text={text} /></div>
+        {customFamily && <CustomFontStyle family={customFamily} url={text.customFontUrl} />}
+        <div className="px-6 pb-8 pt-12"><CoverCopy app={app} theme={themeName} text={text} customFamily={customFamily} /></div>
         <div className="h-[34vh] min-h-[240px] overflow-hidden"><img src={cover} alt="" className="h-full w-full object-cover" style={{ objectPosition: `${focal.x}% ${focal.y}%` }} /></div>
       </header>
     );
   }
 
-  return <header className="px-6 pb-9 pt-14"><CoverCopy app={app} theme={themeName} text={text} /></header>;
+  return (
+    <header className="px-6 pb-9 pt-14">
+      {customFamily && <CustomFontStyle family={customFamily} url={text.customFontUrl} />}
+      <CoverCopy app={app} theme={themeName} text={text} customFamily={customFamily} />
+    </header>
+  );
 }
 
-function CoverCopy({ app, theme, text, inverse = false }: { app: MobileGalleryApp; theme: MobileGalleryThemeName; text: ResolvedCoverText; inverse?: boolean }) {
+function CoverCopy({ app, theme, text, customFamily, inverse = false }: { app: MobileGalleryApp; theme: MobileGalleryThemeName; text: ResolvedCoverText; customFamily?: string; inverse?: boolean }) {
   const date = text.dateLabel || (app.eventDate ? formatDate(app.eventDate) : "");
   const alignmentClass = text.alignment === "center" ? "text-center mx-auto" : text.alignment === "right" ? "text-right ml-auto" : "text-left";
-  const fontFamily = fontPreset(text.fontPreset, mobileGalleryThemes[theme].fontFamily);
+  const fontFamily = fontPreset(text.fontPreset, mobileGalleryThemes[theme].fontFamily, customFamily);
   const title = text.uppercase ? text.title.toUpperCase() : text.title;
   const color = text.textColor || (inverse ? "#ffffff" : undefined);
   const shadow = text.shadowStrength > 0 ? `0 2px ${Math.max(2, text.shadowStrength / 2)}px rgba(0,0,0,${Math.min(0.75, text.shadowStrength / 100)})` : undefined;
@@ -56,7 +66,7 @@ function CoverCopy({ app, theme, text, inverse = false }: { app: MobileGalleryAp
     <div className={`w-full ${alignmentClass}`} style={wrapperStyle}>
       {text.eyebrow && <p className="text-[10px] uppercase tracking-[0.24em] opacity-75">{text.eyebrow}</p>}
       {text.showDivider && text.eyebrow && <div className={`mt-4 h-px w-14 bg-current opacity-50 ${text.alignment === "center" ? "mx-auto" : text.alignment === "right" ? "ml-auto" : ""}`} />}
-      <h1 className={`mt-4 break-words ${theme === "spring" ? "italic" : "font-semibold"}`} style={titleStyle}>{title}</h1>
+      <h1 className={`mt-4 break-words ${theme === "spring" && text.fontPreset !== "custom" ? "italic" : "font-semibold"}`} style={titleStyle}>{title}</h1>
       {text.subtitle && <p className="mt-4 whitespace-pre-line leading-6 opacity-80" style={subtitleStyle}>{text.subtitle}</p>}
       {text.showDivider && !text.eyebrow && <div className={`mt-5 h-px w-14 bg-current opacity-45 ${text.alignment === "center" ? "mx-auto" : text.alignment === "right" ? "ml-auto" : ""}`} />}
       {text.showDate && date && <p className="mt-5 text-[10px] uppercase tracking-[0.22em] opacity-70">{date}</p>}
@@ -71,25 +81,40 @@ export function getMobileGalleryCoverDefaults(
   custom?: MobileGalleryCoverText,
 ): ResolvedCoverText {
   const defaults: Record<MobileGalleryThemeName, ResolvedCoverText> = {
-    echo: { eyebrow: "Mobile Gallery", title: app.name, subtitle: "", showDate: true, dateLabel: "", alignment: "center", verticalPosition: "bottom", fontPreset: "serif", titleSize: 42, subtitleSize: 15, letterSpacing: 4, uppercase: true, showDivider: true, contentWidth: 88, textColor: "#ffffff", overlayColor: "#000000", overlayOpacity: 34, shadowStrength: 38 },
-    spring: { eyebrow: "A collection of moments", title: app.name, subtitle: "", showDate: true, dateLabel: "", alignment: "left", verticalPosition: "bottom", fontPreset: "serif", titleSize: 50, subtitleSize: 16, letterSpacing: 0, uppercase: false, showDivider: false, contentWidth: 88, textColor: "#ffffff", overlayColor: "#000000", overlayOpacity: 30, shadowStrength: 32 },
-    lark: { eyebrow: "", title: app.name, subtitle: "", showDate: true, dateLabel: "", alignment: "left", verticalPosition: "bottom", fontPreset: "sans", titleSize: 42, subtitleSize: 15, letterSpacing: 1, uppercase: false, showDivider: true, contentWidth: 88, textColor: "#ffffff", overlayColor: "#000000", overlayOpacity: 28, shadowStrength: 30 },
-    sage: { eyebrow: "Private mobile gallery", title: app.name, subtitle: "", showDate: true, dateLabel: "", alignment: "center", verticalPosition: "center", fontPreset: "mono", titleSize: 40, subtitleSize: 14, letterSpacing: 3, uppercase: true, showDivider: false, contentWidth: 88, textColor: "#ffffff", overlayColor: "#1f2a25", overlayOpacity: 42, shadowStrength: 24 },
+    echo: { eyebrow: "Mobile Gallery", title: app.name, subtitle: "", showDate: true, dateLabel: "", alignment: "center", verticalPosition: "bottom", positionX: 50, positionY: 78, fontPreset: "serif", customFontUrl: "", customFontName: "", titleSize: 42, subtitleSize: 15, letterSpacing: 4, uppercase: true, showDivider: true, contentWidth: 88, textColor: "#ffffff", overlayColor: "#000000", overlayOpacity: 34, shadowStrength: 38 },
+    spring: { eyebrow: "A collection of moments", title: app.name, subtitle: "", showDate: true, dateLabel: "", alignment: "left", verticalPosition: "bottom", positionX: 8, positionY: 78, fontPreset: "serif", customFontUrl: "", customFontName: "", titleSize: 50, subtitleSize: 16, letterSpacing: 0, uppercase: false, showDivider: false, contentWidth: 88, textColor: "#ffffff", overlayColor: "#000000", overlayOpacity: 30, shadowStrength: 32 },
+    lark: { eyebrow: "", title: app.name, subtitle: "", showDate: true, dateLabel: "", alignment: "left", verticalPosition: "bottom", positionX: 8, positionY: 78, fontPreset: "sans", customFontUrl: "", customFontName: "", titleSize: 42, subtitleSize: 15, letterSpacing: 1, uppercase: false, showDivider: true, contentWidth: 88, textColor: "#ffffff", overlayColor: "#000000", overlayOpacity: 28, shadowStrength: 30 },
+    sage: { eyebrow: "Private mobile gallery", title: app.name, subtitle: "", showDate: true, dateLabel: "", alignment: "center", verticalPosition: "center", positionX: 50, positionY: 50, fontPreset: "mono", customFontUrl: "", customFontName: "", titleSize: 40, subtitleSize: 14, letterSpacing: 3, uppercase: true, showDivider: false, contentWidth: 88, textColor: "#ffffff", overlayColor: "#1f2a25", overlayOpacity: 42, shadowStrength: 24 },
   };
-  return {
-    ...defaults[theme],
-    ...(custom || {}),
-    title: custom?.title || app.name,
-    textColor: custom?.textColor ?? (coverStyle === "full" ? defaults[theme].textColor : ""),
-  };
+  return { ...defaults[theme], ...(custom || {}), title: custom?.title || app.name, textColor: custom?.textColor ?? (coverStyle === "full" ? defaults[theme].textColor : "") };
 }
 
-function fontPreset(preset: ResolvedCoverText["fontPreset"], themeFont: string) {
+function CustomFontStyle({ family, url }: { family: string; url: string }) {
+  const source = `/api/mobile-gallery/font?url=${encodeURIComponent(url)}`;
+  return <style>{`@font-face{font-family:'${family}';src:url('${source}') format('${fontFormat(url)}');font-display:swap;font-style:normal;font-weight:100 900;}`}</style>;
+}
+
+function customFontFamily(app: MobileGalleryApp, text: ResolvedCoverText) {
+  if (text.fontPreset !== "custom" || !text.customFontUrl) return undefined;
+  const key = String(app._id || app.slug || "gallery").replace(/[^a-z0-9_-]/gi, "").slice(0, 32);
+  return `MobileGalleryCustom-${key}`;
+}
+
+function fontPreset(preset: ResolvedCoverText["fontPreset"], themeFont: string, customFamily?: string) {
+  if (preset === "custom" && customFamily) return `'${customFamily}', ${themeFont}`;
   if (preset === "serif") return "Georgia, 'Times New Roman', serif";
   if (preset === "sans") return "Arial, Helvetica, sans-serif";
   if (preset === "mono") return "'Courier New', monospace";
   if (preset === "script") return "'Brush Script MT', 'Segoe Script', cursive";
   return themeFont;
+}
+
+function fontFormat(url: string) {
+  const clean = url.toLowerCase().split(/[?#]/)[0];
+  if (clean.endsWith(".woff2")) return "woff2";
+  if (clean.endsWith(".woff")) return "woff";
+  if (clean.endsWith(".otf")) return "opentype";
+  return "truetype";
 }
 
 function hexToRgba(hex: string, alpha: number) {
