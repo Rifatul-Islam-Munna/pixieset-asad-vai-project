@@ -3,17 +3,13 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Facebook,
   Globe2,
-  Instagram,
-  Linkedin,
   Loader2,
   LockKeyhole,
   Mail,
   MapPin,
   Search,
   Phone,
-  Youtube,
 } from "lucide-react";
 
 export type PublicHomepageCollection = {
@@ -98,10 +94,10 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
   }
 
   const socialItems = [
-    ["instagram", Instagram],
-    ["facebook", Facebook],
-    ["youtube", Youtube],
-    ["linkedin", Linkedin],
+    ["instagram", "IG"],
+    ["facebook", "FB"],
+    ["youtube", "YT"],
+    ["linkedin", "IN"],
   ] as const;
 
   return (
@@ -109,10 +105,21 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
       <header className="mx-auto max-w-[1380px] px-5 pb-10 pt-8 sm:px-10 sm:pt-12">
         <div className="flex items-start justify-between gap-6">
           <div className="flex min-h-10 items-center gap-3">
-            {socialItems.map(([key, Icon]) => {
+            {socialItems.map(([key, label]) => {
               const href = data.socialLinks?.[key];
               if (!href) return null;
-              return <a key={key} href={href} target="_blank" rel="noreferrer" aria-label={key} className="text-[#555] transition hover:text-black"><Icon className="size-4" /></a>;
+              return (
+                <a
+                  key={key}
+                  href={normalizeUrl(href)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={key}
+                  className="flex size-7 items-center justify-center rounded-full border text-[9px] font-black tracking-wide text-[#555] transition hover:border-black hover:text-black"
+                >
+                  {label}
+                </a>
+              );
             })}
           </div>
           <label className="flex items-center gap-2 border-b border-transparent pb-2 focus-within:border-[#111]">
