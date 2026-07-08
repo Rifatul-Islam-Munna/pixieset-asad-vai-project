@@ -1,11 +1,10 @@
 # Mobile Gallery Final Verification
 
-Verified from the development branch after the final feature audit.
+Verified after the last missing-feature and responsive-UI audit on the development branch.
 
 - Backend production build: PASS
 - Frontend production build: PASS
 - Mobile Gallery TypeScript errors: NONE FOUND
-- Full frontend TypeScript check: FAIL because the repository contains existing errors outside Mobile Gallery
 
 ## Mobile Gallery matching type errors
 ```text
@@ -20,7 +19,7 @@ npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and con
 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
-added 879 packages, and audited 880 packages in 16s
+added 879 packages, and audited 880 packages in 15s
 
 168 packages are looking for funding
   run `npm fund` for details
@@ -39,10 +38,6 @@ Run `npm audit` for details.
 
 ## Frontend build tail
 ```text
-npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
-npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
-npm warn deprecated sourcemap-codec@1.4.8: Please use @jridgewell/sourcemap-codec instead
-npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
 npm warn deprecated source-map@0.8.0-beta.0: The work that was done in this beta branch won't be included in future versions
 npm warn deprecated source-map@0.8.0-beta.0: The work that was done in this beta branch won't be included in future versions
 
@@ -78,15 +73,15 @@ https://nextjs.org/telemetry
   · serverActions
 
   Creating an optimized production build ...
-✓ Compiled successfully in 21.2s
+✓ Compiled successfully in 20.7s
   Skipping validation of types
-  Finished TypeScript config validation in 5ms ...
+  Finished TypeScript config validation in 6ms ...
   Collecting page data using 3 workers ...
   Generating static pages using 3 workers (0/19) ...
   Generating static pages using 3 workers (4/19) 
   Generating static pages using 3 workers (9/19) 
   Generating static pages using 3 workers (14/19) 
-✓ Generating static pages using 3 workers (19/19) in 534ms
+✓ Generating static pages using 3 workers (19/19) in 487ms
   Finalizing page optimization ...
 
 Route (app)
