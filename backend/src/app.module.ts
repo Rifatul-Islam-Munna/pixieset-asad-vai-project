@@ -11,6 +11,7 @@ import { CollectionsModule } from './collections/collections.module';
 import { StoreModule } from './store/store.module';
 import { AdminModule } from './admin/admin.module';
 import { HomeCmsModule } from './home-cms/home-cms.module';
+import { MobileGalleryModule } from './mobile-gallery/mobile-gallery.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { HomeCmsModule } from './home-cms/home-cms.module';
     StoreModule,
     AdminModule,
     HomeCmsModule,
+    MobileGalleryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
