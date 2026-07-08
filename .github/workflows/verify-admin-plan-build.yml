@@ -1,0 +1,55 @@
+name: Verify Admin Plan Feature Builds
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.head_ref == 'development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build backend
+        id: backend
+        continue-on-error: true
+        working-directory: backend
+        run: |
+          set -o pipefail
+          (npm ci && npm run build) 2>&1 | tee ../backend-build.log
+
+      - name: Build frontend
+        id: frontend
+        continue-on-error: true
+        working-directory: frontend
+        env:
+          BASE_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_BASE_URL: http://127.0.0.1:4000
+        run: |
+          set -o pipefail
+          (npm ci && npm run build) 2>&1 | tee ../frontend-build.log
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-plan-build-logs
+          path: |
+            backend-build.log
+            frontend-build.log
+
+      - name: Check build result
+        if: steps.backend.outcome == 'failure' || steps.frontend.outcome == 'failure'
+        run: exit 1
