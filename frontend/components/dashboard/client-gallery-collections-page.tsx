@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Grid2X2,
-  Heart,
   Images,
   LayoutList,
   Loader2,
@@ -21,7 +20,6 @@ type ViewMode = "grid" | "list";
 const navigation = [
   ["Collections", Images, "/dashboard/client-gallery"],
   ["Library", Grid2X2, "/dashboard/client-gallery/library"],
-  ["Favorite", Heart, "/dashboard/client-gallery/favorites"],
   ["Starred", Star, "/dashboard/client-gallery/starred"],
   ["Homepage", PanelTop, "/dashboard/client-gallery/homepage"],
   ["Settings", Settings, "/dashboard/client-gallery/settings"],

@@ -121,6 +121,7 @@ import {
   type CollectionImageRecord,
   type CollectionRecord,
 } from "@/api-hooks/use-collections";
+import { PostRequestAxios } from "@/api-hooks/api-hooks";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import { logOutUser } from "@/actions/auth";
 import { checkoutPlan, confirmPlanCheckout, getBillingOverview, recordEmailUsage, type BillingUser } from "@/actions/billing";
@@ -172,7 +173,6 @@ export type DashboardPage =
   | "collections"
   | "collection-new"
   | "library"
-  | "favorites"
   | "starred"
   | "homepage"
   | "settings"
@@ -195,8 +195,7 @@ export type SettingsPage =
   | "presets"
   | "preset-new"
   | "email-templates"
-  | "preferences"
-  | "integrations";
+  | "preferences";
 
 const switcherItems = [
   {
@@ -229,7 +228,6 @@ const sidebarItems = {
   "client-gallery": [
     { label: "Collections", icon: Images, page: "collections" },
     { label: "Library", icon: LayoutGrid, page: "library" },
-    { label: "Favorite", icon: Heart, page: "favorites" },
     { label: "Starred", icon: Star, page: "starred" },
     { label: "Homepage", icon: PanelTop, page: "homepage" },
     { label: "Settings", icon: Settings, page: "settings" },
@@ -272,6 +270,21 @@ const dashboardCopy = {
       "https://images.unsplash.com/photo-1529636798458-92182e662485?auto=format&fit=crop&w=1200&q=80",
   },
 };
+
+async function sendUniversalEmail(payload: {
+  to: string | string[];
+  subject: string;
+  text: string;
+  html?: string;
+  replyTo?: string;
+}) {
+  const [data, error] = await PostRequestAxios<{ data: { sent: boolean; skipped?: boolean; reason?: string } }>(
+    "/mail/send",
+    payload,
+  );
+  if (error || !data) throw new Error(error?.message || "Email send failed");
+  return data.data;
+}
 
 const libraryFilters = [
   {
@@ -680,8 +693,6 @@ export function ClientDashboard({
             <CollectionWizard />
           ) : page === "library" ? (
             <LibraryPanel onNewCollection={startWizard} />
-          ) : page === "favorites" ? (
-            <FavoriteCollectionsPanel />
           ) : page === "starred" ? (
             <StarredPanel />
           ) : section === "store-gallery" && page === "settings" ? (
@@ -763,15 +774,26 @@ function StoreTopNavigation({
                 <ChevronDown className="size-4 text-[#333]" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border bg-white p-3 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
+            <DropdownMenuContent align="start" className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+              <DropdownMenuGroup className="p-5">
               {switcherItems.map((item) => (
-                <DropdownMenuItem key={item.key} asChild className="rounded-none p-0 focus:bg-transparent">
-                  <Link href={item.href} className={cn("block w-full px-4 py-3 hover:bg-[#f5f5f5]", item.key === "store-gallery" && "bg-[#fff4f5]")}>
-                    <span className="block font-bold text-[#151515]">{item.title}</span>
-                    <span className="mt-1 block text-xs leading-5 text-[#777]">{item.text}</span>
+                <DropdownMenuItem key={item.key} asChild className="p-0">
+                  <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
+                    <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
+                    <span className="flex flex-col gap-1">
+                      <span className="font-bold text-[#151515]">{item.title}</span>
+                      <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                    </span>
                   </Link>
                 </DropdownMenuItem>
               ))}
+              </DropdownMenuGroup>
+              <div className="bg-[#f7f7f7] p-5 text-center">
+                <Link href="/dashboard/store-gallery" className="inline-flex items-center gap-2 text-sm text-[#333]">
+                  <LayoutGrid className="size-4 text-[#999]" />
+                  View Dashboard
+                </Link>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -845,7 +867,7 @@ function StoreGetStartedPanel() {
       <div className="mt-3 grid gap-6 text-sm text-[#6a7280] md:grid-cols-2">
         {steps.map((step) => (
           <p key={step.title}>
-            {step.text} <button onClick={() => router.push(step.href)} className="text-[#00a997]">Learn more</button>
+            {step.text}
           </p>
         ))}
       </div>
@@ -1419,6 +1441,22 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
     setSendError("");
     startSendTransition(async () => {
       try {
+        const emails = selectedRecipients.filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
+        if (emails.length) {
+          const body = [
+            campaignMessage,
+            "",
+            campaignButtonText && campaignButtonLink ? `${campaignButtonText}: ${campaignButtonLink}` : "",
+            "",
+            campaignFooterText,
+          ].filter(Boolean).join("\n");
+          await sendUniversalEmail({
+            to: emails,
+            subject: campaignSubject || campaignTemplate,
+            text: body || campaignPreviewText || campaignTemplate,
+          });
+          toast.success("Campaign sent by universal SMTP");
+        }
         await recordEmailUsage(Math.max(1, selectedRecipients.length));
         onClose();
       } catch (error) {
@@ -2326,7 +2364,6 @@ const settingsTabs = [
   { label: "Presets", page: "presets" },
   { label: "Email Templates", page: "email-templates" },
   { label: "Preferences", page: "preferences" },
-  { label: "Integrations", page: "integrations" },
 ] as const;
 
 const watermarkFonts = [
@@ -2407,6 +2444,8 @@ function SettingsPanel({
           <PresetEditor section={section} />
         ) : settingsPage === "email-templates" ? (
           <EmailTemplatesPanel />
+        ) : settingsPage === "preferences" ? (
+          <PreferencesPanel />
         ) : (
           <div className="max-w-[560px] bg-[#fafafa] p-8">
             <p className="font-bold">
@@ -2418,6 +2457,55 @@ function SettingsPanel({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function PreferencesPanel() {
+  return (
+    <div className="max-w-[560px] space-y-12">
+      <FieldGroup>
+        <Field>
+          <FieldLabel className="font-bold">Default Collection Language</FieldLabel>
+          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+            <option>English</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">Select default language for newly created collections.</p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Filename Display</FieldLabel>
+          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+            <option>Show</option>
+            <option>Hide</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">Choose whether filenames show on collection photos.</p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Search Engine Visibility</FieldLabel>
+          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+            <option>Homepage Only</option>
+            <option>All Public Pages</option>
+            <option>Hidden</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">Choose whether collections can be searchable on search engines.</p>
+        </Field>
+        <Field>
+          <FieldLabel className="font-bold">Sharpening Level</FieldLabel>
+          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+            <option>Optimal</option>
+            <option>Low</option>
+            <option>High</option>
+          </select>
+          <p className="text-sm leading-6 text-[#666]">Applies to web display copies only. Originals stay unchanged.</p>
+        </Field>
+      </FieldGroup>
+
+      <FieldGroup>
+        <Field>
+          <FieldLabel className="font-bold">Terms of Service</FieldLabel>
+          <textarea className="min-h-36 rounded-none border bg-white p-4 text-sm" placeholder="Terms shown on collection pages" />
+        </Field>
+      </FieldGroup>
     </div>
   );
 }
@@ -3124,7 +3212,7 @@ function PresetGeneralPanel({
           />
           <p className="text-sm leading-6 text-[#666]">
             Add tags to categorize different collections e.g. wedding, outdoor,
-            summer. <span className="text-[#00a997]">Learn more</span>
+            summer.
           </p>
         </Field>
         <Field>
@@ -3199,7 +3287,7 @@ function PresetGeneralPanel({
                 <span>{general[typedKey] ? "On" : "Off"}</span>
               </div>
               <p className="text-sm leading-6 text-[#666]">
-                {text} <span className="text-[#00a997]">Learn more</span>
+                {text}
               </p>
               {key === "slideshow" && (
                 <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
@@ -3277,8 +3365,7 @@ function PresetFavoritePanel({
             <span>{favorite.favoriteNotes ? "On" : "Off"}</span>
           </div>
           <p className="text-sm leading-6 text-[#666]">
-            Allow clients to add notes to photos they have favorited.{" "}
-            <span className="text-[#00a997]">Learn more</span>
+            Allow clients to add notes to photos they have favorited.
           </p>
         </Field>
         <Field>
@@ -3861,14 +3948,13 @@ function PresetDownloadPanel({
             ))}
           </div>
           <p className="text-sm leading-6 text-[#666]">
-            Allow photos to be downloaded in select sizes.{" "}
-            <span className="text-[#00a997]">Learn more</span>
+            Allow photos to be downloaded in select sizes.
           </p>
         </Field>
 
         <PlanFeatureNotice feature="pinSet" label="Download PIN" />
         {[
-          ["Video Download", "videoDownload", "Allow videos to be downloaded for offline viewing."],
+          ["Video Download", "videoDownload", "Control video download availability."],
           ["Download PIN", "downloadPin", "If enabled, all collections created from this preset will have a download PIN set automatically."],
         ].map(([label, key, text]) => (
           <Field key={key} className={cn(key === "downloadPin" && pinAccess.locked && "pointer-events-none opacity-45")}>
@@ -3884,7 +3970,7 @@ function PresetDownloadPanel({
               <span>{download[key as "videoDownload" | "downloadPin"] ? "On" : "Off"}</span>
             </div>
             <p className="text-sm leading-6 text-[#666]">
-              {text} <span className="text-[#00a997]">Learn more</span>
+              {text}
             </p>
             {key === "downloadPin" && download.downloadPin && (
               <Input
@@ -4438,10 +4524,7 @@ function SearchBox({
           ))}
           <p className="flex items-center gap-2 text-sm text-[#777]">
             <Info className="size-4" />
-            Need help searching?{" "}
-            <button className="text-[#00a997]" onClick={() => onQueryChange("Keyword")}>
-              Learn more
-            </button>
+            Need help searching? Use keywords, gallery names, or file info.
           </p>
         </div>
       </PopoverContent>
@@ -4561,7 +4644,10 @@ async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], 
     context.fillRect(0, 0, width, height);
     context.translate(width / 2 + (width * Number(item.crop.x ?? 0)) / 100, height / 2 + (height * Number(item.crop.y ?? 0)) / 100);
     context.rotate((Number(item.crop.rotation ?? 0) * Math.PI) / 180);
-    const scale = Math.max(width / image.width, height / image.height) * Number(item.crop.zoom ?? 1);
+    const baseScale = item.crop.fit === "contain"
+      ? Math.min(width / image.width, height / image.height)
+      : Math.max(width / image.width, height / image.height);
+    const scale = baseScale * Number(item.crop.zoom ?? 1);
     context.drawImage(image, -image.width * scale / 2, -image.height * scale / 2, image.width * scale, image.height * scale);
 
     const link = document.createElement("a");
@@ -4576,6 +4662,15 @@ async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], 
 function storeCropRatio(value?: string) {
   const [width, height] = String(value || "4:3").split(":").map(Number);
   return width > 0 && height > 0 ? width / height : 4 / 3;
+}
+
+async function downloadStoreOrderImages(order: StoreOrderRecord) {
+  for (const [index, item] of order.items.entries()) {
+    if (item.imageUrl) {
+      await downloadStoreOrderImage(item, `${order.orderNumber}-${index + 1}`);
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+    }
+  }
 }
 
 function StoreOrdersPanel() {
@@ -4719,6 +4814,16 @@ function StoreOrdersPanel() {
           </DialogHeader>
           {viewOrder && (
             <div className="max-h-[70vh] overflow-y-auto pr-1">
+              {viewOrder.items.some((item) => item.imageUrl) && (
+                <button
+                  className="mb-4 inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
+                  onClick={() => void downloadStoreOrderImages(viewOrder)}
+                  type="button"
+                >
+                  <Download className="size-4" />
+                  Download all images
+                </button>
+              )}
               <div className="grid gap-3 text-sm sm:grid-cols-3">
                 <div className="border p-3"><p className="text-xs text-[#777]">Status</p><StatusBadge value={viewOrder.status} /></div>
                 <div className="border p-3"><p className="text-xs text-[#777]">Payment</p><StatusBadge value={viewOrder.paymentStatus} /></div>
@@ -4732,8 +4837,9 @@ function StoreOrdersPanel() {
                         <img
                           src={storeOrderImageSrc(item.imageUrl)}
                           alt={item.name}
-                          className="absolute left-1/2 top-1/2 h-full w-full max-w-none object-cover"
+                          className="absolute left-1/2 top-1/2 h-full w-full max-w-none"
                           style={{
+                            objectFit: item.crop?.fit === "contain" ? "contain" : "cover",
                             transform: item.crop
                               ? `translate(calc(-50% + ${item.crop.x}%), calc(-50% + ${item.crop.y}%)) scale(${item.crop.zoom}) rotate(${item.crop.rotation}deg)`
                               : "translate(-50%, -50%)",
@@ -9223,7 +9329,27 @@ function CollectionActivityPanel({
     if (!mailList) return;
     const template = emailTemplates.find((item) => item.id === selectedMailTemplateId) ?? emailTemplates[0];
     if (!template) return;
+    const body = [
+      template.message,
+      "",
+      `${template.buttonText || "Open Gallery"}: ${publicLink}`,
+      "",
+      template.footerText,
+    ].filter(Boolean).join("\n");
+    const html = [
+      `<h1>${template.title || collectionName}</h1>`,
+      `<p>${template.message || ""}</p>`,
+      `<p><a href="${publicLink}">${template.buttonText || "Open Gallery"}</a></p>`,
+      `<p>${template.footerText || ""}</p>`,
+    ].join("");
+    const result = await sendUniversalEmail({
+      to: mailList.email,
+      subject: template.subject || collectionName,
+      text: body,
+      html,
+    }).catch(() => null);
     await recordEmailUsage(1).catch(() => null);
+    if (result?.sent) toast.success("Email sent by universal SMTP");
     window.sessionStorage.setItem(
       "nikoset-mail-preview",
       JSON.stringify({

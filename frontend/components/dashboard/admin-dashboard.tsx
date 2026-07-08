@@ -1025,6 +1025,20 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
       </div>
 
       <div className="grid gap-5">
+        <CmsSection title="Navbar brand" defaultOpen>
+          <div className="grid gap-4 md:grid-cols-2">
+            <CmsInput label="Brand text" value={form.brand.brandText} onChange={(brandText) => setForm({ ...form, brand: { ...form.brand, brandText } })} />
+            <CmsImageInput label="Logo image" value={form.brand.logoUrl} onChange={(logoUrl) => setForm({ ...form, brand: { ...form.brand, logoUrl } })} onUpload={onUpload} busy={busy} />
+            <CmsInput label="Accent color" value={form.brand.accentColor} onChange={(accentColor) => setForm({ ...form, brand: { ...form.brand, accentColor } })} />
+            {(form.brand.logoUrl || form.brand.brandText) && (
+              <div className="flex items-center gap-3 border bg-[#171918] p-4 text-white">
+                {form.brand.logoUrl && <img src={form.brand.logoUrl} alt="" className="h-10 max-w-32 object-contain" />}
+                {form.brand.brandText && <span className="font-serif text-xl tracking-[0.28em]">{form.brand.brandText}</span>}
+              </div>
+            )}
+          </div>
+        </CmsSection>
+
         <CmsSection title="SEO and auth" defaultOpen>
           <div className="grid gap-5">
             <CmsRepeater title="Site SEO">
@@ -1151,6 +1165,8 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
                 <div key={`${product.title}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
                   <CmsInput label="Title" value={product.title} onChange={(title) => patchProduct(index, { title })} />
                   <CmsInput label="Price" value={product.price} onChange={(price) => patchProduct(index, { price })} />
+                  <CmsInput label="Description" value={product.description ?? ""} onChange={(description) => patchProduct(index, { description })} />
+                  <CmsInput label="Link" value={product.href ?? ""} onChange={(href) => patchProduct(index, { href })} />
                 </div>
               ))}
             </CmsRepeater>

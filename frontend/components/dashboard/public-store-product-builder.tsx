@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Check, ChevronDown, ImageIcon, Minus, Plus, RotateCcw, RotateCw, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -45,6 +45,7 @@ export function PublicStoreProductBuilder({
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [activeCropImageId, setActiveCropImageId] = useState("");
   const [crop, setCrop] = useState<StoreCrop>(defaultCrop("4:3"));
+  const [cropsByImageId, setCropsByImageId] = useState<Record<string, StoreCrop>>({});
   const [infoOpen, setInfoOpen] = useState(true);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function PublicStoreProductBuilder({
     setSelectedImageIds(initialImageId ? [initialImageId] : []);
     setActiveCropImageId(initialImageId ?? "");
     setCrop(defaultCrop(aspectLabel(initialVariant?.label)));
+    setCropsByImageId({});
   }, [initialImageId, open, product]);
 
   if (!open || !product) return null;
@@ -69,6 +71,7 @@ export function PublicStoreProductBuilder({
   const activeCropImage = images.find((image) => image._id === activeCropImageId) ?? selectedImages[0];
   const buyPhotoMode = Boolean(initialImageId && selectedImages.length);
   const price = Number(selectedVariant?.price ?? product.price ?? 0);
+  const activeCropIndex = Math.max(0, selectedImages.findIndex((image) => image._id === activeCropImageId));
 
   const choosePhoto = (imageId: string) => {
     if (!canBulkSelect) {
@@ -94,9 +97,9 @@ export function PublicStoreProductBuilder({
       return;
     }
     if (selectedImages.length) {
-      if (product.allowCrop !== false && selectedImages.length === 1) {
+      if (product.allowCrop !== false) {
         setActiveCropImageId(selectedImages[0]._id);
-        setCrop(defaultCrop(aspectLabel(selectedVariant?.label)));
+        setCrop(cropsByImageId[selectedImages[0]._id] ?? defaultCrop(aspectLabel(selectedVariant?.label)));
         setStep("crop");
         return;
       }
@@ -115,16 +118,16 @@ export function PublicStoreProductBuilder({
       toast.error("Choose at least one photo");
       return;
     }
-    if (product.allowCrop !== false && selectedImages.length === 1) {
+    if (product.allowCrop !== false) {
       setActiveCropImageId(selectedImages[0]._id);
-      setCrop(defaultCrop(aspectLabel(selectedVariant?.label)));
+      setCrop(cropsByImageId[selectedImages[0]._id] ?? defaultCrop(aspectLabel(selectedVariant?.label)));
       setStep("crop");
       return;
     }
     completeAdd(selectedImages);
   };
 
-  const completeAdd = (chosen: PublicStoreImage[], customCrop?: StoreCrop) => {
+  const completeAdd = (chosen: PublicStoreImage[], customCrop?: StoreCrop, customCropsByImageId?: Record<string, StoreCrop>) => {
     const targets = requiresPhoto ? chosen : [undefined];
     const items = targets.map((image) => ({
       id: createCartItemId(product, selectedVariant, image),
@@ -132,12 +135,25 @@ export function PublicStoreProductBuilder({
       variant: selectedVariant,
       image,
       crop: image && product.allowCrop !== false
-        ? customCrop ?? defaultCrop(aspectLabel(selectedVariant?.label))
+        ? customCropsByImageId?.[image._id] ?? customCrop ?? defaultCrop(aspectLabel(selectedVariant?.label))
         : undefined,
       quantity: product.limitOnePerCheckout ? 1 : Math.max(1, quantity),
     }));
     onAdd(items);
     onClose();
+  };
+  const saveActiveCrop = () => {
+    if (!activeCropImage) return cropsByImageId;
+    const next = { ...cropsByImageId, [activeCropImage._id]: crop };
+    setCropsByImageId(next);
+    return next;
+  };
+  const nextCropPhoto = () => {
+    const next = saveActiveCrop();
+    const nextImage = selectedImages[activeCropIndex + 1];
+    if (!nextImage) return completeAdd(selectedImages, undefined, next);
+    setActiveCropImageId(nextImage._id);
+    setCrop(next[nextImage._id] ?? defaultCrop(aspectLabel(selectedVariant?.label)));
   };
 
   return (
@@ -276,26 +292,30 @@ export function PublicStoreProductBuilder({
 
         {step === "crop" && activeCropImage && (
           <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_390px]">
-            <div className="flex min-h-[320px] items-center justify-center bg-[#ececea] p-4 sm:min-h-[420px] sm:p-8">
-              <div
-                className="relative w-full max-w-[720px] overflow-hidden bg-white shadow-xl"
-                style={{ aspectRatio: cropAspectNumber(crop.aspectRatio) }}
-              >
-                <img
-                  src={publicImageSrc(activeCropImage.url)}
-                  alt="Crop preview"
-                  className="absolute left-1/2 top-1/2 h-full w-full max-w-none object-cover"
-                  style={{ transform: `translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom}) rotate(${crop.rotation}deg)` }}
-                />
-                <div className="pointer-events-none absolute inset-0 border border-white/70 shadow-[inset_0_0_0_999px_rgba(0,0,0,0.04)]" />
-              </div>
+            <div className="flex min-h-[320px] flex-col items-center justify-center bg-[#ececea] p-4 sm:min-h-[420px] sm:p-8">
+              <CropCanvas crop={crop} imageUrl={activeCropImage.url} alt="Crop preview" onChange={setCrop} />
+              {selectedImages.length > 1 && (
+                <div className="mt-4 flex max-w-[720px] gap-2 overflow-x-auto">
+                  {selectedImages.map((image, index) => (
+                    <button key={image._id} className={cn("size-14 shrink-0 border bg-white p-1", image._id === activeCropImage._id && "border-[#222]")} onClick={() => {
+                      const next = saveActiveCrop();
+                      setActiveCropImageId(image._id);
+                      setCrop(next[image._id] ?? defaultCrop(aspectLabel(selectedVariant?.label)));
+                    }}>
+                      <img src={publicImageSrc(image.thumbnailUrl || image.url)} alt="" className="h-full w-full object-cover" />
+                      <span className="sr-only">Photo {index + 1}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="p-5 sm:p-7 md:p-9">
               <h3 className="text-2xl font-normal">Adjust your photo</h3>
-              <p className="mt-3 text-sm leading-6 text-[#666]">Move, zoom and rotate the photograph to fit the selected product ratio.</p>
-              <CropSlider label="Horizontal" min={-50} max={50} step={1} value={crop.x} onChange={(x) => setCrop((value) => ({ ...value, x }))} />
-              <CropSlider label="Vertical" min={-50} max={50} step={1} value={crop.y} onChange={(y) => setCrop((value) => ({ ...value, y }))} />
-              <CropSlider label="Zoom" min={1} max={3} step={0.05} value={crop.zoom} onChange={(zoom) => setCrop((value) => ({ ...value, zoom }))} />
+              <p className="mt-3 text-sm leading-6 text-[#666]">Whole photo shows first. Drag directly, zoom in or out, rotate, then save.</p>
+              {selectedImages.length > 1 && <p className="mt-2 text-xs font-semibold text-[#777]">Photo {activeCropIndex + 1} of {selectedImages.length}</p>}
+              <CropSlider label="Horizontal" min={-100} max={100} step={1} value={crop.x} onChange={(x) => setCrop((value) => ({ ...value, x }))} />
+              <CropSlider label="Vertical" min={-100} max={100} step={1} value={crop.y} onChange={(y) => setCrop((value) => ({ ...value, y }))} />
+              <CropSlider label="Zoom" min={0.2} max={4} step={0.05} value={crop.zoom} onChange={(zoom) => setCrop((value) => ({ ...value, zoom }))} />
               <div className="mt-7">
                 <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#777]">Rotation</p>
                 <div className="flex gap-2">
@@ -309,8 +329,8 @@ export function PublicStoreProductBuilder({
               </div>
               <div className="mt-9 flex gap-3">
                 <button className="h-12 flex-1 border text-sm" onClick={() => setStep("product")}>Back</button>
-                <button className="h-12 flex-[1.4] bg-[#2f2f2f] text-sm font-semibold text-white" onClick={() => completeAdd([activeCropImage], crop)}>
-                  Add to Cart
+                <button className="h-12 flex-[1.4] bg-[#2f2f2f] text-sm font-semibold text-white" onClick={nextCropPhoto}>
+                  {selectedImages.length > 1 && activeCropIndex < selectedImages.length - 1 ? "Next Photo" : "Add to Cart"}
                 </button>
               </div>
             </div>
@@ -364,6 +384,58 @@ function CropSlider({ label, min, max, step, value, onChange }: { label: string;
   );
 }
 
+function CropCanvas({
+  crop,
+  imageUrl,
+  alt,
+  onChange,
+}: {
+  crop: StoreCrop;
+  imageUrl?: string;
+  alt: string;
+  onChange: (crop: StoreCrop) => void;
+}) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ x: number; y: number; cropX: number; cropY: number } | null>(null);
+  const move = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    const frame = frameRef.current;
+    if (!drag || !frame) return;
+    const rect = frame.getBoundingClientRect();
+    const dx = ((event.clientX - drag.x) / rect.width) * 100;
+    const dy = ((event.clientY - drag.y) / rect.height) * 100;
+    onChange({ ...crop, x: clamp(drag.cropX + dx, -100, 100), y: clamp(drag.cropY + dy, -100, 100) });
+  };
+
+  return (
+    <div
+      ref={frameRef}
+      className="relative w-full max-w-[720px] touch-none overflow-hidden bg-white shadow-xl"
+      style={{ aspectRatio: cropAspectNumber(crop.aspectRatio) }}
+      onPointerDown={(event) => {
+        dragRef.current = { x: event.clientX, y: event.clientY, cropX: crop.x, cropY: crop.y };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={move}
+      onPointerUp={() => { dragRef.current = null; }}
+      onPointerCancel={() => { dragRef.current = null; }}
+    >
+      <img
+        src={publicImageSrc(imageUrl)}
+        alt={alt}
+        className="absolute left-1/2 top-1/2 h-full w-full max-w-none cursor-grab object-contain active:cursor-grabbing"
+        draggable={false}
+        style={{ transform: `translate(calc(-50% + ${crop.x}%), calc(-50% + ${crop.y}%)) scale(${crop.zoom}) rotate(${crop.rotation}deg)` }}
+      />
+      <div className="pointer-events-none absolute inset-0 border border-white/70 shadow-[inset_0_0_0_999px_rgba(0,0,0,0.04)]" />
+    </div>
+  );
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function aspectLabel(label?: string) {
   const match = String(label ?? "").match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
   return match ? `${match[1]}:${match[2]}` : "4:3";
@@ -375,5 +447,5 @@ function cropAspectNumber(value: string) {
 }
 
 function defaultCrop(aspectRatio: string): StoreCrop {
-  return { x: 0, y: 0, width: 100, height: 100, zoom: 1, rotation: 0, aspectRatio };
+  return { x: 0, y: 0, width: 100, height: 100, zoom: 1, rotation: 0, aspectRatio, fit: "contain" };
 }

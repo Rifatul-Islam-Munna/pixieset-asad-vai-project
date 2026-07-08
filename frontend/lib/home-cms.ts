@@ -86,7 +86,7 @@ export type HomeContent = {
   nav: { brand: string; products: string; examples: string; pricing: string; login: string; cta: string };
   hero: { eyebrow: string; title: string; subtitle: string; cta: string };
   gallery: { title: string; subtitle: string; tabs: GalleryTab[]; productTabs: string[]; cartLabel: string };
-  products: { title: string; price: string }[];
+  products: { title: string; price: string; description?: string; href?: string }[];
   workflow: { eyebrow: string; title: string; subtitle: string; tabs: GalleryTab[]; cardText: string };
   testimonials: { eyebrow: string; title: string; subtitle: string; items: Testimonial[] };
   cta: { title: string; subtitle: string; button: string; desktopName: string; desktopSubtitle: string; invoiceTitle: string; invoiceText: string; galleryName: string; images: string[] };
@@ -164,9 +164,9 @@ export const defaultHomeCms: HomeCmsData = {
         ],
       },
       products: [
-        { title: "Canvas", price: "From $130.00" },
-        { title: "Metal Print", price: "From $66.00" },
-        { title: "Standout", price: "From $50.00" },
+        { title: "Client Gallery", price: "Share, deliver, proof and sell", description: "Beautiful client collections with favorites, downloads and face search.", href: "/dashboard/client-gallery" },
+        { title: "Store Gallery", price: "Prints and downloads", description: "Sell print products, digital downloads and wall art from any collection.", href: "/dashboard/store-gallery" },
+        { title: "Mobile Gallery App", price: "Installable photo apps", description: "Create mobile-first gallery apps clients can save to their phones.", href: "/dashboard/mobile-gallery" },
       ],
       workflow: {
         eyebrow: "DESIGNED FOR EVERY WORKFLOW",
@@ -242,6 +242,17 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
   if (!Array.isArray(seo.extraMetaTags)) seo.extraMetaTags = [];
   if (seo.twitterCard !== "summary") seo.twitterCard = "summary_large_image";
 
+  const content = {
+    en: { ...defaultHomeCms.content.en, ...(data?.content?.en ?? {}) },
+    gr: { ...defaultHomeCms.content.gr, ...(data?.content?.gr ?? {}) },
+  };
+  (["en", "gr"] as HomeLanguage[]).forEach((lang) => {
+    const titles = content[lang].products?.map((product) => product.title).join("|");
+    if (titles === "Canvas|Metal Print|Standout") {
+      content[lang].products = defaultHomeCms.content[lang].products;
+    }
+  });
+
   return {
     defaultLanguage: data?.defaultLanguage === "gr" ? "gr" : "en",
     seo,
@@ -249,9 +260,6 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     brand: { ...defaultHomeCms.brand, ...(data?.brand ?? {}) },
     coverTemplates: Array.isArray(data?.coverTemplates) ? data.coverTemplates : [],
     media,
-    content: {
-      en: { ...defaultHomeCms.content.en, ...(data?.content?.en ?? {}) },
-      gr: { ...defaultHomeCms.content.gr, ...(data?.content?.gr ?? {}) },
-    },
+    content,
   };
 }

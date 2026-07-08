@@ -235,6 +235,7 @@ export class StorePricingService {
       zoom: Number(input.zoom ?? 1),
       rotation: Number(input.rotation ?? 0),
       aspectRatio: String(input.aspectRatio ?? ''),
+      fit: input.fit === 'cover' ? 'cover' : 'contain',
     };
   }
 

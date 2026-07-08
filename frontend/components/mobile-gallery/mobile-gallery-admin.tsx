@@ -9,6 +9,7 @@ import {
   ChevronDown,
   GripVertical,
   ImagePlus,
+  LayoutGrid,
   Plus,
   Search,
   Share2,
@@ -34,6 +35,27 @@ import { MobileGalleryPreviewScreen } from "./mobile-gallery-preview-screen";
 type View = "apps" | "settings" | "editor" | "preview" | "share";
 type EditorTab = "photos" | "design" | "app-settings";
 
+const switcherItems = [
+  {
+    title: "Client Gallery",
+    text: "Better way to share, deliver, proof and sell",
+    href: "/dashboard/client-gallery",
+    accent: "from-[#0dc6b5] to-[#9de7de]",
+  },
+  {
+    title: "Store Gallery",
+    text: "Your online store for prints and downloads",
+    href: "/dashboard/store-gallery",
+    accent: "from-[#ff4f5d] to-[#ffc7cd]",
+  },
+  {
+    title: "Mobile Gallery App",
+    text: "Create installable mobile-first photo apps",
+    href: "/dashboard/mobile-gallery",
+    accent: "from-[#f5c421] to-[#ffe99a]",
+  },
+];
+
 export function MobileGalleryDashboard({ view, appId }: { view: View; appId?: string }) {
   if (view === "apps") return <AppsPage />;
   if (view === "settings") return <ProfileSettingsPage />;
@@ -52,10 +74,24 @@ function TopBar({ active }: { active: "apps" | "settings" }) {
               <span className="truncate">Mobile Gallery App</span><ChevronDown className="size-4 shrink-0" />
             </button>
             {switcherOpen && (
-              <div className="absolute left-0 top-11 z-50 w-[calc(100vw-2rem)] max-w-[340px] border bg-white p-3 shadow-xl">
-                <Link href="/dashboard/client-gallery" className="block px-4 py-3 hover:bg-[#f5f5f5]"><b>Client Gallery</b><span className="mt-1 block text-xs text-[#777]">Share and deliver client collections</span></Link>
-                <Link href="/dashboard/store-gallery" className="block px-4 py-3 hover:bg-[#f5f5f5]"><b>Store Gallery</b><span className="mt-1 block text-xs text-[#777]">Sell prints and downloads</span></Link>
-                <Link href="/dashboard/mobile-gallery" className="block bg-[#f4fffc] px-4 py-3"><b>Mobile Gallery App</b><span className="mt-1 block text-xs text-[#777]">Installable event photo apps</span></Link>
+              <div className="absolute left-0 top-11 z-50 w-[calc(100vw-2rem)] max-w-[340px] bg-white shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+                <div className="p-5">
+                  {switcherItems.map((item) => (
+                    <Link key={item.title} href={item.href} className="flex gap-4 px-2 py-4 hover:bg-[#f7f7f7]">
+                      <span className={`mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br ${item.accent}`} />
+                      <span className="flex flex-col gap-1">
+                        <span className="font-bold text-[#151515]">{item.title}</span>
+                        <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+                <div className="bg-[#f7f7f7] p-5 text-center">
+                  <Link href="/dashboard/mobile-gallery" className="inline-flex items-center gap-2 text-sm text-[#333]">
+                    <LayoutGrid className="size-4 text-[#999]" />
+                    View Dashboard
+                  </Link>
+                </div>
               </div>
             )}
           </div>
