@@ -17,20 +17,20 @@ def replace_after(text: str, anchor: str, old: str, new: str, label: str) -> str
     return text[:position] + new + text[position + len(old):]
 
 
-# Backend collection publication rules.
+# ---------------------------------------------------------------------------
+# Backend: Draft/Published is the collection publication state.
+# ---------------------------------------------------------------------------
 path = Path("backend/src/collections/collections.service.ts")
 text = path.read_text()
 text = replace_once(
     text,
     """      presetId: safeDto.presetId,
       design: safeDto.design ?? {},
-      settings: safeDto.settings ?? {},
-      sets: [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],""",
+      settings: safeDto.settings ?? {},""",
     """      presetId: safeDto.presetId,
       status: safeDto.status ?? 'draft',
       design: safeDto.design ?? {},
-      settings: safeDto.settings ?? {},
-      sets: [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],""",
+      settings: safeDto.settings ?? {},""",
     "create collection status",
 )
 text = replace_once(
@@ -53,7 +53,7 @@ text = replace_once(
     """    const collection = await this.findCollectionByIdentifier(identifier);
     if (collection.status !== 'published') throw new NotFoundException('Collection not found');
     const email = String(body?.email ?? '').trim().toLowerCase();""",
-    "public download status",
+    "public collection download status",
 )
 text = replace_once(
     text,
@@ -67,7 +67,10 @@ text = replace_once(
 text = text.replace("status: source.status ?? 'draft',", "status: 'draft',")
 path.write_text(text)
 
-# Frontend collection mutation payload.
+
+# ---------------------------------------------------------------------------
+# Frontend API payload supports publication status when creating collections.
+# ---------------------------------------------------------------------------
 path = Path("frontend/api-hooks/use-collections.ts")
 text = path.read_text()
 text = replace_once(
@@ -77,18 +80,21 @@ text = replace_once(
     """      presetId?: string;
       status?: \"draft\" | \"published\";
       design?: Record<string, any>;""",
-    "create collection hook status",
+    "collection create hook status",
 )
 path.write_text(text)
 
-# Client dashboard integration.
+
+# ---------------------------------------------------------------------------
+# Client Gallery: real Homepage settings and explicit Draft/Published controls.
+# ---------------------------------------------------------------------------
 path = Path("frontend/components/dashboard/client-dashboard.tsx")
 text = path.read_text()
 text = replace_once(
     text,
     'import { PlanFeatureLock, PlanFeatureNotice } from "@/components/dashboard/plan-feature-lock";\n',
     'import { PlanFeatureLock, PlanFeatureNotice } from "@/components/dashboard/plan-feature-lock";\nimport { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";\n',
-    "homepage panel import",
+    "homepage settings import",
 )
 
 start = text.find("function HomepageSettings() {")
@@ -97,13 +103,17 @@ if start < 0 or end < 0:
     raise RuntimeError("HomepageSettings block not found")
 text = text[:start] + "function HomepageSettings() {\n  return <HomepageSettingsPanel />;\n}\n" + text[end:]
 
-# Status belongs only to publication. Starred remains a separate settings flag.
-text = text.replace('(collection.status === "starred" || collection.settings?.starred === true)', 'collection.settings?.starred === true')
+# Starred is an independent settings flag; status is reserved for publication.
+text = text.replace(
+    '(collection.status === "starred" || collection.settings?.starred === true)',
+    'collection.settings?.starred === true',
+)
+
 text = replace_once(
     text,
     '  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "" });',
     '  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "", status: "draft" as "draft" | "published" });',
-    "quick form status",
+    "quick form status state",
 )
 text = replace_once(
     text,
@@ -116,7 +126,7 @@ text = replace_once(
       eventDate: quickEdit.eventDate ? quickEdit.eventDate.slice(0, 10) : "",
       status: quickEdit.status === "published" ? "published" : "draft",
     });""",
-    "hydrate quick status",
+    "quick form hydration",
 )
 text = replace_once(
     text,
@@ -125,15 +135,15 @@ text = replace_once(
     """        name: quickForm.name.trim(),
         eventDate: quickForm.eventDate || undefined,
         status: quickForm.status,""",
-    "save quick status",
+    "quick form save status",
 )
 text = replace_once(
     text,
     '            <DialogDescription>Rename collection and update event date.</DialogDescription>',
     '            <DialogDescription>Rename the collection and choose Draft or Published.</DialogDescription>',
-    "quick edit description",
+    "quick edit copy",
 )
-quick_status = '''            <Field>
+quick_status_field = '''            <Field>
               <FieldLabel htmlFor="quick-status">Collection Status</FieldLabel>
               <select
                 id="quick-status"
@@ -149,38 +159,31 @@ quick_status = '''            <Field>
 '''
 text = replace_after(
     text,
-    "<DialogTitle>Quick edit</DialogTitle>",
-    "          </FieldGroup>",
-    quick_status + "          </FieldGroup>",
-    "quick status field",
+    '<DialogTitle>Quick edit</DialogTitle>',
+    '          </FieldGroup>',
+    quick_status_field + '          </FieldGroup>',
+    "quick edit status field",
 )
-text = replace_once(
-    text,
-    """  const toggleCollectionStar = (collection: CollectionRecord) => {
-    const isStarred = collection.status === "starred" || collection.settings?.starred === true;
-    const nextStatus = isStarred ? (collection.status === "starred" ? "draft" : collection.status) : "starred";
-    const nextSettings = {
-      ...(collection.settings ?? {}),
-      starred: !isStarred,
-    };
-    updateCollection.mutate({
-      collectionId: collection._id,
-      payload: { status: nextStatus, settings: nextSettings },
-    });
-  };""",
-    """  const toggleCollectionStar = (collection: CollectionRecord) => {
+
+star_start = text.find("  const toggleCollectionStar = (collection: CollectionRecord) => {")
+star_end = text.find("  const removeCollection =", star_start)
+if star_start < 0 or star_end < 0:
+    raise RuntimeError("Collection star function not found")
+star_function = '''  const toggleCollectionStar = (collection: CollectionRecord) => {
     const isStarred = collection.settings?.starred === true;
-    const nextSettings = {
-      ...(collection.settings ?? {}),
-      starred: !isStarred,
-    };
     updateCollection.mutate({
       collectionId: collection._id,
-      payload: { settings: nextSettings },
+      payload: {
+        settings: {
+          ...(collection.settings ?? {}),
+          starred: !isStarred,
+        },
+      },
     });
-  };""",
-    "separate star and status",
-)
+  };
+'''
+text = text[:star_start] + star_function + text[star_end:]
+
 text = replace_once(
     text,
     """  const openCollectionPreview = (collection: CollectionRecord) => {
@@ -204,12 +207,17 @@ text = replace_once(
     "preview and share publication guard",
 )
 
-# New collections can begin as draft or published.
+# New collection form.
+text = text.replace(
+    '  const coverImageAccess = usePlanFeatureAccess("coverImage");\n',
+    '',
+    1,
+)
 text = replace_once(
     text,
     '  const [form, setForm] = useState({ name: "", eventDate: "", presetId: "" });',
     '  const [form, setForm] = useState({ name: "", eventDate: "", presetId: "", status: "draft" as "draft" | "published" });',
-    "new collection form status",
+    "new collection status state",
 )
 text = replace_once(
     text,
@@ -218,9 +226,9 @@ text = replace_once(
     """        presetId: form.presetId || undefined,
         status: form.status,
         design,""",
-    "new collection payload status",
+    "new collection status payload",
 )
-new_status = '''          <Field>
+new_status_field = '''          <Field>
             <FieldLabel htmlFor="new-status" className="font-bold">Collection Status</FieldLabel>
             <select
               id="new-status"
@@ -237,40 +245,51 @@ new_status = '''          <Field>
 text = replace_after(
     text,
     "function CollectionNewPanel",
-    "          <Field>\n            <FieldLabel htmlFor=\"new-preset\"",
-    new_status + "          <Field>\n            <FieldLabel htmlFor=\"new-preset\"",
+    '          <Field>\n            <FieldLabel htmlFor="new-preset"',
+    new_status_field + '          <Field>\n            <FieldLabel htmlFor="new-preset"',
     "new collection status field",
 )
 
-# Collection detail status state and save control.
-text = replace_once(
+# Collection detail form.
+detail_anchor = "function CollectionDetailView({"
+text = replace_after(
     text,
-    """  const [form, setForm] = useState(() => collectionForm(collection));
-  const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));""",
-    """  const [form, setForm] = useState(() => collectionForm(collection));
-  const [collectionStatus, setCollectionStatus] = useState<"draft" | "published">(collection?.status === "published" ? "published" : "draft");
-  const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));""",
-    "detail collection status state",
+    detail_anchor,
+    "  const router = useRouter();\n",
+    "  const router = useRouter();\n  const coverImageAccess = usePlanFeatureAccess(\"coverImage\");\n",
+    "detail cover access",
 )
-text = replace_once(
+text = replace_after(
     text,
+    detail_anchor,
+    """  const [form, setForm] = useState(() => collectionForm(collection));
+  const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));""",
+    """  const [form, setForm] = useState(() => collectionForm(collection));
+  const [collectionStatus, setCollectionStatus] = useState<\"draft\" | \"published\">(collection?.status === \"published\" ? \"published\" : \"draft\");
+  const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));""",
+    "detail status state",
+)
+text = replace_after(
+    text,
+    detail_anchor,
     """    syncedCollectionFormKeyRef.current = nextFormKey;
     setForm(nextForm);""",
     """    syncedCollectionFormKeyRef.current = nextFormKey;
     setForm(nextForm);
-    setCollectionStatus(collection.status === "published" ? "published" : "draft");""",
-    "sync detail status",
+    setCollectionStatus(collection.status === \"published\" ? \"published\" : \"draft\");""",
+    "detail status synchronization",
 )
-text = replace_once(
+text = replace_after(
     text,
+    detail_anchor,
     """      expiresAt: form.expiresAt || undefined,
       design: form.design,""",
     """      expiresAt: form.expiresAt || undefined,
       status: collectionStatus,
       design: form.design,""",
-    "save detail status",
+    "detail status save payload",
 )
-detail_status = '''                <Field>
+detail_status_field = '''                <Field>
                   <FieldLabel htmlFor="collection-status" className="font-bold">Collection Status</FieldLabel>
                   <select
                     id="collection-status"
@@ -287,8 +306,8 @@ detail_status = '''                <Field>
 text = replace_after(
     text,
     '<h2 className="text-2xl font-medium">General Settings</h2>',
-    "                <Field>\n                  <FieldLabel className=\"font-bold\">Expire Date</FieldLabel>",
-    detail_status + "                <Field>\n                  <FieldLabel className=\"font-bold\">Expire Date</FieldLabel>",
+    '                <Field>\n                  <FieldLabel className="font-bold">Expire Date</FieldLabel>',
+    detail_status_field + '                <Field>\n                  <FieldLabel className="font-bold">Expire Date</FieldLabel>',
     "detail status field",
 )
 
