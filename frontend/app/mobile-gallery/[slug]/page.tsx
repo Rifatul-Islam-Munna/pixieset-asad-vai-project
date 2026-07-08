@@ -20,11 +20,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const app = await getApp(slug);
   if (!app) return { title: "Mobile Gallery" };
+  const icon192 = `/mobile-gallery/${app.slug}/icon/192`;
+  const icon512 = `/mobile-gallery/${app.slug}/icon/512`;
   return {
     title: app.name,
     description: `Install and view the ${app.name} mobile photo gallery.`,
     manifest: `/mobile-gallery/${app.slug}/manifest.webmanifest`,
-    icons: app.iconUrl ? { icon: app.iconUrl, apple: app.iconUrl } : undefined,
+    icons: { icon: [{ url: icon192, sizes: "192x192" }, { url: icon512, sizes: "512x512" }], apple: icon192 },
     appleWebApp: { capable: true, title: app.name, statusBarStyle: "black-translucent" },
     openGraph: {
       title: app.name,
