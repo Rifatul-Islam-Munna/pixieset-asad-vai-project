@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { unlink } from 'fs/promises';
 import { Model } from 'mongoose';
+import { extname } from 'path';
 import { MinioService } from 'src/lib/minio.service';
 import { MobileGalleryApp, MobileGalleryAppDocument } from './entities/mobile-gallery-app.entity';
 import { MobileGalleryImage, MobileGalleryImageDocument } from './entities/mobile-gallery-image.entity';
@@ -15,6 +16,7 @@ const defaultDesign = {
   gridStyle: 'masonry',
   backgroundColor: '#ffffff',
   textColor: '#222222',
+  coverText: {},
 };
 
 const defaultSettings = {
@@ -98,6 +100,8 @@ export class MobileGalleryService {
     const images = await this.imageModel.find({ appId: id, userId }).select({ url: 1 }).lean();
     const filesToDelete = new Set<string>(images.map((image) => image.url).filter(Boolean));
     if (app.iconUrl) filesToDelete.add(app.iconUrl);
+    const customFontUrl = String((app.design as any)?.coverText?.customFontUrl || '');
+    if (customFontUrl) filesToDelete.add(customFontUrl);
 
     await Promise.all([
       this.imageModel.deleteMany({ appId: id, userId }),
@@ -178,14 +182,20 @@ export class MobileGalleryService {
 
   async uploadAsset(userId: string, file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('File is required');
-    this.assertImageFiles([file]);
+    this.assertAssetFile(file);
     let url = '';
     try {
       url = await this.minioService.uploadFile(file);
     } finally {
       await unlink(file.path).catch(() => null);
     }
-    return { url, userId };
+    return {
+      url,
+      userId,
+      originalName: file.originalname,
+      mimetype: file.mimetype,
+      kind: this.isFontFile(file) ? 'font' : 'image',
+    };
   }
 
   async getSettings(userId: string) {
@@ -226,6 +236,27 @@ export class MobileGalleryService {
   private assertImageFiles(files: Express.Multer.File[]) {
     const invalid = files.find((file) => !String(file.mimetype || '').toLowerCase().startsWith('image/'));
     if (invalid) throw new BadRequestException(`${invalid.originalname || 'File'} is not a supported image`);
+  }
+
+  private assertAssetFile(file: Express.Multer.File) {
+    if (String(file.mimetype || '').toLowerCase().startsWith('image/')) return;
+    if (this.isFontFile(file)) return;
+    throw new BadRequestException(`${file.originalname || 'File'} must be an image or a WOFF, WOFF2, TTF, or OTF font`);
+  }
+
+  private isFontFile(file: Express.Multer.File) {
+    const extension = extname(file.originalname || file.filename || '').toLowerCase();
+    const mime = String(file.mimetype || '').toLowerCase();
+    return ['.woff', '.woff2', '.ttf', '.otf'].includes(extension) || [
+      'font/woff',
+      'font/woff2',
+      'font/ttf',
+      'font/otf',
+      'application/font-woff',
+      'application/x-font-ttf',
+      'application/x-font-opentype',
+      'application/octet-stream',
+    ].includes(mime) && ['.woff', '.woff2', '.ttf', '.otf'].includes(extension);
   }
 
   private async uniqueSlug(name: string) {
