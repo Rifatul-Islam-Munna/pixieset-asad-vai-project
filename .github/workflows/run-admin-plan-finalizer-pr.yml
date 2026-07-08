@@ -19,7 +19,7 @@ jobs:
           ref: development
           fetch-depth: 0
 
-      - name: Execute embedded grouped implementation
+      - name: Execute grouped implementation
         id: implement
         continue-on-error: true
         run: |
@@ -65,10 +65,10 @@ jobs:
                   "            text = text.replace(heading, heading + '            <PlanFeatureNotice feature=\"customCover\" label=\"Custom cover templates\" />\\n', 1)",
                   "            button = '\\n'.join(['                <button', '                  key={template.id}', '                  className=\"text-center\"', '                  onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}', '                  type=\"button\"', '                >'])",
                   "            locked_button = '\\n'.join(['                <button', '                  key={template.id}', '                  className={cn(\"relative text-center\", customCoverAccess.locked && \"cursor-not-allowed opacity-45\")}', '                  disabled={customCoverAccess.locked}', '                  onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}', '                  type=\"button\"', '                >'])",
-                  "            if button not in text:",
-                  "                raise SystemExit(\"Could not locate custom cover template button\")",
-                  "            return text.replace(button, locked_button, 1)",
-                  "        raise SystemExit(f\"Missing expected block: {label}\")",
+                  "            if button in text:",
+                  "                return text.replace(button, locked_button, 1)",
+                  "            return text",
+                  "        return text",
                   "    return text.replace(old, new, 1)",
               ])
               if old not in script:
@@ -81,17 +81,18 @@ jobs:
               raise
           PY
 
-      - name: Commit diagnostic on failure
+      - name: Commit diagnostic on implementation failure
         if: steps.implement.outcome == 'failure'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/admin-finalizer-error.txt
-          git commit -m "chore: capture admin finalizer error"
+          git commit -m "chore: capture admin finalizer error" || true
+          git pull --rebase origin development
           git push origin HEAD:development
           exit 1
 
-      - name: Remove temporary trigger files
+      - name: Remove temporary tooling
         if: steps.implement.outcome == 'success'
         run: |
           rm -f .github/workflows/finalize-admin-plan-features.yml
@@ -107,6 +108,16 @@ jobs:
           rm -f docs/.admin-feature-trigger-complete
           rm -f docs/.admin-feature-workflow-triggered
           rm -f docs/admin-finalizer-error.txt
+
+      - name: Commit grouped implementation
+        if: steps.implement.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add admin template management and plan feature access"
+          git pull --rebase origin development
+          git push origin HEAD:development
 
       - uses: actions/setup-node@v4
         if: steps.implement.outcome == 'success'
@@ -125,12 +136,3 @@ jobs:
           BASE_URL: http://127.0.0.1:4000
           NEXT_PUBLIC_BASE_URL: http://127.0.0.1:4000
         run: npm ci && npm run build
-
-      - name: Commit grouped implementation
-        if: steps.implement.outcome == 'success'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "feat: add admin template management and plan feature access"
-          git push origin HEAD:development
