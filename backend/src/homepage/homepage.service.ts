@@ -91,16 +91,14 @@ export class HomepageService {
       };
     }
 
-    const sort = homepage.sortOrder === 'oldest'
-      ? { createdAt: 1 as const }
-      : homepage.sortOrder === 'name'
-        ? { name: 1 as const }
-        : { createdAt: -1 as const };
-
-    const collections = await this.collectionModel
-      .find({ userId: homepage.userId, status: 'published' })
-      .sort(sort)
-      .lean();
+    const query = this.collectionModel.find({
+      userId: homepage.userId,
+      status: 'published',
+    });
+    if (homepage.sortOrder === 'oldest') query.sort('createdAt');
+    else if (homepage.sortOrder === 'name') query.sort('name');
+    else query.sort('-createdAt');
+    const collections = await query.lean();
 
     const collectionIds = collections.map((collection) => collection._id.toString());
     const images = collectionIds.length
