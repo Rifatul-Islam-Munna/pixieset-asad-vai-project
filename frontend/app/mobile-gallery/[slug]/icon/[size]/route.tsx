@@ -4,7 +4,8 @@ const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "htt
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string; size: string }> }) {
   const { slug, size: rawSize } = await params;
-  const size = rawSize === "512" ? 512 : 192;
+  const requested = Number(rawSize);
+  const size = [180, 192, 512].includes(requested) ? requested : 192;
   const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(slug)}`, { cache: "no-store" }).catch(() => null);
   const payload = response?.ok ? await response.json().catch(() => null) : null;
   const app = payload?.data;
@@ -33,6 +34,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
         )}
       </div>
     ),
-    { width: size, height: size },
+    { width: size, height: size, headers: { "cache-control": "public, max-age=300" } },
   );
 }
