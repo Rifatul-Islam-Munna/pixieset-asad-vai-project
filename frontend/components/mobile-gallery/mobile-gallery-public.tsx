@@ -17,13 +17,7 @@ import {
   X,
 } from "lucide-react";
 import type { MobileGalleryApp, MobileGalleryImage, MobileGalleryProfile } from "@/api-hooks/use-mobile-gallery";
-
-const themeStyles = {
-  echo: { fontFamily: "Georgia, serif", titleClass: "tracking-[0.16em] uppercase", align: "text-center" },
-  spring: { fontFamily: "'Times New Roman', serif", titleClass: "italic tracking-wide", align: "text-left" },
-  lark: { fontFamily: "Arial, sans-serif", titleClass: "font-semibold tracking-[0.04em]", align: "text-left" },
-  sage: { fontFamily: "'Courier New', monospace", titleClass: "uppercase tracking-[0.18em]", align: "text-center" },
-} as const;
+import { MobileGalleryCover, mobileGalleryThemes } from "./mobile-gallery-cover";
 
 type DeferredPrompt = Event & {
   prompt: () => Promise<void>;
@@ -43,12 +37,15 @@ export function MobileGalleryPublic({
 }) {
   const images = app.images ?? [];
   const design = app.design ?? {};
-  const theme = themeStyles[design.theme ?? "lark"];
+  const theme = mobileGalleryThemes[design.theme ?? "lark"];
   const [tab, setTab] = useState<PublicTab>("home");
   const [favorites, setFavorites] = useState<string[]>([]);
   const [activeImage, setActiveImage] = useState<MobileGalleryImage | null>(null);
   const [installOpen, setInstallOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<DeferredPrompt | null>(null);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -74,6 +71,14 @@ export function MobileGalleryPublic({
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  useEffect(() => {
+    const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean };
+    const appleMobile = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    setIsIOS(appleMobile);
+    setIsStandalone(Boolean(navigatorWithStandalone.standalone) || window.matchMedia("(display-mode: standalone)").matches);
   }, []);
 
   useEffect(() => {
@@ -166,25 +171,34 @@ export function MobileGalleryPublic({
     setNotice("Gallery link copied");
   };
 
+  const openInstall = () => {
+    setShowInstallHelp(false);
+    setInstallOpen(true);
+  };
+
   const install = async () => {
-    if (installPrompt) {
-      await installPrompt.prompt();
-      await installPrompt.userChoice.catch(() => null);
+    if (!installPrompt) {
+      setShowInstallHelp(true);
+      return;
     }
-    localStorage.setItem(`mobile-gallery-install-seen:${app.slug}`, "1");
-    setInstallOpen(false);
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice.catch(() => null);
+    if (choice?.outcome === "accepted") {
+      setIsStandalone(true);
+      localStorage.setItem(`mobile-gallery-install-seen:${app.slug}`, "1");
+      setInstallOpen(false);
+    }
+    setInstallPrompt(null);
   };
 
   const dismissInstall = () => {
     localStorage.setItem(`mobile-gallery-install-seen:${app.slug}`, "1");
+    setShowInstallHelp(false);
     setInstallOpen(false);
   };
 
   const bg = design.backgroundColor || "#ffffff";
   const fg = design.textColor || "#222222";
-  const cover = app.coverImage || images[0]?.url;
-  const coverStyle = design.coverStyle || "none";
-  const focal = design.focal || { x: 50, y: 50 };
   const columns = design.layout === "horizontal"
     ? { 350: 1, 700: 2, 1000: 3 }
     : { 350: 2, 700: 3, 1000: 4 };
@@ -222,39 +236,10 @@ export function MobileGalleryPublic({
 
   return (
     <main
-      className={embedded ? "relative h-full overflow-y-auto" : "min-h-dvh"}
+      className={embedded ? "relative h-full overflow-y-auto pb-20" : "min-h-dvh pb-20"}
       style={{ backgroundColor: bg, color: fg, fontFamily: theme.fontFamily }}
     >
-      <header className={theme.align}>
-        {coverStyle === "full" && cover && (
-          <div className="relative h-[56vh] min-h-[360px] overflow-hidden">
-            <img src={cover} alt="" className="h-full w-full object-cover" style={{ objectPosition: `${focal.x}% ${focal.y}%` }} />
-            <div className="absolute inset-0 bg-black/30" />
-            <div className="absolute inset-x-0 bottom-14 px-6 text-white">
-              <h1 className={`break-words text-4xl ${theme.titleClass}`}>{app.name}</h1>
-              {app.eventDate && <p className="mt-4 text-xs uppercase tracking-[0.24em]">{formatDate(app.eventDate)}</p>}
-            </div>
-          </div>
-        )}
-        {coverStyle === "third" && cover && (
-          <div>
-            <div className="px-6 pb-8 pt-14">
-              <h1 className={`break-words text-3xl ${theme.titleClass}`}>{app.name}</h1>
-              {app.eventDate && <p className="mt-4 text-xs uppercase tracking-[0.22em] opacity-60">{formatDate(app.eventDate)}</p>}
-            </div>
-            <div className="h-[34vh] min-h-[240px] overflow-hidden">
-              <img src={cover} alt="" className="h-full w-full object-cover" style={{ objectPosition: `${focal.x}% ${focal.y}%` }} />
-            </div>
-          </div>
-        )}
-        {coverStyle === "none" && (
-          <div className="px-6 pb-8 pt-14">
-            <h1 className={`break-words text-3xl ${theme.titleClass}`}>{app.name}</h1>
-            <div className={`mt-5 h-px w-14 bg-current opacity-40 ${theme.align === "text-center" ? "mx-auto" : ""}`} />
-            {app.eventDate && <p className="mt-5 text-xs uppercase tracking-[0.22em] opacity-60">{formatDate(app.eventDate)}</p>}
-          </div>
-        )}
-      </header>
+      <MobileGalleryCover app={app} design={design} images={images} />
 
       <section className="px-2 pb-8 sm:px-4">
         {(tab === "home" || tab === "favorites") && (
@@ -311,6 +296,7 @@ export function MobileGalleryPublic({
             <button type="button" onClick={share} className="mt-8 w-full bg-current px-5 py-4 text-sm font-semibold">
               <span style={{ color: bg }}>Share gallery link</span>
             </button>
+            {!isStandalone && <button type="button" onClick={openInstall} className="mt-3 w-full border border-current px-5 py-4 text-sm font-semibold">Install on this device</button>}
           </div>
         )}
 
@@ -330,6 +316,7 @@ export function MobileGalleryPublic({
                 <a key={name} href={value} target="_blank" rel="noreferrer" className="border border-current px-4 py-2 text-xs uppercase tracking-wider">{name}</a>
               ))}
             </div>
+            {!isStandalone && <button type="button" onClick={openInstall} className="mt-8 w-full border border-current px-5 py-3 text-sm font-semibold">Install this gallery app</button>}
           </div>
         )}
       </section>
@@ -364,12 +351,23 @@ export function MobileGalleryPublic({
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
                 {app.iconUrl ? <img src={app.iconUrl} alt="" className="size-16 shrink-0 rounded-2xl object-cover" /> : <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-[#efefef]"><Smartphone className="size-7" /></div>}
-                <div className="min-w-0"><p className="break-words font-semibold">Download {app.name}</p><p className="mt-1 text-xs text-[#777]">Install this gallery on your phone.</p></div>
+                <div className="min-w-0"><p className="break-words font-semibold">{showInstallHelp ? "Add to Home Screen" : `Download ${app.name}`}</p><p className="mt-1 text-xs text-[#777]">{showInstallHelp ? "Follow the browser steps below." : "Install this gallery on your phone."}</p></div>
               </div>
               <button type="button" onClick={dismissInstall}><X className="size-5" /></button>
             </div>
-            <button type="button" onClick={install} className="mt-6 w-full rounded-xl bg-[#18bfa6] px-5 py-3 font-semibold text-white">Install App</button>
-            {!installPrompt && <p className="mt-3 text-center text-xs leading-5 text-[#777]">On iPhone, open this page in Safari, tap Share, then choose “Add to Home Screen”.</p>}
+            {showInstallHelp ? (
+              <div className="mt-6">
+                <ol className="space-y-3 text-sm leading-6 text-[#555]">
+                  {isIOS ? <><li><b>1.</b> Open this link in Safari.</li><li><b>2.</b> Tap the Share button.</li><li><b>3.</b> Choose “Add to Home Screen”, then tap Add.</li></> : <><li><b>1.</b> Open your browser menu.</li><li><b>2.</b> Choose “Install app” or “Add to Home screen”.</li><li><b>3.</b> Confirm the installation.</li></>}
+                </ol>
+                <button type="button" onClick={dismissInstall} className="mt-6 w-full rounded-xl bg-[#18bfa6] px-5 py-3 font-semibold text-white">Got it</button>
+              </div>
+            ) : (
+              <>
+                <button type="button" onClick={install} className="mt-6 w-full rounded-xl bg-[#18bfa6] px-5 py-3 font-semibold text-white">{installPrompt ? "Install App" : isIOS ? "Show iPhone Install Steps" : "Show Install Instructions"}</button>
+                {!installPrompt && <p className="mt-3 text-center text-xs leading-5 text-[#777]">Automatic installation is not available in this browser, but the gallery can still be added to the home screen.</p>}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -377,10 +375,4 @@ export function MobileGalleryPublic({
       {notice && <div className={`${embedded ? "absolute" : "fixed"} bottom-20 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-black px-4 py-2 text-xs text-white shadow-xl`}>{notice}</div>}
     </main>
   );
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en", { month: "long", day: "numeric", year: "numeric" }).format(date);
 }
