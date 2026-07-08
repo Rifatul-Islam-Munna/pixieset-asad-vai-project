@@ -1,0 +1,52 @@
+name: Finalize Plan Control Locks
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+
+      - name: Apply final plan control locks
+        run: python scripts/finalize_plan_control_locks.py
+
+      - name: Remove temporary migration files
+        run: |
+          rm -f scripts/finalize_plan_control_locks.py
+          rm -f .github/workflows/finalize-plan-control-locks.yml
+
+      - name: Commit final controls
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: disable unavailable cover and download controls by plan"
+          git pull --rebase origin development
+          git push origin HEAD:development
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build backend
+        working-directory: backend
+        run: npm ci && npm run build
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          BASE_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_BASE_URL: http://127.0.0.1:4000
+        run: npm ci && npm run build
