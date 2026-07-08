@@ -620,10 +620,6 @@ export function PublicGallery({
                 <span className="hidden sm:inline md:sr-only">Share</span>
               </button>
             )}
-            <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={favoriteTools.openFavorites} type="button" title="My Favorites" aria-label="My Favorites">
-              <Heart className="size-4" />
-              <span className="hidden sm:inline md:sr-only">My Favorites</span>
-            </button>
             <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button" title="Favorite" aria-label="Favorite">
               <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
               <span className="hidden sm:inline md:sr-only">Favorite</span>
