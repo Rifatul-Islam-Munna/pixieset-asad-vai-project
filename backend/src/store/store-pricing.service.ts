@@ -97,7 +97,10 @@ export class StorePricingService {
         ? 1
         : Math.max(1, Math.min(99, Number(raw.quantity ?? 1)));
       const unitPrice = Number(variant?.price ?? product.price ?? 0);
-      const extraShipping = Number(variant?.extraShipping ?? product.extraShipping ?? 0) * quantity;
+      const isDigital = product.type === 'digital-download';
+      const extraShipping = isDigital
+        ? 0
+        : Number(variant?.extraShipping ?? product.extraShipping ?? 0) * quantity;
       const item = {
         productId: product._id.toString(),
         collectionId: resolved.collection._id.toString(),
@@ -120,17 +123,31 @@ export class StorePricingService {
     });
 
     const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const extraShipping = items.reduce((sum, item) => sum + item.extraShipping, 0);
-    const shippingMethod = body.shippingMethodId
-      ? await this.shippingModel.findOne({
-          _id: body.shippingMethodId,
-          userId: resolved.userId,
-          active: true,
-        }).lean()
-      : null;
+    const customer = this.customer(body.customer);
+    const hasPhysicalItems = taxRows.some(({ product }) => product.type !== 'digital-download');
+    const physicalSubtotal = taxRows
+      .filter(({ product }) => product.type !== 'digital-download')
+      .reduce((sum, { item }) => sum + item.total, 0);
+    const extraShipping = hasPhysicalItems
+      ? items.reduce((sum, item) => sum + item.extraShipping, 0)
+      : 0;
+
+    let shippingMethod: any = null;
+    if (hasPhysicalItems && body.shippingMethodId) {
+      shippingMethod = await this.shippingModel.findOne({
+        _id: body.shippingMethodId,
+        userId: resolved.userId,
+        active: true,
+      }).lean();
+      if (!shippingMethod) throw new BadRequestException('The selected shipping method is unavailable');
+      if (!this.shippingApplies(shippingMethod, customer.address.country)) {
+        throw new BadRequestException('The selected shipping method is not available for this country');
+      }
+    }
+
     let shippingBase = Number(shippingMethod?.price ?? 0);
-    if (shippingMethod?.freeOver && subtotal >= Number(shippingMethod.freeOver)) shippingBase = 0;
-    const shipping = shippingBase + extraShipping;
+    if (shippingMethod?.freeOver && physicalSubtotal >= Number(shippingMethod.freeOver)) shippingBase = 0;
+    const shipping = hasPhysicalItems ? shippingBase + extraShipping : 0;
 
     const couponCode = String(body.couponCode ?? '').trim().toUpperCase();
     const coupon = couponCode
@@ -147,14 +164,10 @@ export class StorePricingService {
         : Math.min(subtotal, Number(coupon.amount ?? 0))
       : 0;
 
-    const customer = this.customer(body.customer);
-    const taxableSubtotal = taxRows
-      .filter(({ product }) => !product.exemptFromSalesTax)
-      .reduce((sum, { item }) => sum + item.total, 0);
     const tax = await this.tax(
       resolved.userId,
       taxRows,
-      taxableSubtotal,
+      subtotal,
       discount,
       shipping,
       customer.address,
@@ -181,6 +194,8 @@ export class StorePricingService {
       currency: resolved.config.currency,
       shippingMethod,
       coupon,
+      hasPhysicalItems,
+      requiresShipping: hasPhysicalItems,
     };
   }
 
@@ -223,27 +238,37 @@ export class StorePricingService {
     };
   }
 
+  private shippingApplies(method: any, country: string) {
+    const region = String(method?.region ?? '').trim().toLowerCase();
+    const destination = String(country ?? '').trim().toLowerCase();
+    if (!region || region === 'all' || region === 'worldwide') return true;
+    if (destination && region === destination) return true;
+    return Boolean(method?.shipInternational);
+  }
+
   private async tax(
     userId: string,
     rows: Array<{ item: any; product: any }>,
-    taxableSubtotal: number,
+    subtotal: number,
     discount: number,
     shipping: number,
     address: Record<string, unknown>,
   ) {
-    const country = typeof address.country === 'string' ? address.country : '';
-    const rule = await this.taxModel.findOne({
-      userId,
-      active: true,
-      ...(country ? { $or: [{ region: country }, { region: 'All' }, { region: '' }] } : {}),
-    }).sort({ createdAt: -1 }).lean();
+    const country = typeof address.country === 'string' ? address.country.trim() : '';
+    const rules = await this.taxModel.find({ userId, active: true }).sort({ createdAt: -1 }).lean();
+    const normalizedCountry = country.toLowerCase();
+    const rule = rules.find((entry) => String(entry.region ?? '').trim().toLowerCase() === normalizedCountry)
+      ?? rules.find((entry) => ['all', ''].includes(String(entry.region ?? '').trim().toLowerCase()));
     if (!rule?.rate) return 0;
-    const digital = rows
-      .filter(({ product }) => product.type === 'digital-download')
-      .reduce((sum, { item }) => sum + item.total, 0);
-    const productBase = rule.applyDigitalDownloads === false
-      ? Math.max(0, taxableSubtotal - digital - discount)
-      : Math.max(0, taxableSubtotal - discount);
+
+    const eligibleRows = rows.filter(({ product }) => {
+      if (product.exemptFromSalesTax) return false;
+      if (product.type === 'digital-download' && rule.applyDigitalDownloads === false) return false;
+      return true;
+    });
+    const eligibleSubtotal = eligibleRows.reduce((sum, { item }) => sum + item.total, 0);
+    const eligibleDiscount = subtotal > 0 ? discount * (eligibleSubtotal / subtotal) : 0;
+    const productBase = Math.max(0, eligibleSubtotal - eligibleDiscount);
     const shippingBase = rule.applyShipping ? shipping : 0;
     return (productBase + shippingBase) * Number(rule.rate) / 100;
   }
