@@ -34,6 +34,7 @@ export function MobileGalleryDesignEditor({ app, profile, updateApp }: { app: Mo
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(true);
   const [directMode, setDirectMode] = useState<DirectMode>("focal");
+  const [fontUploading, setFontUploading] = useState(false);
   useEffect(() => setDraft(app), [app]);
 
   const design = draft.design || {};
@@ -57,17 +58,20 @@ export function MobileGalleryDesignEditor({ app, profile, updateApp }: { app: Mo
   }
 
   async function uploadFont(file?: File) {
-    if (!file) return;
+    if (!file || fontUploading) return;
     if (!/\.(woff2?|ttf|otf)$/i.test(file.name)) {
       toast.error("Upload a WOFF, WOFF2, TTF, or OTF font file");
       return;
     }
+    setFontUploading(true);
     try {
       const customFontUrl = await uploadMobileGalleryAsset(file);
       patchCoverText({ customFontUrl, customFontName: file.name, fontPreset: "custom" });
       toast.success("Custom font uploaded");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Font upload failed");
+    } finally {
+      setFontUploading(false);
     }
   }
 
@@ -177,7 +181,7 @@ export function MobileGalleryDesignEditor({ app, profile, updateApp }: { app: Mo
               <div className="rounded border bg-[#fafafa] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div><p className="text-sm font-semibold">Custom Font</p><p className="mt-1 text-xs text-[#777]">WOFF, WOFF2, TTF or OTF</p></div>
-                  <label className="relative flex cursor-pointer items-center gap-2 border bg-white px-4 py-2 text-sm font-semibold"><Upload className="size-4" /> Upload Font<input type="file" accept=".woff,.woff2,.ttf,.otf,font/woff,font/woff2,font/ttf,font/otf" className="absolute inset-0 cursor-pointer opacity-0" onChange={(event) => uploadFont(event.target.files?.[0])} /></label>
+                  <label className={`relative flex cursor-pointer items-center gap-2 border bg-white px-4 py-2 text-sm font-semibold ${fontUploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-4" /> {fontUploading ? "Uploading..." : "Upload Font"}<input type="file" accept=".woff,.woff2,.ttf,.otf,font/woff,font/woff2,font/ttf,font/otf" className="absolute inset-0 cursor-pointer opacity-0" disabled={fontUploading} onChange={(event) => { void uploadFont(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
                 </div>
                 {coverText.customFontUrl && <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs"><span className="truncate text-[#555]">{coverText.customFontName || "Custom font uploaded"}</span><button type="button" onClick={() => patchCoverText({ customFontUrl: "", customFontName: "", fontPreset: "theme" })} className="text-red-600">Remove</button></div>}
               </div>
