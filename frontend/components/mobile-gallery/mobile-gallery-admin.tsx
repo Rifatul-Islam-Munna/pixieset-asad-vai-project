@@ -35,6 +35,8 @@ import {
   useMobileGalleryProfile,
 } from "@/api-hooks/use-mobile-gallery";
 import { MobileGalleryPublic } from "./mobile-gallery-public";
+import { MobileGalleryDesignEditor } from "./mobile-gallery-design-editor";
+import { MobileGalleryShareScreen } from "./mobile-gallery-share-screen";
 
 type View = "apps" | "settings" | "editor" | "preview" | "share";
 type EditorTab = "photos" | "design" | "app-settings";
@@ -216,7 +218,7 @@ function ProfileSettingsPage() {
 }
 
 function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
-  const { appQuery, updateApp, uploadImages, reorderImages, deleteImage } = useMobileGalleryApp(appId);
+  const { appQuery, updateApp, uploadImages, reorderImages, deleteImage, sendInvite } = useMobileGalleryApp(appId);
   const { profileQuery } = useMobileGalleryProfile();
   const app = appQuery.data?.data;
   const profile = profileQuery.data?.data || {};
@@ -225,7 +227,7 @@ function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
   useEffect(() => setImages(app?.images || []), [app?.images]);
   if (appQuery.isLoading || !app) return <div className="flex min-h-screen items-center justify-center text-sm text-[#777]">Loading mobile gallery…</div>;
   if (view === "preview") return <PreviewScreen app={app} profile={profile} />;
-  if (view === "share") return <ShareScreen app={app} />;
+  if (view === "share") return <MobileGalleryShareScreen app={app} profile={profile} sendInvite={sendInvite} />;
 
   return (
     <main className="min-h-screen bg-white text-[#202020]">
@@ -245,7 +247,7 @@ function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
           </div>
         </div>
         {tab === "photos" && <PhotosEditor app={app} images={images} setImages={setImages} uploadImages={uploadImages} reorderImages={reorderImages} deleteImage={deleteImage} updateApp={updateApp} />}
-        {tab === "design" && <DesignEditor app={app} profile={profile} updateApp={updateApp} />}
+        {tab === "design" && <MobileGalleryDesignEditor app={app} profile={profile} updateApp={updateApp} />}
         {tab === "app-settings" && <AppSettingsEditor app={app} updateApp={updateApp} />}
       </section>
     </main>
