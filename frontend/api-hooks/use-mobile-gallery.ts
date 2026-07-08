@@ -12,6 +12,27 @@ export type MobileGalleryImage = {
   order?: number;
 };
 
+export type MobileGalleryCoverText = {
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+  showDate?: boolean;
+  dateLabel?: string;
+  alignment?: "left" | "center" | "right";
+  verticalPosition?: "top" | "center" | "bottom";
+  fontPreset?: "theme" | "serif" | "sans" | "mono" | "script";
+  titleSize?: number;
+  subtitleSize?: number;
+  letterSpacing?: number;
+  uppercase?: boolean;
+  showDivider?: boolean;
+  contentWidth?: number;
+  textColor?: string;
+  overlayColor?: string;
+  overlayOpacity?: number;
+  shadowStrength?: number;
+};
+
 export type MobileGalleryDesign = {
   coverStyle?: "full" | "third" | "none";
   focal?: { x: number; y: number };
@@ -20,6 +41,7 @@ export type MobileGalleryDesign = {
   gridStyle?: "masonry" | "grid";
   backgroundColor?: string;
   textColor?: string;
+  coverText?: MobileGalleryCoverText;
 };
 
 export type MobileGalleryApp = {
@@ -46,22 +68,6 @@ export type MobileGalleryProfile = {
   phoneNumber?: string;
   businessAddress?: string;
   website?: string;
-};
-
-export type MobileGalleryInvitePayload = {
-  to: string;
-  subject: string;
-  message: string;
-  templateTitle: string;
-  link: string;
-  sendCopy?: boolean;
-};
-
-export type MobileGalleryInviteResult = {
-  delivered: boolean;
-  provider: "resend" | "mailto" | string;
-  id?: string | null;
-  reason?: string;
 };
 
 type Data<T> = { data: T; message?: string };
@@ -143,18 +149,7 @@ export function useMobileGalleryApp(appId?: string) {
     },
     onSuccess: refresh,
   });
-  const sendInvite = useMutation({
-    mutationFn: async (payload: MobileGalleryInvitePayload) => {
-      if (!appId) throw new Error("App is required");
-      const [data, error] = await PostRequestAxios<Data<MobileGalleryInviteResult>>(
-        `/mobile-gallery/apps/${appId}/share-email`,
-        payload as any,
-      );
-      if (error || !data) throw new Error(error?.message || "Could not send invitation");
-      return data;
-    },
-  });
-  return { appQuery, updateApp, uploadImages, reorderImages, deleteImage, sendInvite };
+  return { appQuery, updateApp, uploadImages, reorderImages, deleteImage };
 }
 
 export function useMobileGalleryProfile() {
