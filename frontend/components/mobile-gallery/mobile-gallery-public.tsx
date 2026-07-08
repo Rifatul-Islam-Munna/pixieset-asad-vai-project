@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 import {
   Check,
@@ -17,9 +17,11 @@ import {
   X,
 } from "lucide-react";
 import type { MobileGalleryApp, MobileGalleryImage, MobileGalleryProfile } from "@/api-hooks/use-mobile-gallery";
+import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
 import { MobileGalleryCover, mobileGalleryThemes } from "./mobile-gallery-cover";
 
 type DeferredPrompt = Event & {
+  preventDefault: () => void;
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: string }>;
 };
@@ -47,31 +49,89 @@ export function MobileGalleryPublic({
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [assetCaching, setAssetCaching] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
+  const assetCachingRef = useRef(false);
   const storageKey = `mobile-gallery-favorites:${app.slug}`;
+  const assetCacheName = `mobile-gallery-assets:${app.slug}`;
+  const galleryAssetUrls = useMemo(
+    () => Array.from(new Set([
+      app.coverImage,
+      app.iconUrl,
+      profile.logoUrl,
+      ...images.flatMap((image) => [image.thumbnailUrl, image.url]),
+    ].filter(Boolean) as string[])),
+    [app.coverImage, app.iconUrl, images, profile.logoUrl],
+  );
+
+  const cacheGalleryAssets = useCallback(async (silent = false) => {
+    if (embedded || assetCachingRef.current || !("caches" in window) || !galleryAssetUrls.length) return;
+    assetCachingRef.current = true;
+    setAssetCaching(true);
+    if (!silent) setNotice("Saving gallery for offline use");
+    try {
+      const cache = await caches.open(assetCacheName);
+      await Promise.allSettled(galleryAssetUrls.map(async (url) => {
+        const request = new Request(url, { mode: url.startsWith("/") || url.startsWith(window.location.origin) ? "same-origin" : "cors", cache: "reload" });
+        const response = await fetch(request).catch(() => fetch(url, { mode: "no-cors", cache: "reload" }));
+        if (response) await cache.put(url, response);
+      }));
+      if (!silent) setNotice("Gallery saved on this device");
+    } catch {
+      if (!silent) setNotice("Offline save could not finish");
+    } finally {
+      assetCachingRef.current = false;
+      setAssetCaching(false);
+    }
+  }, [assetCacheName, embedded, galleryAssetUrls]);
 
   useEffect(() => {
     try {
       setFavorites(JSON.parse(localStorage.getItem(storageKey) || "[]"));
-      if (!embedded && !localStorage.getItem(`mobile-gallery-install-seen:${app.slug}`)) {
+      if (!embedded && !isStandalone) {
         const timer = window.setTimeout(() => setInstallOpen(true), 700);
         return () => window.clearTimeout(timer);
       }
     } catch {
       setFavorites([]);
     }
-  }, [app.slug, embedded, storageKey]);
+  }, [embedded, isStandalone, storageKey]);
 
   useEffect(() => {
     const handler = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as DeferredPrompt);
+      const promptEvent = event as DeferredPrompt;
+      promptEvent.preventDefault();
+      setInstallPrompt(promptEvent);
+      if (!embedded && !isStandalone) setInstallOpen(true);
+    };
+    const installed = () => {
+      setIsStandalone(true);
+      setInstallOpen(false);
+      setInstallPrompt(null);
+      setNotice("Gallery app installed");
+      void cacheGalleryAssets();
     };
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
+    window.addEventListener("appinstalled", installed);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installed);
+    };
+  }, [cacheGalleryAssets, embedded, isStandalone]);
+
+  useEffect(() => {
+    if (embedded) return;
+    const manifestHref = `/mobile-gallery/${encodeURIComponent(app.slug)}/manifest.webmanifest`;
+    let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!manifestLink) {
+      manifestLink = document.createElement("link");
+      manifestLink.rel = "manifest";
+      document.head.appendChild(manifestLink);
+    }
+    manifestLink.href = manifestHref;
+  }, [app.slug, embedded]);
 
   useEffect(() => {
     const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean };
@@ -80,6 +140,22 @@ export function MobileGalleryPublic({
     setIsIOS(appleMobile);
     setIsStandalone(Boolean(navigatorWithStandalone.standalone) || window.matchMedia("(display-mode: standalone)").matches);
   }, []);
+
+  useEffect(() => {
+    if (embedded || !isStandalone) return;
+    void cacheGalleryAssets(true);
+    const refresh = () => {
+      if (!document.hidden && navigator.onLine) void cacheGalleryAssets(true);
+    };
+    window.addEventListener("online", refresh);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [cacheGalleryAssets, embedded, isStandalone]);
 
   useEffect(() => {
     setSelecting(false);
@@ -185,14 +261,16 @@ export function MobileGalleryPublic({
     const choice = await installPrompt.userChoice.catch(() => null);
     if (choice?.outcome === "accepted") {
       setIsStandalone(true);
-      localStorage.setItem(`mobile-gallery-install-seen:${app.slug}`, "1");
       setInstallOpen(false);
+      setNotice("Gallery app installed");
+      void cacheGalleryAssets();
+    } else {
+      setShowInstallHelp(true);
     }
     setInstallPrompt(null);
   };
 
   const dismissInstall = () => {
-    localStorage.setItem(`mobile-gallery-install-seen:${app.slug}`, "1");
     setShowInstallHelp(false);
     setInstallOpen(false);
   };
@@ -239,6 +317,7 @@ export function MobileGalleryPublic({
       className={embedded ? "relative h-full overflow-y-auto pb-20" : "min-h-dvh pb-20"}
       style={{ backgroundColor: bg, color: fg, fontFamily: theme.fontFamily }}
     >
+      <ScreenCaptureGuard enabled={!embedded} />
       <MobileGalleryCover app={app} design={design} images={images} />
 
       <section className="px-2 pb-8 sm:px-4">
@@ -365,6 +444,7 @@ export function MobileGalleryPublic({
             ) : (
               <>
                 <button type="button" onClick={install} className="mt-6 w-full rounded-xl bg-[#18bfa6] px-5 py-3 font-semibold text-white">{installPrompt ? "Install App" : isIOS ? "Show iPhone Install Steps" : "Show Install Instructions"}</button>
+                {assetCaching && <p className="mt-3 text-center text-xs font-semibold text-[#18bfa6]">Saving photos for offline use...</p>}
                 {!installPrompt && <p className="mt-3 text-center text-xs leading-5 text-[#777]">Automatic installation is not available in this browser, but the gallery can still be added to the home screen.</p>}
               </>
             )}

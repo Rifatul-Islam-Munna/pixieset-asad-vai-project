@@ -3576,6 +3576,10 @@ function PresetDesignPanel({
   const customCoverAccess = usePlanFeatureAccess("customCover");
   const readCustomFont = (file?: File) => {
     if (!file) return;
+    if (!/\.(woff2?|ttf|otf)$/i.test(file.name)) {
+      toast.error("Upload a WOFF, WOFF2, TTF, or OTF font file");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       onChange({
@@ -3690,6 +3694,16 @@ function PresetDesignPanel({
           <PlanFeatureLock feature="advancedDesign" label="Advanced design">
             <h2 className="text-2xl font-medium">Typography</h2>
             <div className="mt-8 grid grid-cols-2 gap-3">
+              {design.customFontName && design.customFontDataUrl && (
+                <button className="text-center" onClick={() => onChange({ typography: "Custom" } as Partial<typeof design>)} type="button">
+                  <span className={cn("block border p-8 text-left", design.typography === "Custom" && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                    <style>{`@font-face{font-family:"${design.customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
+                    <span className="block text-xl tracking-widest" style={{ fontFamily: `"${design.customFontName.replace(/"/g, "")}", serif` }}>{design.customFontName}</span>
+                    <span className="mt-3 block text-sm text-[#555]">Uploaded font</span>
+                  </span>
+                  <span className="mt-3 block text-sm">Custom</span>
+                </button>
+              )}
               {typographyOptions.map(([name, sample, desc]) => (
                 <button key={name} className="text-center" onClick={() => onChange({ typography: name, customFontName: "", customFontDataUrl: "" } as Partial<typeof design>)} type="button">
                   <span className={cn("block border p-8 text-left", design.typography === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>

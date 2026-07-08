@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
+import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
@@ -503,6 +504,7 @@ export function PublicGallery({
       {customFontName && design.customFontDataUrl && (
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
+      <ScreenCaptureGuard />
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-black/5 px-4 sm:px-5 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
         <p className="truncate text-sm uppercase tracking-[0.24em]">{studioName}</p>
