@@ -34,14 +34,30 @@ jobs:
           PY
 
       - name: Apply homepage and publication integration
-        run: python scripts/finalize_dynamic_homepage.py
+        id: migrate
+        continue-on-error: true
+        run: python scripts/finalize_dynamic_homepage.py > docs/homepage-migration-error.txt 2>&1
+
+      - name: Commit migration diagnostic
+        if: steps.migrate.outcome == 'failure'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/homepage-migration-error.txt
+          git commit -m "chore: capture homepage migration error" || true
+          git pull --rebase origin development
+          git push origin HEAD:development
+          exit 1
 
       - name: Remove temporary migration files
+        if: steps.migrate.outcome == 'success'
         run: |
           rm -f scripts/finalize_dynamic_homepage.py
           rm -f .github/workflows/finalize-dynamic-homepage.yml
+          rm -f docs/homepage-migration-error.txt
 
       - name: Commit grouped implementation
+        if: steps.migrate.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -51,14 +67,17 @@ jobs:
           git push origin HEAD:development
 
       - uses: actions/setup-node@v4
+        if: steps.migrate.outcome == 'success'
         with:
           node-version: 22
 
       - name: Build backend
+        if: steps.migrate.outcome == 'success'
         working-directory: backend
         run: npm ci && npm run build
 
       - name: Build frontend
+        if: steps.migrate.outcome == 'success'
         working-directory: frontend
         env:
           BASE_URL: http://127.0.0.1:4000
