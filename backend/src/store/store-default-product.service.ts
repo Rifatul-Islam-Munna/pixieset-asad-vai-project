@@ -16,22 +16,15 @@ export class StoreDefaultProductService {
 
   async ensureSeeded() {
     if (!DEFAULT_STORE_PRODUCTS.length) return;
-    await this.model.bulkWrite(
+    if (await this.model.exists({})) return;
+    await this.model.insertMany(
       DEFAULT_STORE_PRODUCTS.map((item) => ({
-        updateOne: {
-          filter: { slug: item.slug },
-          update: {
-            $setOnInsert: {
-              slug: item.slug,
-              name: item.name,
-              category: item.category,
-              active: item.active !== false,
-              sortOrder: item.sortOrder ?? 0,
-              data: item,
-            },
-          },
-          upsert: true,
-        },
+        slug: item.slug,
+        name: item.name,
+        category: item.category,
+        active: item.active !== false,
+        sortOrder: item.sortOrder ?? 0,
+        data: item,
       })),
     );
   }
