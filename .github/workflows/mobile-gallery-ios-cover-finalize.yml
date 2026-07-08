@@ -1,0 +1,99 @@
+name: Finalize iOS PWA and Cover Maker
+
+on:
+  push:
+    branches:
+      - development
+    paths:
+      - .github/workflows/mobile-gallery-ios-cover-finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout development
+        uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+
+      - name: Apply final integration patches
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              text = path.read_text()
+              if old not in text:
+                  raise SystemExit(f'Missing expected block: {label}')
+              path.write_text(text.replace(old, new, 1))
+
+          admin = Path('frontend/components/mobile-gallery/mobile-gallery-admin.tsx')
+          replace_once(
+              admin,
+              '  const { appQuery, updateApp, uploadImages, reorderImages, deleteImage, sendInvite } = useMobileGalleryApp(appId);',
+              '  const { appQuery, updateApp, uploadImages, reorderImages, deleteImage } = useMobileGalleryApp(appId);',
+              'remove sendInvite hook',
+          )
+          replace_once(
+              admin,
+              '  if (view === "share") return <MobileGalleryShareScreen app={app} profile={profile} sendInvite={sendInvite} />;',
+              '  if (view === "share") return <MobileGalleryShareScreen app={app} profile={profile} />;',
+              'remove sendInvite prop',
+          )
+
+          service = Path('backend/src/mobile-gallery/mobile-gallery.service.ts')
+          replace_once(
+              service,
+              "  textColor: '#222222',\n};",
+              "  textColor: '#222222',\n  coverText: {},\n};",
+              'cover text default',
+          )
+
+          public = Path('frontend/components/mobile-gallery/mobile-gallery-public.tsx')
+          replace_once(
+              public,
+              '<nav className={`${embedded ? "sticky" : "fixed"} inset-x-0 bottom-0 z-30 grid h-16 grid-cols-4 border-t bg-white text-[#777]`}>',
+              '<nav className={`${embedded ? "sticky" : "fixed"} inset-x-0 bottom-0 z-30 grid min-h-16 grid-cols-4 border-t bg-white text-[#777]`} style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>',
+              'iOS safe-area navigation',
+          )
+          PY
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build backend
+        working-directory: backend
+        run: npm ci && npm run build
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          BASE_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_BASE_URL: http://127.0.0.1:4000
+        run: npm ci && npm run build
+
+      - name: Check Mobile Gallery TypeScript errors
+        working-directory: frontend
+        run: |
+          set +e
+          npx tsc --noEmit --pretty false > /tmp/types.log 2>&1
+          grep -E "mobile-gallery|use-mobile-gallery" /tmp/types.log > /tmp/mobile-errors.log || true
+          if [ -s /tmp/mobile-errors.log ]; then
+            cat /tmp/mobile-errors.log
+            exit 1
+          fi
+
+      - name: Commit final integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/components/mobile-gallery/mobile-gallery-admin.tsx frontend/components/mobile-gallery/mobile-gallery-public.tsx backend/src/mobile-gallery/mobile-gallery.service.ts
+          git commit -m "fix(mobile-gallery): finalize iOS PWA and advanced cover maker"
+          git push origin HEAD:development
