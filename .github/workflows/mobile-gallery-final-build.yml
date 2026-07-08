@@ -1,0 +1,67 @@
+name: Mobile Gallery Final Build
+
+on:
+  push:
+    branches:
+      - development
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout development
+        uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and report
+        env:
+          BASE_URL: http://127.0.0.1:4000
+          NEXT_PUBLIC_BASE_URL: http://127.0.0.1:4000
+        run: |
+          set +e
+          (cd backend && npm ci && npm run build) > /tmp/backend.log 2>&1
+          BACKEND_STATUS=$?
+          (cd frontend && npm ci && npm run build) > /tmp/frontend.log 2>&1
+          FRONTEND_STATUS=$?
+          (cd frontend && npx tsc --noEmit --pretty false) > /tmp/types.log 2>&1
+          MOBILE_ERRORS=$(grep -E "mobile-gallery|use-mobile-gallery" /tmp/types.log || true)
+          mkdir -p docs
+          {
+            echo "# Mobile Gallery Final Build"
+            echo
+            if [ "$BACKEND_STATUS" -eq 0 ]; then echo "- Backend build: PASS"; else echo "- Backend build: FAIL"; fi
+            if [ "$FRONTEND_STATUS" -eq 0 ]; then echo "- Frontend build: PASS"; else echo "- Frontend build: FAIL"; fi
+            if [ -z "$MOBILE_ERRORS" ]; then echo "- Mobile Gallery TypeScript errors: NONE FOUND"; else echo "- Mobile Gallery TypeScript errors: FOUND"; fi
+            echo
+            echo "## Mobile Gallery type matches"
+            echo '```text'
+            if [ -z "$MOBILE_ERRORS" ]; then echo "No Mobile Gallery type errors found."; else echo "$MOBILE_ERRORS"; fi
+            echo '```'
+            echo
+            echo "## Backend tail"
+            echo '```text'
+            tail -n 80 /tmp/backend.log
+            echo '```'
+            echo
+            echo "## Frontend tail"
+            echo '```text'
+            tail -n 120 /tmp/frontend.log
+            echo '```'
+          } > docs/mobile-gallery-final-build.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/mobile-gallery-final-build.md
+          git commit -m "chore: record mobile gallery final build" || true
+          git push origin HEAD:development
+          if [ "$BACKEND_STATUS" -ne 0 ] || [ "$FRONTEND_STATUS" -ne 0 ] || [ -n "$MOBILE_ERRORS" ]; then exit 1; fi
