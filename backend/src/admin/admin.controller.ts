@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuard
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { Roles } from 'src/lib/roles.decorator';
 import { RolesGuard } from 'src/lib/roles.guard';
+import { StoreDefaultProductService } from 'src/store/store-default-product.service';
 import { UserType } from 'src/user/entities/user.entity';
 import { AdminService } from './admin.service';
 import { AdminCreatePlanDto, AdminUpdatePlanDto } from './dto/admin-plan.dto';
@@ -12,7 +13,10 @@ import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
 @UseGuards(AuthGuard, RolesGuard)
 @Roles(UserType.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly defaultProducts: StoreDefaultProductService,
+  ) {}
 
   @Get('dashboard')
   async dashboard() {
@@ -64,14 +68,26 @@ export class AdminController {
 
   @Get('default-store-products')
   async defaultStoreProducts() {
-    const data = await this.adminService.findDefaultStoreProducts();
+    const data = await this.defaultProducts.list();
     return { data };
+  }
+
+  @Post('default-store-products')
+  async createDefaultStoreProduct(@Body() dto: Record<string, unknown>) {
+    const data = await this.defaultProducts.create(dto);
+    return { message: 'Default product created', data };
   }
 
   @Patch('default-store-products/:id')
   async updateDefaultStoreProduct(@Param('id') id: string, @Body() dto: Record<string, unknown>) {
-    const data = await this.adminService.updateDefaultStoreProduct(id, dto);
+    const data = await this.defaultProducts.update(id, dto);
     return { message: 'Default product updated', data };
+  }
+
+  @Delete('default-store-products/:id')
+  async deleteDefaultStoreProduct(@Param('id') id: string) {
+    const data = await this.defaultProducts.remove(id);
+    return { message: 'Default product deleted', data };
   }
 
   @Get('plans')
