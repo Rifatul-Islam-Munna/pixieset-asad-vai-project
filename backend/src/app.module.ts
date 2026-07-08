@@ -13,6 +13,7 @@ import { AdminModule } from './admin/admin.module';
 import { HomeCmsModule } from './home-cms/home-cms.module';
 import { MobileGalleryModule } from './mobile-gallery/mobile-gallery.module';
 import { MailModule } from './mail/mail.module';
+import { HomepageModule } from './homepage/homepage.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { MailModule } from './mail/mail.module';
     AdminModule,
     HomeCmsModule,
     MobileGalleryModule,
+    HomepageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
