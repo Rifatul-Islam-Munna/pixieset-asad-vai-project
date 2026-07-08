@@ -1,21 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Check,
   Copy,
   ExternalLink,
-  Facebook,
   Globe2,
-  Instagram,
-  Linkedin,
   Loader2,
   Mail,
   MapPin,
   Phone,
   RefreshCw,
   Save,
-  Youtube,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -223,10 +219,10 @@ export function HomepageSettingsPanel() {
 
           <Section title="Social Links">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field icon={<Instagram className="size-4" />} label="Instagram" value={form.socialLinks.instagram || ""} onChange={(instagram) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, instagram } }))} />
-              <Field icon={<Facebook className="size-4" />} label="Facebook" value={form.socialLinks.facebook || ""} onChange={(facebook) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, facebook } }))} />
-              <Field icon={<Youtube className="size-4" />} label="YouTube" value={form.socialLinks.youtube || ""} onChange={(youtube) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, youtube } }))} />
-              <Field icon={<Linkedin className="size-4" />} label="LinkedIn" value={form.socialLinks.linkedin || ""} onChange={(linkedin) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, linkedin } }))} />
+              <Field icon={<SocialBadge>IG</SocialBadge>} label="Instagram" value={form.socialLinks.instagram || ""} onChange={(instagram) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, instagram } }))} />
+              <Field icon={<SocialBadge>FB</SocialBadge>} label="Facebook" value={form.socialLinks.facebook || ""} onChange={(facebook) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, facebook } }))} />
+              <Field icon={<SocialBadge>YT</SocialBadge>} label="YouTube" value={form.socialLinks.youtube || ""} onChange={(youtube) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, youtube } }))} />
+              <Field icon={<SocialBadge>IN</SocialBadge>} label="LinkedIn" value={form.socialLinks.linkedin || ""} onChange={(linkedin) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, linkedin } }))} />
             </div>
           </Section>
 
@@ -293,15 +289,19 @@ export function HomepageSettingsPanel() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function SocialBadge({ children }: { children: ReactNode }) {
+  return <span className="text-[9px] font-black tracking-wide">{children}</span>;
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return <section className="mb-12"><p className="mb-4 text-sm font-bold">{title}</p><div className="grid gap-4">{children}</div></section>;
 }
 
-function HelpText({ children }: { children: React.ReactNode }) {
+function HelpText({ children }: { children: ReactNode }) {
   return <p className="text-sm leading-6 text-[#667085]">{children}</p>;
 }
 
-function Field({ label, value, onChange, placeholder, icon }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; icon?: React.ReactNode }) {
+function Field({ label, value, onChange, placeholder, icon }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; icon?: ReactNode }) {
   return (
     <label className="grid gap-2">
       <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-[#667085]">{icon}{label}</span>
