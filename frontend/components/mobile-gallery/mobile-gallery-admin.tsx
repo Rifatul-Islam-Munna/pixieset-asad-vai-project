@@ -37,6 +37,7 @@ import {
 import { MobileGalleryPublic } from "./mobile-gallery-public";
 import { MobileGalleryDesignEditor } from "./mobile-gallery-design-editor";
 import { MobileGalleryShareScreen } from "./mobile-gallery-share-screen";
+import { MobileGalleryPreviewScreen } from "./mobile-gallery-preview-screen";
 
 type View = "apps" | "settings" | "editor" | "preview" | "share";
 type EditorTab = "photos" | "design" | "app-settings";
@@ -91,7 +92,7 @@ function TopBar({ active }: { active: "apps" | "settings" }) {
               </div>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-3 text-[#777]"><Search className="size-5" /><Settings className="size-5" /></div>
+          <div className="flex shrink-0 items-center gap-3 text-[#777]"><Link href="/dashboard/mobile-gallery#search-apps" aria-label="Search mobile gallery apps" className="rounded p-1.5 hover:bg-white hover:text-[#18bfa6]"><Search className="size-5" /></Link><Link href="/dashboard/mobile-gallery/settings" aria-label="Mobile gallery settings" className="rounded p-1.5 hover:bg-white hover:text-[#18bfa6]"><Settings className="size-5" /></Link></div>
         </div>
       </div>
       <nav className="overflow-x-auto border-b px-4 sm:px-8">
@@ -137,7 +138,7 @@ function AppsPage() {
           <h1 className="text-2xl font-light sm:text-3xl">Mobile Gallery Apps</h1>
           <button onClick={() => setCreateOpen(true)} className="flex items-center gap-2 bg-[#18bfa6] px-5 py-3 text-sm font-semibold text-white"><Plus className="size-4" /> Create New</button>
         </div>
-        <div className="mt-5 flex justify-end">
+        <div id="search-apps" className="mt-5 flex scroll-mt-24 justify-end">
           <label className="relative block w-full max-w-[320px]">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#888]" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search apps" className="h-11 w-full border px-10 text-sm outline-none focus:border-[#18bfa6]" />
@@ -226,7 +227,7 @@ function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
   const [images, setImages] = useState<MobileGalleryImage[]>([]);
   useEffect(() => setImages(app?.images || []), [app?.images]);
   if (appQuery.isLoading || !app) return <div className="flex min-h-screen items-center justify-center text-sm text-[#777]">Loading mobile gallery…</div>;
-  if (view === "preview") return <PreviewScreen app={app} profile={profile} />;
+  if (view === "preview") return <MobileGalleryPreviewScreen app={app} profile={profile} />;
   if (view === "share") return <MobileGalleryShareScreen app={app} profile={profile} sendInvite={sendInvite} />;
 
   return (
