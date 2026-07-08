@@ -41,10 +41,13 @@ jobs:
       - name: Commit migration diagnostic
         if: steps.migrate.outcome == 'failure'
         run: |
+          cp docs/homepage-migration-error.txt /tmp/homepage-migration-error.txt
+          git reset --hard HEAD
+          cp /tmp/homepage-migration-error.txt docs/homepage-migration-error.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/homepage-migration-error.txt
-          git commit -m "chore: capture homepage migration error" || true
+          git commit -m "chore: capture homepage migration error"
           git pull --rebase origin development
           git push origin HEAD:development
           exit 1
