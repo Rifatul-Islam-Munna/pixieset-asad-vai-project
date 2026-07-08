@@ -672,7 +672,6 @@ export function ClientDashboard({
             label={section === "store-gallery" ? "Store" : "Marketing email"}
             className={section === "store-gallery" || page === "marketing" || campaignBuilderOpen ? "min-h-[520px]" : "contents"}
             bypass={section !== "store-gallery" && page !== "marketing" && !campaignBuilderOpen}
-            bypass={section !== "store-gallery" && page !== "marketing" && !campaignBuilderOpen}
           >
           {campaignBuilderOpen ? (
             <CampaignBuilder onClose={closeCampaignBuilder} />
@@ -3487,8 +3486,6 @@ function PresetDesignPanel({
 }) {
   const [adminCoverTemplates, setAdminCoverTemplates] = useState<CustomCoverTemplate[]>([]);
   const customCoverAccess = usePlanFeatureAccess("customCover");
-  const advancedDesignAccess = usePlanFeatureAccess("advancedDesign");
-  const layoutsAccess = usePlanFeatureAccess("layouts");
   const readCustomFont = (file?: File) => {
     if (!file) return;
     const reader = new FileReader();
@@ -3574,7 +3571,7 @@ function PresetDesignPanel({
         )}
 
         {activePanel === "typography" && (
-          <>
+          <PlanFeatureLock feature="advancedDesign" label="Advanced design">
             <h2 className="text-2xl font-medium">Typography</h2>
             <div className="mt-8 grid grid-cols-2 gap-3">
               {typographyOptions.map(([name, sample, desc]) => (
@@ -3610,11 +3607,11 @@ function PresetDesignPanel({
                 </button>
               )}
             </div>
-          </>
+          </PlanFeatureLock>
         )}
 
         {activePanel === "color" && (
-          <>
+          <PlanFeatureLock feature="advancedDesign" label="Advanced design">
             <h2 className="text-2xl font-medium">Color</h2>
             <div className="mt-8 grid grid-cols-2 gap-3">
               {colorOptions.map(([name, colors]) => (
@@ -3628,11 +3625,11 @@ function PresetDesignPanel({
                 </button>
               ))}
             </div>
-          </>
+          </PlanFeatureLock>
         )}
 
         {activePanel === "grid" && (
-          <>
+          <PlanFeatureLock feature="layouts" label="Layouts">
             <h2 className="text-2xl font-medium">Grid</h2>
             <OptionSection title="Thumbnail Size">
               <TwoOption value={design.thumbnailSize} a="Regular" b="Large" onPick={(value) => onChange({ thumbnailSize: value as "Regular" | "Large" })} />
