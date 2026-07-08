@@ -14,7 +14,7 @@ const shareTemplates = [
     label: "Mobile App Ready",
     title: "Your Mobile Gallery App is Ready",
     subject: (name: string) => `Your ${name} mobile app is ready!`,
-    intro: (name: string) => `To install your ${name} mobile gallery app, open this email on your mobile phone and click the Install App link.`,
+    intro: (name: string) => `To install your ${name} mobile gallery app, open this email on your mobile phone and click the Install App button.`,
   },
   {
     id: "wedding",
@@ -35,9 +35,11 @@ const shareTemplates = [
 export function MobileGalleryShareScreen({
   app,
   profile,
+  sendInvite,
 }: {
   app: MobileGalleryApp;
   profile: MobileGalleryProfile;
+  sendInvite: any;
 }) {
   const router = useRouter();
   const [step, setStep] = useState<ShareStep>("method");
@@ -72,14 +74,43 @@ export function MobileGalleryShareScreen({
     toast.success("Link copied");
   }
 
-  function send(event: FormEvent) {
+  function openMailApp() {
+    const cc = sendCopy && profile.contactEmail ? `&cc=${encodeURIComponent(profile.contactEmail)}` : "";
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${cc}`;
+  }
+
+  async function send(event: FormEvent) {
     event.preventDefault();
     if (!isPublished) {
       toast.error("Publish this app before sharing it");
       return;
     }
-    const cc = sendCopy && profile.contactEmail ? `&cc=${encodeURIComponent(profile.contactEmail)}` : "";
-    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${cc}`;
+
+    try {
+      const result = await sendInvite.mutateAsync({
+        to: email,
+        subject,
+        message,
+        templateTitle: selectedTemplate.title,
+        link,
+        sendCopy,
+      });
+
+      if (result.data.sent) {
+        toast.success("Invitation sent by SMTP");
+        return;
+      }
+
+      if (result.data.reason === "SMTP_NOT_CONFIGURED") {
+        toast.info("SMTP is not configured, so the invitation will open in your email app.");
+      } else {
+        toast.warning("SMTP could not send the invitation. Opening your email app instead.");
+      }
+      openMailApp();
+    } catch (error) {
+      toast.warning(error instanceof Error ? `${error.message}. Opening your email app instead.` : "Opening your email app instead.");
+      openMailApp();
+    }
   }
 
   return (
@@ -98,7 +129,7 @@ export function MobileGalleryShareScreen({
         <section className="mx-auto max-w-4xl px-4 py-12 sm:px-8">
           <div className="text-center"><h1 className="text-3xl font-light">Share {app.name}</h1><p className="mt-3 text-sm text-[#777]">Choose how you want to share this mobile gallery app.</p></div>
           <div className="mt-10 grid gap-5 sm:grid-cols-2">
-            <button disabled={!isPublished} onClick={() => setStep("templates")} className="border bg-white p-8 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"><Mail className="size-8 text-[#18bfa6]" /><h2 className="mt-5 text-xl font-semibold">Share by Email</h2><p className="mt-2 text-sm leading-6 text-[#777]">Select a template, edit the invitation and open it in your email application.</p></button>
+            <button disabled={!isPublished} onClick={() => setStep("templates")} className="border bg-white p-8 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"><Mail className="size-8 text-[#18bfa6]" /><h2 className="mt-5 text-xl font-semibold">Share by Email</h2><p className="mt-2 text-sm leading-6 text-[#777]">Send through the global SMTP service. If SMTP is not configured, the prepared email opens locally without breaking the flow.</p></button>
             <button disabled={!isPublished} onClick={() => setStep("link")} className="border bg-white p-8 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"><Link2 className="size-8 text-[#18bfa6]" /><h2 className="mt-5 text-xl font-semibold">Get Direct Link</h2><p className="mt-2 text-sm leading-6 text-[#777]">Copy the public app link or open it in a new tab to test installation.</p></button>
           </div>
         </section>
@@ -138,10 +169,10 @@ export function MobileGalleryShareScreen({
             <Field label="Email" value={email} onChange={setEmail} type="email" required placeholder="e.g. johnsmith@email.com" />
             <Field label="Subject" value={subject} onChange={setSubject} />
             <label className="mt-5 block text-sm font-semibold">Message<textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={7} className="mt-2 w-full border p-4 font-normal leading-6 outline-none focus:border-[#18bfa6]" /></label>
-            <div className="mt-4 rounded border bg-[#fafafa] p-3 text-xs leading-5 text-[#777]">The Install App link automatically uses: <span className="break-all">{link}</span></div>
-            {profile.contactEmail && <label className="mt-4 flex items-center gap-2 text-sm text-[#666]"><input type="checkbox" checked={sendCopy} onChange={(event) => setSendCopy(event.target.checked)} /> Add {profile.contactEmail} as CC</label>}
-            <div className="mt-5 flex flex-wrap gap-3"><button disabled={!isPublished} className="flex items-center gap-2 bg-[#18bfa6] px-6 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"><Mail className="size-4" /> Open Email Invite</button><button type="button" onClick={copyLink} className="flex items-center gap-2 border px-5 py-3"><Copy className="size-4" /> Copy Link</button></div>
-            <p className="mt-4 text-xs leading-5 text-[#888]">This flow is SMTP-neutral. Your own SMTP service can be connected later without changing the gallery or template UI.</p>
+            <div className="mt-4 rounded border bg-[#fafafa] p-3 text-xs leading-5 text-[#777]">The Install App button automatically uses: <span className="break-all">{link}</span></div>
+            {profile.contactEmail && <label className="mt-4 flex items-center gap-2 text-sm text-[#666]"><input type="checkbox" checked={sendCopy} onChange={(event) => setSendCopy(event.target.checked)} /> Send a copy to {profile.contactEmail}</label>}
+            <div className="mt-5 flex flex-wrap gap-3"><button disabled={sendInvite.isPending || !isPublished} className="flex items-center gap-2 bg-[#18bfa6] px-6 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"><Mail className="size-4" /> {sendInvite.isPending ? "Sending…" : "Send Invite"}</button><button type="button" onClick={copyLink} className="flex items-center gap-2 border px-5 py-3"><Copy className="size-4" /> Copy Link</button></div>
+            <p className="mt-4 text-xs leading-5 text-[#888]">The global SMTP service is used first. Missing SMTP environment values only create a backend warning log and return a safe fallback result.</p>
           </form>
 
           <div className="flex items-center justify-center p-5 sm:p-8">
