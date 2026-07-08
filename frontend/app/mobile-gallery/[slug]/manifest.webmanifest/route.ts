@@ -7,7 +7,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(slug)}`, { cache: "no-store" }).catch(() => null);
   const payload = response?.ok ? await response.json().catch(() => null) : null;
   const app = payload?.data;
-  const icon = app?.iconUrl || app?.coverImage || "/favicon.ico";
   return NextResponse.json(
     {
       id: `/mobile-gallery/${slug}`,
@@ -22,8 +21,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
       theme_color: app?.design?.backgroundColor || "#ffffff",
       orientation: "portrait-primary",
       icons: [
-        { src: icon, sizes: "192x192", type: "image/png", purpose: "any maskable" },
-        { src: icon, sizes: "512x512", type: "image/png", purpose: "any maskable" },
+        { src: `/mobile-gallery/${slug}/icon/192`, sizes: "192x192", type: "image/png", purpose: "any maskable" },
+        { src: `/mobile-gallery/${slug}/icon/512`, sizes: "512x512", type: "image/png", purpose: "any maskable" },
       ],
     },
     { headers: { "content-type": "application/manifest+json", "cache-control": "public, max-age=300" } },
