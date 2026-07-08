@@ -130,7 +130,8 @@ export function PublicGallery({
     ...defaultDesign,
     ...(collection?.design ?? fallbackPresetDesign),
   };
-  const title = collection?.name ?? decodeURIComponent(galary);
+  const studioName = decodeRouteText(name);
+  const title = collection?.name ?? decodeRouteText(galary);
   design.coverTitle = coverTextOrDefault(design.coverTitle, title);
   design.coverDate = coverTextOrDefault(
     design.coverDate,
@@ -504,7 +505,7 @@ export function PublicGallery({
       )}
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-black/5 px-4 sm:px-5 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
-        <p className="truncate text-sm uppercase tracking-[0.24em]">{decodeURIComponent(name)}</p>
+        <p className="truncate text-sm uppercase tracking-[0.24em]">{studioName}</p>
         <div className="hidden lg:block" />
         <div className="flex min-w-0 items-center justify-end gap-3 sm:gap-4" data-print-store-actions-host="true">
           <span data-public-store-cart-host="true" />
@@ -549,7 +550,7 @@ export function PublicGallery({
           design={{
             ...design,
             coverTitle: design.coverTitle || title,
-            coverSmallTitle: design.coverSmallTitle || decodeURIComponent(name),
+            coverSmallTitle: design.coverSmallTitle || studioName,
             branding: collection?.branding,
           }}
           image={coverPhoto}
@@ -1080,6 +1081,20 @@ async function compressFaceSearchImage(file: File) {
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
   if (!blob || blob.size >= file.size) return file;
   return new File([blob], "face-search.jpg", { type: "image/jpeg" });
+}
+
+function decodeRouteText(value: string) {
+  let decoded = value;
+  for (let index = 0; index < 3; index += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+  return decoded;
 }
 
 function formatPublicDate(value: string) {
