@@ -212,6 +212,14 @@ const switcherItems = [
     mark: "bg-[#ff4f5d]",
     accent: "from-[#ff4f5d] to-[#ffc7cd]",
   },
+  {
+    key: "mobile-gallery",
+    title: "Mobile Gallery App",
+    text: "Create installable mobile-first photo apps",
+    href: "/dashboard/mobile-gallery",
+    mark: "bg-[#f5c421]",
+    accent: "from-[#f5c421] to-[#ffe99a]",
+  },
 ] as const;
 
 const sidebarItems = {
