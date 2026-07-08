@@ -70,5 +70,10 @@ export default async function PublicMobileGalleryPage({ params }: { params: Prom
   const { slug } = await params;
   const app = await getApp(slug);
   if (!app) notFound();
-  return <MobileGalleryPublic app={app} profile={app.profile || {}} />;
+  return (
+    <div className="mobile-gallery-page">
+      <style>{`@supports (padding-bottom: env(safe-area-inset-bottom)) { .mobile-gallery-page > main > nav { padding-bottom: env(safe-area-inset-bottom); min-height: calc(4rem + env(safe-area-inset-bottom)); } }`}</style>
+      <MobileGalleryPublic app={app} profile={app.profile || {}} />
+    </div>
+  );
 }
