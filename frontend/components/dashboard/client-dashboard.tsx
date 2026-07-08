@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type PointerEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, parseISO } from "date-fns";
+import { format, isValid, parse, parseISO } from "date-fns";
 import LinkExtension from "@tiptap/extension-link";
 import UnderlineExtension from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -3607,22 +3607,50 @@ function PresetDesignPanel({
                   ["Title", "coverTitle", "showCoverTitle"],
                   ["Date", "coverDate", "showCoverDate"],
                   ["Button", "coverButtonText", "showCoverButton"],
-                ] as const).map(([label, key, toggle]) => (
-                  <Field key={key}>
-                    <div className="flex items-center gap-3">
-                      <Checkbox
-                        checked={design[toggle]}
-                        onCheckedChange={(value) => onChange({ [toggle]: Boolean(value) } as Partial<typeof design>)}
-                      />
-                      <FieldLabel className="font-bold">{label}</FieldLabel>
-                    </div>
-                    <Input
-                      value={design[key]}
-                      onChange={(event) => onChange({ [key]: event.target.value } as Partial<typeof design>)}
-                      className="mt-2 h-11 rounded-none bg-white"
-                    />
-                  </Field>
-                ))}
+                ] as const).map(([label, key, toggle]) => {
+                  const selectedCoverDate = key === "coverDate" ? parseDisplayDate(design.coverDate) : undefined;
+
+                  return (
+                    <Field key={key}>
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={design[toggle]}
+                          onCheckedChange={(value) => onChange({ [toggle]: Boolean(value) } as Partial<typeof design>)}
+                        />
+                        <FieldLabel className="font-bold">{label}</FieldLabel>
+                      </div>
+                      {key === "coverDate" ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "mt-2 h-11 w-full justify-between rounded-none bg-white px-3 text-left font-normal",
+                                !design.coverDate && "text-[#777]"
+                              )}
+                            >
+                              {design.coverDate || "Select date"}
+                              <CalendarIcon data-icon="inline-end" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto rounded-none p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={selectedCoverDate}
+                              onSelect={(date) => onChange({ coverDate: date ? format(date, "PPP") : "" })}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <Input
+                          value={design[key]}
+                          onChange={(event) => onChange({ [key]: event.target.value } as Partial<typeof design>)}
+                          className="mt-2 h-11 rounded-none bg-white"
+                        />
+                      )}
+                    </Field>
+                  );
+                })}
               </FieldGroup>
             </OptionSection>
             <p className="mt-10 text-sm font-bold">Cover</p>
@@ -10088,10 +10116,20 @@ function titleCase(value: string) {
 function formatDate(value?: string) {
   if (!value) return "No date";
   try {
-    return format(parseISO(value), "MMM d, yyyy");
+    return format(parseISO(value), "PPP");
   } catch {
     return value;
   }
+}
+
+function parseDisplayDate(value?: string) {
+  if (!value) return undefined;
+  const formats = ["PPP", "MMMM do, yyyy", "MMMM d, yyyy", "MMM d, yyyy", "yyyy-MM-dd"];
+  for (const pattern of formats) {
+    const date = pattern === "yyyy-MM-dd" ? parseISO(value) : parse(value, pattern, new Date());
+    if (isValid(date)) return date;
+  }
+  return undefined;
 }
 
 function formatActivityDate(value?: string) {
