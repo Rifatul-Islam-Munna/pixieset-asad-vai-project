@@ -3,7 +3,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
-import { DEFAULT_STORE_PRODUCTS } from './store-defaults';
 import { StoreActivity, StoreActivityDocument, StoreActivityType } from './entities/store-activity.entity';
 import { StoreCoupon, StoreCouponDocument } from './entities/store-coupon.entity';
 import { StorePriceSheet, StorePriceSheetDocument } from './entities/store-price-sheet.entity';
@@ -11,6 +10,7 @@ import { StoreProduct, StoreProductDocument } from './entities/store-product.ent
 import { StoreSetting, StoreSettingDocument } from './entities/store-setting.entity';
 import { StoreShipping, StoreShippingDocument } from './entities/store-shipping.entity';
 import { StoreTax, StoreTaxDocument } from './entities/store-tax.entity';
+import { StoreDefaultProductService } from './store-default-product.service';
 
 export type CollectionStoreConfig = {
   enabled: boolean;
@@ -52,6 +52,7 @@ export class StoreCatalogService {
     private readonly settingModel: Model<StoreSettingDocument>,
     @InjectModel(StoreActivity.name)
     private readonly activityModel: Model<StoreActivityDocument>,
+    private readonly defaultProducts: StoreDefaultProductService,
   ) {}
 
   async getPublicStore(identifier: string, logView = true) {
@@ -180,10 +181,12 @@ export class StoreCatalogService {
         collectionIds: [collection._id.toString()],
         minimumOrderAmount: Number(raw.minimumOrderAmount ?? 0),
       });
+      const defaults = await this.defaultProducts.listActiveData();
       await this.productModel.insertMany(
-        DEFAULT_STORE_PRODUCTS.map((item) => ({
+        defaults.map((item: any) => ({
           userId,
           priceSheetId: sheet._id.toString(),
+          defaultTemplateSlug: item.slug,
           ...item,
         })),
       );
@@ -312,10 +315,11 @@ export class StoreCatalogService {
   private async ensureDefaultProducts(userId: string, priceSheetId: string) {
     const existing = await this.productModel.find({ userId, priceSheetId }).select('slug').lean();
     const slugs = new Set(existing.map((item: any) => item.slug));
-    const missing = DEFAULT_STORE_PRODUCTS.filter((item) => !slugs.has(item.slug));
+    const defaults = await this.defaultProducts.listActiveData();
+    const missing = defaults.filter((item: any) => !slugs.has(item.slug));
     if (missing.length) {
       await this.productModel.insertMany(
-        missing.map((item) => ({ userId, priceSheetId, ...item })),
+        missing.map((item: any) => ({ userId, priceSheetId, defaultTemplateSlug: item.slug, ...item })),
       );
     }
     return missing.length;

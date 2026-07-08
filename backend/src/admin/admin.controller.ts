@@ -62,6 +62,18 @@ export class AdminController {
     return { message: 'Collection faces reindexed', data };
   }
 
+  @Get('default-store-products')
+  async defaultStoreProducts() {
+    const data = await this.adminService.findDefaultStoreProducts();
+    return { data };
+  }
+
+  @Patch('default-store-products/:id')
+  async updateDefaultStoreProduct(@Param('id') id: string, @Body() dto: Record<string, unknown>) {
+    const data = await this.adminService.updateDefaultStoreProduct(id, dto);
+    return { message: 'Default product updated', data };
+  }
+
   @Get('plans')
   async plans() {
     const data = await this.adminService.findPlans();

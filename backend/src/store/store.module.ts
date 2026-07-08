@@ -9,6 +9,7 @@ import { StoreShipping, StoreShippingSchema } from './entities/store-shipping.en
 import { StoreSetting, StoreSettingSchema } from './entities/store-setting.entity';
 import { StoreTax, StoreTaxSchema } from './entities/store-tax.entity';
 import { StoreActivity, StoreActivitySchema } from './entities/store-activity.entity';
+import { StoreDefaultProduct, StoreDefaultProductSchema } from './entities/store-default-product.entity';
 import { PublicStoreController, StoreController } from './store.controller';
 import { PublicPrintStoreController } from './public-print-store.controller';
 import { StorePrintAdminController } from './store-print-admin.controller';
@@ -21,6 +22,7 @@ import { StorePricingService } from './store-pricing.service';
 import { StoreStripeService } from './store-stripe.service';
 import { StoreOrderCreateService } from './store-order-create.service';
 import { StorePaymentVerifyService } from './store-payment-verify.service';
+import { StoreDefaultProductService } from './store-default-product.service';
 import { Collection, CollectionSchema } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
@@ -37,6 +39,7 @@ import { User, UserSchema } from 'src/user/entities/user.entity';
       { name: StoreShipping.name, schema: StoreShippingSchema },
       { name: StoreSetting.name, schema: StoreSettingSchema },
       { name: StoreActivity.name, schema: StoreActivitySchema },
+      { name: StoreDefaultProduct.name, schema: StoreDefaultProductSchema },
       { name: Collection.name, schema: CollectionSchema },
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: User.name, schema: UserSchema },
@@ -58,6 +61,8 @@ import { User, UserSchema } from 'src/user/entities/user.entity';
     StoreStripeService,
     StoreOrderCreateService,
     StorePaymentVerifyService,
+    StoreDefaultProductService,
   ],
+  exports: [StoreDefaultProductService],
 })
 export class StoreModule {}

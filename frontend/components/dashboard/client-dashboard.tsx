@@ -163,6 +163,8 @@ import {
 } from "@/lib/dashboard-store";
 import type { BrandSettings, CustomCoverTemplate, HomeCmsData } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
+import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
+import { PlanFeatureLock, PlanFeatureNotice } from "@/components/dashboard/plan-feature-lock";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
 export type DashboardPage =
@@ -665,6 +667,13 @@ export function ClientDashboard({
         )}
 
         <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : storeTopNavOpen ? "max-w-[1220px] px-4 py-10 sm:px-5 md:py-14" : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20")}>
+          <PlanFeatureLock
+            feature={section === "store-gallery" ? "store" : "marketingEmails"}
+            label={section === "store-gallery" ? "Store" : "Marketing email"}
+            className={section === "store-gallery" || page === "marketing" || campaignBuilderOpen ? "min-h-[520px]" : "contents"}
+            bypass={section !== "store-gallery" && page !== "marketing" && !campaignBuilderOpen}
+            bypass={section !== "store-gallery" && page !== "marketing" && !campaignBuilderOpen}
+          >
           {campaignBuilderOpen ? (
             <CampaignBuilder onClose={closeCampaignBuilder} />
           ) : wizardOpen ? (
@@ -722,6 +731,7 @@ export function ClientDashboard({
           ) : (
             <DashboardPlaceholder page={page} title={activeNav} />
           )}
+</PlanFeatureLock>
         </div>
       </section>
 
@@ -846,6 +856,7 @@ function StoreGetStartedPanel() {
 function StoragePlanPanel() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [data, setData] = useState<{ plans: AdminPlan[]; user: BillingUser } | null>(null);
 
   useEffect(() => {
@@ -882,7 +893,10 @@ function StoragePlanPanel() {
       try {
         const result = await checkoutPlan(planId);
         if (result.checkoutUrl) window.location.href = result.checkoutUrl;
-        else setError("Stripe checkout URL missing");
+        else if (result.activated) {
+setData(await getBillingOverview());
+setNotice("Free plan activated successfully");
+        } else setError("Plan activation failed");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Checkout failed");
       }
@@ -898,6 +912,7 @@ function StoragePlanPanel() {
         </Button>
       </div>
       {error && <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">{error}</p>}
+      {notice && <p className="mt-5 border-l-2 border-[#22bda7] pl-3 text-sm font-semibold text-[#008f80]">{notice}</p>}
       <div className="mt-10 grid gap-5 lg:grid-cols-2">
         <UsagePanel
           icon={<Database className="size-5" />}
@@ -3309,6 +3324,7 @@ function PresetStorePanel({
   };
 }) {
   return (
+    <PlanFeatureLock feature="store" label="Store">
     <div className="max-w-[560px]">
       <h2 className="text-2xl font-medium">Store</h2>
       <div className="mt-8 bg-[#eef7f9] p-6">
@@ -3380,6 +3396,7 @@ function PresetStorePanel({
         </button>
       </div>
     </div>
+    </PlanFeatureLock>
   );
 }
 
@@ -3469,6 +3486,9 @@ function PresetDesignPanel({
   onChange: (value: Partial<typeof design>) => void;
 }) {
   const [adminCoverTemplates, setAdminCoverTemplates] = useState<CustomCoverTemplate[]>([]);
+  const customCoverAccess = usePlanFeatureAccess("customCover");
+  const advancedDesignAccess = usePlanFeatureAccess("advancedDesign");
+  const layoutsAccess = usePlanFeatureAccess("layouts");
   const readCustomFont = (file?: File) => {
     if (!file) return;
     const reader = new FileReader();
@@ -3521,11 +3541,13 @@ function PresetDesignPanel({
               </FieldGroup>
             </OptionSection>
             <p className="mt-10 text-sm font-bold">Cover</p>
+            <PlanFeatureNotice feature="customCover" label="Custom cover templates" />
             <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8">
               {adminCoverTemplates.map((template) => (
                 <button
                   key={template.id}
-                  className="text-center"
+                  className={cn("relative text-center", customCoverAccess.locked && "cursor-not-allowed opacity-45")}
+                  disabled={customCoverAccess.locked}
                   onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}
                   type="button"
                 >
@@ -3621,7 +3643,7 @@ function PresetDesignPanel({
             <OptionSection title="Navigation Style">
               <TwoOption value={design.navigationStyle} a="Icon Only" b="Icon & Text" onPick={(value) => onChange({ navigationStyle: value as "Icon Only" | "Icon & Text" })} />
             </OptionSection>
-          </>
+          </PlanFeatureLock>
         )}
     </div>
   );
@@ -3792,6 +3814,8 @@ function PresetDownloadPanel({
   };
   onChange: (value: Partial<typeof download>) => void;
 }) {
+  const pinAccess = usePlanFeatureAccess("pinSet");
+  const limitAccess = usePlanFeatureAccess("downloadLimit");
   return (
     <div className="max-w-[620px]">
       <FieldGroup className="gap-12">

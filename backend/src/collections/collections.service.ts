@@ -48,14 +48,15 @@ export class CollectionsService {
   ) {}
 
   async create(userId: string, dto: CreateCollectionDto) {
+    const safeDto = await this.sanitizeCollectionCapabilities(userId, dto);
     const collection = await this.collectionModel.create({
       userId,
-      name: dto.name,
-      slug: await this.uniqueSlug(userId, dto.name),
-      eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
-      presetId: dto.presetId,
-      design: dto.design ?? {},
-      settings: dto.settings ?? {},
+      name: safeDto.name,
+      slug: await this.uniqueSlug(userId, safeDto.name),
+      eventDate: safeDto.eventDate ? new Date(safeDto.eventDate) : undefined,
+      presetId: safeDto.presetId,
+      design: safeDto.design ?? {},
+      settings: safeDto.settings ?? {},
       sets: [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],
       imageCount: 0,
     });
@@ -1155,19 +1156,36 @@ export class CollectionsService {
     }
   }
 
-  private async sanitizeCollectionCapabilities(userId: string, dto: UpdateCollectionDto) {
+  private async sanitizeCollectionCapabilities<T extends CreateCollectionDto | UpdateCollectionDto>(userId: string, dto: T): Promise<T> {
     const user = await this.userModel.findById(userId).select('planFeatures').lean();
     const features = user?.planFeatures ?? {};
-    const next = { ...dto };
+    const next: any = { ...dto };
     const settings = { ...((next.settings ?? {}) as any) };
     const download = { ...(settings.download ?? {}) };
+    const store = { ...(settings.store ?? {}) };
+    const design = { ...((next.design ?? {}) as any) };
 
-    if (next.coverImage && !features.coverImage) {
-      delete next.coverImage;
+    if (next.coverImage && !features.coverImage) delete next.coverImage;
+
+    if (!features.customCover) {
+      delete design.customCoverTemplate;
+      if (String(design.cover ?? '').startsWith('custom:')) design.cover = 'Center';
     }
-    if (next.design && !features.advancedDesign) {
-      delete next.design;
+
+    if (!features.advancedDesign) {
+      delete design.typography;
+      delete design.customFontName;
+      delete design.customFontDataUrl;
+      delete design.color;
+      delete design.navigationStyle;
     }
+
+    if (!features.layouts) {
+      design.gridStyle = 'Vertical';
+      design.thumbnailSize = 'Regular';
+      design.gridSpacing = 'Regular';
+    }
+
     if ((download.limitDownloads || download.restrictDownloads) && !features.downloadLimit) {
       download.limitDownloads = false;
       download.restrictDownloads = false;
@@ -1177,8 +1195,16 @@ export class CollectionsService {
       download.downloadPin = false;
       download.downloadPinCode = '';
     }
-    if (next.settings) next.settings = { ...settings, download };
-    return next;
+    if (!features.store) {
+      store.enabled = false;
+      store.storeStatus = false;
+      store.showPrintStoreNav = false;
+      store.showBuyPhotoButton = false;
+    }
+
+    if (next.design) next.design = design;
+    if (next.settings) next.settings = { ...settings, download, store };
+    return next as T;
   }
 }
 

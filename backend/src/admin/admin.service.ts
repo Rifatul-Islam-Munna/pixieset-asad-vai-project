@@ -13,6 +13,7 @@ import { AdminStripeSetting, AdminStripeSettingDocument } from './entities/admin
 import { Plan, PlanDocument } from './entities/plan.entity';
 import { StoreOrder, StoreOrderDocument } from 'src/store/entities/store-order.entity';
 import { FaceSearchService } from 'src/face-search/face-search.service';
+import { StoreDefaultProductService } from 'src/store/store-default-product.service';
 
 @Injectable()
 export class AdminService {
@@ -25,6 +26,7 @@ export class AdminService {
     private readonly stripeSettingModel: Model<AdminStripeSettingDocument>,
     @InjectModel(StoreOrder.name) private readonly orderModel: Model<StoreOrderDocument>,
     private readonly faceSearchService: FaceSearchService,
+    private readonly defaultProducts: StoreDefaultProductService,
   ) {}
 
   async dashboard() {
@@ -167,6 +169,14 @@ export class AdminService {
     return this.planModel.find().sort({ createdAt: -1 }).lean();
   }
 
+  async findDefaultStoreProducts() {
+    return this.defaultProducts.list();
+  }
+
+  async updateDefaultStoreProduct(id: string, dto: Record<string, unknown>) {
+    return this.defaultProducts.update(id, dto);
+  }
+
   async createPlan(dto: AdminCreatePlanDto) {
     const plan = await this.planModel.create({
       name: dto.name.trim(),
@@ -227,8 +237,11 @@ export class AdminService {
       this.userModel.findById(userId).lean(),
     ]);
     if (!plan) throw new NotFoundException('Plan not found');
+    if (Number(plan.priceMonthly ?? 0) <= 0) {
+      const activatedPlan = await this.assignPlanToUser(userId, plan._id.toString());
+      return { activated: true, checkoutUrl: null, sessionId: null, plan: activatedPlan };
+    }
     if (!settings.enabled || !settings.secretKey) throw new BadRequestException('Stripe is not configured');
-    if (Number(plan.priceMonthly ?? 0) <= 0) throw new BadRequestException('Plan price is required for Stripe checkout');
 
     const stripe = new Stripe(settings.secretKey);
     const session = await stripe.checkout.sessions.create({
@@ -354,7 +367,10 @@ export class AdminService {
   async addEmailUsage(userId: string, count: number) {
     const safeCount = Math.max(1, Number(count ?? 1));
     const monthKey = this.currentMonthKey();
-    const user = await this.userModel.findById(userId).select('monthlyEmailLimit monthlyEmailsUsed monthlyUsageKey').lean();
+    const user = await this.userModel.findById(userId).select('monthlyEmailLimit monthlyEmailsUsed monthlyUsageKey planFeatures').lean();
+    if (!user?.planFeatures?.marketingEmails) {
+      throw new BadRequestException('Marketing email is not included in your current plan.');
+    }
     const limit = Number(user?.monthlyEmailLimit ?? 0);
     const used = user?.monthlyUsageKey === monthKey ? Number(user?.monthlyEmailsUsed ?? 0) : 0;
     if (limit > 0 && used + safeCount > limit) {

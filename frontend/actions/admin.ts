@@ -42,6 +42,37 @@ export type AdminPlan = {
   createdAt?: string;
 };
 
+export type AdminDefaultStoreVariant = {
+  id: string;
+  label: string;
+  options?: Record<string, string>;
+  price: number;
+  extraShipping?: number;
+  hidden?: boolean;
+  sortOrder?: number;
+  isDefault?: boolean;
+};
+
+export type AdminDefaultStoreProduct = {
+  _id: string;
+  slug: string;
+  type: "digital-download" | "self-fulfilled";
+  name: string;
+  category: string;
+  active: boolean;
+  sortOrder: number;
+  description?: string;
+  productInfo?: string;
+  productionNote?: string;
+  price: number;
+  extraShipping?: number;
+  images?: string[];
+  previewImages?: string[];
+  variants?: AdminDefaultStoreVariant[];
+  options?: { name: string; values: string[] }[];
+  updatedAt?: string;
+};
+
 export type AdminStripeSetting = {
   enabled: boolean;
   publishableKey: string;
@@ -204,4 +235,20 @@ export async function uploadHomeCmsFile(formData: FormData) {
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message ?? "Upload failed");
   return payload?.data as string;
+}
+
+
+export async function getAdminHomeCms() {
+  return adminRequest<HomeCmsData>("/home-cms");
+}
+
+export async function getAdminDefaultStoreProducts() {
+  return adminRequest<AdminDefaultStoreProduct[]>("/admin/default-store-products");
+}
+
+export async function updateAdminDefaultStoreProduct(id: string, payload: Partial<AdminDefaultStoreProduct>) {
+  return adminRequest<AdminDefaultStoreProduct>(`/admin/default-store-products/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
