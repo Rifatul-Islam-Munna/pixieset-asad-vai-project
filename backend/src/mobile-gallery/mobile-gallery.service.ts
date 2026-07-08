@@ -51,8 +51,7 @@ export class MobileGalleryService {
   }
 
   async findAll(userId: string) {
-    const apps = await this.appModel.find({ userId }).sort({ createdAt: -1 }).lean();
-    return apps;
+    return this.appModel.find({ userId }).sort({ createdAt: -1 }).lean();
   }
 
   async findOne(userId: string, id: string) {
@@ -94,17 +93,23 @@ export class MobileGalleryService {
   }
 
   async remove(userId: string, id: string) {
-    const app = await this.appModel.findOne({ _id: id, userId });
+    const app = await this.appModel.findOne({ _id: id, userId }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
+    const images = await this.imageModel.find({ appId: id, userId }).select({ url: 1 }).lean();
+    const filesToDelete = new Set<string>(images.map((image) => image.url).filter(Boolean));
+    if (app.iconUrl) filesToDelete.add(app.iconUrl);
+
     await Promise.all([
       this.imageModel.deleteMany({ appId: id, userId }),
       this.appModel.deleteOne({ _id: id, userId }),
     ]);
+    await Promise.all(Array.from(filesToDelete).map((url) => this.minioService.deleteService(url).catch(() => null)));
     return { deleted: true, appId: id };
   }
 
   async uploadImages(userId: string, appId: string, files: Express.Multer.File[]) {
     if (!files?.length) throw new BadRequestException('Files are required');
+    this.assertImageFiles(files);
     const app = await this.appModel.findOne({ _id: appId, userId }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
     const last = await this.imageModel.findOne({ appId, userId }).sort({ order: -1 }).lean();
@@ -159,18 +164,21 @@ export class MobileGalleryService {
     const image = await this.imageModel.findOne({ _id: imageId, appId, userId });
     if (!image) throw new NotFoundException('Image not found');
     await this.imageModel.deleteOne({ _id: imageId, appId, userId });
-    const next = await this.imageModel.findOne({ appId, userId }).sort({ order: 1 }).lean();
-    const app = await this.appModel.findOne({ _id: appId, userId }).lean();
-    const update: Record<string, any> = { $inc: { imageCount: -1 } };
-    if (app?.coverImage === image.url) {
-      update.$set = { coverImage: next?.url ?? '' };
-    }
+    const [next, remaining, app] = await Promise.all([
+      this.imageModel.findOne({ appId, userId }).sort({ order: 1 }).lean(),
+      this.imageModel.countDocuments({ appId, userId }),
+      this.appModel.findOne({ _id: appId, userId }).lean(),
+    ]);
+    const update: Record<string, any> = { $set: { imageCount: remaining } };
+    if (app?.coverImage === image.url) update.$set.coverImage = next?.url ?? '';
     await this.appModel.updateOne({ _id: appId, userId }, update);
+    await this.minioService.deleteService(image.url).catch(() => null);
     return image.toObject();
   }
 
   async uploadAsset(userId: string, file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('File is required');
+    this.assertImageFiles([file]);
     let url = '';
     try {
       url = await this.minioService.uploadFile(file);
@@ -195,21 +203,29 @@ export class MobileGalleryService {
   }
 
   async updateSettings(userId: string, body: Record<string, any>) {
+    const socialLinks = Object.fromEntries(
+      Object.entries(body.socialLinks ?? {}).map(([key, value]) => [String(key).slice(0, 40), String(value ?? '').trim().slice(0, 500)]),
+    );
     return this.settingModel.findOneAndUpdate(
       { userId },
       {
         $set: {
-          logoUrl: String(body.logoUrl ?? ''),
-          biography: String(body.biography ?? ''),
-          socialLinks: body.socialLinks ?? {},
-          contactEmail: String(body.contactEmail ?? ''),
-          phoneNumber: String(body.phoneNumber ?? ''),
-          businessAddress: String(body.businessAddress ?? ''),
-          website: String(body.website ?? ''),
+          logoUrl: String(body.logoUrl ?? '').trim(),
+          biography: String(body.biography ?? '').slice(0, 5000),
+          socialLinks,
+          contactEmail: String(body.contactEmail ?? '').trim(),
+          phoneNumber: String(body.phoneNumber ?? '').trim(),
+          businessAddress: String(body.businessAddress ?? '').slice(0, 1000),
+          website: String(body.website ?? '').trim(),
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     ).lean();
+  }
+
+  private assertImageFiles(files: Express.Multer.File[]) {
+    const invalid = files.find((file) => !String(file.mimetype || '').toLowerCase().startsWith('image/'));
+    if (invalid) throw new BadRequestException(`${invalid.originalname || 'File'} is not a supported image`);
   }
 
   private async uniqueSlug(name: string) {
