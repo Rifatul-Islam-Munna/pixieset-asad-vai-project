@@ -1,7 +1,7 @@
 Traceback (most recent call last):
   File "<stdin>", line 12, in <module>
-  File "admin-plan-finalizer.py", line 757, in <module>
-  File "admin-plan-finalizer.py", line 24, in replace_once
-SystemExit: Missing expected block: dashboard feature boundary open
+  File "admin-plan-finalizer.py", line 795, in <module>
+  File "admin-plan-finalizer.py", line 34, in replace_once
+SystemExit: Missing expected block: custom covers disabled
 
-Run: 28933770012
+Run: 28933855480
