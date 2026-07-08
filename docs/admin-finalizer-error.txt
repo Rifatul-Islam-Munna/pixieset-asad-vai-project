@@ -1,7 +1,7 @@
 Traceback (most recent call last):
   File "<stdin>", line 12, in <module>
-  File "admin-plan-finalizer.py", line 736, in <module>
-  File "admin-plan-finalizer.py", line 19, in replace_once
-SystemExit: Missing expected block: admin resource links
+  File "admin-plan-finalizer.py", line 757, in <module>
+  File "admin-plan-finalizer.py", line 24, in replace_once
+SystemExit: Missing expected block: dashboard feature boundary open
 
-Run: 28933647841
+Run: 28933770012
