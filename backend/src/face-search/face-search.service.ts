@@ -425,10 +425,10 @@ export class FaceSearchService implements OnModuleInit {
     const groups: FaceGroup[] = [];
     for (const point of sortedPoints) {
       const vector = this.pointVector(point);
-      if (!vector) continue;
+      if (!Array.isArray(vector)) continue;
 
-      const normalized = this.normalizeVector(vector) ?? [];
-      if (!normalized.length) continue;
+      const normalized = this.normalizeVector(vector);
+      if (!normalized?.length) continue;
 
       const match = groups
         .map((group) => {
