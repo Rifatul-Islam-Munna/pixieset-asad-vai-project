@@ -10,12 +10,13 @@ import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@ne
 import { ConfigService } from '@nestjs/config';
 import { createReadStream } from 'fs';
 
-const BUCKET_NAME = 'niqha-public-bukcet';
+const DEFAULT_BUCKET_NAME = 'gallerista.app';
 
 @Injectable()
 export class MinioService implements OnModuleInit {
   private readonly logger = new Logger(MinioService.name);
   private s3?: S3Client;
+  private bucketName = DEFAULT_BUCKET_NAME;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -23,6 +24,8 @@ export class MinioService implements OnModuleInit {
     const minioUrl = this.configService.get<string>('MINIO_URL')?.trim();
     const accessKeyId = this.configService.get<string>('MINIO_ACCESS_KEY')?.trim();
     const secretAccessKey = this.configService.get<string>('MINIO_SECRET_KEY')?.trim();
+    const region = this.configService.get<string>('MINIO_REGION')?.trim() || 'us-east-1';
+    this.bucketName = this.configService.get<string>('MINIO_BUCKET')?.trim() || DEFAULT_BUCKET_NAME;
 
     if (!minioUrl || !accessKeyId || !secretAccessKey) {
       this.logger.error('MinIO env missing; uploads will fail until MINIO_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY are set');
@@ -30,15 +33,15 @@ export class MinioService implements OnModuleInit {
     }
 
     this.s3 = new S3Client({
-      region: 'us-east-1',
+      region,
       endpoint: minioUrl,
       credentials: { accessKeyId, secretAccessKey },
-      forcePathStyle: true,
+      forcePathStyle: false,
     });
 
-    await this.createBucketIfNotExists(BUCKET_NAME);
-    await this.makeBucketPublic(BUCKET_NAME);
-    await this.enablePublicAssetCors(BUCKET_NAME);
+    await this.createBucketIfNotExists(this.bucketName);
+    await this.makeBucketPublic(this.bucketName);
+    await this.enablePublicAssetCors(this.bucketName);
   }
 
   async createBucketIfNotExists(bucketName: string) {
@@ -107,13 +110,13 @@ export class MinioService implements OnModuleInit {
       const fileContent = createReadStream(file.path);
       await this.s3.send(
         new PutObjectCommand({
-          Bucket: BUCKET_NAME,
+          Bucket: this.bucketName,
           Key: file.filename,
           Body: fileContent,
           ContentType: file.mimetype,
         }),
       );
-      return `${this.configService.get('MINIO_URL')}/${BUCKET_NAME}/${file.filename}`;
+      return `${this.configService.get('MINIO_URL')}/${this.bucketName}/${file.filename}`;
     } catch (error) {
       this.logger.error(`Error uploading file: ${error instanceof Error ? error.message : String(error)}`);
       throw new HttpException('Failed to upload file', HttpStatus.INTERNAL_SERVER_ERROR);
@@ -125,7 +128,7 @@ export class MinioService implements OnModuleInit {
     if (!fileName) throw new HttpException('Invalid file name', HttpStatus.BAD_REQUEST);
     try {
       if (!this.s3) return true;
-      await this.s3.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: fileName }));
+      await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucketName, Key: fileName }));
       return true;
     } catch (error) {
       this.logger.error(`Error deleting file: ${error instanceof Error ? error.message : String(error)}`);
@@ -139,12 +142,12 @@ export class MinioService implements OnModuleInit {
     try {
       const url = new URL(trimmed);
       const parts = url.pathname.split('/').filter(Boolean);
-      const bucketIndex = parts.indexOf(BUCKET_NAME);
+      const bucketIndex = parts.indexOf(this.bucketName);
       const keyParts = bucketIndex >= 0 ? parts.slice(bucketIndex + 1) : parts.slice(-1);
       return decodeURIComponent(keyParts.join('/'));
     } catch {
       const withoutQuery = trimmed.split(/[?#]/)[0].replace(/^\/+/, '');
-      const bucketPrefix = `${BUCKET_NAME}/`;
+      const bucketPrefix = `${this.bucketName}/`;
       const key = withoutQuery.startsWith(bucketPrefix) ? withoutQuery.slice(bucketPrefix.length) : withoutQuery;
       return decodeURIComponent(key);
     }
