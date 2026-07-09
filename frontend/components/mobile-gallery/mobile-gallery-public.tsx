@@ -37,7 +37,10 @@ export function MobileGalleryPublic({
   profile?: MobileGalleryProfile;
   embedded?: boolean;
 }) {
-  const images = app.images ?? [];
+  const [images, setImages] = useState<MobileGalleryImage[]>(app.images ?? []);
+  const [imagesHasMore, setImagesHasMore] = useState(Boolean(app.imagesPage?.hasMore));
+  const [imagesLoadingMore, setImagesLoadingMore] = useState(false);
+  const loaderRef = useRef<HTMLDivElement | null>(null);
   const design = app.design ?? {};
   const theme = mobileGalleryThemes[design.theme ?? "lark"];
   const [tab, setTab] = useState<PublicTab>("home");
@@ -65,6 +68,11 @@ export function MobileGalleryPublic({
     ].filter(Boolean) as string[])),
     [app.coverImage, app.iconUrl, images, profile.logoUrl],
   );
+
+  useEffect(() => {
+    setImages(app.images ?? []);
+    setImagesHasMore(Boolean(app.imagesPage?.hasMore));
+  }, [app.images, app.imagesPage?.hasMore]);
 
   const cacheGalleryAssets = useCallback(async (silent = false) => {
     if (embedded || assetCachingRef.current || !("caches" in window) || !galleryAssetUrls.length) return;
@@ -205,12 +213,37 @@ export function MobileGalleryPublic({
     if (!items.length || busy) return;
     setBusy(true);
     try {
+      let zipItems = items;
+      if (suffix === "all-photos" && imagesHasMore) {
+        const loaded: MobileGalleryImage[] = [];
+        let offset = images.length;
+        let hasMore = imagesHasMore;
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+        while (hasMore) {
+          const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(app.slug)}/images?limit=120&offset=${offset}`).catch(() => null);
+          const payload = response?.ok ? await response.json().catch(() => null) : null;
+          const page = payload?.data;
+          if (!page?.items?.length) break;
+          loaded.push(...page.items);
+          offset += page.items.length;
+          hasMore = Boolean(page.hasMore);
+        }
+        if (loaded.length) {
+          const seen = new Set(zipItems.map((image) => image._id));
+          zipItems = [...zipItems, ...loaded.filter((image) => !seen.has(image._id))];
+          setImages((current) => {
+            const currentIds = new Set(current.map((image) => image._id));
+            return [...current, ...loaded.filter((image) => !currentIds.has(image._id))];
+          });
+          setImagesHasMore(false);
+        }
+      }
       const response = await fetch("/api/public-download", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: `${app.slug}-${suffix}`,
-          images: items.map((image, index) => ({
+          images: zipItems.map((image, index) => ({
             url: image.url,
             name: image.originalName || `photo-${index + 1}`,
           })),
@@ -269,6 +302,34 @@ export function MobileGalleryPublic({
     }
     setInstallPrompt(null);
   };
+
+  const loadMoreImages = async () => {
+    if (imagesLoadingMore || !imagesHasMore) return;
+    setImagesLoadingMore(true);
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+    const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(app.slug)}/images?limit=48&offset=${images.length}`).catch(() => null);
+    const payload = response?.ok ? await response.json().catch(() => null) : null;
+    const page = payload?.data;
+    if (page?.items?.length) {
+      setImages((current) => {
+        const seen = new Set(current.map((image) => image._id));
+        return [...current, ...page.items.filter((image: MobileGalleryImage) => !seen.has(image._id))];
+      });
+    }
+    setImagesHasMore(Boolean(page?.hasMore));
+    setImagesLoadingMore(false);
+  };
+
+  useEffect(() => {
+    if (tab !== "home" || !imagesHasMore) return;
+    const target = loaderRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMoreImages();
+    }, { rootMargin: "800px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [images.length, imagesHasMore, imagesLoadingMore, tab]);
 
   const dismissInstall = () => {
     setShowInstallHelp(false);
@@ -354,6 +415,12 @@ export function MobileGalleryPublic({
             ) : (
               <div className="flex min-h-72 items-center justify-center px-5 text-center text-sm opacity-60">
                 {tab === "favorites" ? "Tap the heart on a photo to add it here." : "No photos have been added yet."}
+              </div>
+            )}
+
+            {tab === "home" && imagesHasMore && (
+              <div ref={loaderRef} className="flex h-24 items-center justify-center">
+                {imagesLoadingMore && <span className="text-xs uppercase tracking-[0.14em] opacity-60">Loading</span>}
               </div>
             )}
 

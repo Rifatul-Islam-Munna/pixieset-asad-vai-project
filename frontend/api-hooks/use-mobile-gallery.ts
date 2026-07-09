@@ -12,6 +12,8 @@ export type MobileGalleryImage = {
   order?: number;
 };
 
+export type ImagesPage<T> = { items: T[]; total: number; limit: number; offset: number; hasMore: boolean };
+
 export type MobileGalleryCoverText = {
   eyebrow?: string;
   title?: string;
@@ -62,6 +64,7 @@ export type MobileGalleryApp = {
     callToAction?: { enabled?: boolean; label?: string; url?: string };
   };
   images?: MobileGalleryImage[];
+  imagesPage?: ImagesPage<MobileGalleryImage>;
 };
 
 export type MobileGalleryProfile = {
@@ -122,7 +125,7 @@ export function useMobileGalleryApp(appId?: string) {
   const appQuery = useQuery({
     enabled: Boolean(appId),
     queryKey: ["mobile-gallery-app", appId],
-    queryFn: () => GetRequestNormal<Data<MobileGalleryApp>>(`/mobile-gallery/apps/${appId}`),
+    queryFn: () => GetRequestNormal<Data<MobileGalleryApp>>(`/mobile-gallery/apps/${appId}?limit=60&offset=0`),
   });
   const refresh = () => {
     client.invalidateQueries({ queryKey: ["mobile-gallery-app", appId] });
@@ -181,6 +184,12 @@ export function useMobileGalleryApp(appId?: string) {
     },
   });
   return { appQuery, updateApp, uploadImages, reorderImages, deleteImage, sendInvite };
+}
+
+export function fetchMobileGalleryImagesPage(appId: string, offset: number, limit = 60) {
+  return GetRequestNormal<Data<ImagesPage<MobileGalleryImage>>>(
+    `/mobile-gallery/apps/${appId}/images?limit=${limit}&offset=${offset}`,
+  );
 }
 
 export function useMobileGalleryProfile() {

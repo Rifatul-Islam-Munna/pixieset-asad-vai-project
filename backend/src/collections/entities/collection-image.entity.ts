@@ -47,6 +47,9 @@ export class CollectionImage {
   @Prop({ default: 0 })
   faceCount?: number;
 
+  @Prop({ default: 0, index: true })
+  faceIndexVersion?: number;
+
   @Prop({ type: Object, default: {} })
   metadata: Record<string, unknown>;
 }

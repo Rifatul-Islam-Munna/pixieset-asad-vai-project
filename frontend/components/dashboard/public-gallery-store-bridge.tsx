@@ -59,7 +59,12 @@ export function PublicGalleryStoreBridge({
   const [activeProduct, setActiveProduct] = useState<PublicStoreProduct | null>(null);
   const [cart, setCart] = useState<PublicStoreCartItem[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
-  const images = useMemo(() => collection?.images ?? [], [collection?.images]);
+  const [extraImages, setExtraImages] = useState<GalleryImage[]>([]);
+  const images = useMemo(() => {
+    const base = collection?.images ?? [];
+    const ids = new Set(base.map((image) => image._id));
+    return [...base, ...extraImages.filter((image) => !ids.has(image._id))];
+  }, [collection?.images, extraImages]);
   const selectedImage = images.find((image) => image._id === activeImageId);
   const cartKey = storeCartKey(collection?._id ?? galary);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -151,6 +156,17 @@ export function PublicGalleryStoreBridge({
       const imageId = trigger?.dataset.buyPhotoOpen;
       if (!imageId) return;
       event.preventDefault();
+      if (!images.some((image) => image._id === imageId) && trigger.dataset.buyPhotoUrl) {
+        setExtraImages((current) => [
+          ...current,
+          {
+            _id: imageId,
+            url: trigger.dataset.buyPhotoUrl || "",
+            thumbnailUrl: trigger.dataset.buyPhotoThumbnail || undefined,
+            originalName: trigger.dataset.buyPhotoName || undefined,
+          },
+        ]);
+      }
       setActiveImageId(imageId);
       setBuyOpen(true);
     };
@@ -160,7 +176,7 @@ export function PublicGalleryStoreBridge({
       document.removeEventListener("click", openStore);
       document.removeEventListener("click", openBuyPhoto);
     };
-  }, [enabled]);
+  }, [enabled, images]);
 
   useEffect(() => {
     if (!enabled) return;

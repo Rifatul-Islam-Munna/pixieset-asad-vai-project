@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
@@ -41,6 +41,7 @@ type PublicCollection = {
   coverImage?: string;
   sets?: Array<{ id: string; name: string }>;
   images?: PublicImage[];
+  imagesPage?: { total: number; limit: number; offset: number; hasMore: boolean };
   design?: Partial<PresetDesignSettings>;
   branding?: Partial<BrandSettings>;
   settings?: {
@@ -129,6 +130,14 @@ export function PublicGallery({
 }) {
   const [collection, setCollection] = useState(initialCollection);
   useEffect(() => setCollection(initialCollection), [initialCollection]);
+  const [loadedImages, setLoadedImages] = useState<PublicImage[]>(initialCollection?.images ?? []);
+  const [imagesHasMore, setImagesHasMore] = useState(Boolean(initialCollection?.imagesPage?.hasMore));
+  const [imagesLoadingMore, setImagesLoadingMore] = useState(false);
+  const loaderRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    setLoadedImages(initialCollection?.images ?? []);
+    setImagesHasMore(Boolean(initialCollection?.imagesPage?.hasMore));
+  }, [initialCollection]);
   const fallbackPresetDesign = useDashboardStore((state) => state.presetDesign);
   const fallbackPresetDownload = useDashboardStore((state) => state.presetDownload);
   const fallbackPresetStore = useDashboardStore((state) => state.presetStore);
@@ -166,7 +175,7 @@ export function PublicGallery({
   const emailRegistrationEnabled = boolSetting(generalSettings.emailRegistration);
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images = collection
-    ? (collection.images ?? [])
+    ? loadedImages
     : fallbackPhotos.map((url, index) => ({ _id: `sample-${index}`, url }));
   const collectionCoverImage = collection?.coverImage;
   const coverMatch = collectionCoverImage
@@ -215,6 +224,7 @@ export function PublicGallery({
     ? galleryImages.filter((image) => imageSetId(image) === activeSetId)
     : galleryImages;
   const visibleImages = faceResults ?? activeGalleryImages;
+  const canLoadMoreImages = Boolean(collection && !faceResults && imagesHasMore);
   const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
   const slideshowPosition = slideshowIndex ?? 0;
   const [bg, fg, accent] =
@@ -318,10 +328,38 @@ export function PublicGallery({
   };
   const downloadAllImages = async () => {
     if (!canDownload || zipDownloading) return;
+    let allImages = galleryImages;
+    if (collection && imagesHasMore) {
+      setZipStage("Loading remaining gallery photos");
+      let offset = loadedImages.length;
+      let hasMore = imagesHasMore;
+      const loaded: PublicImage[] = [];
+      while (hasMore) {
+        const params = new URLSearchParams({ limit: "120", offset: String(offset) });
+        const email = accessSettings?.email || visitorEmail || accessEmail;
+        if (email) params.set("email", email);
+        const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(collection.slug ?? galary)}/images?${params.toString()}`).catch(() => null);
+        const payload = response?.ok ? await response.json().catch(() => null) : null;
+        const page = payload?.data;
+        if (!page?.items?.length) break;
+        loaded.push(...page.items);
+        offset += page.items.length;
+        hasMore = Boolean(page.hasMore);
+      }
+      if (loaded.length) {
+        const seen = new Set(allImages.map((image) => image._id));
+        allImages = [...allImages, ...loaded.filter((image) => !seen.has(image._id))];
+        setLoadedImages((current) => {
+          const currentIds = new Set(current.map((image) => image._id));
+          return [...current, ...loaded.filter((image) => !currentIds.has(image._id))];
+        });
+        setImagesHasMore(false);
+      }
+    }
     const remaining = boolSetting(download.limitDownloads) && maxDownloads > 0
       ? Math.max(0, maxDownloads - downloadCount)
-      : galleryImages.length;
-    const downloadable = galleryImages.slice(0, remaining || galleryImages.length);
+      : allImages.length;
+    const downloadable = allImages.slice(0, remaining || allImages.length);
     if (!downloadable.length) return;
     const email = ensureDownloadEmail();
     if (!email) return;
@@ -400,12 +438,44 @@ export function PublicGallery({
     setSlideshowIndex(null);
   }, [activeSetId]);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  const loadMoreImages = async () => {
+    if (!collection || imagesLoadingMore || !imagesHasMore) return;
+    setImagesLoadingMore(true);
+    const params = new URLSearchParams({
+      limit: "48",
+      offset: String(loadedImages.length),
+    });
+    const email = accessSettings?.email || visitorEmail || accessEmail;
+    if (email) params.set("email", email);
+    const identifier = collection.slug ?? galary;
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(identifier)}/images?${params.toString()}`).catch(() => null);
+    const payload = response?.ok ? await response.json().catch(() => null) : null;
+    const page = payload?.data;
+    if (page?.items?.length) {
+      setLoadedImages((current) => {
+        const seen = new Set(current.map((image) => image._id));
+        return [...current, ...page.items.filter((image: PublicImage) => !seen.has(image._id))];
+      });
+    }
+    setImagesHasMore(Boolean(page?.hasMore));
+    setImagesLoadingMore(false);
+  };
+  useEffect(() => {
+    if (!canLoadMoreImages) return;
+    const target = loaderRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMoreImages();
+    }, { rootMargin: "900px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [canLoadMoreImages, loadedImages.length, imagesLoadingMore]);
   const verifyAccessEmail = async () => {
     const email = accessEmail.trim().toLowerCase();
     if (!email.includes("@") || accessBusy) return;
     setAccessBusy(true);
     setAccessNotice("");
-    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}`).catch(() => null);
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0`).catch(() => null);
     const payload = response ? await response.json().catch(() => null) : null;
     setAccessBusy(false);
     if (!response?.ok || !payload?.data) {
@@ -413,6 +483,8 @@ export function PublicGallery({
       return;
     }
     setCollection(payload.data);
+    setLoadedImages(payload.data?.images ?? []);
+    setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
     if (payload.data?.settings?.access?.emailAuthorized) {
       setVisitorEmail(email);
       setVisitorEmailSaved(true);
@@ -791,6 +863,11 @@ export function PublicGallery({
               />
             ))}
           </div>
+          {canLoadMoreImages && (
+            <div ref={loaderRef} className="flex h-24 items-center justify-center">
+              {imagesLoadingMore && <Loader2 className="size-6 animate-spin" />}
+            </div>
+          )}
         </div>
       </section>
 
@@ -855,7 +932,7 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" data-buy-photo-open={activeImage._id} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={activeImage.originalName} type="button">
                 <ShoppingBag className="size-4" />
                 Buy This Photo
               </button>
@@ -904,7 +981,7 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" data-buy-photo-open={slideshowImage._id} type="button">
+              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={slideshowImage.originalName} type="button">
                 <ShoppingBag className="size-4" />
                 Buy This Photo
               </button>

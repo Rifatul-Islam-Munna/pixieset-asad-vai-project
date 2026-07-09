@@ -27,15 +27,15 @@ class Settings:
     model_name: str = os.getenv("MODEL_NAME", "buffalo_s")
     model_root: str = os.getenv("MODEL_ROOT", "/models")
     detection_size: int = int(os.getenv("DETECTION_SIZE", "960"))
-    detection_threshold: float = float(os.getenv("DETECTION_THRESHOLD", "0.28"))
+    detection_threshold: float = float(os.getenv("DETECTION_THRESHOLD", "0.20"))
     worker_count: int = int(os.getenv("WORKER_COUNT", "2"))
     group_scan: bool = os.getenv("GROUP_SCAN", "true").lower() in {"1", "true", "yes"}
     mirror_scan: bool = os.getenv("MIRROR_SCAN", "true").lower() in {"1", "true", "yes"}
     tile_size: int = int(os.getenv("TILE_SIZE", "896"))
     tile_overlap: int = int(os.getenv("TILE_OVERLAP", "320"))
-    max_tiles: int = int(os.getenv("MAX_TILES", "24"))
+    max_tiles: int = int(os.getenv("MAX_TILES", "48"))
     max_image_side: int = int(os.getenv("MAX_IMAGE_SIDE", "3200"))
-    min_face_size: int = int(os.getenv("MIN_FACE_SIZE", "10"))
+    min_face_size: int = int(os.getenv("MIN_FACE_SIZE", "8"))
     max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "80"))
     api_key: str = os.getenv("API_KEY", "")
 

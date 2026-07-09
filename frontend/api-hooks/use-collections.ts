@@ -68,6 +68,7 @@ export type CollectionDownloadActivityRecord = {
 };
 
 type ListResponse<T> = { data: T };
+export type ImagesPage<T> = { items: T[]; total: number; limit: number; offset: number; hasMore: boolean };
 
 export function useCollections() {
   const queryClient = useQueryClient();
@@ -153,8 +154,8 @@ export function useCollectionDetail(collectionId?: string) {
     queryKey: ["collections", collectionId],
     queryFn: () =>
       GetRequestNormal<
-        ListResponse<CollectionRecord & { images: CollectionImageRecord[] }>
-      >(`/collections/${collectionId}`),
+        ListResponse<CollectionRecord & { images: CollectionImageRecord[]; imagesPage?: ImagesPage<CollectionImageRecord> }>
+      >(`/collections/${collectionId}?limit=60&offset=0`),
   });
 
   const updateCollection = useMutation({
@@ -254,6 +255,12 @@ export function useCollectionDetail(collectionId?: string) {
   });
 
   return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages };
+}
+
+export function fetchCollectionImagesPage(collectionId: string, offset: number, limit = 60) {
+  return GetRequestNormal<ListResponse<ImagesPage<CollectionImageRecord>>>(
+    `/collections/${collectionId}/images?limit=${limit}&offset=${offset}`,
+  );
 }
 
 export function useCollectionActivity(collectionId?: string) {

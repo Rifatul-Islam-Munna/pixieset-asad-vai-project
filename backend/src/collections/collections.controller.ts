@@ -44,8 +44,24 @@ export class PublicCollectionsController {
   constructor(private readonly collectionsService: CollectionsService) {}
 
   @Get(':identifier')
-  async findPublic(@Param('identifier') identifier: string, @Query('email') email?: string) {
-    const data = await this.collectionsService.findPublic(identifier, email);
+  async findPublic(
+    @Param('identifier') identifier: string,
+    @Query('email') email?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const data = await this.collectionsService.findPublic(identifier, email, limit, offset);
+    return { data };
+  }
+
+  @Get(':identifier/images')
+  async findPublicImages(
+    @Param('identifier') identifier: string,
+    @Query('email') email?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const data = await this.collectionsService.findPublicImages(identifier, email, limit, offset);
     return { data };
   }
 
@@ -165,8 +181,24 @@ export class CollectionsController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string, @Req() req: ExpressRequest) {
-    const data = await this.collectionsService.findOne(req.user.id, id);
+  async findOne(
+    @Param('id') id: string,
+    @Req() req: ExpressRequest,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const data = await this.collectionsService.findOne(req.user.id, id, limit, offset);
+    return { data };
+  }
+
+  @Get(':id/images')
+  async findImages(
+    @Param('id') id: string,
+    @Req() req: ExpressRequest,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const data = await this.collectionsService.findImages(req.user.id, id, limit, offset);
     return { data };
   }
 

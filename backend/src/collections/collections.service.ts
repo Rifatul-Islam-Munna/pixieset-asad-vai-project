@@ -84,20 +84,17 @@ export class CollectionsService {
     }));
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(userId: string, id: string, limit?: string, offset?: string) {
     const collection = await this.collectionModel.findOne({ _id: id, userId }).lean();
     if (!collection) throw new NotFoundException('Collection not found');
 
-    const images = await this.imageModel
-      .find({ collectionId: id, userId })
-      .sort({ order: 1, createdAt: -1 })
-      .lean();
+    const imagesPage = await this.findImages(userId, id, limit, offset);
     void this.ensureCollectionPreviews(id);
 
-    return { ...collection, images: this.sortImagesForGallery(images) };
+    return { ...collection, images: imagesPage.items, imagesPage };
   }
 
-  async findPublic(identifier: string, email?: string) {
+  async findPublic(identifier: string, email?: string, limit?: string, offset?: string) {
     const collection = await this.findCollectionByIdentifier(identifier);
     if (collection.status !== 'published') throw new NotFoundException('Collection not found');
     const preset = collection.presetId
@@ -118,12 +115,9 @@ export class CollectionsService {
       },
     };
     const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
-    const images = emailAccess.authorized
-      ? await this.imageModel
-          .find({ collectionId: collection._id.toString() })
-          .sort({ order: 1, createdAt: -1 })
-          .lean()
-      : [];
+    const imagesPage = emailAccess.authorized
+      ? await this.findPublicImages(identifier, email, limit, offset)
+      : { items: [], total: 0, limit: this.pageLimit(limit), offset: this.pageOffset(offset), hasMore: false };
     if (emailAccess.authorized) void this.ensureCollectionPreviews(collection._id.toString());
     const branding = await this.settingModel
       .findOne({
@@ -166,8 +160,37 @@ export class CollectionsService {
       },
       settings: mergedSettings,
       branding: (branding?.data as any) ?? {},
-      images: this.sortImagesForGallery(images),
+      images: imagesPage.items,
+      imagesPage,
     };
+  }
+
+  async findImages(userId: string, id: string, limit?: string, offset?: string) {
+    const collection = await this.collectionModel.findOne({ _id: id, userId }).select('_id').lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    return this.findImagesPage({ collectionId: id, userId }, limit, offset);
+  }
+
+  async findPublicImages(identifier: string, email?: string, limit?: string, offset?: string) {
+    const collection = await this.findCollectionByIdentifier(identifier);
+    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    const preset = collection.presetId
+      ? await this.settingModel.findOne({ userId: collection.userId, type: DashboardSettingType.PRESET, localId: collection.presetId }).lean()
+      : null;
+    const presetData = preset?.data as any;
+    const accessSourceSettings = {
+      ...((collection.settings as any) ?? {}),
+      general: {
+        ...(presetData?.general ?? presetData?.presetGeneral ?? {}),
+        ...((collection.settings as any)?.general ?? {}),
+      },
+    };
+    const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
+    if (!emailAccess.authorized) {
+      return { items: [], total: 0, limit: this.pageLimit(limit), offset: this.pageOffset(offset), hasMore: false };
+    }
+    void this.ensureCollectionPreviews(collection._id.toString());
+    return this.findImagesPage({ collectionId: collection._id.toString() }, limit, offset);
   }
 
   async requestPublicAccess(identifier: string, body: { email?: string; reason?: string }) {
@@ -885,6 +908,39 @@ export class CollectionsService {
       if (bHasOrder) return 1;
       return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
     });
+  }
+
+  private async findImagesPage(query: Record<string, unknown>, limitValue?: string, offsetValue?: string) {
+    const limit = this.pageLimit(limitValue);
+    const offset = this.pageOffset(offsetValue);
+    const [items, total] = await Promise.all([
+      this.imageModel
+        .find(query)
+        .sort({ order: 1, createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      this.imageModel.countDocuments(query),
+    ]);
+    return {
+      items: this.sortImagesForGallery(items),
+      total,
+      limit,
+      offset,
+      hasMore: offset + items.length < total,
+    };
+  }
+
+  private pageLimit(value?: string) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 48;
+    return Math.min(120, Math.max(1, Math.floor(parsed)));
+  }
+
+  private pageOffset(value?: string) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return Math.floor(parsed);
   }
 
   private async createImagePreview(file: Express.Multer.File) {

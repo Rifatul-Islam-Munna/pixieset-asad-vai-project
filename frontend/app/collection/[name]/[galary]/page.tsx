@@ -8,7 +8,7 @@ import { JsonLdScript, absoluteUrl, collectSeoText, pageMetadata } from "@/lib/s
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
 
 async function getCollection(identifier: string) {
-  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}`, {
+  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}?limit=48&offset=0`, {
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
   }).catch(() => null);

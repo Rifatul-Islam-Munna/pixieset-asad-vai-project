@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFile,
   UploadedFiles,
@@ -41,8 +42,13 @@ export class PublicMobileGalleryController {
   constructor(private readonly service: MobileGalleryService) {}
 
   @Get(':identifier')
-  async findPublic(@Param('identifier') identifier: string) {
-    return { data: await this.service.findPublic(identifier) };
+  async findPublic(@Param('identifier') identifier: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return { data: await this.service.findPublic(identifier, limit, offset) };
+  }
+
+  @Get(':identifier/images')
+  async findPublicImages(@Param('identifier') identifier: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return { data: await this.service.findPublicImages(identifier, limit, offset) };
   }
 }
 
@@ -65,8 +71,13 @@ export class MobileGalleryController {
   }
 
   @Get('apps/:id')
-  async findOne(@Param('id') id: string, @Req() req: ExpressRequest) {
-    return { data: await this.service.findOne(req.user.id, id) };
+  async findOne(@Param('id') id: string, @Req() req: ExpressRequest, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return { data: await this.service.findOne(req.user.id, id, limit, offset) };
+  }
+
+  @Get('apps/:id/images')
+  async findImages(@Param('id') id: string, @Req() req: ExpressRequest, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return { data: await this.service.findImages(req.user.id, id, limit, offset) };
   }
 
   @Patch('apps/:id')

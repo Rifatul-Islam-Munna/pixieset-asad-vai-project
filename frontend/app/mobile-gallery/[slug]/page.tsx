@@ -8,7 +8,7 @@ const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "htt
 type PublicApp = MobileGalleryApp & { profile?: MobileGalleryProfile };
 
 async function getApp(slug: string): Promise<PublicApp | null> {
-  const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(slug)}`, {
+  const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(slug)}?limit=48&offset=0`, {
     next: { revalidate: 30, tags: [`mobile-gallery-${slug}`] },
   }).catch(() => null);
   if (!response?.ok) return null;

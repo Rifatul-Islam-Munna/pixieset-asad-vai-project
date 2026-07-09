@@ -117,6 +117,7 @@ import {
   useCollectionImages,
   useCollections,
   useImageActions,
+  fetchCollectionImagesPage,
   type CollectionDownloadActivityRecord,
   type CollectionFavoriteActivityRecord,
   type CollectionImageRecord,
@@ -8142,7 +8143,15 @@ function CollectionDetailView({
   const collection = collectionQuery.data?.data ?? collections.find((item) => item._id === collectionId);
   const detail = collectionQuery.data?.data;
   const imagesLoading = collectionQuery.isLoading && !detail;
-  const images = useMemo(() => detail?.images ?? [], [detail?.images]);
+  const [loadedImages, setLoadedImages] = useState<CollectionImageRecord[]>([]);
+  const [imagesHasMore, setImagesHasMore] = useState(false);
+  const [imagesLoadingMore, setImagesLoadingMore] = useState(false);
+  const imagesLoaderRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    setLoadedImages(detail?.images ?? []);
+    setImagesHasMore(Boolean(detail?.imagesPage?.hasMore));
+  }, [detail?.images, detail?.imagesPage?.hasMore]);
+  const images = useMemo(() => loadedImages, [loadedImages]);
   const sets = useMemo(
     () => detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }],
     [detail?.sets],
@@ -8228,6 +8237,32 @@ function CollectionDetailView({
   const publicPath = `/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collection?.slug ?? collectionId)}`;
   const publicLink = `${pageOrigin}${publicPath}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicLink)}`;
+  const loadMoreCollectionImages = async () => {
+    if (!collectionId || imagesLoadingMore || !imagesHasMore) return;
+    setImagesLoadingMore(true);
+    try {
+      const page = (await fetchCollectionImagesPage(collectionId, loadedImages.length, 60)).data;
+      setLoadedImages((current) => {
+        const seen = new Set(current.map((image) => image._id));
+        return [...current, ...page.items.filter((image) => !seen.has(image._id))];
+      });
+      setImagesHasMore(page.hasMore);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load images");
+    } finally {
+      setImagesLoadingMore(false);
+    }
+  };
+  useEffect(() => {
+    if (!imagesHasMore) return;
+    const target = imagesLoaderRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMoreCollectionImages();
+    }, { rootMargin: "800px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [imagesHasMore, imagesLoadingMore, loadedImages.length]);
   useEffect(() => {
     setPageOrigin(window.location.origin);
   }, []);
@@ -8814,7 +8849,7 @@ function CollectionDetailView({
             </div>
           )}
           {activeTab === "download" && !detailCollapsed && (
-            <div className="min-h-0 bg-[#fafafa]">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#fafafa] pb-4">
               <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Activities</p>
               <button
                 className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "download" && "bg-white font-bold")}
@@ -8863,7 +8898,7 @@ function CollectionDetailView({
           {activeTab === "photos" && (
             imagesLoading ? (
               <CollectionImagesSkeleton />
-            ) : !activeSetImages.length ? (
+            ) : !activeSetImages.length && !imagesHasMore ? (
               <label
                 className={cn("flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center transition", draggingUpload && "border-[#22bda7] bg-[#f2fffd]", uploading && "pointer-events-none opacity-75")}
                 onDragOver={handleUploadDragOver}
@@ -9041,6 +9076,11 @@ function CollectionDetailView({
                     </div>
                   ))}
                 </ReactSortable>
+                {imagesHasMore && (
+                  <div ref={imagesLoaderRef} className="flex h-20 items-center justify-center text-sm text-[#777]">
+                    {imagesLoadingMore && <Loader2 className="size-5 animate-spin" />}
+                  </div>
+                )}
                 {false && totalImagePages > 1 && (
                   <div className="mt-5 flex items-center justify-end gap-3 text-sm">
                     <Button
@@ -9629,8 +9669,8 @@ function CollectionActivityPanel({
     <>
     <section className="min-w-0">
         {activityPage === "email" ? (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="max-h-[calc(100dvh-220px)] min-h-[560px] overflow-y-auto pr-1">
+            <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 py-3 backdrop-blur">
               <div>
                 <h2 className="text-2xl font-medium">Email Access</h2>
                 <p className="mt-2 text-sm text-[#666]">Only listed or approved emails can open this collection when Email Registration is on.</p>
@@ -9641,7 +9681,7 @@ function CollectionActivityPanel({
                 <input type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(event) => { void importAccessFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
               </label>
             </div>
-            <section className="mt-7 border bg-white">
+            <section className="mt-5 border bg-white">
               <div className="border-b p-5">
                 <FieldGroup>
                   <Field>
@@ -9719,7 +9759,7 @@ function CollectionActivityPanel({
                 </TableBody>
               </Table>
             </section>
-          </>
+          </div>
         ) : activityPage === "download" ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">

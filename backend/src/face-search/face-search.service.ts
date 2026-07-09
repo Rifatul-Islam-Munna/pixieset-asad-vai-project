@@ -32,6 +32,7 @@ type FaceGroup = {
 
 const INSIGHT_VECTOR_SIZE = 512;
 const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
+const FACE_INDEX_VERSION = 2;
 
 /**
  * Face indexing/search service.
@@ -81,7 +82,7 @@ export class FaceSearchService implements OnModuleInit {
       await this.imageModel
         .updateOne(
           { _id: imageId },
-          { $set: { faceIndexedAt: new Date(), faceCount: 0 } },
+          { $set: { faceIndexedAt: new Date(), faceCount: 0, faceIndexVersion: FACE_INDEX_VERSION } },
         )
         .catch(() => undefined);
       return 0;
@@ -109,7 +110,7 @@ export class FaceSearchService implements OnModuleInit {
     await this.imageModel
       .updateOne(
         { _id: imageId },
-        { $set: { faceIndexedAt: new Date(), faceCount: faces.length } },
+        { $set: { faceIndexedAt: new Date(), faceCount: faces.length, faceIndexVersion: FACE_INDEX_VERSION } },
       )
       .catch(() => undefined);
 
@@ -198,19 +199,25 @@ export class FaceSearchService implements OnModuleInit {
     });
 
     const points = (response.points ?? []) as FacePoint[];
-    const missingImages = await this.imageModel
-      .find({ collectionId, faceIndexedAt: { $exists: false } })
+    const staleImages = await this.imageModel
+      .find({
+        collectionId,
+        $or: [
+          { faceIndexedAt: { $exists: false } },
+          { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
+        ],
+      })
       .limit(50)
       .lean();
 
-    if (missingImages.length) {
+    if (staleImages.length) {
       setTimeout(() => {
-        void this.indexMissingFaces(missingImages as IndexedImage[]);
+        void this.indexMissingFaces(staleImages as IndexedImage[]);
       }, 250);
     }
 
-    const minSimilarity = this.configNumber('FACE_CLUSTER_SIMILARITY', 0.58, 0.1, 0.99);
-    const minPairSimilarity = this.configNumber('FACE_CLUSTER_PAIR_SIMILARITY', 0.52, 0.1, 0.99);
+    const minSimilarity = this.configNumber('FACE_CLUSTER_SIMILARITY', 0.50, 0.1, 0.99);
+    const minPairSimilarity = this.configNumber('FACE_CLUSTER_PAIR_SIMILARITY', 0.46, 0.1, 0.99);
     const sortedPoints = [...points].sort((a, b) => {
       const aImage = String(a.payload?.imageId ?? '');
       const bImage = String(b.payload?.imageId ?? '');
@@ -228,16 +235,24 @@ export class FaceSearchService implements OnModuleInit {
       const match = groups
         .map((group) => ({
           group,
-          similarity: this.cosine(normalized, group.centroid),
+          similarity: Math.max(
+            this.cosine(normalized, group.centroid),
+            ...group.points
+              .map((groupPoint) => {
+                const groupVector = this.pointVector(groupPoint);
+                const normalizedGroupVector = groupVector ? this.normalizeVector(groupVector) : undefined;
+                return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) : Number.NEGATIVE_INFINITY;
+              }),
+          ),
         }))
-        .filter(({ group, similarity }) =>
-          similarity >= minSimilarity
-          && group.points.every((groupPoint) => {
+        .filter(({ group, similarity }) => {
+          const pairScores = group.points.map((groupPoint) => {
             const groupVector = this.pointVector(groupPoint);
             const normalizedGroupVector = groupVector ? this.normalizeVector(groupVector) : undefined;
-            return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) >= minPairSimilarity : false;
-          }),
-        )
+            return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) : Number.NEGATIVE_INFINITY;
+          });
+          return similarity >= minSimilarity || Math.max(...pairScores) >= minPairSimilarity;
+        })
         .sort((a, b) => b.similarity - a.similarity)[0]?.group;
 
       if (match) {
@@ -251,8 +266,8 @@ export class FaceSearchService implements OnModuleInit {
     return {
       collectionId,
       count: groups.length,
-      indexing: missingImages.length > 0,
-      missingImages: missingImages.length,
+      indexing: staleImages.length > 0,
+      missingImages: staleImages.length,
       faces: groups.map((group, index) => ({
         id: String(group.representative.id),
         label: `Face ${index + 1}`,

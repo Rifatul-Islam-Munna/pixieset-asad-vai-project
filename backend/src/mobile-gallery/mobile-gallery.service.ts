@@ -56,24 +56,39 @@ export class MobileGalleryService {
     return this.appModel.find({ userId }).sort({ createdAt: -1 }).lean();
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(userId: string, id: string, limit?: string, offset?: string) {
     const app = await this.appModel.findOne({ _id: id, userId }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
-    const images = await this.imageModel.find({ appId: id, userId }).sort({ order: 1, createdAt: -1 }).lean();
-    return { ...app, images };
+    const imagesPage = await this.findImages(userId, id, limit, offset);
+    return { ...app, images: imagesPage.items, imagesPage };
   }
 
-  async findPublic(identifier: string) {
+  async findPublic(identifier: string, limit?: string, offset?: string) {
     const app = await this.appModel.findOne({
       $or: [{ slug: identifier }, ...(identifier.match(/^[a-f\d]{24}$/i) ? [{ _id: identifier }] : [])],
       status: 'published',
     }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
-    const [images, profile] = await Promise.all([
-      this.imageModel.find({ appId: app._id.toString() }).sort({ order: 1, createdAt: -1 }).lean(),
+    const [imagesPage, profile] = await Promise.all([
+      this.findPublicImages(app._id.toString(), limit, offset),
       this.settingModel.findOne({ userId: app.userId }).lean(),
     ]);
-    return { ...app, images, profile: profile ?? {} };
+    return { ...app, images: imagesPage.items, imagesPage, profile: profile ?? {} };
+  }
+
+  async findImages(userId: string, appId: string, limit?: string, offset?: string) {
+    const app = await this.appModel.findOne({ _id: appId, userId }).select('_id').lean();
+    if (!app) throw new NotFoundException('Mobile gallery app not found');
+    return this.findImagesPage({ appId, userId }, limit, offset);
+  }
+
+  async findPublicImages(identifier: string, limit?: string, offset?: string) {
+    const app = await this.appModel.findOne({
+      $or: [{ slug: identifier }, ...(identifier.match(/^[a-f\d]{24}$/i) ? [{ _id: identifier }] : [])],
+      status: 'published',
+    }).select('_id').lean();
+    if (!app) throw new NotFoundException('Mobile gallery app not found');
+    return this.findImagesPage({ appId: app._id.toString() }, limit, offset);
   }
 
   async update(userId: string, id: string, body: Record<string, any>) {
@@ -257,6 +272,28 @@ export class MobileGalleryService {
       'application/x-font-opentype',
       'application/octet-stream',
     ].includes(mime) && ['.woff', '.woff2', '.ttf', '.otf'].includes(extension);
+  }
+
+  private async findImagesPage(query: Record<string, unknown>, limitValue?: string, offsetValue?: string) {
+    const limit = this.pageLimit(limitValue);
+    const offset = this.pageOffset(offsetValue);
+    const [items, total] = await Promise.all([
+      this.imageModel.find(query).sort({ order: 1, createdAt: -1 }).skip(offset).limit(limit).lean(),
+      this.imageModel.countDocuments(query),
+    ]);
+    return { items, total, limit, offset, hasMore: offset + items.length < total };
+  }
+
+  private pageLimit(value?: string) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 48;
+    return Math.min(120, Math.max(1, Math.floor(parsed)));
+  }
+
+  private pageOffset(value?: string) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return Math.floor(parsed);
   }
 
   private async uniqueSlug(name: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from "react";
+import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactSortable } from "react-sortablejs";
@@ -23,6 +23,7 @@ import {
   type MobileGalleryApp,
   type MobileGalleryImage,
   type MobileGalleryProfile,
+  fetchMobileGalleryImagesPage,
   uploadMobileGalleryAsset,
   useMobileGalleryApp,
   useMobileGalleryApps,
@@ -206,7 +207,10 @@ function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
   const profile = profileQuery.data?.data || {};
   const [tab, setTab] = useState<EditorTab>("photos");
   const [images, setImages] = useState<MobileGalleryImage[]>([]);
+  const [imagesHasMore, setImagesHasMore] = useState(false);
+  const [imagesLoadingMore, setImagesLoadingMore] = useState(false);
   useEffect(() => setImages(app?.images || []), [app?.images]);
+  useEffect(() => setImagesHasMore(Boolean(app?.imagesPage?.hasMore)), [app?.imagesPage?.hasMore]);
   if (appQuery.isLoading || !app) return <div className="flex min-h-screen items-center justify-center text-sm text-[#777]">Loading mobile gallery…</div>;
   if (view === "preview") return <MobileGalleryPreviewScreen app={app} profile={profile} />;
   if (view === "share") return <MobileGalleryShareScreen app={app} profile={profile} />;
@@ -217,7 +221,7 @@ function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
       <section className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-5"><div className="flex min-w-0 items-center gap-4"><Link href="/dashboard/mobile-gallery" className="shrink-0"><ArrowLeft className="size-5" /></Link>{app.iconUrl || app.coverImage ? <img src={app.iconUrl || app.coverImage} alt="" className="size-16 shrink-0 rounded-2xl object-cover" /> : <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-[#eee]"><Smartphone className="size-6" /></div>}<div className="min-w-0"><h1 className="truncate text-xl font-medium sm:text-2xl">{app.name}</h1><p className="mt-1 text-xs uppercase tracking-wider text-[#888]">{app.status}</p></div></div><div className="flex gap-2"><Link href={`/dashboard/mobile-gallery/apps/${app._id}/preview`} className="border bg-[#f3f3f3] px-4 py-3 text-sm sm:px-5">Preview</Link><Link href={`/dashboard/mobile-gallery/apps/${app._id}/share`} className="flex items-center gap-2 bg-[#18bfa6] px-4 py-3 text-sm font-semibold text-white sm:px-5"><Share2 className="size-4" />Share</Link></div></div>
         <div className="mt-8 overflow-x-auto border-b"><div className="flex min-w-max gap-8">{([['photos','Photos'],['design','Design'],['app-settings','App Settings']] as const).map(([value, label]) => <button key={value} onClick={() => setTab(value)} className={`border-b-2 px-1 pb-4 text-sm ${tab === value ? "border-[#18bfa6] font-semibold" : "border-transparent"}`}>{label}</button>)}</div></div>
-        {tab === "photos" && <PhotosEditor app={app} images={images} setImages={setImages} uploadImages={uploadImages} reorderImages={reorderImages} deleteImage={deleteImage} updateApp={updateApp} />}
+        {tab === "photos" && <PhotosEditor app={app} images={images} setImages={setImages} imagesHasMore={imagesHasMore} setImagesHasMore={setImagesHasMore} imagesLoadingMore={imagesLoadingMore} setImagesLoadingMore={setImagesLoadingMore} uploadImages={uploadImages} reorderImages={reorderImages} deleteImage={deleteImage} updateApp={updateApp} />}
         {tab === "design" && <MobileGalleryDesignEditor app={app} profile={profile} updateApp={updateApp} />}
         {tab === "app-settings" && <AppSettingsEditor app={app} updateApp={updateApp} />}
       </section>
@@ -225,8 +229,9 @@ function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
   );
 }
 
-function PhotosEditor({ app, images, setImages, uploadImages, reorderImages, deleteImage, updateApp }: any) {
+function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore, imagesLoadingMore, setImagesLoadingMore, uploadImages, reorderImages, deleteImage, updateApp }: any) {
   const [draggingUpload, setDraggingUpload] = useState(false);
+  const loaderRef = useRef<HTMLDivElement | null>(null);
   const uploading = Boolean(uploadImages.isPending);
   const dropClass = draggingUpload ? " border-[#18bfa6] bg-[#f2fffd]" : "";
   function isFileDrag(event: DragEvent<HTMLElement>) { return Array.from(event.dataTransfer.types).includes("Files"); }
@@ -242,6 +247,32 @@ function PhotosEditor({ app, images, setImages, uploadImages, reorderImages, del
     if (!files.length) { toast.error("Drop image files only"); return; }
     void upload(files);
   }
+  async function loadMoreImages() {
+    if (imagesLoadingMore || !imagesHasMore) return;
+    setImagesLoadingMore(true);
+    try {
+      const page = (await fetchMobileGalleryImagesPage(app._id, images.length, 60)).data;
+      setImages((current: MobileGalleryImage[]) => {
+        const seen = new Set(current.map((image) => image._id));
+        return [...current, ...page.items.filter((image) => !seen.has(image._id))];
+      });
+      setImagesHasMore(page.hasMore);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load photos");
+    } finally {
+      setImagesLoadingMore(false);
+    }
+  }
+  useEffect(() => {
+    if (!imagesHasMore) return;
+    const target = loaderRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMoreImages();
+    }, { rootMargin: "700px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [images.length, imagesHasMore, imagesLoadingMore]);
   return (
     <section className={`relative pt-6${dropClass}`} onDragEnter={onDragOver} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       {draggingUpload && <div className="pointer-events-none absolute inset-0 z-20 flex min-h-72 items-center justify-center border border-dashed border-[#18bfa6] bg-white/80 text-sm font-semibold text-[#18bfa6]">Drop images to upload</div>}
@@ -249,6 +280,7 @@ function PhotosEditor({ app, images, setImages, uploadImages, reorderImages, del
       <ReactSortable list={images.map((image: MobileGalleryImage) => ({ ...image, id: image._id }))} setList={(next: Array<MobileGalleryImage & { id: string }>) => { const normalized = next.map(({ id: _idAlias, ...image }) => image); setImages(normalized); if (normalized.length) reorderImages.mutate(normalized.map((image) => image._id)); }} animation={180} className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
         {images.map((image: MobileGalleryImage) => <article key={image._id} className="group relative cursor-grab border bg-white p-1 shadow-sm active:cursor-grabbing"><img src={image.thumbnailUrl || image.url} alt="" className="aspect-square w-full object-cover" /><div className="absolute inset-x-2 bottom-2 flex justify-between opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"><button onClick={() => updateApp.mutate({ coverImage: image.url })} className="bg-white/95 px-2 py-1 text-[10px] font-semibold">Set Cover</button><button onClick={() => deleteImage.mutate(image._id)} className="bg-white/95 p-1 text-red-500"><Trash2 className="size-4" /></button></div>{app.coverImage === image.url && <span className="absolute left-2 top-2 bg-[#18bfa6] px-2 py-1 text-[9px] font-semibold uppercase text-white">Cover</span>}</article>)}
       </ReactSortable>
+      {imagesHasMore && <div ref={loaderRef} className="flex h-20 items-center justify-center text-sm text-[#777]">{imagesLoadingMore ? "Loading photos..." : ""}</div>}
       {!images.length && <label className={`mt-8 flex min-h-72 cursor-pointer flex-col items-center justify-center border border-dashed px-5 text-center text-[#888]${dropClass}`}><Upload className="size-8" /><span className="mt-3 text-sm">{uploading ? "Uploading..." : "Drop photos here or browse"}</span><input type="file" accept="image/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label>}
     </section>
   );
