@@ -451,7 +451,7 @@ export class FaceSearchService implements OnModuleInit {
           };
         })
         .filter(({ group, centroidSimilarity, bestPairSimilarity, avgPairSimilarity }) => {
-          if (this.groupsShareImage(group, { representative: point, points: [point], centroid: normalized })) {
+          if (this.groupsConflictInSameImage(group, { representative: point, points: [point], centroid: normalized })) {
             return false;
           }
           return centroidSimilarity >= minSimilarity
@@ -754,7 +754,7 @@ export class FaceSearchService implements OnModuleInit {
 
         for (const candidate of groups) {
           if (candidate === small) continue;
-          if (this.groupsShareImage(small, candidate)) continue;
+          if (this.groupsConflictInSameImage(small, candidate)) continue;
 
           let bestCandidateScore = Number.NEGATIVE_INFINITY;
 
@@ -802,7 +802,7 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private groupsMatch(left: FaceGroup, right: FaceGroup, minSimilarity: number, minPairSimilarity: number) {
-    if (this.groupsShareImage(left, right)) return false;
+    if (this.groupsConflictInSameImage(left, right)) return false;
     if (this.cosine(left.centroid, right.centroid) >= minSimilarity) return true;
 
     // Collect all cross-pair similarities to check both best-pair and average.
@@ -832,12 +832,46 @@ export class FaceSearchService implements OnModuleInit {
     return false;
   }
 
-  private groupsShareImage(left: FaceGroup, right: FaceGroup) {
-    const leftImageIds = new Set(left.points.map((point) => String(point.payload?.imageId ?? '')).filter(Boolean));
-    return right.points.some((point) => {
-      const imageId = String(point.payload?.imageId ?? '');
-      return Boolean(imageId && leftImageIds.has(imageId));
-    });
+  private groupsConflictInSameImage(left: FaceGroup, right: FaceGroup) {
+    for (const leftPoint of left.points) {
+      const leftImageId = String(leftPoint.payload?.imageId ?? '');
+      if (!leftImageId) continue;
+      for (const rightPoint of right.points) {
+        if (String(rightPoint.payload?.imageId ?? '') !== leftImageId) continue;
+        if (!this.sameFaceBox(leftPoint.payload?.box, rightPoint.payload?.box)) return true;
+      }
+    }
+    return false;
+  }
+
+  private sameFaceBox(
+    left?: { x: number; y: number; width: number; height: number },
+    right?: { x: number; y: number; width: number; height: number },
+  ) {
+    if (!left || !right) return false;
+    const iou = this.boxIou(left, right);
+    if (iou >= 0.22) return true;
+
+    const leftCenter = { x: left.x + left.width / 2, y: left.y + left.height / 2 };
+    const rightCenter = { x: right.x + right.width / 2, y: right.y + right.height / 2 };
+    const distance = Math.hypot(leftCenter.x - rightCenter.x, leftCenter.y - rightCenter.y);
+    const faceSize = Math.max(left.width, left.height, right.width, right.height, 1);
+    return distance <= faceSize * 0.45;
+  }
+
+  private boxIou(
+    left: { x: number; y: number; width: number; height: number },
+    right: { x: number; y: number; width: number; height: number },
+  ) {
+    const leftX2 = left.x + left.width;
+    const leftY2 = left.y + left.height;
+    const rightX2 = right.x + right.width;
+    const rightY2 = right.y + right.height;
+    const intersectionWidth = Math.max(0, Math.min(leftX2, rightX2) - Math.max(left.x, right.x));
+    const intersectionHeight = Math.max(0, Math.min(leftY2, rightY2) - Math.max(left.y, right.y));
+    const intersection = intersectionWidth * intersectionHeight;
+    const union = left.width * left.height + right.width * right.height - intersection;
+    return union > 0 ? intersection / union : 0;
   }
 
   private bestRepresentative(points: FacePoint[]) {
