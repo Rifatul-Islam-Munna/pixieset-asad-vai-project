@@ -17,11 +17,12 @@ QDRANT_API_KEY=
 IMAGE_MODEL_URL=http://127.0.0.1:8010
 IMAGE_MODEL_API_KEY=change-this-to-a-long-random-secret
 IMAGE_MODEL_QDRANT_COLLECTION=album_faces_insightface
-FACE_CLUSTER_DISTANCE=0.95
-FACE_MATCH_DISTANCE=0.95
+FACE_CLUSTER_SIMILARITY=0.50
+FACE_CLUSTER_PAIR_SIMILARITY=0.46
+FACE_MATCH_SIMILARITY=0.52
 FACE_SEARCH_SCAN_LIMIT=10000
 ```
 
 If `IMAGE_MODEL_URL` is missing or the health check fails, face indexing/search is disabled. There is no NestJS CPU fallback.
 
-Unique-face grouping uses face descriptor Euclidean distance. Lower `FACE_CLUSTER_DISTANCE` splits people more aggressively; higher merges more. `FACE_MATCH_DISTANCE` controls how strict the photo filter is after Qdrant returns candidates.
+Unique-face grouping uses cosine similarity. Lower values merge people more; higher values split people more. Old `FACE_CLUSTER_DISTANCE` / `FACE_MATCH_DISTANCE` env vars are still accepted, but similarity vars are preferred.

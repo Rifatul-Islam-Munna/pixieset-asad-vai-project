@@ -170,7 +170,6 @@ export function useCollectionDetail(collectionId?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
-      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
     },
   });
 

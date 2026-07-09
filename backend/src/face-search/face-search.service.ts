@@ -32,7 +32,7 @@ type FaceGroup = {
 
 const INSIGHT_VECTOR_SIZE = 512;
 const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
-const FACE_INDEX_VERSION = 2;
+const FACE_INDEX_VERSION = 3;
 
 /**
  * Face indexing/search service.
@@ -216,8 +216,8 @@ export class FaceSearchService implements OnModuleInit {
       }, 250);
     }
 
-    const minSimilarity = this.configNumber('FACE_CLUSTER_SIMILARITY', 0.50, 0.1, 0.99);
-    const minPairSimilarity = this.configNumber('FACE_CLUSTER_PAIR_SIMILARITY', 0.46, 0.1, 0.99);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.50);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.46);
     const sortedPoints = [...points].sort((a, b) => {
       const aImage = String(a.payload?.imageId ?? '');
       const bImage = String(b.payload?.imageId ?? '');
@@ -263,12 +263,14 @@ export class FaceSearchService implements OnModuleInit {
       }
     }
 
+    const mergedGroups = this.mergeFaceGroups(groups, minSimilarity, minPairSimilarity);
+
     return {
       collectionId,
-      count: groups.length,
+      count: mergedGroups.length,
       indexing: staleImages.length > 0,
       missingImages: staleImages.length,
-      faces: groups.map((group, index) => ({
+      faces: mergedGroups.map((group, index) => ({
         id: String(group.representative.id),
         label: `Face ${index + 1}`,
         imageId: group.representative.payload?.imageId,
@@ -329,7 +331,7 @@ export class FaceSearchService implements OnModuleInit {
     });
 
     const points = (response.points ?? []) as FacePoint[];
-    const minSimilarity = this.configNumber('FACE_MATCH_SIMILARITY', 0.52, 0.1, 0.99);
+    const minSimilarity = this.faceThreshold('FACE_MATCH_SIMILARITY', 'FACE_MATCH_DISTANCE', 0.52);
     const normalizedQueries = vectors
       .map((vector) => this.normalizeVector(vector))
       .filter((vector): vector is number[] => Boolean(vector));
@@ -595,6 +597,55 @@ export class FaceSearchService implements OnModuleInit {
     return this.normalizeVector(centroid) ?? centroid;
   }
 
+  private mergeFaceGroups(groups: FaceGroup[], minSimilarity: number, minPairSimilarity: number) {
+    const merged = [...groups];
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+      for (let leftIndex = 0; leftIndex < merged.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < merged.length; rightIndex += 1) {
+          if (!this.groupsMatch(merged[leftIndex], merged[rightIndex], minSimilarity, minPairSimilarity)) continue;
+          merged[leftIndex].points.push(...merged[rightIndex].points);
+          merged[leftIndex].centroid = this.centroid(merged[leftIndex].points);
+          merged[leftIndex].representative = this.bestRepresentative(merged[leftIndex].points);
+          merged.splice(rightIndex, 1);
+          changed = true;
+          rightIndex -= 1;
+        }
+      }
+    }
+
+    return merged;
+  }
+
+  private groupsMatch(left: FaceGroup, right: FaceGroup, minSimilarity: number, minPairSimilarity: number) {
+    if (this.cosine(left.centroid, right.centroid) >= minSimilarity) return true;
+
+    for (const leftPoint of left.points) {
+      const leftVector = this.pointVector(leftPoint);
+      const normalizedLeft = leftVector ? this.normalizeVector(leftVector) : undefined;
+      if (!normalizedLeft) continue;
+      for (const rightPoint of right.points) {
+        const rightVector = this.pointVector(rightPoint);
+        const normalizedRight = rightVector ? this.normalizeVector(rightVector) : undefined;
+        if (normalizedRight && this.cosine(normalizedLeft, normalizedRight) >= minPairSimilarity) return true;
+      }
+    }
+
+    return false;
+  }
+
+  private bestRepresentative(points: FacePoint[]) {
+    return [...points].sort((left, right) => {
+      const leftBox = left.payload?.box;
+      const rightBox = right.payload?.box;
+      const leftArea = Number(leftBox?.width ?? 0) * Number(leftBox?.height ?? 0);
+      const rightArea = Number(rightBox?.width ?? 0) * Number(rightBox?.height ?? 0);
+      return rightArea - leftArea;
+    })[0] ?? points[0];
+  }
+
   private cosine(a: number[], b: number[]) {
     let sum = 0;
     const length = Math.min(a.length, b.length);
@@ -604,6 +655,26 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     return sum;
+  }
+
+  private faceThreshold(similarityKey: string, distanceKey: string, fallback: number) {
+    const similarityRaw = this.configService.get<string>(similarityKey);
+    if (similarityRaw !== undefined && similarityRaw !== null && similarityRaw.trim() !== '') {
+      return this.configNumber(similarityKey, fallback, 0.1, 0.99);
+    }
+
+    const distanceRaw = this.configService.get<string>(distanceKey);
+    if (distanceRaw !== undefined && distanceRaw !== null && distanceRaw.trim() !== '') {
+      const distance = Number(distanceRaw);
+      if (Number.isFinite(distance)) {
+        // Historical env used "distance" as a loose threshold. Qdrant uses cosine similarity here.
+        // 0.95 old distance maps to a sane similarity floor instead of merging every person.
+        if (distance >= 0.9) return fallback;
+        return Math.min(0.99, Math.max(0.1, 1 - distance));
+      }
+    }
+
+    return fallback;
   }
 
 }

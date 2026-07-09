@@ -8397,14 +8397,20 @@ function CollectionDetailView({
     try {
       for (const [index, file] of selectedFiles.entries()) {
         setUploadProgress((current) => ({ ...current, currentName: file.name }));
-        await uploadImages.mutateAsync({
+        const response = await uploadImages.mutateAsync({
           files: [file],
           setId: activeSetId,
           watermarkId: uploadWatermarkId,
         });
+        const uploadedImages = Array.isArray(response?.data) ? response.data : [];
+        if (uploadedImages.length) {
+          setLoadedImages((current) => {
+            const seen = new Set(current.map((image) => image._id));
+            return [...current, ...uploadedImages.filter((image) => !seen.has(image._id))];
+          });
+        }
         setUploadProgress((current) => ({ ...current, uploaded: index + 1 }));
       }
-      await collectionQuery.refetch();
       toast.success(`Upload finished: ${selectedFiles.length} image${selectedFiles.length === 1 ? "" : "s"}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
