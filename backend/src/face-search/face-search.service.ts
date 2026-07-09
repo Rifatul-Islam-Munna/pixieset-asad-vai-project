@@ -427,8 +427,8 @@ export class FaceSearchService implements OnModuleInit {
       const vector = this.pointVector(point);
       if (!Array.isArray(vector)) continue;
 
-      const normalized = this.normalizeVector(vector);
-      if (!normalized?.length) continue;
+      const normalized: number[] = this.normalizeVector(vector) ?? [];
+      if (!normalized.length) continue;
 
       const match = groups
         .map((group) => {
@@ -744,10 +744,10 @@ export class FaceSearchService implements OnModuleInit {
 
     if (typed.vector && typeof typed.vector === 'object') {
       const values = Object.values(typed.vector).find((item) => Array.isArray(item));
-      return values as number[] | undefined;
+      return Array.isArray(values) ? values as number[] : [];
     }
 
-    return undefined;
+    return [];
   }
 
   private normalizeVector(vector: number[]) {
