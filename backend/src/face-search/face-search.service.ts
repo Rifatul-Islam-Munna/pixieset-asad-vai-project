@@ -216,8 +216,8 @@ export class FaceSearchService implements OnModuleInit {
       }, 250);
     }
 
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.48);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.62);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.38);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.50);
     const sortedPoints = [...points].sort((a, b) => {
       const aImage = String(a.payload?.imageId ?? '');
       const bImage = String(b.payload?.imageId ?? '');
@@ -239,18 +239,31 @@ export class FaceSearchService implements OnModuleInit {
             const normalizedGroupVector = groupVector ? this.normalizeVector(groupVector) : undefined;
             return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) : Number.NEGATIVE_INFINITY;
           });
+          const validPairScores = pairScores.filter((score) => Number.isFinite(score));
+          const avgPairSimilarity = validPairScores.length
+            ? validPairScores.reduce((sum, score) => sum + score, 0) / validPairScores.length
+            : Number.NEGATIVE_INFINITY;
+          const centroidSimilarity = this.cosine(normalized, group.centroid);
+          const bestPairSimilarity = Math.max(...pairScores);
+          // Use a combined score: the highest of centroid similarity, best pair, or
+          // average pair (which is more robust against outlier embeddings).
+          const combinedScore = Math.max(centroidSimilarity, bestPairSimilarity);
           return {
             group,
-            centroidSimilarity: this.cosine(normalized, group.centroid),
-            bestPairSimilarity: Math.max(...pairScores),
+            centroidSimilarity,
+            bestPairSimilarity,
+            avgPairSimilarity,
+            combinedScore,
           };
         })
-        .filter(({ centroidSimilarity, bestPairSimilarity }) => {
-          return centroidSimilarity >= minSimilarity || bestPairSimilarity >= minPairSimilarity;
+        .filter(({ centroidSimilarity, bestPairSimilarity, avgPairSimilarity }) => {
+          // Accept if centroid match is good, or best pair match is good,
+          // or average pair similarity exceeds the centroid threshold (more lenient path).
+          return centroidSimilarity >= minSimilarity
+            || bestPairSimilarity >= minPairSimilarity
+            || avgPairSimilarity >= minSimilarity;
         })
-        .sort((a, b) =>
-          Math.max(b.centroidSimilarity, b.bestPairSimilarity) - Math.max(a.centroidSimilarity, a.bestPairSimilarity),
-        )[0]?.group;
+        .sort((a, b) => b.combinedScore - a.combinedScore)[0]?.group;
 
       if (match) {
         match.points.push(point);
@@ -260,7 +273,20 @@ export class FaceSearchService implements OnModuleInit {
       }
     }
 
-    const mergedGroups = this.mergeFaceGroups(groups, minSimilarity, minPairSimilarity);
+    // Use slightly relaxed thresholds for the merge pass: once groups have
+    // accumulated multiple face vectors the centroids become more reliable,
+    // so we can afford to merge clusters that are close but didn't quite
+    // meet the strict threshold during the initial greedy assignment.
+    const mergeSimilarity = minSimilarity * 0.85;
+    const mergePairSimilarity = minPairSimilarity * 0.85;
+    const mergedGroups = this.mergeFaceGroups(groups, mergeSimilarity, mergePairSimilarity);
+
+    this.logger.log(
+      `Face clustering: collection=${collectionId} points=${points.length} ` +
+      `initialGroups=${groups.length} mergedGroups=${mergedGroups.length} ` +
+      `minSim=${minSimilarity} minPairSim=${minPairSimilarity} ` +
+      `mergeSim=${mergeSimilarity.toFixed(3)} mergePairSim=${mergePairSimilarity.toFixed(3)}`,
+    );
 
     return {
       collectionId,
@@ -619,6 +645,8 @@ export class FaceSearchService implements OnModuleInit {
   private groupsMatch(left: FaceGroup, right: FaceGroup, minSimilarity: number, minPairSimilarity: number) {
     if (this.cosine(left.centroid, right.centroid) >= minSimilarity) return true;
 
+    // Collect all cross-pair similarities to check both best-pair and average.
+    const pairSimilarities: number[] = [];
     for (const leftPoint of left.points) {
       const leftVector = this.pointVector(leftPoint);
       const normalizedLeft = leftVector ? this.normalizeVector(leftVector) : undefined;
@@ -626,8 +654,19 @@ export class FaceSearchService implements OnModuleInit {
       for (const rightPoint of right.points) {
         const rightVector = this.pointVector(rightPoint);
         const normalizedRight = rightVector ? this.normalizeVector(rightVector) : undefined;
-        if (normalizedRight && this.cosine(normalizedLeft, normalizedRight) >= minPairSimilarity) return true;
+        if (!normalizedRight) continue;
+        const similarity = this.cosine(normalizedLeft, normalizedRight);
+        if (similarity >= minPairSimilarity) return true;
+        pairSimilarities.push(similarity);
       }
+    }
+
+    // If the average cross-pair similarity exceeds the centroid threshold,
+    // groups likely belong to the same person even though no single pair
+    // exceeded the stricter pair threshold.
+    if (pairSimilarities.length > 0) {
+      const avgSimilarity = pairSimilarities.reduce((sum, score) => sum + score, 0) / pairSimilarities.length;
+      if (avgSimilarity >= minSimilarity) return true;
     }
 
     return false;
