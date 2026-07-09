@@ -4460,6 +4460,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
         <div
           ref={previewRef}
           className="relative aspect-[1.5] w-full max-w-[860px] overflow-hidden bg-[#f3f3f3]"
+          style={{ containerType: "inline-size" }}
         >
           <img
             src="https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1400&q=80"
@@ -4475,7 +4476,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
                 transform: "translate(-50%, -50%)",
                 color: watermarkColor,
                 fontFamily: watermarkFont,
-                fontSize: `${Math.max(28, watermarkScale * 1.7)}px`,
+                fontSize: `max(18px, ${watermarkScale * 0.2}cqw)`,
                 opacity: watermarkOpacity / 100,
               }}
               onPointerDown={startDrag}
@@ -4490,7 +4491,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
               style={{
                 left: `${watermarkPosition.x}%`,
                 top: `${watermarkPosition.y}%`,
-                width: `${watermarkScale * 2.4}px`,
+                width: `max(40px, ${watermarkScale * 0.28}cqw)`,
                 opacity: watermarkOpacity / 100,
                 transform: "translate(-50%, -50%)",
               }}

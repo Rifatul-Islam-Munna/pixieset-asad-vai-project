@@ -1110,7 +1110,7 @@ export class CollectionsService {
     if (watermark.type === 'text') {
       const text = this.escapeSvg(watermark.text || 'Watermark');
       const fontFamily = this.watermarkFontFamily(watermark.font);
-      const fontSize = Math.max(24, (watermark.scale ?? 42) * 1.7);
+      const fontSize = this.watermarkTextSize(width, watermark.scale);
       const estimatedTextWidth = (watermark.text || 'Watermark').length * fontSize * 0.55;
       const padX = Math.min(45, Math.max(5, (estimatedTextWidth / width) * 50));
       const padY = Math.min(45, Math.max(5, (fontSize / height) * 60));
@@ -1140,7 +1140,7 @@ export class CollectionsService {
     const overlay = await this.readWatermarkImage(watermark.image);
     if (!overlay) return null;
 
-    const overlayWidth = Math.max(40, Math.round((watermark.scale ?? 42) * 2.4));
+    const overlayWidth = this.watermarkImageWidth(width, watermark.scale);
     const overlayBuffer = await sharp(overlay)
       .resize({ width: overlayWidth, withoutEnlargement: true })
       .ensureAlpha(opacity)
@@ -1260,6 +1260,14 @@ export class CollectionsService {
 
   private escapeCssString(value: string) {
     return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  }
+
+  private watermarkTextSize(imageWidth: number, scale?: number) {
+    return Math.max(18, Math.round(imageWidth * ((scale ?? 42) / 100) * 0.2));
+  }
+
+  private watermarkImageWidth(imageWidth: number, scale?: number) {
+    return Math.max(40, Math.round(imageWidth * ((scale ?? 42) / 100) * 0.28));
   }
 
   private clampPercent(value: number, min = 5, max = 95) {
