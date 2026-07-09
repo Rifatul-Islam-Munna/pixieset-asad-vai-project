@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { CollectionImage, CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
 import { MinioService } from 'src/lib/minio.service';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { MobileGalleryApp, MobileGalleryAppSchema } from './entities/mobile-gallery-app.entity';
@@ -16,6 +17,7 @@ import { MobileGalleryService } from './mobile-gallery.service';
       { name: MobileGalleryImage.name, schema: MobileGalleryImageSchema },
       { name: MobileGallerySetting.name, schema: MobileGallerySettingSchema },
       { name: User.name, schema: UserSchema },
+      { name: CollectionImage.name, schema: CollectionImageSchema },
     ]),
   ],
   controllers: [MobileGalleryController, PublicMobileGalleryController],

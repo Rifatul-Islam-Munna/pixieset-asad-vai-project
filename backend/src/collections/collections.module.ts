@@ -26,6 +26,7 @@ import {
 } from './entities/collection-download-activity.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
+import { MobileGalleryImage, MobileGalleryImageSchema } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { FaceSearchModule } from 'src/face-search/face-search.module';
       { name: CollectionDownloadActivity.name, schema: CollectionDownloadActivitySchema },
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: User.name, schema: UserSchema },
+      { name: MobileGalleryImage.name, schema: MobileGalleryImageSchema },
     ]),
     FaceSearchModule,
   ],

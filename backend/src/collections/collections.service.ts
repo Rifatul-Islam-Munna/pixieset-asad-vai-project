@@ -9,6 +9,7 @@ import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
 import { MinioService } from 'src/lib/minio.service';
 import { FaceSearchService } from 'src/face-search/face-search.service';
+import { MobileGalleryImage, MobileGalleryImageDocument } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
@@ -43,6 +44,7 @@ export class CollectionsService {
     @InjectModel(CollectionDownloadActivity.name) private readonly downloadActivityModel: Model<CollectionDownloadActivityDocument>,
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(MobileGalleryImage.name) private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
     private readonly minioService: MinioService,
     private readonly faceSearchService: FaceSearchService,
   ) {}
@@ -680,12 +682,7 @@ export class CollectionsService {
       this.collectionModel.deleteOne({ _id: id, userId }),
     ]);
 
-    if (reclaimedBytes > 0) {
-      await this.userModel.updateOne(
-        { _id: userId },
-        { $inc: { storageUsedBytes: -reclaimedBytes } },
-      );
-    }
+    await this.decrementStorageUsedBytes(userId, reclaimedBytes);
 
     return { deleted: true, collectionId: id };
   }
@@ -795,12 +792,7 @@ export class CollectionsService {
     await this.imageModel.deleteOne({ _id: imageId, userId, collectionId });
     await this.imageFavoriteModel.deleteMany({ imageId });
     await this.faceSearchService.deleteImageFaces(collectionId, imageId);
-    if (image.sizeBytes) {
-      await this.userModel.updateOne(
-        { _id: userId },
-        { $inc: { storageUsedBytes: -Math.max(0, Number(image.sizeBytes ?? 0)) } },
-      );
-    }
+    await this.decrementStorageUsedBytes(userId, image.sizeBytes ?? 0);
     const nextImage = await this.imageModel
       .findOne({ userId, collectionId })
       .sort({ createdAt: -1 })
@@ -1294,6 +1286,35 @@ export class CollectionsService {
     const used = Number(user?.storageUsedBytes ?? 0);
     if (used + incomingBytes > limitBytes) {
       throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');
+    }
+  }
+
+  private async decrementStorageUsedBytes(userId: string, bytes: number) {
+    const safeBytes = Math.max(0, Number(bytes ?? 0));
+    if (safeBytes > 0) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        [
+          {
+            $set: {
+              storageUsedBytes: {
+                $max: [0, { $subtract: [{ $ifNull: ['$storageUsedBytes', 0] }, safeBytes] }],
+              },
+            },
+          },
+        ] as any,
+      );
+    }
+    await this.clearStorageIfNoImages(userId);
+  }
+
+  private async clearStorageIfNoImages(userId: string) {
+    const [collectionImages, mobileImages] = await Promise.all([
+      this.imageModel.exists({ userId }),
+      this.mobileGalleryImageModel.exists({ userId }),
+    ]);
+    if (!collectionImages && !mobileImages) {
+      await this.userModel.updateOne({ _id: userId }, { $set: { storageUsedBytes: 0 } });
     }
   }
 

@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { unlink } from 'fs/promises';
 import { Model } from 'mongoose';
 import { extname } from 'path';
+import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { MinioService } from 'src/lib/minio.service';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { MobileGalleryApp, MobileGalleryAppDocument } from './entities/mobile-gallery-app.entity';
@@ -35,6 +36,7 @@ export class MobileGalleryService {
     @InjectModel(MobileGalleryImage.name) private readonly imageModel: Model<MobileGalleryImageDocument>,
     @InjectModel(MobileGallerySetting.name) private readonly settingModel: Model<MobileGallerySettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(CollectionImage.name) private readonly collectionImageModel: Model<CollectionImageDocument>,
     private readonly minioService: MinioService,
   ) {}
 
@@ -129,9 +131,7 @@ export class MobileGalleryService {
       this.appModel.deleteOne({ _id: id, userId }),
     ]);
     await Promise.all(Array.from(filesToDelete).map((url) => this.minioService.deleteService(url).catch(() => null)));
-    if (reclaimedBytes > 0) {
-      await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: -reclaimedBytes } });
-    }
+    await this.decrementStorageUsedBytes(userId, reclaimedBytes);
     return { deleted: true, appId: id };
   }
 
@@ -206,10 +206,7 @@ export class MobileGalleryService {
     if (app?.coverImage === image.url) update.$set.coverImage = next?.url ?? '';
     await this.appModel.updateOne({ _id: appId, userId }, update);
     await this.deleteStoredImageFiles(image);
-    await this.userModel.updateOne(
-      { _id: userId },
-      { $inc: { storageUsedBytes: -Math.max(0, Number(image.sizeBytes ?? 0)) } },
-    );
+    await this.decrementStorageUsedBytes(userId, image.sizeBytes ?? 0);
     return image.toObject();
   }
 
@@ -284,6 +281,35 @@ export class MobileGalleryService {
     const used = Number(user?.storageUsedBytes ?? 0);
     if (used + incomingBytes > limitBytes) {
       throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');
+    }
+  }
+
+  private async decrementStorageUsedBytes(userId: string, bytes: number) {
+    const safeBytes = Math.max(0, Number(bytes ?? 0));
+    if (safeBytes > 0) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        [
+          {
+            $set: {
+              storageUsedBytes: {
+                $max: [0, { $subtract: [{ $ifNull: ['$storageUsedBytes', 0] }, safeBytes] }],
+              },
+            },
+          },
+        ] as any,
+      );
+    }
+    await this.clearStorageIfNoImages(userId);
+  }
+
+  private async clearStorageIfNoImages(userId: string) {
+    const [collectionImages, mobileImages] = await Promise.all([
+      this.collectionImageModel.exists({ userId }),
+      this.imageModel.exists({ userId }),
+    ]);
+    if (!collectionImages && !mobileImages) {
+      await this.userModel.updateOne({ _id: userId }, { $set: { storageUsedBytes: 0 } });
     }
   }
 
