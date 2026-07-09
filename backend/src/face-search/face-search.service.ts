@@ -406,12 +406,13 @@ export class FaceSearchService implements OnModuleInit {
    *   Pass 4: Final merge to catch groups that became similar after absorption
    */
   private clusterPoints(points: FacePoint[]): FaceGroup[] {
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.36);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.48);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.45);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.58);
+    const uniquePoints = this.dedupeSameImageFaces(points);
 
     // Sort by face quality (largest face area first) so high-quality portrait
     // embeddings seed clusters before noisy small crops from group photos.
-    const sortedPoints = [...points].sort((a, b) => {
+    const sortedPoints = [...uniquePoints].sort((a, b) => {
       const aBox = a.payload?.box;
       const bBox = b.payload?.box;
       const aArea = Number(aBox?.width ?? 0) * Number(aBox?.height ?? 0);
@@ -456,7 +457,7 @@ export class FaceSearchService implements OnModuleInit {
           }
           return centroidSimilarity >= minSimilarity
             || bestPairSimilarity >= minPairSimilarity
-            || avgPairSimilarity >= minSimilarity;
+            || avgPairSimilarity >= minSimilarity + 0.08;
         })
         .sort((a, b) => b.combinedScore - a.combinedScore)[0]?.group;
 
@@ -478,7 +479,7 @@ export class FaceSearchService implements OnModuleInit {
     // the best match is clearly better than the second-best match (confidence
     // gap). This prevents absorbing faces into the WRONG group which makes
     // people disappear from the face sheet.
-    this.absorbSmallGroups(mergedGroups, minSimilarity, minPairSimilarity);
+    // Keep small ambiguous groups visible. User can tolerate a duplicate more than a missing person.
 
     // ── Pass 4: Final merge ────────────────────────────────────────────────
     // After absorption, some groups' centroids may have shifted enough to
@@ -487,6 +488,39 @@ export class FaceSearchService implements OnModuleInit {
     this.mergeFaceGroups(mergedGroups, minSimilarity, minPairSimilarity);
 
     return mergedGroups;
+  }
+
+  private dedupeSameImageFaces(points: FacePoint[]) {
+    const byImage = new Map<string, FacePoint[]>();
+    for (const point of points) {
+      const imageId = String(point.payload?.imageId ?? '');
+      byImage.set(imageId || String(point.id), [...(byImage.get(imageId || String(point.id)) ?? []), point]);
+    }
+
+    const unique: FacePoint[] = [];
+    for (const imagePoints of byImage.values()) {
+      const accepted: FacePoint[] = [];
+      for (const point of this.sortFacePointsByQuality(imagePoints)) {
+        const duplicate = accepted.some((existing) =>
+          this.sameFaceBox(existing.payload?.box, point.payload?.box)
+          || this.samePointSimilarity(existing, point) >= 0.78,
+        );
+        if (!duplicate) accepted.push(point);
+      }
+      unique.push(...accepted);
+    }
+
+    return unique;
+  }
+
+  private sortFacePointsByQuality(points: FacePoint[]) {
+    return [...points].sort((left, right) => {
+      const leftBox = left.payload?.box;
+      const rightBox = right.payload?.box;
+      const leftArea = Number(leftBox?.width ?? 0) * Number(leftBox?.height ?? 0);
+      const rightArea = Number(rightBox?.width ?? 0) * Number(rightBox?.height ?? 0);
+      return rightArea - leftArea;
+    });
   }
 
   private vectorCollection() {
