@@ -406,8 +406,8 @@ export class FaceSearchService implements OnModuleInit {
    *   Pass 4: Final merge to catch groups that became similar after absorption
    */
   private clusterPoints(points: FacePoint[]): FaceGroup[] {
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.48);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.62);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.36);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.48);
 
     // Sort by face quality (largest face area first) so high-quality portrait
     // embeddings seed clusters before noisy small crops from group photos.
@@ -838,10 +838,20 @@ export class FaceSearchService implements OnModuleInit {
       if (!leftImageId) continue;
       for (const rightPoint of right.points) {
         if (String(rightPoint.payload?.imageId ?? '') !== leftImageId) continue;
-        if (!this.sameFaceBox(leftPoint.payload?.box, rightPoint.payload?.box)) return true;
+        if (this.sameFaceBox(leftPoint.payload?.box, rightPoint.payload?.box)) continue;
+        if (this.samePointSimilarity(leftPoint, rightPoint) >= 0.72) continue;
+        return true;
       }
     }
     return false;
+  }
+
+  private samePointSimilarity(left: FacePoint, right: FacePoint) {
+    const leftVector = this.pointVector(left);
+    const rightVector = this.pointVector(right);
+    const normalizedLeft = leftVector ? this.normalizeVector(leftVector) : undefined;
+    const normalizedRight = rightVector ? this.normalizeVector(rightVector) : undefined;
+    return normalizedLeft && normalizedRight ? this.cosine(normalizedLeft, normalizedRight) : Number.NEGATIVE_INFINITY;
   }
 
   private sameFaceBox(

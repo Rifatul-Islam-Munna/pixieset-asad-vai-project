@@ -112,8 +112,11 @@ export class MobileGalleryService {
   async remove(userId: string, id: string) {
     const app = await this.appModel.findOne({ _id: id, userId }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
-    const images = await this.imageModel.find({ appId: id, userId }).select({ url: 1 }).lean();
-    const filesToDelete = new Set<string>(images.map((image) => image.url).filter(Boolean));
+    const images = await this.imageModel.find({ appId: id, userId }).select({ url: 1, thumbnailUrl: 1, filename: 1 }).lean();
+    const filesToDelete = new Set<string>();
+    for (const image of images) {
+      [image.url, image.thumbnailUrl, image.filename].filter(Boolean).forEach((reference) => filesToDelete.add(String(reference)));
+    }
     if (app.iconUrl) filesToDelete.add(app.iconUrl);
     const customFontUrl = String((app.design as any)?.coverText?.customFontUrl || '');
     if (customFontUrl) filesToDelete.add(customFontUrl);
@@ -191,8 +194,13 @@ export class MobileGalleryService {
     const update: Record<string, any> = { $set: { imageCount: remaining } };
     if (app?.coverImage === image.url) update.$set.coverImage = next?.url ?? '';
     await this.appModel.updateOne({ _id: appId, userId }, update);
-    await this.minioService.deleteService(image.url).catch(() => null);
+    await this.deleteStoredImageFiles(image);
     return image.toObject();
+  }
+
+  private async deleteStoredImageFiles(image: MobileGalleryImageDocument) {
+    const references = [image.url, image.thumbnailUrl, image.filename].filter(Boolean) as string[];
+    await Promise.all([...new Set(references)].map((reference) => this.minioService.deleteService(reference).catch(() => null)));
   }
 
   async uploadAsset(userId: string, file?: Express.Multer.File) {
