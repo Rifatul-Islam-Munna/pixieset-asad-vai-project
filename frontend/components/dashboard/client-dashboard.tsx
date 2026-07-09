@@ -4156,8 +4156,20 @@ function WatermarkList({ section }: { section: DashboardSection }) {
   );
 }
 
+async function uploadDashboardAsset(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch("/api/mobile-gallery/assets", { method: "POST", body: form });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.message || "Upload failed");
+  const url = String(payload?.data?.url || "");
+  if (!url) throw new Error("Upload failed");
+  return url;
+}
+
 function WatermarkSettings({ section }: { section: DashboardSection }) {
   const previewRef = useRef<HTMLDivElement>(null);
+  const [watermarkImageUploading, setWatermarkImageUploading] = useState(false);
   const {
     activeWatermarkId,
     watermarkApplyDownloads,
@@ -4205,8 +4217,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
       y: clamp(((clientY - rect.top) / rect.height) * 100),
     });
   };
-  const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    if (watermarkType !== "text") return;
+  const startDrag = (event: PointerEvent<HTMLElement>) => {
     event.preventDefault();
     moveWatermark(event.clientX, event.clientY);
     const onMove = (moveEvent: globalThis.PointerEvent) =>
@@ -4218,7 +4229,28 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   };
+  const uploadWatermarkFile = async (file?: File) => {
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setWatermarkType("image");
+    setWatermarkImage(previewUrl);
+    setWatermarkImageUploading(true);
+    try {
+      const url = await uploadDashboardAsset(file);
+      setWatermarkImage(url);
+      toast.success("Watermark image uploaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Watermark upload failed");
+    } finally {
+      setWatermarkImageUploading(false);
+      URL.revokeObjectURL(previewUrl);
+    }
+  };
   const saveWatermarkToDb = () => {
+    if (watermarkImageUploading) {
+      toast.error("Wait until watermark image upload finishes");
+      return;
+    }
     const position = safePosition();
     const watermark = {
       id: activeWatermarkId,
@@ -4258,25 +4290,6 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
             Back to Watermarks
           </Link>
           <p className="mb-4 text-sm font-bold">Watermark</p>
-          <label className="flex size-[148px] cursor-pointer items-center justify-center bg-[#e9e9e9] text-2xl text-[#888]">
-            +
-            <input
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  setWatermarkImage(URL.createObjectURL(file));
-                  setWatermarkType("image");
-                }
-              }}
-            />
-          </label>
-          <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#666]">
-            Protect your photos with custom watermarks. Saved setting can apply
-            to all future images.
-          </p>
         </div>
 
         <div>
@@ -4354,9 +4367,11 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
               className="h-12 rounded-none bg-white"
               onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) setWatermarkImage(URL.createObjectURL(file));
+                void uploadWatermarkFile(file);
+                event.currentTarget.value = "";
               }}
             />
+            {watermarkImageUploading && <p className="mt-2 text-xs font-semibold text-[#00a997]">Uploading watermark image...</p>}
           </Field>
         )}
 
@@ -4407,7 +4422,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
             )}
           </div>
           <p className="mt-3 text-sm text-[#666]">
-            Text watermark drag works on preview.
+            Drag watermark on preview, or pick a position.
           </p>
         </div>
 
@@ -4425,6 +4440,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
           <Button
             className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
             onClick={saveWatermarkToDb}
+            disabled={watermarkImageUploading}
           >
             Save Settings
           </Button>
@@ -4470,22 +4486,22 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
             <img
               src={watermarkImage}
               alt="Uploaded watermark"
-              className="absolute left-1/2 top-1/2 object-contain"
+              className="absolute cursor-grab select-none object-contain active:cursor-grabbing"
               style={{
+                left: `${watermarkPosition.x}%`,
+                top: `${watermarkPosition.y}%`,
                 width: `${watermarkScale * 2.4}px`,
                 opacity: watermarkOpacity / 100,
                 transform: "translate(-50%, -50%)",
               }}
+              onPointerDown={startDrag}
+              draggable={false}
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white">
               Upload watermark image
             </div>
           )}
-        </div>
-        <div className="flex gap-5 text-[#777]">
-          <button className="rounded bg-[#eee] px-2 py-1">Desktop</button>
-          <button className="px-2 py-1">Mobile</button>
         </div>
       </div>
     </div>

@@ -1119,13 +1119,17 @@ export class CollectionsService {
         y: this.clampPercent(rawPosition.y, padY, 100 - padY),
       };
       const svg = Buffer.from(`
-        <svg width="${width}" height="${height}">
-          <text x="${position.x}%" y="${position.y}%"
-            text-anchor="middle" dominant-baseline="middle"
-            font-family="${fontFamily}"
-            font-size="${fontSize}"
-            fill="${watermark.color || '#ffffff'}"
-            opacity="${opacity}">${text}</text>
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+          <style>
+            .watermark-text {
+              font-family: ${fontFamily};
+              font-size: ${fontSize}px;
+              fill: ${watermark.color || '#ffffff'};
+              opacity: ${opacity};
+            }
+          </style>
+          <text class="watermark-text" x="${position.x}%" y="${position.y}%"
+            text-anchor="middle" dominant-baseline="middle">${text}</text>
         </svg>
       `);
 
@@ -1236,8 +1240,26 @@ export class CollectionsService {
   }
 
   private watermarkFontFamily(font?: string) {
-    const preferred = this.escapeSvg(font || 'Noto Sans');
-    return `${preferred}, Noto Sans Bengali, Noto Sans, DejaVu Sans, Arial, sans-serif`;
+    const mapped = this.serverWatermarkFont(font);
+    return [
+      mapped,
+      'Noto Sans Bengali',
+      'Noto Sans',
+      'DejaVu Sans',
+      'Liberation Sans',
+      'sans-serif',
+    ].map((family) => family.includes(' ') ? `"${this.escapeCssString(family)}"` : this.escapeCssString(family)).join(', ');
+  }
+
+  private serverWatermarkFont(font?: string) {
+    const value = String(font || '').trim().toLowerCase();
+    if (value.includes('times') || value.includes('georgia') || value.includes('playfair')) return 'Noto Serif';
+    if (value.includes('courier')) return 'DejaVu Sans Mono';
+    return 'Noto Sans';
+  }
+
+  private escapeCssString(value: string) {
+    return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   }
 
   private clampPercent(value: number, min = 5, max = 95) {
