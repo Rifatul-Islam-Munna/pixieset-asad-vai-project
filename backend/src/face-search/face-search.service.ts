@@ -406,8 +406,8 @@ export class FaceSearchService implements OnModuleInit {
    *   Pass 4: Final merge to catch groups that became similar after absorption
    */
   private clusterPoints(points: FacePoint[]): FaceGroup[] {
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.24);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.22);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.13);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.13);
 
     const uniquePoints = this.dedupeSameImageFaces(points);
     let groups = this.vectorConnectedGroups(uniquePoints, minPairSimilarity);
@@ -415,6 +415,11 @@ export class FaceSearchService implements OnModuleInit {
     groups = this.mergeFaceGroups(groups, minSimilarity, minPairSimilarity);
     this.absorbSmallGroups(groups, minSimilarity, minPairSimilarity);
     groups = this.mergeFaceGroups(groups, minSimilarity, minPairSimilarity);
+
+    this.logger.log(
+      `CLUSTER_DEBUG input=${points.length} unique=${uniquePoints.length} groups=${groups.length} `
+      + `minSimilarity=${minSimilarity} minPairSimilarity=${minPairSimilarity}`,
+    );
 
     return groups;
   }
@@ -465,8 +470,10 @@ export class FaceSearchService implements OnModuleInit {
         for (let rightIndex = leftIndex + 1; rightIndex < groups.length; rightIndex += 1) {
           const left = groups[leftIndex];
           const right = groups[rightIndex];
-          if (this.groupsConflictInSameImage(left, right)) continue;
-          if (this.bestGroupPairSimilarity(left, right) < minPairSimilarity) continue;
+          const bestScore = this.bestGroupPairSimilarity(left, right);
+          const conflict = this.groupsConflictInSameImage(left, right);
+          if (conflict && bestScore < 0.55) continue;
+          if (bestScore < minPairSimilarity) continue;
           left.points.push(...right.points);
           left.centroid = this.centroid(left.points);
           left.representative = this.bestRepresentative(left.points);
@@ -484,9 +491,20 @@ export class FaceSearchService implements OnModuleInit {
     let best = Number.NEGATIVE_INFINITY;
     for (const leftPoint of left.points) {
       for (const rightPoint of right.points) {
-        best = Math.max(best, this.samePointSimilarity(leftPoint, rightPoint));
+        const score = this.samePointSimilarity(leftPoint, rightPoint);
+        best = Math.max(best, score);
       }
     }
+
+    if (best >= 0.10) {
+      this.logger.log(
+        `PAIR_SCORE best=${best.toFixed(4)} `
+        + `leftPhotos=${new Set(left.points.map((point) => point.payload?.imageId).filter(Boolean)).size} `
+        + `rightPhotos=${new Set(right.points.map((point) => point.payload?.imageId).filter(Boolean)).size} `
+        + `conflict=${this.groupsConflictInSameImage(left, right)}`,
+      );
+    }
+
     return best;
   }
 
@@ -803,7 +821,11 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private groupsMatch(left: FaceGroup, right: FaceGroup, minSimilarity: number, minPairSimilarity: number) {
-    if (this.groupsConflictInSameImage(left, right)) return false;
+    const bestPairScore = this.bestGroupPairSimilarity(left, right);
+    const conflict = this.groupsConflictInSameImage(left, right);
+
+    if (conflict && bestPairScore < 0.55) return false;
+    if (bestPairScore >= minPairSimilarity) return true;
     if (this.cosine(left.centroid, right.centroid) >= minSimilarity) return true;
 
     // Collect all cross-pair similarities to check both best-pair and average.
