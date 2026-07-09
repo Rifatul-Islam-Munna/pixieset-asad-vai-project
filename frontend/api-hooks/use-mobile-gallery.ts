@@ -140,13 +140,16 @@ export function useMobileGalleryApp(appId?: string) {
     onSuccess: refresh,
   });
   const uploadImages = useMutation({
-    mutationFn: async (files: FileList | File[]) => {
+    mutationFn: async (input: FileList | File[] | { files: FileList | File[]; onProgress?: (percent: number) => void }) => {
       if (!appId) throw new Error("App is required");
+      const files = "files" in input ? input.files : input;
       const form = new FormData();
       Array.from(files).forEach((file) => form.append("files", file));
-      const response = await fetch(`/api/mobile-gallery/apps/${appId}/images`, { method: "POST", body: form });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.message || "Upload failed");
+      const data = await uploadFormDataWithProgress<Data<MobileGalleryImage[]>>(
+        `/api/mobile-gallery/apps/${appId}/images`,
+        form,
+        "files" in input ? input.onProgress : undefined,
+      );
       return data as Data<MobileGalleryImage[]>;
     },
     onSuccess: refresh,
@@ -184,6 +187,33 @@ export function useMobileGalleryApp(appId?: string) {
     },
   });
   return { appQuery, updateApp, uploadImages, reorderImages, deleteImage, sendInvite };
+}
+
+function uploadFormDataWithProgress<T>(
+  url: string,
+  formData: FormData,
+  onProgress?: (percent: number) => void,
+) {
+  return new Promise<T>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", url);
+    request.responseType = "json";
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    request.onload = () => {
+      const data = request.response ?? {};
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(data?.message || "Upload failed"));
+        return;
+      }
+      onProgress?.(100);
+      resolve(data as T);
+    };
+    request.onerror = () => reject(new Error("Upload failed"));
+    request.send(formData);
+  });
 }
 
 export function fetchMobileGalleryImagesPage(appId: string, offset: number, limit = 60) {

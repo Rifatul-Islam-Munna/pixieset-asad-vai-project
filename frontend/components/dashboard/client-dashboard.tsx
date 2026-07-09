@@ -8174,7 +8174,7 @@ function CollectionDetailView({
   const [editingSetName, setEditingSetName] = useState("");
   const [pageOrigin, setPageOrigin] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({ active: false, total: 0, uploaded: 0, currentName: "" });
+  const [uploadProgress, setUploadProgress] = useState({ active: false, total: 0, uploaded: 0, currentName: "", currentPercent: 0 });
   const [draggingUpload, setDraggingUpload] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -8393,14 +8393,15 @@ function CollectionDetailView({
   const handleImageUpload = async (files: FileList | File[] | null) => {
     if (!files?.length || uploadImages.isPending || uploadProgress.active) return;
     const selectedFiles = Array.from(files);
-    setUploadProgress({ active: true, total: selectedFiles.length, uploaded: 0, currentName: selectedFiles[0]?.name ?? "" });
+    setUploadProgress({ active: true, total: selectedFiles.length, uploaded: 0, currentName: selectedFiles[0]?.name ?? "", currentPercent: 0 });
     try {
       for (const [index, file] of selectedFiles.entries()) {
-        setUploadProgress((current) => ({ ...current, currentName: file.name }));
+        setUploadProgress((current) => ({ ...current, currentName: file.name, currentPercent: 0 }));
         const response = await uploadImages.mutateAsync({
           files: [file],
           setId: activeSetId,
           watermarkId: uploadWatermarkId,
+          onProgress: (percent) => setUploadProgress((current) => ({ ...current, currentPercent: percent })),
         });
         const uploadedImages = Array.isArray(response?.data) ? response.data : [];
         if (uploadedImages.length) {
@@ -8409,13 +8410,13 @@ function CollectionDetailView({
             return [...current, ...uploadedImages.filter((image) => !seen.has(image._id))];
           });
         }
-        setUploadProgress((current) => ({ ...current, uploaded: index + 1 }));
+        setUploadProgress((current) => ({ ...current, uploaded: index + 1, currentPercent: 100 }));
       }
       toast.success(`Upload finished: ${selectedFiles.length} image${selectedFiles.length === 1 ? "" : "s"}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
-      setUploadProgress({ active: false, total: 0, uploaded: 0, currentName: "" });
+      setUploadProgress({ active: false, total: 0, uploaded: 0, currentName: "", currentPercent: 0 });
     }
   };
   const handleUploadDragOver = (event: DragEvent<HTMLElement>) => {
@@ -8439,7 +8440,9 @@ function CollectionDetailView({
   };
   const uploading = uploadProgress.active || uploadImages.isPending;
   const uploadsLeft = Math.max(0, uploadProgress.total - uploadProgress.uploaded);
-  const uploadPercent = uploadProgress.total ? Math.round((uploadProgress.uploaded / uploadProgress.total) * 100) : 0;
+  const uploadPercent = uploadProgress.total
+    ? Math.round(((uploadProgress.uploaded + uploadProgress.currentPercent / 100) / uploadProgress.total) * 100)
+    : 0;
   const deletingImages = deleteImage.isPending || bulkDeleting;
   const toggleImageSelection = (imageId: string) => {
     if (deletingImages) return;
@@ -8557,7 +8560,7 @@ function CollectionDetailView({
           </Button>
           <label className={cn("inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white", uploading && "pointer-events-none opacity-70")}>
             {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-            {uploading ? `${uploadProgress.uploaded}/${uploadProgress.total || "..."}` : "Add Media"}
+            {uploading ? `${uploadProgress.currentPercent}%` : "Add Media"}
             <input
               type="file"
               accept="image/*"
@@ -8694,7 +8697,7 @@ function CollectionDetailView({
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-bold">
-              Uploaded {uploadProgress.uploaded} of {uploadProgress.total || "selected"} images. {uploadsLeft} left.
+              Image {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of {uploadProgress.total || "selected"} · {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.
             </p>
             <p className="mt-1 truncate text-xs font-semibold text-[#3f8179]">
               {uploadProgress.currentName || "Processing files and watermark"}
@@ -8913,8 +8916,13 @@ function CollectionDetailView({
                 onDrop={handleUploadDrop}
               >
                 {uploading ? <Loader2 className="size-10 animate-spin text-[#22bda7]" /> : <Upload className="size-10 text-[#bbb]" />}
-                <p className="mt-5 font-bold">{uploading ? `Uploaded ${uploadProgress.uploaded} of ${uploadProgress.total || "selected"} images` : "Drag photos and videos here to upload"}</p>
+                <p className="mt-5 font-bold">{uploading ? `Image ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} · ${uploadProgress.currentPercent}%` : "Drag photos and videos here to upload"}</p>
                 <p className="mt-3 text-sm text-[#00a997]">{uploading ? `${uploadsLeft} left` : "or Browse files"}</p>
+                {uploading && (
+                  <div className="mt-5 h-2 w-full max-w-sm overflow-hidden bg-[#d3f2ee]">
+                    <div className="h-full bg-[#22bda7] transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+                  </div>
+                )}
                 <input
                   type="file"
                   accept="image/*"

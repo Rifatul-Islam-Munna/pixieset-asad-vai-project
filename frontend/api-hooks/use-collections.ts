@@ -194,25 +194,21 @@ export function useCollectionDetail(collectionId?: string) {
       files,
       setId,
       watermarkId,
+      onProgress,
     }: {
       files: FileList | File[];
       setId?: string;
       watermarkId?: string;
+      onProgress?: (percent: number) => void;
     }) => {
       if (!collectionId) throw new Error("Collection is required");
       const formData = new FormData();
       if (setId) formData.append("setId", setId);
       if (watermarkId) formData.append("watermarkId", watermarkId);
       Array.from(files).forEach((file) => formData.append("files", file));
-      const response = await fetch(`/api/collections/${collectionId}/images`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = (await response.json()) as
-        | (ListResponse<CollectionImageRecord[]> & { message: string })
-        | { message?: string };
-
-      if (!response.ok) throw new Error(data.message ?? "Upload failed");
+      const data = await uploadFormDataWithProgress<
+        (ListResponse<CollectionImageRecord[]> & { message: string }) | { message?: string }
+      >(`/api/collections/${collectionId}/images`, formData, onProgress);
       return data as ListResponse<CollectionImageRecord[]> & { message: string };
     },
     onSuccess: () => {
@@ -254,6 +250,33 @@ export function useCollectionDetail(collectionId?: string) {
   });
 
   return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages };
+}
+
+function uploadFormDataWithProgress<T>(
+  url: string,
+  formData: FormData,
+  onProgress?: (percent: number) => void,
+) {
+  return new Promise<T>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", url);
+    request.responseType = "json";
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    request.onload = () => {
+      const data = request.response ?? {};
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(data?.message ?? "Upload failed"));
+        return;
+      }
+      onProgress?.(100);
+      resolve(data as T);
+    };
+    request.onerror = () => reject(new Error("Upload failed"));
+    request.send(formData);
+  });
 }
 
 export function fetchCollectionImagesPage(collectionId: string, offset: number, limit = 60) {
