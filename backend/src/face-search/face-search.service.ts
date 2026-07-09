@@ -36,7 +36,7 @@ type FaceGroup = {
 
 const INSIGHT_VECTOR_SIZE = 512;
 const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
-const FACE_INDEX_VERSION = 5;
+const FACE_INDEX_VERSION = 6;
 
 /**
  * Face indexing/search service.
@@ -328,11 +328,7 @@ export class FaceSearchService implements OnModuleInit {
     );
 
     // Sort by photo count descending so the most prominent people come first.
-    const sortedGroups = clusteredGroups.sort((a, b) => {
-      const aPhotos = new Set(a.points.map((p) => p.payload?.imageId).filter(Boolean)).size;
-      const bPhotos = new Set(b.points.map((p) => p.payload?.imageId).filter(Boolean)).size;
-      return bPhotos - aPhotos;
-    });
+    const sortedGroups = this.visibleFaceGroups(clusteredGroups);
 
     return {
       collectionId,
@@ -518,6 +514,29 @@ export class FaceSearchService implements OnModuleInit {
         centroid: this.centroid(personPoints),
       }))
       .filter((group) => group.centroid.length > 0);
+  }
+
+  private visibleFaceGroups(groups: FaceGroup[]) {
+    const sortedGroups = [...groups].sort((a, b) => this.groupPhotoCount(b) - this.groupPhotoCount(a));
+    const duplicateSimilarity = this.configNumber('FACE_SIDEBAR_DUPLICATE_SIMILARITY', 0.22, 0.1, 0.99);
+    const visible: FaceGroup[] = [];
+
+    for (const group of sortedGroups) {
+      const photoCount = this.groupPhotoCount(group);
+      const duplicateOfLargerGroup = photoCount <= 1 && visible.some((candidate) =>
+        this.groupPhotoCount(candidate) > photoCount
+        && !this.groupsConflictInSameImage(group, candidate)
+        && this.bestGroupPairSimilarity(group, candidate) >= duplicateSimilarity,
+      );
+
+      if (!duplicateOfLargerGroup) visible.push(group);
+    }
+
+    return visible;
+  }
+
+  private groupPhotoCount(group: FaceGroup) {
+    return new Set(group.points.map((point) => point.payload?.imageId).filter(Boolean)).size;
   }
 
   private dedupeSameImageFaces(points: FacePoint[]) {

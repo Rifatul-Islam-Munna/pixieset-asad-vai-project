@@ -9,6 +9,7 @@ import {
 import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createReadStream } from 'fs';
+import sharp from 'sharp';
 
 const DEFAULT_BUCKET_NAME = 'gallerista.app';
 
@@ -107,20 +108,77 @@ export class MinioService implements OnModuleInit {
   async uploadFile(file: Express.Multer.File) {
     try {
       if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
-      const fileContent = createReadStream(file.path);
+      const optimized = await this.optimizedUploadBody(file);
+      const key = optimized.key;
       await this.s3.send(
         new PutObjectCommand({
           Bucket: this.bucketName,
-          Key: file.filename,
-          Body: fileContent,
-          ContentType: file.mimetype,
+          Key: key,
+          Body: optimized.body,
+          ContentType: optimized.contentType,
         }),
       );
-      return `${this.configService.get('MINIO_URL')}/${this.bucketName}/${file.filename}`;
+      file.filename = key;
+      file.mimetype = optimized.contentType;
+      file.size = optimized.size;
+      return `${this.configService.get('MINIO_URL')}/${this.bucketName}/${key}`;
     } catch (error) {
       this.logger.error(`Error uploading file: ${error instanceof Error ? error.message : String(error)}`);
       throw new HttpException('Failed to upload file', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  private async optimizedUploadBody(file: Express.Multer.File) {
+    if (!String(file.mimetype || '').toLowerCase().startsWith('image/')) {
+      return {
+        key: file.filename,
+        body: createReadStream(file.path),
+        contentType: file.mimetype,
+        size: file.size ?? 0,
+      };
+    }
+
+    const maxBytes = this.configNumber('IMAGE_UPLOAD_MAX_BYTES', 900 * 1024, 100 * 1024, 5 * 1024 * 1024);
+    const maxWidth = this.configNumber('IMAGE_UPLOAD_MAX_WIDTH', 1920, 640, 4096);
+    const maxHeight = this.configNumber('IMAGE_UPLOAD_MAX_HEIGHT', 1920, 640, 4096);
+    const base = file.filename.replace(/\.[^.]+$/, '');
+
+    let best: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+    for (const scale of [1, 0.85, 0.7, 0.55]) {
+      for (const quality of [64, 58, 52, 46, 40, 34]) {
+        const output = await sharp(file.path)
+          .rotate()
+          .resize({
+            width: Math.round(maxWidth * scale),
+            height: Math.round(maxHeight * scale),
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .avif({ quality, effort: 4 })
+          .toBuffer();
+
+        if (!best.length || output.length < best.length) best = output;
+        if (output.length <= maxBytes) {
+          best = output;
+          break;
+        }
+      }
+      if (best.length <= maxBytes) break;
+    }
+
+    return {
+      key: `${base}.avif`,
+      body: best,
+      contentType: 'image/avif',
+      size: best.length,
+    };
+  }
+
+  private configNumber(key: string, fallback: number, min: number, max: number) {
+    const raw = this.configService.get<string>(key);
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return fallback;
+    return Math.min(max, Math.max(min, value));
   }
 
   async deleteService(fileReference: string) {
