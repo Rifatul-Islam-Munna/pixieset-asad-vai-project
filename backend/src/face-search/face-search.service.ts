@@ -406,8 +406,8 @@ export class FaceSearchService implements OnModuleInit {
    *   Pass 4: Final merge to catch groups that became similar after absorption
    */
   private clusterPoints(points: FacePoint[]): FaceGroup[] {
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.45);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.58);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.30);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.42);
     const uniquePoints = this.dedupeSameImageFaces(points);
 
     // Sort by face quality (largest face area first) so high-quality portrait
@@ -503,7 +503,7 @@ export class FaceSearchService implements OnModuleInit {
       for (const point of this.sortFacePointsByQuality(imagePoints)) {
         const duplicate = accepted.some((existing) =>
           this.sameFaceBox(existing.payload?.box, point.payload?.box)
-          || this.samePointSimilarity(existing, point) >= 0.78,
+          || this.samePointSimilarity(existing, point) >= 0.50,
         );
         if (!duplicate) accepted.push(point);
       }
@@ -873,7 +873,7 @@ export class FaceSearchService implements OnModuleInit {
       for (const rightPoint of right.points) {
         if (String(rightPoint.payload?.imageId ?? '') !== leftImageId) continue;
         if (this.sameFaceBox(leftPoint.payload?.box, rightPoint.payload?.box)) continue;
-        if (this.samePointSimilarity(leftPoint, rightPoint) >= 0.72) continue;
+        if (this.samePointSimilarity(leftPoint, rightPoint) >= 0.50) continue;
         return true;
       }
     }
