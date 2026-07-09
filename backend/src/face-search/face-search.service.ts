@@ -216,8 +216,8 @@ export class FaceSearchService implements OnModuleInit {
       }, 250);
     }
 
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.42);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.35);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.48);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.62);
     const sortedPoints = [...points].sort((a, b) => {
       const aImage = String(a.payload?.imageId ?? '');
       const bImage = String(b.payload?.imageId ?? '');
@@ -233,27 +233,24 @@ export class FaceSearchService implements OnModuleInit {
       if (!normalized) continue;
 
       const match = groups
-        .map((group) => ({
-          group,
-          similarity: Math.max(
-            this.cosine(normalized, group.centroid),
-            ...group.points
-              .map((groupPoint) => {
-                const groupVector = this.pointVector(groupPoint);
-                const normalizedGroupVector = groupVector ? this.normalizeVector(groupVector) : undefined;
-                return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) : Number.NEGATIVE_INFINITY;
-              }),
-          ),
-        }))
-        .filter(({ group, similarity }) => {
+        .map((group) => {
           const pairScores = group.points.map((groupPoint) => {
             const groupVector = this.pointVector(groupPoint);
             const normalizedGroupVector = groupVector ? this.normalizeVector(groupVector) : undefined;
             return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) : Number.NEGATIVE_INFINITY;
           });
-          return similarity >= minSimilarity || Math.max(...pairScores) >= minPairSimilarity;
+          return {
+            group,
+            centroidSimilarity: this.cosine(normalized, group.centroid),
+            bestPairSimilarity: Math.max(...pairScores),
+          };
         })
-        .sort((a, b) => b.similarity - a.similarity)[0]?.group;
+        .filter(({ centroidSimilarity, bestPairSimilarity }) => {
+          return centroidSimilarity >= minSimilarity || bestPairSimilarity >= minPairSimilarity;
+        })
+        .sort((a, b) =>
+          Math.max(b.centroidSimilarity, b.bestPairSimilarity) - Math.max(a.centroidSimilarity, a.bestPairSimilarity),
+        )[0]?.group;
 
       if (match) {
         match.points.push(point);
