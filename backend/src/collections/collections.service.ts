@@ -1109,6 +1109,7 @@ export class CollectionsService {
 
     if (watermark.type === 'text') {
       const text = this.escapeSvg(watermark.text || 'Watermark');
+      const fontFamily = this.watermarkFontFamily(watermark.font);
       const fontSize = Math.max(24, (watermark.scale ?? 42) * 1.7);
       const estimatedTextWidth = (watermark.text || 'Watermark').length * fontSize * 0.55;
       const padX = Math.min(45, Math.max(5, (estimatedTextWidth / width) * 50));
@@ -1121,7 +1122,7 @@ export class CollectionsService {
         <svg width="${width}" height="${height}">
           <text x="${position.x}%" y="${position.y}%"
             text-anchor="middle" dominant-baseline="middle"
-            font-family="${this.escapeSvg(watermark.font || 'Arial')}"
+            font-family="${fontFamily}"
             font-size="${fontSize}"
             fill="${watermark.color || '#ffffff'}"
             opacity="${opacity}">${text}</text>
@@ -1232,6 +1233,11 @@ export class CollectionsService {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  private watermarkFontFamily(font?: string) {
+    const preferred = this.escapeSvg(font || 'Noto Sans');
+    return `${preferred}, Noto Sans Bengali, Noto Sans, DejaVu Sans, Arial, sans-serif`;
   }
 
   private clampPercent(value: number, min = 5, max = 95) {

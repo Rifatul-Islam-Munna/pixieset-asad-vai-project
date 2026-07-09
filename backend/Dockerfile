@@ -45,6 +45,15 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Fonts are required by Sharp/librsvg for text watermarks.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      fontconfig \
+      fonts-dejavu-core \
+      fonts-noto-core \
+      fonts-noto-extra \
+    && rm -rf /var/lib/apt/lists/*
+
 # Debian-compatible non-root user creation
 RUN groupadd --gid 1001 nodejs \
     && useradd \
