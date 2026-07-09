@@ -216,8 +216,8 @@ export class FaceSearchService implements OnModuleInit {
       }, 250);
     }
 
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.50);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.46);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.42);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.35);
     const sortedPoints = [...points].sort((a, b) => {
       const aImage = String(a.payload?.imageId ?? '');
       const bImage = String(b.payload?.imageId ?? '');

@@ -1042,11 +1042,11 @@ export function PublicGallery({
                 <button key={face.id} className="grid justify-items-center gap-2 text-center" onClick={() => void filterBySavedFace(face.id)}>
                   <span className="block size-16 overflow-hidden rounded-full bg-[#eee] ring-2 ring-[#111]/10 sm:size-20">
                     {face.imageUrl ? (
-                      <GalleryImage
-                        src={imageSrc(face.imageUrl)}
-                        alt={face.label}
-                        className="h-full w-full object-cover"
-                        style={face.box ? { objectPosition: `${face.box.x + face.box.width / 2}% ${face.box.y + face.box.height / 2}%` } : undefined}
+                      <span
+                        aria-label={face.label}
+                        role="img"
+                        className="block h-full w-full bg-cover bg-no-repeat"
+                        style={faceAvatarStyle(imageSrc(face.imageUrl), face.box)}
                       />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center text-xs font-bold">Face</span>
@@ -1086,6 +1086,19 @@ function displayImageUrl(image: PublicImage) {
 
 function imageSetId(image: PublicImage) {
   return image.setId || "highlights";
+}
+
+function faceAvatarStyle(url: string, box?: PublicFace["box"]): CSSProperties {
+  if (!box) return { backgroundImage: `url("${url}")`, backgroundPosition: "50% 35%" };
+  const centerX = box.x + box.width / 2;
+  const centerY = box.y + box.height / 2;
+  const faceSize = Math.max(box.width, box.height, 8);
+  const zoom = Math.min(380, Math.max(170, (100 / faceSize) * 34));
+  return {
+    backgroundImage: `url("${url}")`,
+    backgroundPosition: `${centerX}% ${centerY}%`,
+    backgroundSize: `${zoom}%`,
+  };
 }
 
 function safeDownloadName(value: string) {
