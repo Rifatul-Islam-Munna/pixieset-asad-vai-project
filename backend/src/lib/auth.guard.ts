@@ -27,7 +27,6 @@ export class AuthGuard implements CanActivate {
 
        
         const token = request.headers["access_token"] as string
-        this.logger.log("access_token----->",token)
         if(!token){
             throw new UnauthorizedException('No token found');
         }
@@ -41,8 +40,6 @@ export class AuthGuard implements CanActivate {
       private async validateToken(request:ExpressRequest,token: string): Promise<boolean> {
         try {
               const secret = this.configService.get<string>('ACCESS_TOKEN') ?? 'dev-secret';
-  this.logger.log('🔑 Regular Login SECRET in Auh:', secret); // Debug
-       
           const decoded = await this.jwtService.verifyAsync<jwts>(token,{secret:secret}); 
 
     
@@ -50,8 +47,6 @@ export class AuthGuard implements CanActivate {
            if (!decoded) {
             throw new Error('Token verification returned no payload');
         }
-        this.logger.log("decoded->",decoded)
-
         if (  !decoded.id || !decoded.role  ) {
             throw new Error('Incomplete JWT payload');
         }
@@ -59,7 +54,7 @@ export class AuthGuard implements CanActivate {
          
           return true; 
         } catch (error) {
-          this.logger.debug("token-error->",error)
+          this.logger.debug(`token-error->${error instanceof Error ? error.message : 'unknown'}`)
           throw new UnauthorizedException('Invalid or expired token');
         }
       }

@@ -472,8 +472,8 @@ export class FaceSearchService implements OnModuleInit {
           const right = groups[rightIndex];
           const bestScore = this.bestGroupPairSimilarity(left, right);
           const conflict = this.groupsConflictInSameImage(left, right);
-          if (conflict && bestScore < 0.55) continue;
           if (bestScore < minPairSimilarity) continue;
+          if (conflict && bestScore < this.conflictMergeSimilarity()) continue;
           left.points.push(...right.points);
           left.centroid = this.centroid(left.points);
           left.representative = this.bestRepresentative(left.points);
@@ -506,6 +506,10 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     return best;
+  }
+
+  private conflictMergeSimilarity() {
+    return this.configNumber('FACE_CLUSTER_CONFLICT_SIMILARITY', 0.30, 0.1, 0.99);
   }
 
   private vectorCollection() {
@@ -773,7 +777,6 @@ export class FaceSearchService implements OnModuleInit {
 
         for (const candidate of groups) {
           if (candidate === small) continue;
-          if (this.groupsConflictInSameImage(small, candidate)) continue;
 
           let bestCandidateScore = Number.NEGATIVE_INFINITY;
 
@@ -794,6 +797,9 @@ export class FaceSearchService implements OnModuleInit {
               if (pairScore > bestCandidateScore) bestCandidateScore = pairScore;
             }
           }
+
+          const conflict = this.groupsConflictInSameImage(small, candidate);
+          if (conflict && bestCandidateScore < this.conflictMergeSimilarity()) continue;
 
           scores.push({ target: candidate, score: bestCandidateScore });
         }
@@ -824,7 +830,7 @@ export class FaceSearchService implements OnModuleInit {
     const bestPairScore = this.bestGroupPairSimilarity(left, right);
     const conflict = this.groupsConflictInSameImage(left, right);
 
-    if (conflict && bestPairScore < 0.55) return false;
+    if (conflict && bestPairScore < this.conflictMergeSimilarity()) return false;
     if (bestPairScore >= minPairSimilarity) return true;
     if (this.cosine(left.centroid, right.centroid) >= minSimilarity) return true;
 
