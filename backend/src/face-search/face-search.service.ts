@@ -274,34 +274,9 @@ export class FaceSearchService implements OnModuleInit {
       throw new BadRequestException('Face not found');
     }
 
-    // Fetch all face points for this collection and re-run clustering so we
-    // can find ALL embeddings that belong to the same person group.
-    const response = await this.qdrant.scroll(this.vectorCollection(), {
-      limit: 10000,
-      with_payload: true,
-      with_vector: true,
-      filter: {
-        must: [{ key: 'collectionId', match: { value: collectionId } }],
-      },
-    });
-    const allPoints = (response.points ?? []) as FacePoint[];
-
-    // Use the same clustering pipeline as listCollectionFaces.
-    const mergedGroups = this.clusterPoints(allPoints);
-
-    // Find the group containing our target faceId.
-    const targetGroup = mergedGroups.find((group) =>
-      group.points.some((p) => String(p.id) === faceId),
-    );
-
-    // Use all vectors from the matched group as query vectors for best recall.
-    // This ensures clicking a face group finds ALL photos of that person,
-    // even ones where the face crop was noisy (e.g. small faces in group photos).
-    const queryVectors = targetGroup
-      ? targetGroup.points
-          .map((p) => this.pointVector(p))
-          .filter((v): v is number[] => Boolean(v))
-      : [targetVector];
+    // Keep click-search anchored to the selected face. If a sidebar group is
+    // accidentally polluted, using all group vectors can pull another person.
+    const queryVectors = [targetVector];
 
     return this.searchByVectors(collectionId, queryVectors);
   }
@@ -406,8 +381,8 @@ export class FaceSearchService implements OnModuleInit {
    *   Pass 4: Final merge to catch groups that became similar after absorption
    */
   private clusterPoints(points: FacePoint[]): FaceGroup[] {
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.13);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.13);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.16);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.16);
 
     const uniquePoints = this.dedupeSameImageFaces(points);
     let groups = this.vectorConnectedGroups(uniquePoints, minPairSimilarity);
