@@ -409,6 +409,7 @@ export class FaceSearchService implements OnModuleInit {
     const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.30);
     const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.42);
     const uniquePoints = this.dedupeSameImageFaces(points);
+    return this.vectorConnectedGroups(uniquePoints, minPairSimilarity);
 
     // Sort by face quality (largest face area first) so high-quality portrait
     // embeddings seed clusters before noisy small crops from group photos.
@@ -521,6 +522,47 @@ export class FaceSearchService implements OnModuleInit {
       const rightArea = Number(rightBox?.width ?? 0) * Number(rightBox?.height ?? 0);
       return rightArea - leftArea;
     });
+  }
+
+  private vectorConnectedGroups(points: FacePoint[], minPairSimilarity: number) {
+    const groups: FaceGroup[] = this.sortFacePointsByQuality(points)
+      .map((point) => {
+        const vector = this.pointVector(point);
+        const normalized = vector ? this.normalizeVector(vector) : undefined;
+        return normalized ? { representative: point, points: [point], centroid: normalized } : null;
+      })
+      .filter((group): group is FaceGroup => Boolean(group));
+
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let leftIndex = 0; leftIndex < groups.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < groups.length; rightIndex += 1) {
+          const left = groups[leftIndex];
+          const right = groups[rightIndex];
+          if (this.groupsConflictInSameImage(left, right)) continue;
+          if (this.bestGroupPairSimilarity(left, right) < minPairSimilarity) continue;
+          left.points.push(...right.points);
+          left.centroid = this.centroid(left.points);
+          left.representative = this.bestRepresentative(left.points);
+          groups.splice(rightIndex, 1);
+          changed = true;
+          rightIndex -= 1;
+        }
+      }
+    }
+
+    return groups;
+  }
+
+  private bestGroupPairSimilarity(left: FaceGroup, right: FaceGroup) {
+    let best = Number.NEGATIVE_INFINITY;
+    for (const leftPoint of left.points) {
+      for (const rightPoint of right.points) {
+        best = Math.max(best, this.samePointSimilarity(leftPoint, rightPoint));
+      }
+    }
+    return best;
   }
 
   private vectorCollection() {
