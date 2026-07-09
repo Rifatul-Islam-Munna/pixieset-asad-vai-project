@@ -207,7 +207,7 @@ export class FaceSearchService implements OnModuleInit {
           { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
         ],
       })
-      .limit(50)
+      .limit(200)
       .lean();
 
     if (staleImages.length) {
@@ -216,84 +216,31 @@ export class FaceSearchService implements OnModuleInit {
       }, 250);
     }
 
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.38);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.50);
-    const sortedPoints = [...points].sort((a, b) => {
-      const aImage = String(a.payload?.imageId ?? '');
-      const bImage = String(b.payload?.imageId ?? '');
-      return aImage.localeCompare(bImage) || String(a.id).localeCompare(String(b.id));
-    });
-
-    const groups: FaceGroup[] = [];
-    for (const point of sortedPoints) {
-      const vector = this.pointVector(point);
-      if (!vector) continue;
-
-      const normalized = this.normalizeVector(vector);
-      if (!normalized) continue;
-
-      const match = groups
-        .map((group) => {
-          const pairScores = group.points.map((groupPoint) => {
-            const groupVector = this.pointVector(groupPoint);
-            const normalizedGroupVector = groupVector ? this.normalizeVector(groupVector) : undefined;
-            return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) : Number.NEGATIVE_INFINITY;
-          });
-          const validPairScores = pairScores.filter((score) => Number.isFinite(score));
-          const avgPairSimilarity = validPairScores.length
-            ? validPairScores.reduce((sum, score) => sum + score, 0) / validPairScores.length
-            : Number.NEGATIVE_INFINITY;
-          const centroidSimilarity = this.cosine(normalized, group.centroid);
-          const bestPairSimilarity = Math.max(...pairScores);
-          // Use a combined score: the highest of centroid similarity, best pair, or
-          // average pair (which is more robust against outlier embeddings).
-          const combinedScore = Math.max(centroidSimilarity, bestPairSimilarity);
-          return {
-            group,
-            centroidSimilarity,
-            bestPairSimilarity,
-            avgPairSimilarity,
-            combinedScore,
-          };
-        })
-        .filter(({ centroidSimilarity, bestPairSimilarity, avgPairSimilarity }) => {
-          // Accept if centroid match is good, or best pair match is good,
-          // or average pair similarity exceeds the centroid threshold (more lenient path).
-          return centroidSimilarity >= minSimilarity
-            || bestPairSimilarity >= minPairSimilarity
-            || avgPairSimilarity >= minSimilarity;
-        })
-        .sort((a, b) => b.combinedScore - a.combinedScore)[0]?.group;
-
-      if (match) {
-        match.points.push(point);
-        match.centroid = this.centroid(match.points);
-      } else {
-        groups.push({ representative: point, points: [point], centroid: normalized });
-      }
-    }
-
-    // Use slightly relaxed thresholds for the merge pass: once groups have
-    // accumulated multiple face vectors the centroids become more reliable,
-    // so we can afford to merge clusters that are close but didn't quite
-    // meet the strict threshold during the initial greedy assignment.
-    const mergeSimilarity = minSimilarity * 0.85;
-    const mergePairSimilarity = minPairSimilarity * 0.85;
-    const mergedGroups = this.mergeFaceGroups(groups, mergeSimilarity, mergePairSimilarity);
+    // Cluster all face points: same person → 1 group.
+    // Works for all photo types:
+    //   • Solo portrait (1 face) — creates or joins 1 cluster
+    //   • Duo photo (2 faces) — each face creates/joins its own cluster
+    //   • Group photo (many faces) — each detected face creates/joins clusters
+    const clusteredGroups = this.clusterPoints(points);
 
     this.logger.log(
       `Face clustering: collection=${collectionId} points=${points.length} ` +
-      `initialGroups=${groups.length} mergedGroups=${mergedGroups.length} ` +
-      `minSim=${minSimilarity} minPairSim=${minPairSimilarity} ` +
-      `mergeSim=${mergeSimilarity.toFixed(3)} mergePairSim=${mergePairSimilarity.toFixed(3)}`,
+      `groups=${clusteredGroups.length} staleImages=${staleImages.length}`,
     );
+
+    // Sort by photo count descending so the most prominent people come first.
+    const sortedGroups = clusteredGroups.sort((a, b) => {
+      const aPhotos = new Set(a.points.map((p) => p.payload?.imageId).filter(Boolean)).size;
+      const bPhotos = new Set(b.points.map((p) => p.payload?.imageId).filter(Boolean)).size;
+      return bPhotos - aPhotos;
+    });
 
     return {
       collectionId,
-      count: mergedGroups.length,
+      count: sortedGroups.length,
       indexing: staleImages.length > 0,
       missingImages: staleImages.length,
-      faces: mergedGroups.map((group, index) => ({
+      faces: sortedGroups.map((group, index) => ({
         id: String(group.representative.id),
         label: `Face ${index + 1}`,
         imageId: group.representative.payload?.imageId,
@@ -312,20 +259,51 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     const collection = await this.findCollection(collectionIdOrSlug);
-    const points = await this.qdrant.retrieve(this.vectorCollection(), {
+    const collectionId = collection._id.toString();
+
+    // Retrieve the target face point to confirm it exists and belongs to this collection.
+    const retrievedPoints = await this.qdrant.retrieve(this.vectorCollection(), {
       ids: [faceId],
       with_vector: true,
       with_payload: true,
     });
+    const targetPoint = retrievedPoints[0] as FacePoint | undefined;
+    const targetVector = targetPoint ? this.pointVector(targetPoint) : undefined;
 
-    const point = points[0] as FacePoint | undefined;
-    const vector = point ? this.pointVector(point) : undefined;
-
-    if (!vector || point?.payload?.collectionId !== collection._id.toString()) {
+    if (!targetVector || targetPoint?.payload?.collectionId !== collectionId) {
       throw new BadRequestException('Face not found');
     }
 
-    return this.searchByVectors(collection._id.toString(), [vector]);
+    // Fetch all face points for this collection and re-run clustering so we
+    // can find ALL embeddings that belong to the same person group.
+    const response = await this.qdrant.scroll(this.vectorCollection(), {
+      limit: 10000,
+      with_payload: true,
+      with_vector: true,
+      filter: {
+        must: [{ key: 'collectionId', match: { value: collectionId } }],
+      },
+    });
+    const allPoints = (response.points ?? []) as FacePoint[];
+
+    // Use the same clustering pipeline as listCollectionFaces.
+    const mergedGroups = this.clusterPoints(allPoints);
+
+    // Find the group containing our target faceId.
+    const targetGroup = mergedGroups.find((group) =>
+      group.points.some((p) => String(p.id) === faceId),
+    );
+
+    // Use all vectors from the matched group as query vectors for best recall.
+    // This ensures clicking a face group finds ALL photos of that person,
+    // even ones where the face crop was noisy (e.g. small faces in group photos).
+    const queryVectors = targetGroup
+      ? targetGroup.points
+          .map((p) => this.pointVector(p))
+          .filter((v): v is number[] => Boolean(v))
+      : [targetVector];
+
+    return this.searchByVectors(collectionId, queryVectors);
   }
 
   private async indexMissingFaces(images: IndexedImage[]) {
@@ -354,7 +332,7 @@ export class FaceSearchService implements OnModuleInit {
     });
 
     const points = (response.points ?? []) as FacePoint[];
-    const minSimilarity = this.faceThreshold('FACE_MATCH_SIMILARITY', 'FACE_MATCH_DISTANCE', 0.52);
+    const minSimilarity = this.faceThreshold('FACE_MATCH_SIMILARITY', 'FACE_MATCH_DISTANCE', 0.40);
     const normalizedQueries = vectors
       .map((vector) => this.normalizeVector(vector))
       .filter((vector): vector is number[] => Boolean(vector));
@@ -411,6 +389,93 @@ export class FaceSearchService implements OnModuleInit {
         }))
         .sort((a, b) => b.faceScore - a.faceScore),
     };
+  }
+
+  /**
+   * Core clustering pipeline — groups face points by person identity.
+   *
+   * Handles all photo types uniformly:
+   *   • Solo portrait (1 face per image) — creates or joins 1 cluster
+   *   • Duo photo (2 faces per image) — each face creates/joins its own cluster
+   *   • Group photo (many faces per image) — each face creates/joins clusters
+   *
+   * Pipeline:
+   *   Pass 1: Greedy assignment (quality-sorted, largest faces seed clusters first)
+   *   Pass 2: Standard merge at 75% threshold
+   *   Pass 3: Singleton absorption at 55% threshold
+   */
+  private clusterPoints(points: FacePoint[]): FaceGroup[] {
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.28);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.40);
+
+    // Sort by face quality (largest face area first) so high-quality portrait
+    // embeddings seed clusters before noisy small crops from group photos.
+    const sortedPoints = [...points].sort((a, b) => {
+      const aBox = a.payload?.box;
+      const bBox = b.payload?.box;
+      const aArea = Number(aBox?.width ?? 0) * Number(aBox?.height ?? 0);
+      const bArea = Number(bBox?.width ?? 0) * Number(bBox?.height ?? 0);
+      return bArea - aArea;
+    });
+
+    // ── Pass 1: Greedy assignment ──────────────────────────────────────────
+    const groups: FaceGroup[] = [];
+    for (const point of sortedPoints) {
+      const vector = this.pointVector(point);
+      if (!vector) continue;
+
+      const normalized = this.normalizeVector(vector);
+      if (!normalized) continue;
+
+      const match = groups
+        .map((group) => {
+          const pairScores = group.points.map((groupPoint) => {
+            const groupVector = this.pointVector(groupPoint);
+            const normalizedGroupVector = groupVector ? this.normalizeVector(groupVector) : undefined;
+            return normalizedGroupVector ? this.cosine(normalized, normalizedGroupVector) : Number.NEGATIVE_INFINITY;
+          });
+          const validPairScores = pairScores.filter((score) => Number.isFinite(score));
+          const avgPairSimilarity = validPairScores.length
+            ? validPairScores.reduce((sum, score) => sum + score, 0) / validPairScores.length
+            : Number.NEGATIVE_INFINITY;
+          const centroidSimilarity = this.cosine(normalized, group.centroid);
+          const bestPairSimilarity = Math.max(...pairScores);
+          const combinedScore = Math.max(centroidSimilarity, bestPairSimilarity);
+          return {
+            group,
+            centroidSimilarity,
+            bestPairSimilarity,
+            avgPairSimilarity,
+            combinedScore,
+          };
+        })
+        .filter(({ centroidSimilarity, bestPairSimilarity, avgPairSimilarity }) => {
+          return centroidSimilarity >= minSimilarity
+            || bestPairSimilarity >= minPairSimilarity
+            || avgPairSimilarity >= minSimilarity;
+        })
+        .sort((a, b) => b.combinedScore - a.combinedScore)[0]?.group;
+
+      if (match) {
+        match.points.push(point);
+        match.centroid = this.centroid(match.points);
+      } else {
+        groups.push({ representative: point, points: [point], centroid: normalized });
+      }
+    }
+
+    // ── Pass 2: Standard merge ─────────────────────────────────────────────
+    // Use relaxed thresholds (75% of original) since centroids with multiple
+    // points are more reliable than single embeddings.
+    const mergedGroups = this.mergeFaceGroups(groups, minSimilarity * 0.75, minPairSimilarity * 0.75);
+
+    // ── Pass 3: Singleton absorption ───────────────────────────────────────
+    // Small groups (≤2 faces) are often low-quality face crops from group photos
+    // that didn't match during earlier passes. Try harder to merge them into
+    // the nearest larger cluster at an even more relaxed threshold.
+    this.absorbSmallGroups(mergedGroups, minSimilarity * 0.55, minPairSimilarity * 0.55);
+
+    return mergedGroups;
   }
 
   private vectorCollection() {
@@ -607,15 +672,24 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private centroid(points: FacePoint[]) {
-    const vectors = points
+    const entries = points
       .map((point) => {
         const vector = this.pointVector(point);
-        return vector ? this.normalizeVector(vector) : undefined;
+        const normalized = vector ? this.normalizeVector(vector) : undefined;
+        // Weight by face area: larger faces produce better embeddings.
+        const box = point.payload?.box;
+        const area = Number(box?.width ?? 0) * Number(box?.height ?? 0);
+        const weight = Math.max(area, 0.01); // avoid zero weight
+        return normalized ? { vector: normalized, weight } : undefined;
       })
-      .filter((vector): vector is number[] => Boolean(vector));
-    const length = vectors[0]?.length ?? 0;
+      .filter((entry): entry is { vector: number[]; weight: number } => Boolean(entry));
+
+    if (!entries.length) return [];
+
+    const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
+    const length = entries[0].vector.length;
     const centroid = Array.from({ length }, (_, index) =>
-      vectors.reduce((sum, vector) => sum + vector[index], 0) / vectors.length,
+      entries.reduce((sum, entry) => sum + entry.vector[index] * entry.weight, 0) / totalWeight,
     );
     return this.normalizeVector(centroid) ?? centroid;
   }
@@ -640,6 +714,65 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     return merged;
+  }
+
+  /**
+   * Singleton / small-group absorption pass.
+   * Groups with very few face points (≤2) are usually noisy crops from group
+   * photos. This pass tries to absorb them into the nearest larger group
+   * using more relaxed thresholds.  It modifies the array in place.
+   */
+  private absorbSmallGroups(groups: FaceGroup[], minSimilarity: number, minPairSimilarity: number) {
+    const maxSmallGroupSize = 2;
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+      for (let index = groups.length - 1; index >= 0; index -= 1) {
+        const small = groups[index];
+        if (small.points.length > maxSmallGroupSize) continue;
+
+        // Find the best matching larger group for this small group.
+        let bestTarget: FaceGroup | undefined;
+        let bestScore = Number.NEGATIVE_INFINITY;
+
+        for (const candidate of groups) {
+          if (candidate === small) continue;
+          // Preferably absorb into larger groups, but also merge with equal-size groups.
+          const centroidScore = this.cosine(small.centroid, candidate.centroid);
+          if (centroidScore >= minSimilarity && centroidScore > bestScore) {
+            bestScore = centroidScore;
+            bestTarget = candidate;
+            continue;
+          }
+
+          // Also check best pairwise match.
+          for (const smallPoint of small.points) {
+            const smallVector = this.pointVector(smallPoint);
+            const normalizedSmall = smallVector ? this.normalizeVector(smallVector) : undefined;
+            if (!normalizedSmall) continue;
+            for (const candidatePoint of candidate.points) {
+              const candidateVector = this.pointVector(candidatePoint);
+              const normalizedCandidate = candidateVector ? this.normalizeVector(candidateVector) : undefined;
+              if (!normalizedCandidate) continue;
+              const pairScore = this.cosine(normalizedSmall, normalizedCandidate);
+              if (pairScore >= minPairSimilarity && pairScore > bestScore) {
+                bestScore = pairScore;
+                bestTarget = candidate;
+              }
+            }
+          }
+        }
+
+        if (bestTarget) {
+          bestTarget.points.push(...small.points);
+          bestTarget.centroid = this.centroid(bestTarget.points);
+          bestTarget.representative = this.bestRepresentative(bestTarget.points);
+          groups.splice(index, 1);
+          changed = true;
+        }
+      }
+    }
   }
 
   private groupsMatch(left: FaceGroup, right: FaceGroup, minSimilarity: number, minPairSimilarity: number) {

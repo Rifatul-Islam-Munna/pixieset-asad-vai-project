@@ -10,15 +10,15 @@ services:
 
       # Bigger detector + mirror/tile scans catch more small and side faces in group photos.
       DETECTION_SIZE: "960"
-      DETECTION_THRESHOLD: "0.28"
+      DETECTION_THRESHOLD: "0.20"
       WORKER_COUNT: "2"
       GROUP_SCAN: "true"
       MIRROR_SCAN: "true"
       TILE_SIZE: "896"
       TILE_OVERLAP: "320"
-      MAX_TILES: "24"
+      MAX_TILES: "48"
       MAX_IMAGE_SIDE: "3200"
-      MIN_FACE_SIZE: "10"
+      MIN_FACE_SIZE: "6"
       MAX_UPLOAD_MB: "80"
 
       # Set a long random value. NestJS must send this in the x-api-key header.
