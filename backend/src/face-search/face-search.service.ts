@@ -427,8 +427,8 @@ export class FaceSearchService implements OnModuleInit {
       const vector = this.pointVector(point);
       if (!vector) continue;
 
-      const normalized = this.normalizeVector(vector);
-      if (!normalized) continue;
+      const normalized = this.normalizeVector(vector) ?? [];
+      if (!normalized.length) continue;
 
       const match = groups
         .map((group) => {
