@@ -3,6 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
 
+function notifyStorageChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("storage-usage-changed"));
+}
+
 export type MobileGalleryImage = {
   _id: string;
   appId: string;
@@ -115,7 +119,10 @@ export function useMobileGalleryApps() {
       if (error || !data) throw new Error(error?.message || "Could not delete app");
       return data;
     },
-    onSuccess: () => client.invalidateQueries({ queryKey: ["mobile-gallery-apps"] }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["mobile-gallery-apps"] });
+      notifyStorageChanged();
+    },
   });
   return { appsQuery, createApp, deleteApp };
 }
@@ -131,13 +138,17 @@ export function useMobileGalleryApp(appId?: string) {
     client.invalidateQueries({ queryKey: ["mobile-gallery-app", appId] });
     client.invalidateQueries({ queryKey: ["mobile-gallery-apps"] });
   };
+  const refreshStorage = () => {
+    refresh();
+    notifyStorageChanged();
+  };
   const updateApp = useMutation({
     mutationFn: async (payload: Partial<MobileGalleryApp>) => {
       const [data, error] = await PatchRequestAxios<Data<MobileGalleryApp>>(`/mobile-gallery/apps/${appId}`, payload as any);
       if (error || !data) throw new Error(error?.message || "Could not update app");
       return data;
     },
-    onSuccess: refresh,
+    onSuccess: refreshStorage,
   });
   const uploadImages = useMutation({
     mutationFn: async (input: FileList | File[] | { files: FileList | File[]; onProgress?: (percent: number) => void }) => {
@@ -152,7 +163,7 @@ export function useMobileGalleryApp(appId?: string) {
       );
       return data as Data<MobileGalleryImage[]>;
     },
-    onSuccess: refresh,
+    onSuccess: refreshStorage,
   });
   const reorderImages = useMutation({
     mutationFn: async (imageIds: string[]) => {
@@ -173,7 +184,7 @@ export function useMobileGalleryApp(appId?: string) {
       if (error || !data) throw new Error(error?.message || "Could not delete photo");
       return data;
     },
-    onSuccess: refresh,
+    onSuccess: refreshStorage,
   });
   const sendInvite = useMutation({
     mutationFn: async (payload: MobileGalleryInvitePayload) => {

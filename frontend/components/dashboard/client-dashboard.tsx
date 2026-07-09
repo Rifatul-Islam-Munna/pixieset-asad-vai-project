@@ -393,7 +393,7 @@ export function ClientDashboard({
   const [billingUser, setBillingUser] = useState<BillingUser | null>(null);
   useEffect(() => {
     let active = true;
-    getBillingOverview()
+    const loadBilling = () => getBillingOverview()
       .then((value) => {
         const storageUsedBytes = Number(value.user?.storageUsedBytes ?? 0);
         console.log("[storage-debug] sidebar billing", {
@@ -405,8 +405,14 @@ export function ClientDashboard({
         if (active) setBillingUser(value.user);
       })
       .catch(() => undefined);
+    const onStorageChanged = () => {
+      void loadBilling();
+    };
+    void loadBilling();
+    window.addEventListener("storage-usage-changed", onStorageChanged);
     return () => {
       active = false;
+      window.removeEventListener("storage-usage-changed", onStorageChanged);
     };
   }, []);
   const sidebarUsedGb = bytesToGb(billingUser?.storageUsedBytes ?? 0);
@@ -929,26 +935,34 @@ function StoragePlanPanel() {
     let active = true;
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
-    const load = async () => {
-      if (sessionId) await confirmPlanCheckout(sessionId).catch(() => null);
+    const load = async (confirmCheckout = false) => {
+      if (confirmCheckout && sessionId) await confirmPlanCheckout(sessionId).catch(() => null);
       return getBillingOverview();
     };
-    load()
+    const applyBilling = (value: Awaited<ReturnType<typeof getBillingOverview>>) => {
+      const storageUsedBytes = Number(value.user?.storageUsedBytes ?? 0);
+      console.log("[storage-debug] storage page billing", {
+        storageUsedBytes,
+        storageUsedGb: bytesToGb(storageUsedBytes),
+        storageLimitGb: value.user?.storageLimitGb,
+        storageLeftGb: Math.max(0, Number(value.user?.storageLimitGb ?? 0) - bytesToGb(storageUsedBytes)),
+      });
+      if (active) setData(value);
+    };
+    const onStorageChanged = () => {
+      void load().then(applyBilling).catch(() => undefined);
+    };
+    load(true)
       .then((value) => {
-        const storageUsedBytes = Number(value.user?.storageUsedBytes ?? 0);
-        console.log("[storage-debug] storage page billing", {
-          storageUsedBytes,
-          storageUsedGb: bytesToGb(storageUsedBytes),
-          storageLimitGb: value.user?.storageLimitGb,
-          storageLeftGb: Math.max(0, Number(value.user?.storageLimitGb ?? 0) - bytesToGb(storageUsedBytes)),
-        });
-        if (active) setData(value);
+        applyBilling(value);
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : "Billing failed");
       });
+    window.addEventListener("storage-usage-changed", onStorageChanged);
     return () => {
       active = false;
+      window.removeEventListener("storage-usage-changed", onStorageChanged);
     };
   }, []);
 

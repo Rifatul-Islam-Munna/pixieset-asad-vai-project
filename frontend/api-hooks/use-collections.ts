@@ -3,6 +3,10 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
 
+function notifyStorageChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("storage-usage-changed"));
+}
+
 export type CollectionRecord = {
   _id: string;
   name: string;
@@ -129,6 +133,7 @@ export function useCollections() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["collection-images"] });
+      notifyStorageChanged();
     },
   });
 
@@ -214,6 +219,7 @@ export function useCollectionDetail(collectionId?: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+      notifyStorageChanged();
     },
   });
 
@@ -230,6 +236,7 @@ export function useCollectionDetail(collectionId?: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+      notifyStorageChanged();
     },
   });
 
