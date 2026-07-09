@@ -6,6 +6,7 @@ import { createHash } from 'crypto';
 import { Model } from 'mongoose';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
+import { FacePerson, FacePersonDocument } from './entities/face-person.entity';
 
 type IndexedImage = CollectionImage & { _id?: unknown };
 type FacePoint = {
@@ -16,6 +17,7 @@ type FacePoint = {
     collectionId?: string;
     imageId?: string;
     url?: string;
+    personId?: string;
     faceIndex?: number;
     box?: { x: number; y: number; width: number; height: number };
   };
@@ -24,10 +26,12 @@ type DetectedFace = {
   vector: number[];
   box: { x: number; y: number; width: number; height: number };
 };
+type AssignedFace = DetectedFace & { personId: string };
 type FaceGroup = {
   representative: FacePoint;
   points: FacePoint[];
   centroid: number[];
+  personId?: string;
 };
 
 const INSIGHT_VECTOR_SIZE = 512;
@@ -49,6 +53,7 @@ export class FaceSearchService implements OnModuleInit {
     private readonly configService: ConfigService,
     @InjectModel(Collection.name) private readonly collectionModel: Model<CollectionDocument>,
     @InjectModel(CollectionImage.name) private readonly imageModel: Model<CollectionImageDocument>,
+    @InjectModel(FacePerson.name) private readonly facePersonModel: Model<FacePersonDocument>,
   ) {}
 
   async onModuleInit() {
@@ -88,18 +93,21 @@ export class FaceSearchService implements OnModuleInit {
       return 0;
     }
 
+    const assignedFaces = await this.assignPersonIds(String(image.collectionId), imageId, image.url, faces);
+
     await this.qdrant
       .upsert(this.vectorCollection(), {
         // Face points are eventually visible; the Mongo record is still updated
         // immediately so the image is not needlessly reprocessed.
         wait: false,
-        points: faces.map((face, index) => ({
+        points: assignedFaces.map((face, index) => ({
           id: this.pointId(`${image.collectionId}-${imageId}-${index}`),
           vector: face.vector,
           payload: {
             collectionId: image.collectionId,
             imageId,
             url: image.url,
+            personId: face.personId,
             faceIndex: index,
             box: face.box,
           },
@@ -114,7 +122,7 @@ export class FaceSearchService implements OnModuleInit {
       )
       .catch(() => undefined);
 
-    return faces.length;
+    return assignedFaces.length;
   }
 
   async deleteImageFaces(collectionId: string, imageId: string) {
@@ -144,6 +152,8 @@ export class FaceSearchService implements OnModuleInit {
         },
       })
       .catch((error) => this.logger.warn(`Qdrant collection face delete failed: ${error?.message ?? error}`));
+
+    await this.facePersonModel.deleteMany({ collectionId }).catch(() => undefined);
   }
 
   async reindexCollectionFaces(collectionId: string) {
@@ -179,6 +189,95 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     return this.searchByVectors(collection._id.toString(), faces.map((face) => face.vector));
+  }
+
+  private async assignPersonIds(
+    collectionId: string,
+    imageId: string,
+    imageUrl: string,
+    faces: DetectedFace[],
+  ): Promise<AssignedFace[]> {
+    const persons = await this.facePersonModel.find({ collectionId }).lean();
+    const working = persons.map((person) => ({
+      personKey: person.personKey,
+      centroid: this.normalizeVector(person.centroid) ?? person.centroid,
+      faceCount: Number(person.faceCount || 0),
+      imageCount: Number(person.imageCount || 0),
+      representativeArea: this.boxArea(person.representativeBox),
+    }));
+    const minSimilarity = this.personSimilarity();
+    const usedPersonIds = new Set<string>();
+    const assigned: AssignedFace[] = [];
+
+    for (const [index, face] of faces.entries()) {
+      const vector = this.normalizeVector(face.vector);
+      if (!vector) continue;
+
+      const match = working
+        .map((person) => ({ person, score: this.cosine(vector, person.centroid) }))
+        .filter(({ person, score }) =>
+          score >= minSimilarity
+          && (!usedPersonIds.has(person.personKey) || score >= this.conflictMergeSimilarity()),
+        )
+        .sort((left, right) => right.score - left.score)[0]?.person;
+
+      const personKey = match?.personKey ?? this.newPersonKey(collectionId, imageId, index);
+      const area = this.boxArea(face.box);
+      const oldRepresentativeArea = match?.representativeArea ?? 0;
+      const isNewPerson = !match;
+      const nextFaceCount = (match?.faceCount ?? 0) + 1;
+      const nextCentroid = match
+        ? this.normalizeVector(
+          match.centroid.map((value, vectorIndex) =>
+            ((value * match.faceCount) + vector[vectorIndex]) / nextFaceCount,
+          ),
+        ) ?? vector
+        : vector;
+
+      if (match) {
+        match.centroid = nextCentroid;
+        match.faceCount = nextFaceCount;
+        if (!usedPersonIds.has(personKey)) match.imageCount += 1;
+        if (area > match.representativeArea) match.representativeArea = area;
+      } else {
+        working.push({
+          personKey,
+          centroid: nextCentroid,
+          faceCount: 1,
+          imageCount: 1,
+          representativeArea: area,
+        });
+      }
+
+      await this.facePersonModel.updateOne(
+        { collectionId, personKey },
+        {
+          $set: {
+            collectionId,
+            personKey,
+            centroid: nextCentroid,
+            ...(isNewPerson || area >= oldRepresentativeArea
+              ? {
+                representativeImageId: imageId,
+                representativeFaceId: String(this.pointId(`${collectionId}-${imageId}-${index}`)),
+                representativeUrl: imageUrl,
+                representativeBox: face.box,
+              }
+              : {}),
+          },
+          $inc: {
+            faceCount: 1,
+            imageCount: usedPersonIds.has(personKey) ? 0 : 1,
+          },
+        },
+        { upsert: true },
+      );
+
+      usedPersonIds.add(personKey);
+      assigned.push({ ...face, personId: personKey });
+    }
+
+    return assigned;
   }
 
   async listCollectionFaces(collectionIdOrSlug: string) {
@@ -242,6 +341,7 @@ export class FaceSearchService implements OnModuleInit {
       missingImages: staleImages.length,
       faces: sortedGroups.map((group, index) => ({
         id: String(group.representative.id),
+        personId: group.personId,
         label: `Face ${index + 1}`,
         imageId: group.representative.payload?.imageId,
         imageUrl: group.representative.payload?.url,
@@ -385,7 +485,10 @@ export class FaceSearchService implements OnModuleInit {
     const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.16);
 
     const uniquePoints = this.dedupeSameImageFaces(points);
-    let groups = this.vectorConnectedGroups(uniquePoints, minPairSimilarity);
+    let groups = this.personIdGroups(uniquePoints);
+    const groupedPointIds = new Set(groups.flatMap((group) => group.points.map((point) => String(point.id))));
+    const ungroupedPoints = uniquePoints.filter((point) => !groupedPointIds.has(String(point.id)));
+    groups.push(...this.vectorConnectedGroups(ungroupedPoints, minPairSimilarity));
 
     groups = this.mergeFaceGroups(groups, minSimilarity, minPairSimilarity);
     this.absorbSmallGroups(groups, minSimilarity, minPairSimilarity);
@@ -397,6 +500,24 @@ export class FaceSearchService implements OnModuleInit {
     );
 
     return groups;
+  }
+
+  private personIdGroups(points: FacePoint[]) {
+    const byPerson = new Map<string, FacePoint[]>();
+    for (const point of points) {
+      const personId = String(point.payload?.personId ?? '');
+      if (!personId) continue;
+      byPerson.set(personId, [...(byPerson.get(personId) ?? []), point]);
+    }
+
+    return [...byPerson.entries()]
+      .map(([personId, personPoints]) => ({
+        personId,
+        points: personPoints,
+        representative: this.bestRepresentative(personPoints),
+        centroid: this.centroid(personPoints),
+      }))
+      .filter((group) => group.centroid.length > 0);
   }
 
   private dedupeSameImageFaces(points: FacePoint[]) {
@@ -485,6 +606,21 @@ export class FaceSearchService implements OnModuleInit {
 
   private conflictMergeSimilarity() {
     return this.configNumber('FACE_CLUSTER_CONFLICT_SIMILARITY', 0.30, 0.1, 0.99);
+  }
+
+  private personSimilarity() {
+    return this.configNumber('FACE_PERSON_SIMILARITY', 0.28, 0.1, 0.99);
+  }
+
+  private newPersonKey(collectionId: string, imageId: string, faceIndex: number) {
+    return `person_${createHash('sha1')
+      .update(`${collectionId}:${imageId}:${faceIndex}:${Date.now()}:${Math.random()}`)
+      .digest('hex')
+      .slice(0, 16)}`;
+  }
+
+  private boxArea(box?: { width: number; height: number }) {
+    return Math.max(0, Number(box?.width ?? 0)) * Math.max(0, Number(box?.height ?? 0));
   }
 
   private vectorCollection() {
