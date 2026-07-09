@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { createHash } from 'crypto';
 import { Model } from 'mongoose';
+import sharp from 'sharp';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { FacePerson, FacePersonDocument } from './entities/face-person.entity';
@@ -36,7 +37,7 @@ type FaceGroup = {
 
 const INSIGHT_VECTOR_SIZE = 512;
 const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
-const FACE_INDEX_VERSION = 6;
+const FACE_INDEX_VERSION = 8;
 
 /**
  * Face indexing/search service.
@@ -48,6 +49,7 @@ export class FaceSearchService implements OnModuleInit {
   private readonly logger = new Logger(FaceSearchService.name);
   private qdrant?: QdrantClient;
   private ready = false;
+  private readonly reindexingCollections = new Set<string>();
 
   constructor(
     private readonly configService: ConfigService,
@@ -142,16 +144,16 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   async deleteCollectionFaces(collectionId: string) {
-    if (!this.ready || !this.qdrant) return;
-
-    await this.qdrant
-      .delete(this.vectorCollection(), {
-        wait: true,
-        filter: {
-          must: [{ key: 'collectionId', match: { value: collectionId } }],
-        },
-      })
-      .catch((error) => this.logger.warn(`Qdrant collection face delete failed: ${error?.message ?? error}`));
+    if (this.ready && this.qdrant) {
+      await this.qdrant
+        .delete(this.vectorCollection(), {
+          wait: true,
+          filter: {
+            must: [{ key: 'collectionId', match: { value: collectionId } }],
+          },
+        })
+        .catch((error) => this.logger.warn(`Qdrant collection face delete failed: ${error?.message ?? error}`));
+    }
 
     await this.facePersonModel.deleteMany({ collectionId }).catch(() => undefined);
   }
@@ -310,9 +312,8 @@ export class FaceSearchService implements OnModuleInit {
       .lean();
 
     if (staleImages.length) {
-      setTimeout(() => {
-        void this.indexMissingFaces(staleImages as IndexedImage[]);
-      }, 250);
+      const needsFullReindex = staleImages.some((image: any) => image.faceIndexVersion !== FACE_INDEX_VERSION);
+      this.scheduleCollectionReindex(collectionId, staleImages as IndexedImage[], needsFullReindex);
     }
 
     // Cluster all face points: same person → 1 group.
@@ -321,14 +322,14 @@ export class FaceSearchService implements OnModuleInit {
     //   • Duo photo (2 faces) — each face creates/joins its own cluster
     //   • Group photo (many faces) — each detected face creates/joins clusters
     const clusteredGroups = this.clusterPoints(points);
+    const sortedGroups = this.visibleFaceGroups(clusteredGroups);
 
     this.logger.log(
       `Face clustering: collection=${collectionId} points=${points.length} ` +
-      `groups=${clusteredGroups.length} staleImages=${staleImages.length}`,
+      `rawGroups=${clusteredGroups.length} people=${sortedGroups.length} staleImages=${staleImages.length}`,
     );
 
     // Sort by photo count descending so the most prominent people come first.
-    const sortedGroups = this.visibleFaceGroups(clusteredGroups);
 
     return {
       collectionId,
@@ -386,6 +387,16 @@ export class FaceSearchService implements OnModuleInit {
       // Yield to the event loop between images so public requests can still run.
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+  }
+
+  private scheduleCollectionReindex(collectionId: string, images: IndexedImage[], fullReindex: boolean) {
+    if (this.reindexingCollections.has(collectionId)) return;
+    this.reindexingCollections.add(collectionId);
+
+    setTimeout(() => {
+      const work = fullReindex ? this.reindexCollectionFaces(collectionId) : this.indexMissingFaces(images);
+      void work.finally(() => this.reindexingCollections.delete(collectionId));
+    }, 250);
   }
 
   private async searchByVectors(collectionId: string, vectors: number[][]) {
@@ -519,15 +530,19 @@ export class FaceSearchService implements OnModuleInit {
   private visibleFaceGroups(groups: FaceGroup[]) {
     const sortedGroups = [...groups].sort((a, b) => this.groupPhotoCount(b) - this.groupPhotoCount(a));
     const duplicateSimilarity = this.configNumber('FACE_SIDEBAR_DUPLICATE_SIMILARITY', 0.22, 0.1, 0.99);
+    const conflictDuplicateSimilarity = this.configNumber('FACE_SIDEBAR_CONFLICT_DUPLICATE_SIMILARITY', 0.24, 0.1, 0.99);
     const visible: FaceGroup[] = [];
 
     for (const group of sortedGroups) {
       const photoCount = this.groupPhotoCount(group);
-      const duplicateOfLargerGroup = photoCount <= 1 && visible.some((candidate) =>
-        this.groupPhotoCount(candidate) > photoCount
-        && !this.groupsConflictInSameImage(group, candidate)
-        && this.bestGroupPairSimilarity(group, candidate) >= duplicateSimilarity,
-      );
+      const duplicateOfLargerGroup = visible.some((candidate) => {
+        if (this.groupPhotoCount(candidate) < photoCount) return false;
+        const score = this.bestGroupPairSimilarity(group, candidate);
+        const threshold = this.groupsConflictInSameImage(group, candidate)
+          ? conflictDuplicateSimilarity
+          : duplicateSimilarity;
+        return score >= threshold;
+      });
 
       if (!duplicateOfLargerGroup) visible.push(group);
     }
@@ -628,7 +643,7 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private personSimilarity() {
-    return this.configNumber('FACE_PERSON_SIMILARITY', 0.28, 0.1, 0.99);
+    return this.configNumber('FACE_PERSON_SIMILARITY', 0.16, 0.1, 0.99);
   }
 
   private newPersonKey(collectionId: string, imageId: string, faceIndex: number) {
@@ -726,7 +741,15 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private async extractFaces(buffer: Buffer): Promise<DetectedFace[]> {
-    return this.extractFacesWithImageModel(buffer);
+    return this.extractFacesWithImageModel(await this.normalizeFaceImage(buffer));
+  }
+
+  private async normalizeFaceImage(buffer: Buffer) {
+    return sharp(buffer)
+      .rotate()
+      .flatten({ background: '#ffffff' })
+      .jpeg({ quality: 90, mozjpeg: true })
+      .toBuffer();
   }
 
   private async extractFacesWithImageModel(buffer: Buffer): Promise<DetectedFace[]> {

@@ -669,8 +669,8 @@ export class CollectionsService {
     for (const image of images) {
       reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
       await this.deleteStoredImageFiles(image);
-      await this.faceSearchService.deleteImageFaces(id, image._id.toString()).catch(() => null);
     }
+    await this.faceSearchService.deleteCollectionFaces(id).catch(() => null);
 
     await Promise.all([
       this.imageModel.deleteMany({ collectionId: id, userId }),

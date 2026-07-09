@@ -26,6 +26,7 @@ export class MinioService implements OnModuleInit {
     const accessKeyId = this.configService.get<string>('MINIO_ACCESS_KEY')?.trim();
     const secretAccessKey = this.configService.get<string>('MINIO_SECRET_KEY')?.trim();
     const region = this.configService.get<string>('MINIO_REGION')?.trim() || 'us-east-1';
+    const forcePathStyle = this.configBoolean('MINIO_FORCE_PATH_STYLE', false);
     this.bucketName = this.configService.get<string>('MINIO_BUCKET')?.trim() || DEFAULT_BUCKET_NAME;
 
     if (!minioUrl || !accessKeyId || !secretAccessKey) {
@@ -37,7 +38,7 @@ export class MinioService implements OnModuleInit {
       region,
       endpoint: minioUrl,
       credentials: { accessKeyId, secretAccessKey },
-      forcePathStyle: false,
+      forcePathStyle,
     });
 
     await this.createBucketIfNotExists(this.bucketName);
@@ -148,13 +149,14 @@ export class MinioService implements OnModuleInit {
       for (const quality of [64, 58, 52, 46, 40, 34]) {
         const output = await sharp(file.path)
           .rotate()
+          .flatten({ background: '#ffffff' })
           .resize({
             width: Math.round(maxWidth * scale),
             height: Math.round(maxHeight * scale),
             fit: 'inside',
             withoutEnlargement: true,
           })
-          .avif({ quality, effort: 4 })
+          .jpeg({ quality, mozjpeg: true })
           .toBuffer();
 
         if (!best.length || output.length < best.length) best = output;
@@ -167,9 +169,9 @@ export class MinioService implements OnModuleInit {
     }
 
     return {
-      key: `${base}.avif`,
+      key: `${base}.jpg`,
       body: best,
-      contentType: 'image/avif',
+      contentType: 'image/jpeg',
       size: best.length,
     };
   }
@@ -179,6 +181,12 @@ export class MinioService implements OnModuleInit {
     const value = Number(raw);
     if (!Number.isFinite(value)) return fallback;
     return Math.min(max, Math.max(min, value));
+  }
+
+  private configBoolean(key: string, fallback: boolean) {
+    const raw = this.configService.get<string>(key);
+    if (raw === undefined || raw === null || raw.trim() === '') return fallback;
+    return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase());
   }
 
   async deleteService(fileReference: string) {

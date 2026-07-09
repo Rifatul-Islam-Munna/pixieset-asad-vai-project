@@ -145,6 +145,8 @@ export class AdminService {
     if (id === currentAdminId) throw new BadRequestException('Admin cannot delete own account');
     const user = await this.userModel.findByIdAndDelete(id).select('-password').lean();
     if (!user) throw new NotFoundException('User not found');
+    const collections = await this.collectionModel.find({ userId: id }).select('_id').lean();
+    await Promise.all(collections.map((collection) => this.faceSearchService.deleteCollectionFaces(collection._id.toString())));
     await Promise.all([
       this.collectionModel.deleteMany({ userId: id }),
       this.imageModel.deleteMany({ userId: id }),
@@ -387,7 +389,7 @@ export class AdminService {
     const collection = await this.collectionModel.findByIdAndDelete(id).lean();
     if (!collection) throw new NotFoundException('Collection not found');
     await this.imageModel.deleteMany({ collectionId: id });
-    void this.faceSearchService.deleteCollectionFaces(id);
+    await this.faceSearchService.deleteCollectionFaces(id);
     return collection;
   }
 
