@@ -182,10 +182,31 @@ def deduplicate(candidates: list[Candidate]) -> list[Candidate]:
     # Faces found on the full image and overlapping tiles often appear twice.
     unique: list[Candidate] = []
     for candidate in sorted(candidates, key=lambda item: item.score, reverse=True):
-        if any(iou(candidate.bbox, accepted.bbox) >= 0.45 for accepted in unique):
+        if any(same_physical_face(candidate, accepted) for accepted in unique):
             continue
         unique.append(candidate)
     return unique
+
+
+def same_physical_face(left: Candidate, right: Candidate) -> bool:
+    if iou(left.bbox, right.bbox) >= 0.45:
+        return True
+
+    similarity = float(np.dot(left.embedding, right.embedding))
+    if similarity < 0.92:
+        return False
+
+    left_center = ((float(left.bbox[0]) + float(left.bbox[2])) / 2, (float(left.bbox[1]) + float(left.bbox[3])) / 2)
+    right_center = ((float(right.bbox[0]) + float(right.bbox[2])) / 2, (float(right.bbox[1]) + float(right.bbox[3])) / 2)
+    distance = math.hypot(left_center[0] - right_center[0], left_center[1] - right_center[1])
+    face_size = max(
+        float(left.bbox[2] - left.bbox[0]),
+        float(left.bbox[3] - left.bbox[1]),
+        float(right.bbox[2] - right.bbox[0]),
+        float(right.bbox[3] - right.bbox[1]),
+        1.0,
+    )
+    return distance <= face_size * 0.60
 
 
 def read_with_mirror(app: FaceAnalysis, image: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> list[Candidate]:
