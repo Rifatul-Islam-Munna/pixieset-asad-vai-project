@@ -32,7 +32,7 @@ type FaceGroup = {
 
 const INSIGHT_VECTOR_SIZE = 512;
 const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
-const FACE_INDEX_VERSION = 4;
+const FACE_INDEX_VERSION = 5;
 
 /**
  * Face indexing/search service.
@@ -430,7 +430,7 @@ export class FaceSearchService implements OnModuleInit {
     for (const imagePoints of byImage.values()) {
       const accepted: FacePoint[] = [];
       for (const point of this.sortFacePointsByQuality(imagePoints)) {
-        const duplicate = accepted.some((existing) => this.sameFaceBox(existing.payload?.box, point.payload?.box));
+        const duplicate = accepted.some((existing) => this.samePhysicalFacePoint(existing, point));
         if (!duplicate) accepted.push(point);
       }
       unique.push(...accepted);
@@ -839,7 +839,7 @@ export class FaceSearchService implements OnModuleInit {
       if (!leftImageId) continue;
       for (const rightPoint of right.points) {
         if (String(rightPoint.payload?.imageId ?? '') !== leftImageId) continue;
-        if (this.sameFaceBox(leftPoint.payload?.box, rightPoint.payload?.box)) continue;
+        if (this.samePhysicalFacePoint(leftPoint, rightPoint)) continue;
         return true;
       }
     }
@@ -852,6 +852,12 @@ export class FaceSearchService implements OnModuleInit {
     const normalizedLeft = leftVector ? this.normalizeVector(leftVector) : undefined;
     const normalizedRight = rightVector ? this.normalizeVector(rightVector) : undefined;
     return normalizedLeft && normalizedRight ? this.cosine(normalizedLeft, normalizedRight) : Number.NEGATIVE_INFINITY;
+  }
+
+  private samePhysicalFacePoint(left: FacePoint, right: FacePoint) {
+    if (this.sameFaceBox(left.payload?.box, right.payload?.box)) return true;
+    if (!this.faceBoxesClose(left.payload?.box, right.payload?.box, 1.25)) return false;
+    return this.samePointSimilarity(left, right) >= 0.78;
   }
 
   private sameFaceBox(
@@ -867,6 +873,19 @@ export class FaceSearchService implements OnModuleInit {
     const distance = Math.hypot(leftCenter.x - rightCenter.x, leftCenter.y - rightCenter.y);
     const faceSize = Math.max(left.width, left.height, right.width, right.height, 1);
     return distance <= faceSize * 0.45;
+  }
+
+  private faceBoxesClose(
+    left?: { x: number; y: number; width: number; height: number },
+    right?: { x: number; y: number; width: number; height: number },
+    multiplier = 1,
+  ) {
+    if (!left || !right) return false;
+    const leftCenter = { x: left.x + left.width / 2, y: left.y + left.height / 2 };
+    const rightCenter = { x: right.x + right.width / 2, y: right.y + right.height / 2 };
+    const distance = Math.hypot(leftCenter.x - rightCenter.x, leftCenter.y - rightCenter.y);
+    const faceSize = Math.max(left.width, left.height, right.width, right.height, 1);
+    return distance <= faceSize * multiplier;
   }
 
   private boxIou(
