@@ -127,6 +127,31 @@
   html {
     @apply font-sans;
   }
+
+  button,
+  a,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .polished-control {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-black/10 bg-white/95 font-semibold text-[#111] shadow-[0_12px_34px_rgba(15,23,42,0.12)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_18px_44px_rgba(15,23,42,0.18)] focus-visible:ring-2 focus-visible:ring-black/20 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .polished-icon-button {
+    @apply inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white/95 text-[#111] shadow-[0_12px_34px_rgba(15,23,42,0.14)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_18px_44px_rgba(15,23,42,0.2)] focus-visible:ring-2 focus-visible:ring-black/20 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50 sm:size-12;
+  }
+
+  .polished-menu-surface {
+    @apply rounded-xl border border-black/10 bg-white/95 p-2 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl;
+  }
 }
 
 .sortable-image-ghost {

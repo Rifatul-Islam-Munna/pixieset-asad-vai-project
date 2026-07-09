@@ -926,33 +926,28 @@ export function PublicGallery({
 
       {activeImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 px-2 pb-4 pt-24 sm:p-4">
-          <button className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2.5 text-sm font-bold text-black sm:left-5 sm:top-5 sm:px-4 sm:py-3" onClick={() => setActiveImage(null)} aria-label="Back to gallery">
+          <button className="polished-icon-button absolute left-3 top-3 sm:left-5 sm:top-5" onClick={() => setActiveImage(null)} aria-label="Back to gallery" title="Back">
             <ChevronLeft className="size-5" />
-            Back
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={activeImage.originalName} type="button">
-                <ShoppingBag className="size-4" />
-                Buy This Photo
+              <button className="polished-icon-button" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={activeImage.originalName} type="button" aria-label="Buy this photo" title="Buy this photo">
+                <ShoppingBag className="size-5" />
               </button>
             )}
             {favoritesEnabled && isPersistedImageId(activeImage._id) && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => void toggleImageFavorite(activeImage)} type="button">
-                <Heart className={cn("size-4", favoriteImageIds.has(activeImage._id) && "fill-red-500 text-red-500")} />
-                Favorite
+              <button className="polished-icon-button" onClick={() => void toggleImageFavorite(activeImage)} type="button" aria-label="Favorite" title="Favorite">
+                <Heart className={cn("size-5", favoriteImageIds.has(activeImage._id) && "fill-red-500 text-red-500")} />
               </button>
             )}
             {socialSharingEnabled && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => void sharePhoto(activeImage)} type="button">
-                <Share2 className="size-4" />
-                Share
+              <button className="polished-icon-button" onClick={() => void sharePhoto(activeImage)} type="button" aria-label="Share" title="Share">
+                <Share2 className="size-5" />
               </button>
             )}
             {canDownload && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => downloadPhoto(activeImage)} type="button">
-                <Download className="size-4" />
-                Download
+              <button className="polished-icon-button" onClick={() => downloadPhoto(activeImage)} type="button" aria-label="Download" title="Download">
+                <Download className="size-5" />
               </button>
             )}
           </div>
@@ -966,9 +961,8 @@ export function PublicGallery({
 
       {slideshowImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black px-2 pb-4 pt-24 sm:p-4" onDoubleClick={closeSlideshow}>
-          <button className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-2.5 text-sm font-bold text-black sm:left-5 sm:top-5 sm:px-4 sm:py-3" onClick={closeSlideshow} aria-label="Back to gallery">
+          <button className="polished-icon-button absolute left-3 top-3 sm:left-5 sm:top-5" onClick={closeSlideshow} aria-label="Back to gallery" title="Back">
             <ChevronLeft className="size-5" />
-            Back
           </button>
           <div className="absolute right-3 top-3 rounded-full bg-white/10 px-3 py-2 text-sm font-bold text-white backdrop-blur sm:left-5 sm:right-auto sm:top-20 sm:px-4">
             {slideshowPosition + 1} / {visibleImages.length}
@@ -981,27 +975,23 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={slideshowImage.originalName} type="button">
-                <ShoppingBag className="size-4" />
-                Buy This Photo
+              <button className="polished-icon-button" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={slideshowImage.originalName} type="button" aria-label="Buy this photo" title="Buy this photo">
+                <ShoppingBag className="size-5" />
               </button>
             )}
             {favoritesEnabled && isPersistedImageId(slideshowImage._id) && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => void toggleImageFavorite(slideshowImage)} type="button">
-                <Heart className={cn("size-4", favoriteImageIds.has(slideshowImage._id) && "fill-red-500 text-red-500")} />
-                Favorite
+              <button className="polished-icon-button" onClick={() => void toggleImageFavorite(slideshowImage)} type="button" aria-label="Favorite" title="Favorite">
+                <Heart className={cn("size-5", favoriteImageIds.has(slideshowImage._id) && "fill-red-500 text-red-500")} />
               </button>
             )}
             {socialSharingEnabled && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => void sharePhoto(slideshowImage)} type="button">
-                <Share2 className="size-4" />
-                Share
+              <button className="polished-icon-button" onClick={() => void sharePhoto(slideshowImage)} type="button" aria-label="Share" title="Share">
+                <Share2 className="size-5" />
               </button>
             )}
             {canDownload && (
-              <button className="inline-flex shrink-0 items-center gap-2 bg-white px-3 py-2.5 text-sm font-bold text-black sm:px-4 sm:py-3" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button">
-                <Download className="size-4" />
-                Download
+              <button className="polished-icon-button" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button" aria-label="Download" title="Download">
+                <Download className="size-5" />
               </button>
             )}
           </div>
@@ -1137,20 +1127,20 @@ function GalleryTile({
       </button>
       <div className="absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         {canFavorite && isPersistedImageId(photo._id) && (
-          <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" type="button">
+          <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" title="Favorite" type="button">
             <Heart className={cn("size-4", favorited && "fill-red-500 text-red-500")} />
           </button>
         )}
-        <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onPreview(photo)} aria-label="View image">
+        <button className="polished-icon-button size-9 sm:size-10" onClick={() => onPreview(photo)} aria-label="View image" title="View">
           <Eye className="size-4" />
         </button>
         {canShare && (
-          <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onShare(photo)} aria-label="Share image" type="button">
+          <button className="polished-icon-button size-9 sm:size-10" onClick={() => onShare(photo)} aria-label="Share image" title="Share" type="button">
             <Share2 className="size-4" />
           </button>
         )}
         {canDownload && (
-          <button className="rounded-full bg-white/90 p-2 shadow-sm" onClick={() => onDownload(photo)} aria-label="Download image" type="button">
+          <button className="polished-icon-button size-9 sm:size-10" onClick={() => onDownload(photo)} aria-label="Download image" title="Download" type="button">
             <Download className="size-4" />
           </button>
         )}
