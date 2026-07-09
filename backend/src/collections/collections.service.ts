@@ -1292,18 +1292,9 @@ export class CollectionsService {
   private async decrementStorageUsedBytes(userId: string, bytes: number) {
     const safeBytes = Math.max(0, Number(bytes ?? 0));
     if (safeBytes > 0) {
-      await this.userModel.updateOne(
-        { _id: userId },
-        [
-          {
-            $set: {
-              storageUsedBytes: {
-                $max: [0, { $subtract: [{ $ifNull: ['$storageUsedBytes', 0] }, safeBytes] }],
-              },
-            },
-          },
-        ] as any,
-      );
+      const user = await this.userModel.findById(userId).select('storageUsedBytes').lean();
+      const nextUsedBytes = Math.max(0, Number(user?.storageUsedBytes ?? 0) - safeBytes);
+      await this.userModel.updateOne({ _id: userId }, { $set: { storageUsedBytes: nextUsedBytes } });
     }
     await this.clearStorageIfNoImages(userId);
   }

@@ -395,6 +395,13 @@ export function ClientDashboard({
     let active = true;
     getBillingOverview()
       .then((value) => {
+        const storageUsedBytes = Number(value.user?.storageUsedBytes ?? 0);
+        console.log("[storage-debug] sidebar billing", {
+          storageUsedBytes,
+          storageUsedGb: bytesToGb(storageUsedBytes),
+          storageLimitGb: value.user?.storageLimitGb,
+          storageLeftGb: Math.max(0, Number(value.user?.storageLimitGb ?? 3) - bytesToGb(storageUsedBytes)),
+        });
         if (active) setBillingUser(value.user);
       })
       .catch(() => undefined);
@@ -928,6 +935,13 @@ function StoragePlanPanel() {
     };
     load()
       .then((value) => {
+        const storageUsedBytes = Number(value.user?.storageUsedBytes ?? 0);
+        console.log("[storage-debug] storage page billing", {
+          storageUsedBytes,
+          storageUsedGb: bytesToGb(storageUsedBytes),
+          storageLimitGb: value.user?.storageLimitGb,
+          storageLeftGb: Math.max(0, Number(value.user?.storageLimitGb ?? 0) - bytesToGb(storageUsedBytes)),
+        });
         if (active) setData(value);
       })
       .catch((err) => {
