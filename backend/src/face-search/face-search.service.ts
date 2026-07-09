@@ -502,7 +502,7 @@ export class FaceSearchService implements OnModuleInit {
     return groups;
   }
 
-  private personIdGroups(points: FacePoint[]) {
+  private personIdGroups(points: FacePoint[]): FaceGroup[] {
     const byPerson = new Map<string, FacePoint[]>();
     for (const point of points) {
       const personId = String(point.payload?.personId ?? '');
