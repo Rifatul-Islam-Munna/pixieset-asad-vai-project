@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import Link from "next/link";
@@ -390,6 +390,26 @@ export function ClientDashboard({
   const storeTopNavOpen = dashboardChromeOpen && section === "store-gallery";
   const [logoutPending, startLogoutTransition] = useTransition();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [billingUser, setBillingUser] = useState<BillingUser | null>(null);
+  useEffect(() => {
+    let active = true;
+    getBillingOverview()
+      .then((value) => {
+        if (active) setBillingUser(value.user);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  const sidebarUsedGb = bytesToGb(billingUser?.storageUsedBytes ?? 0);
+  const sidebarLimitGb = Number(billingUser?.storageLimitGb ?? 3) || 3;
+  const sidebarStorageLeftGb = Math.max(0, sidebarLimitGb - sidebarUsedGb);
+  const sidebarStoragePercent = Math.min(100, (sidebarUsedGb / sidebarLimitGb) * 100);
+  const sidebarEmailLimit = Number(billingUser?.monthlyEmailLimit ?? 0);
+  const sidebarEmailsUsed = Number(billingUser?.monthlyEmailsUsed ?? 0);
+  const sidebarEmailsLeft = sidebarEmailLimit > 0 ? Math.max(0, sidebarEmailLimit - sidebarEmailsUsed) : 0;
+  const sidebarEmailPercent = sidebarEmailLimit > 0 ? Math.min(100, (sidebarEmailsUsed / sidebarEmailLimit) * 100) : 0;
   const logout = () => {
     startLogoutTransition(async () => {
       await logOutUser();
@@ -535,8 +555,18 @@ export function ClientDashboard({
                     <p className="text-sm font-medium text-[#00a997]">Storage</p>
                     <PlusCircle className="size-4 text-[#16bda8]" />
                   </div>
-                  <p className="mt-1 text-xs text-[#777]">0 GB of 3 GB used</p>
-                  <Progress value={0} className="mt-2 bg-[#dceee8]" />
+                  <p className="mt-1 text-xs text-[#777]">
+                    {sidebarUsedGb.toFixed(2)} GB used / {sidebarStorageLeftGb.toFixed(2)} GB left
+                  </p>
+                  <Progress value={sidebarStoragePercent} className="mt-2 bg-[#dceee8]" />
+                  {sidebarEmailLimit > 0 && (
+                    <>
+                      <p className="mt-3 text-xs text-[#777]">
+                        {sidebarEmailsUsed} emails used / {sidebarEmailsLeft} left
+                      </p>
+                      <Progress value={sidebarEmailPercent} className="mt-2 bg-[#dceee8]" />
+                    </>
+                  )}
                 </div>}
               </Link>
             )}
@@ -665,10 +695,15 @@ export function ClientDashboard({
                     <Link
                       href={`/dashboard/${section}/storage`}
                       onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-4 text-base text-[#222]"
+                      className="flex items-start gap-4 text-base text-[#222]"
                     >
-                      <Database className="size-5 text-[#333]" />
-                      Storage
+                      <Database className="mt-0.5 size-5 text-[#333]" />
+                      <span>
+                        <span className="block">Storage</span>
+                        <span className="mt-1 block text-xs text-[#777]">
+                          {sidebarUsedGb.toFixed(2)} GB used / {sidebarStorageLeftGb.toFixed(2)} GB left
+                        </span>
+                      </span>
                     </Link>
                   </>
                 )}
@@ -1457,6 +1492,7 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
     startSendTransition(async () => {
       try {
         const emails = selectedRecipients.filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
+        await recordEmailUsage(Math.max(1, selectedRecipients.length));
         if (emails.length) {
           const body = [
             campaignMessage,
@@ -1472,7 +1508,6 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
           });
           toast.success("Campaign sent by universal SMTP");
         }
-        await recordEmailUsage(Math.max(1, selectedRecipients.length));
         onClose();
       } catch (error) {
         setSendError(error instanceof Error ? error.message : "Email send failed");
@@ -6855,7 +6890,7 @@ function ProductTile({
           <p className="truncate text-sm font-semibold">{product.name}</p>
           <p className="mt-1 text-sm text-[#777]">From {money(productDisplayPrice(product), currency)}</p>
           <p className="mt-1 text-xs text-[#999]">
-            {productTypeLabels[product.type]}{product.active === false ? " • Hidden" : ""}
+            {productTypeLabels[product.type]}{product.active === false ? " â€¢ Hidden" : ""}
           </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#00a997]" />
@@ -7690,7 +7725,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             />
           </label>
           <p className="hidden">
-            Manage your collections — create, view, and organize your photos.
+            Manage your collections â€” create, view, and organize your photos.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-5">
@@ -8714,7 +8749,7 @@ function CollectionDetailView({
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-bold">
-              Image {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of {uploadProgress.total || "selected"} · {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.
+              Image {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of {uploadProgress.total || "selected"} / {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.
             </p>
             <p className="mt-1 truncate text-xs font-semibold text-[#3f8179]">
               {uploadProgress.currentName || "Processing files and watermark"}
@@ -8933,7 +8968,7 @@ function CollectionDetailView({
                 onDrop={handleUploadDrop}
               >
                 {uploading ? <Loader2 className="size-10 animate-spin text-[#22bda7]" /> : <Upload className="size-10 text-[#bbb]" />}
-                <p className="mt-5 font-bold">{uploading ? `Image ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} · ${uploadProgress.currentPercent}%` : "Drag photos and videos here to upload"}</p>
+                <p className="mt-5 font-bold">{uploading ? `Image ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} / ${uploadProgress.currentPercent}%` : "Drag photos and videos here to upload"}</p>
                 <p className="mt-3 text-sm text-[#00a997]">{uploading ? `${uploadsLeft} left` : "or Browse files"}</p>
                 {uploading && (
                   <div className="mt-5 h-2 w-full max-w-sm overflow-hidden bg-[#d3f2ee]">
@@ -9538,13 +9573,13 @@ function CollectionActivityPanel({
       `<p><a href="${publicLink}">${template.buttonText || "Open Gallery"}</a></p>`,
       `<p>${template.footerText || ""}</p>`,
     ].join("");
+    await recordEmailUsage(1);
     const result = await sendUniversalEmail({
       to: mailList.email,
       subject: template.subject || collectionName,
       text: body,
       html,
     }).catch(() => null);
-    await recordEmailUsage(1).catch(() => null);
     if (result?.sent) toast.success("Email sent by universal SMTP");
     window.sessionStorage.setItem(
       "nikoset-mail-preview",
@@ -9765,7 +9800,7 @@ function CollectionActivityPanel({
                       <TableRow key={email}>
                         <TableCell className="px-5 font-semibold">{email}</TableCell>
                         <TableCell className="capitalize">{request?.status || (isAllowed ? "allowed" : "pending")}</TableCell>
-                        <TableCell className="max-w-80 whitespace-normal text-[#666]">{request?.reason || "—"}</TableCell>
+                        <TableCell className="max-w-80 whitespace-normal text-[#666]">{request?.reason || "â€”"}</TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
                             {request && request.status !== "approved" && (

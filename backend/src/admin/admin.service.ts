@@ -342,7 +342,7 @@ export class AdminService {
       {
         $set: {
           planName: 'Free',
-          storageLimitGb: 0,
+          storageLimitGb: 3,
           monthlyEmailLimit: 0,
           planFeatures: {},
           monthlyEmailsUsed: 0,
@@ -360,7 +360,7 @@ export class AdminService {
     const user = await this.userModel.findById(userId).select('planName planFeatures storageLimitGb monthlyEmailLimit').lean();
     return {
       planName: user?.planName ?? 'Free',
-      storageLimitGb: user?.storageLimitGb ?? 0,
+      storageLimitGb: user?.planName === 'Free' && Number(user?.storageLimitGb ?? 0) <= 0 ? 3 : user?.storageLimitGb ?? 3,
       monthlyEmailLimit: user?.monthlyEmailLimit ?? 0,
       features: user?.planFeatures ?? {},
     };

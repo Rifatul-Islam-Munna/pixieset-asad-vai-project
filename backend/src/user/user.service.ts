@@ -64,6 +64,7 @@ export class UserService implements OnModuleInit {
       password: await bcrypt.hash(dto.password, 10),
       isOtpVerified: true,
       otpNumber: '000000',
+      storageLimitGb: 3,
     });
 
     const { password, ...safeUser } = user.toObject();
@@ -130,6 +131,7 @@ export class UserService implements OnModuleInit {
         role: UserType.USER,
         isOtpVerified: true,
         otpNumber: '000000',
+        storageLimitGb: 3,
       }));
 
     if (existing) {
@@ -172,6 +174,7 @@ export class UserService implements OnModuleInit {
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }
+    if (user.planName === 'Free' && Number(user.storageLimitGb ?? 0) <= 0) user.storageLimitGb = 3;
     return { data: user };
   }
 

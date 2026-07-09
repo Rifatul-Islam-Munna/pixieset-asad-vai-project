@@ -770,11 +770,6 @@ export class CollectionsService {
         $set: { coverImage: collection.coverImage ?? uploaded[0]?.url },
       },
     );
-    await this.userModel.updateOne(
-      { _id: userId },
-      { $inc: { storageUsedBytes: files.reduce((sum, file) => sum + (file.size ?? 0), 0) } },
-    );
-
     setTimeout(() => {
       void this.indexFacesInBackground(uploaded);
     }, 1500);
@@ -893,6 +888,10 @@ export class CollectionsService {
       order,
       metadata,
     });
+    await this.userModel.updateOne(
+      { _id: userId },
+      { $inc: { storageUsedBytes: Math.max(0, Number(image.sizeBytes ?? uploadFile.size ?? file.size ?? 0)) } },
+    );
 
     return image.toObject();
   }
@@ -1288,8 +1287,9 @@ export class CollectionsService {
   }
 
   private async ensureStorageAvailable(userId: string, incomingBytes: number) {
-    const user = await this.userModel.findById(userId).select('storageLimitGb storageUsedBytes').lean();
-    const limitBytes = Number(user?.storageLimitGb ?? 0) * 1024 * 1024 * 1024;
+    const user = await this.userModel.findById(userId).select('planName storageLimitGb storageUsedBytes').lean();
+    const limitGb = user?.planName === 'Free' && Number(user?.storageLimitGb ?? 0) <= 0 ? 3 : Number(user?.storageLimitGb ?? 3);
+    const limitBytes = limitGb * 1024 * 1024 * 1024;
     if (limitBytes <= 0) return;
     const used = Number(user?.storageUsedBytes ?? 0);
     if (used + incomingBytes > limitBytes) {

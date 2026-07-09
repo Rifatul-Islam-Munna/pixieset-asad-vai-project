@@ -53,7 +53,7 @@ export class User {
   @Prop({ default: 'Free' })
   planName: string;
 
-  @Prop({ default: 0 })
+  @Prop({ default: 3 })
   storageLimitGb: number;
 
   @Prop({ default: 0 })

@@ -4,6 +4,7 @@ import { unlink } from 'fs/promises';
 import { Model } from 'mongoose';
 import { extname } from 'path';
 import { MinioService } from 'src/lib/minio.service';
+import { User, UserDocument } from 'src/user/entities/user.entity';
 import { MobileGalleryApp, MobileGalleryAppDocument } from './entities/mobile-gallery-app.entity';
 import { MobileGalleryImage, MobileGalleryImageDocument } from './entities/mobile-gallery-image.entity';
 import { MobileGallerySetting, MobileGallerySettingDocument } from './entities/mobile-gallery-setting.entity';
@@ -33,6 +34,7 @@ export class MobileGalleryService {
     @InjectModel(MobileGalleryApp.name) private readonly appModel: Model<MobileGalleryAppDocument>,
     @InjectModel(MobileGalleryImage.name) private readonly imageModel: Model<MobileGalleryImageDocument>,
     @InjectModel(MobileGallerySetting.name) private readonly settingModel: Model<MobileGallerySettingDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly minioService: MinioService,
   ) {}
 
@@ -112,7 +114,8 @@ export class MobileGalleryService {
   async remove(userId: string, id: string) {
     const app = await this.appModel.findOne({ _id: id, userId }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
-    const images = await this.imageModel.find({ appId: id, userId }).select({ url: 1, thumbnailUrl: 1, filename: 1 }).lean();
+    const images = await this.imageModel.find({ appId: id, userId }).select({ url: 1, thumbnailUrl: 1, filename: 1, sizeBytes: 1 }).lean();
+    const reclaimedBytes = images.reduce((sum, image) => sum + Math.max(0, Number(image.sizeBytes ?? 0)), 0);
     const filesToDelete = new Set<string>();
     for (const image of images) {
       [image.url, image.thumbnailUrl, image.filename].filter(Boolean).forEach((reference) => filesToDelete.add(String(reference)));
@@ -126,12 +129,16 @@ export class MobileGalleryService {
       this.appModel.deleteOne({ _id: id, userId }),
     ]);
     await Promise.all(Array.from(filesToDelete).map((url) => this.minioService.deleteService(url).catch(() => null)));
+    if (reclaimedBytes > 0) {
+      await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: -reclaimedBytes } });
+    }
     return { deleted: true, appId: id };
   }
 
   async uploadImages(userId: string, appId: string, files: Express.Multer.File[]) {
     if (!files?.length) throw new BadRequestException('Files are required');
     this.assertImageFiles(files);
+    await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + (file.size ?? 0), 0));
     const app = await this.appModel.findOne({ _id: appId, userId }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
     const last = await this.imageModel.findOne({ appId, userId }).sort({ order: -1 }).lean();
@@ -155,6 +162,10 @@ export class MobileGalleryService {
         sizeBytes: file.size ?? 0,
         order: start + index + 1,
       });
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $inc: { storageUsedBytes: Math.max(0, Number(image.sizeBytes ?? file.size ?? 0)) } },
+      );
       uploaded.push(image.toObject());
     }
     await this.appModel.updateOne(
@@ -195,6 +206,10 @@ export class MobileGalleryService {
     if (app?.coverImage === image.url) update.$set.coverImage = next?.url ?? '';
     await this.appModel.updateOne({ _id: appId, userId }, update);
     await this.deleteStoredImageFiles(image);
+    await this.userModel.updateOne(
+      { _id: userId },
+      { $inc: { storageUsedBytes: -Math.max(0, Number(image.sizeBytes ?? 0)) } },
+    );
     return image.toObject();
   }
 
@@ -259,6 +274,17 @@ export class MobileGalleryService {
   private assertImageFiles(files: Express.Multer.File[]) {
     const invalid = files.find((file) => !String(file.mimetype || '').toLowerCase().startsWith('image/'));
     if (invalid) throw new BadRequestException(`${invalid.originalname || 'File'} is not a supported image`);
+  }
+
+  private async ensureStorageAvailable(userId: string, incomingBytes: number) {
+    const user = await this.userModel.findById(userId).select('planName storageLimitGb storageUsedBytes').lean();
+    const limitGb = user?.planName === 'Free' && Number(user?.storageLimitGb ?? 0) <= 0 ? 3 : Number(user?.storageLimitGb ?? 3);
+    const limitBytes = limitGb * 1024 * 1024 * 1024;
+    if (limitBytes <= 0) return;
+    const used = Number(user?.storageUsedBytes ?? 0);
+    if (used + incomingBytes > limitBytes) {
+      throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');
+    }
   }
 
   private assertAssetFile(file: Express.Multer.File) {
