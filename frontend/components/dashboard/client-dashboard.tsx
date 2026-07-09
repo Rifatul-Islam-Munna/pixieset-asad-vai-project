@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import Link from "next/link";
@@ -395,13 +395,6 @@ export function ClientDashboard({
     let active = true;
     const loadBilling = () => getBillingOverview()
       .then((value) => {
-        const storageUsedBytes = Number(value.user?.storageUsedBytes ?? 0);
-        console.log("[storage-debug] sidebar billing", {
-          storageUsedBytes,
-          storageUsedGb: bytesToGb(storageUsedBytes),
-          storageLimitGb: value.user?.storageLimitGb,
-          storageLeftGb: Math.max(0, Number(value.user?.storageLimitGb ?? 3) - bytesToGb(storageUsedBytes)),
-        });
         if (active) setBillingUser(value.user);
       })
       .catch(() => undefined);
@@ -940,13 +933,6 @@ function StoragePlanPanel() {
       return getBillingOverview();
     };
     const applyBilling = (value: Awaited<ReturnType<typeof getBillingOverview>>) => {
-      const storageUsedBytes = Number(value.user?.storageUsedBytes ?? 0);
-      console.log("[storage-debug] storage page billing", {
-        storageUsedBytes,
-        storageUsedGb: bytesToGb(storageUsedBytes),
-        storageLimitGb: value.user?.storageLimitGb,
-        storageLeftGb: Math.max(0, Number(value.user?.storageLimitGb ?? 0) - bytesToGb(storageUsedBytes)),
-      });
       if (active) setData(value);
     };
     const onStorageChanged = () => {

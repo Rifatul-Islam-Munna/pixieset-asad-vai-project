@@ -5,6 +5,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { Model } from 'mongoose';
+import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
+import { MobileGalleryImage, MobileGalleryImageDocument } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/update-user.dto';
 import { User, UserDocument, UserType } from './entities/user.entity';
@@ -13,6 +15,8 @@ import { User, UserDocument, UserType } from './entities/user.entity';
 export class UserService implements OnModuleInit {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(CollectionImage.name) private readonly collectionImageModel: Model<CollectionImageDocument>,
+    @InjectModel(MobileGalleryImage.name) private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -175,7 +179,28 @@ export class UserService implements OnModuleInit {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }
     if (user.planName === 'Free' && Number(user.storageLimitGb ?? 0) <= 0) user.storageLimitGb = 3;
+
+    // Auto-recalculate storage from actual images to fix any drift
+    const recalculated = await this.recalculateStorage(id);
+    user.storageUsedBytes = recalculated;
+
     return { data: user };
+  }
+
+  async recalculateStorage(userId: string): Promise<number> {
+    const [collectionResult, mobileResult] = await Promise.all([
+      this.collectionImageModel.aggregate([
+        { $match: { userId } },
+        { $group: { _id: null, total: { $sum: '$sizeBytes' } } },
+      ]),
+      this.mobileGalleryImageModel.aggregate([
+        { $match: { userId } },
+        { $group: { _id: null, total: { $sum: '$sizeBytes' } } },
+      ]),
+    ]);
+    const totalBytes = Math.max(0, Number(collectionResult[0]?.total ?? 0) + Number(mobileResult[0]?.total ?? 0));
+    await this.userModel.updateOne({ _id: userId }, { $set: { storageUsedBytes: totalBytes } });
+    return totalBytes;
   }
 
   private signToken(user: any) {

@@ -146,7 +146,10 @@ export function useCollections() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["collections"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      notifyStorageChanged();
+    },
   });
 
   return { collectionsQuery, createCollection, updateCollection, deleteCollection, duplicateCollection };
@@ -364,6 +367,7 @@ export function useCollectionActivityActions(collectionId?: string) {
       refresh();
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+      notifyStorageChanged();
     },
   });
 
@@ -380,6 +384,7 @@ export function useCollectionActivityActions(collectionId?: string) {
     onSuccess: () => {
       refresh();
       queryClient.invalidateQueries({ queryKey: ["collections"] });
+      notifyStorageChanged();
     },
   });
 

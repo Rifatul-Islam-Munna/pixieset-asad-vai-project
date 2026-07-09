@@ -388,8 +388,15 @@ export class AdminService {
   async deleteCollection(id: string) {
     const collection = await this.collectionModel.findByIdAndDelete(id).lean();
     if (!collection) throw new NotFoundException('Collection not found');
+    const images = await this.imageModel.find({ collectionId: id }).select('sizeBytes').lean();
+    const reclaimedBytes = images.reduce((sum, img) => sum + Math.max(0, Number(img.sizeBytes ?? 0)), 0);
     await this.imageModel.deleteMany({ collectionId: id });
     await this.faceSearchService.deleteCollectionFaces(id);
+    if (reclaimedBytes > 0 && collection.userId) {
+      const user = await this.userModel.findById(collection.userId).select('storageUsedBytes').lean();
+      const nextUsedBytes = Math.max(0, Number(user?.storageUsedBytes ?? 0) - reclaimedBytes);
+      await this.userModel.updateOne({ _id: collection.userId }, { $set: { storageUsedBytes: nextUsedBytes } });
+    }
     return collection;
   }
 

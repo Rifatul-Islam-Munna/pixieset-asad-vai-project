@@ -502,6 +502,10 @@ export class CollectionsService {
     collection.sets = [...(collection.sets ?? []), set];
     collection.imageCount = (collection.imageCount ?? 0) + copies.length;
     await collection.save();
+    const copiedBytes = copies.reduce((sum, c) => sum + Math.max(0, Number(c.sizeBytes ?? 0)), 0);
+    if (copiedBytes > 0) {
+      await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: copiedBytes } });
+    }
     return { set, copied: copies.length };
   }
 
@@ -527,7 +531,7 @@ export class CollectionsService {
       imageCount: images.length,
       status: 'draft',
     });
-    await this.imageModel.insertMany(images.map((image) => ({
+    const imageRecords = images.map((image) => ({
       userId,
       collectionId: collection._id.toString(),
       setId: set.id,
@@ -540,7 +544,12 @@ export class CollectionsService {
       sizeBytes: image.sizeBytes,
       watermarked: image.watermarked,
       metadata: image.metadata ?? {},
-    })));
+    }));
+    await this.imageModel.insertMany(imageRecords);
+    const copiedBytes = imageRecords.reduce((sum, r) => sum + Math.max(0, Number(r.sizeBytes ?? 0)), 0);
+    if (copiedBytes > 0) {
+      await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: copiedBytes } });
+    }
     return { collection: collection.toObject(), copied: images.length };
   }
 
@@ -657,6 +666,10 @@ export class CollectionsService {
         metadata: image.metadata ?? {},
         order: image.order,
       })));
+      const duplicatedBytes = images.reduce((sum, img) => sum + Math.max(0, Number(img.sizeBytes ?? 0)), 0);
+      if (duplicatedBytes > 0) {
+        await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: duplicatedBytes } });
+      }
     }
 
     return { collection: collection.toObject(), copied: images.length };
