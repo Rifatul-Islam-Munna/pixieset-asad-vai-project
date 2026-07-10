@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
 import { existsSync } from 'fs';
 import { readFile, unlink } from 'fs/promises';
 import { Model, Types } from 'mongoose';
@@ -47,6 +48,7 @@ export class CollectionsService {
     @InjectModel(MobileGalleryImage.name) private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
     private readonly minioService: MinioService,
     private readonly faceSearchService: FaceSearchService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(userId: string, dto: CreateCollectionDto) {
@@ -769,8 +771,10 @@ export class CollectionsService {
       .select('order')
       .lean();
     const nextOrder = Math.max(0, Number(lastImage?.order ?? 0));
-    const uploaded = await Promise.all(
-      files.map((file, index) => this.processAndSaveImage(userId, collectionId, file, watermark, resolvedSetId, nextOrder + index + 1)),
+    const uploaded = await this.mapWithConcurrency(
+      files,
+      this.imageProcessingConcurrency(),
+      (file, index) => this.processAndSaveImage(userId, collectionId, file, watermark, resolvedSetId, nextOrder + index + 1),
     );
 
     await this.collectionModel.updateOne(
@@ -899,6 +903,38 @@ export class CollectionsService {
     );
 
     return image.toObject();
+  }
+
+  private imageProcessingConcurrency() {
+    const configured = Number(this.configService.get<string>('IMAGE_UPLOAD_PROCESSING_CONCURRENCY') ?? 2);
+    return Math.max(1, Math.min(4, Number.isFinite(configured) ? Math.floor(configured) : 2));
+  }
+
+  private async mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    mapper: (item: T, index: number) => Promise<R>,
+  ): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    const errors: unknown[] = [];
+    let nextIndex = 0;
+    const workerCount = Math.min(Math.max(1, concurrency), items.length);
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (nextIndex < items.length) {
+          const index = nextIndex++;
+          try {
+            results[index] = await mapper(items[index], index);
+          } catch (error) {
+            errors.push(error);
+          }
+        }
+      }),
+    );
+
+    if (errors.length) throw errors[0];
+    return results;
   }
 
   private sortImagesForGallery<T extends { order?: number; createdAt?: Date | string; _id?: unknown }>(images: T[]) {
