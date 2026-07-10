@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
 import { UserModule } from './user/user.module';
 import { SettingsModule } from './settings/settings.module';
+import { FreePlanSettingModule } from './admin/free-plan-setting.module';
 import { CollectionsModule } from './collections/collections.module';
 import { StoreModule } from './store/store.module';
 import { AdminModule } from './admin/admin.module';
@@ -33,6 +34,7 @@ import { HomepageModule } from './homepage/homepage.module';
     ),
     UserModule,
     SettingsModule,
+    FreePlanSettingModule,
     CollectionsModule,
     ImageUploadModule,
     StoreModule,

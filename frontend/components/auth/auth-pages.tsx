@@ -135,9 +135,9 @@ export function RegisterPageClient({ auth }: { auth: AuthCms }) {
   return (
     <main className="min-h-screen bg-white text-[#151515]">
       <div className={cn("grid min-h-screen lg:grid-cols-[1fr_minmax(420px,560px)]", auth.registerImageSide === "right" && "lg:grid-cols-[minmax(420px,560px)_1fr]")}>
-        {auth.registerImageSide !== "right" && <AuthImagePanel title="Client gallery setup" meta="3 GB included" imageUrl={auth.registerImageUrl} />}
+        {auth.registerImageSide !== "right" && <AuthImagePanel title="Client gallery setup" meta="Free plan included" imageUrl={auth.registerImageUrl} />}
         {formPanel}
-        {auth.registerImageSide === "right" && <AuthImagePanel title="Client gallery setup" meta="3 GB included" imageUrl={auth.registerImageUrl} />}
+        {auth.registerImageSide === "right" && <AuthImagePanel title="Client gallery setup" meta="Free plan included" imageUrl={auth.registerImageUrl} />}
       </div>
     </main>
   );

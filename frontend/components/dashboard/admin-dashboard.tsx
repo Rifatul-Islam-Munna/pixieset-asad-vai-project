@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, DollarSign, Edit3, FileImage, Images, Loader2, LogOut, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { BarChart3, DollarSign, Edit3, FileImage, HardDrive, Images, Loader2, LogOut, Mail, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
@@ -13,12 +13,14 @@ import {
   deleteAdminPlan,
   deleteAdminUser,
   updateAdminPlan,
+  updateAdminFreePlanSettings,
   updateAdminStripeSettings,
   updateAdminUser,
   updateHomeCms,
   uploadHomeCmsFile,
   type AdminCollection,
   type AdminDashboardData,
+  type AdminFreePlanSetting,
   type AdminPlan,
   type AdminStripeSetting,
   type AdminUser,
@@ -27,6 +29,8 @@ import { logOutUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { mergeHomeCms, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +55,7 @@ type PlanForm = {
   active: boolean;
 };
 
-type AdminTab = "overview" | "users" | "collections" | "plans" | "stripe" | "cms";
+type AdminTab = "overview" | "users" | "collections" | "plans" | "free-plan" | "stripe" | "cms";
 
 const emptyForm: UserForm = {
   name: "",
@@ -96,6 +100,9 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [stripeForm, setStripeForm] = useState<AdminStripeSetting>(
     initialData.stripe ?? { enabled: false, publishableKey: "" },
+  );
+  const [freePlanForm, setFreePlanForm] = useState<AdminFreePlanSetting>(
+    initialData.freePlan ?? { storageGb: 3, monthlyEmails: 1000 },
   );
   const [homeCms, setHomeCms] = useState<HomeCmsData>(mergeHomeCms(initialData.homeCms));
   const [homeCmsLang, setHomeCmsLang] = useState<HomeLanguage>("en");
@@ -263,6 +270,19 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     });
   };
 
+  const saveFreePlan = () => {
+    startTransition(async () => {
+      try {
+        const data = await updateAdminFreePlanSettings(freePlanForm);
+        setFreePlanForm(data);
+        toast.success("Free plan limits saved");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Free plan save failed");
+      }
+    });
+  };
+
   const saveHomeCms = () => {
     startTransition(async () => {
       try {
@@ -399,7 +419,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={tab === "overview" ? "Dashboard overview" : tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "stripe" ? "Stripe settings" : tab === "cms" ? "Home CMS" : "Search collections"}
+                placeholder={tab === "overview" ? "Dashboard overview" : tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "free-plan" ? "Free plan limits" : tab === "stripe" ? "Stripe settings" : tab === "cms" ? "Home CMS" : "Search collections"}
                 className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
               />
             </div>
@@ -447,6 +467,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             </div>
           ) : tab === "plans" ? (
             <PlanTable plans={filteredPlans} onEdit={editPlan} onDelete={removePlan} busy={pending} />
+          ) : tab === "free-plan" ? (
+            <FreePlanSettingsPanel form={freePlanForm} setForm={setFreePlanForm} onSave={saveFreePlan} busy={pending} />
           ) : tab === "stripe" ? (
             <StripeSettingsPanel form={stripeForm} setForm={setStripeForm} />
           ) : tab === "cms" ? (
@@ -582,6 +604,7 @@ function AdminNav({ tab, setTab }: { tab: AdminTab; setTab: (tab: AdminTab) => v
     { id: "users", label: "Users", icon: Users },
     { id: "collections", label: "Collections", icon: Images },
     { id: "plans", label: "Plans", icon: Package },
+    { id: "free-plan", label: "Free Plan", icon: HardDrive },
     { id: "stripe", label: "Stripe", icon: ShieldCheck },
     { id: "cms", label: "Home CMS", icon: FileImage },
   ];
@@ -857,6 +880,67 @@ function CollectionTable({ collections, onDelete, busy }: {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function FreePlanSettingsPanel({ form, setForm, onSave, busy }: {
+  form: AdminFreePlanSetting;
+  setForm: (value: AdminFreePlanSetting) => void;
+  onSave: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Card className="mt-6 max-w-[760px]">
+      <CardHeader className="border-b">
+        <CardTitle className="text-xl">Free user allowance</CardTitle>
+        <CardDescription>
+          One global limit for every free account. Saving also updates existing free users.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <FieldGroup className="grid gap-4 md:grid-cols-2">
+          <Field className="border bg-muted/30 p-4">
+            <div className="flex items-center gap-3">
+              <HardDrive className="size-5 text-primary" />
+              <FieldLabel htmlFor="free-storage">Storage per user</FieldLabel>
+            </div>
+            <Input
+              id="free-storage"
+              type="number"
+              min={0}
+              max={1000000}
+              step="0.01"
+              value={form.storageGb}
+              onChange={(event) => setForm({ ...form, storageGb: Math.max(0, Number(event.target.value)) })}
+            />
+            <FieldDescription>GB available to each free user. Use 0 to disable uploads.</FieldDescription>
+          </Field>
+          <Field className="border bg-muted/30 p-4">
+            <div className="flex items-center gap-3">
+              <Mail className="size-5 text-primary" />
+              <FieldLabel htmlFor="free-emails">Monthly emails per user</FieldLabel>
+            </div>
+            <Input
+              id="free-emails"
+              type="number"
+              min={0}
+              max={1000000000}
+              step="1"
+              value={form.monthlyEmails}
+              onChange={(event) => setForm({ ...form, monthlyEmails: Math.max(0, Math.floor(Number(event.target.value))) })}
+            />
+            <FieldDescription>Email quota resets monthly. Use 0 to disable marketing email.</FieldDescription>
+          </Field>
+        </FieldGroup>
+      </CardContent>
+      <CardFooter className="justify-between gap-4">
+        <p className="text-sm text-muted-foreground">Paid plan limits stay unchanged.</p>
+        <Button onClick={onSave} disabled={busy}>
+          {busy ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+          Save free plan
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 

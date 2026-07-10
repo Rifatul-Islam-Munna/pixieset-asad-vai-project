@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
@@ -14,9 +14,11 @@ import { Plan, PlanDocument } from './entities/plan.entity';
 import { StoreOrder, StoreOrderDocument } from 'src/store/entities/store-order.entity';
 import { FaceSearchService } from 'src/face-search/face-search.service';
 import { StoreDefaultProductService } from 'src/store/store-default-product.service';
+import { FreePlanSettingDto } from './dto/free-plan-setting.dto';
+import { FreePlanSettingService } from './free-plan-setting.service';
 
 @Injectable()
-export class AdminService {
+export class AdminService implements OnModuleInit {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(Collection.name) private readonly collectionModel: Model<CollectionDocument>,
@@ -27,7 +29,13 @@ export class AdminService {
     @InjectModel(StoreOrder.name) private readonly orderModel: Model<StoreOrderDocument>,
     private readonly faceSearchService: FaceSearchService,
     private readonly defaultProducts: StoreDefaultProductService,
+    private readonly freePlanSettings: FreePlanSettingService,
   ) {}
+
+  async onModuleInit() {
+    const settings = await this.freePlanSettings.get();
+    await this.syncFreeUsers(settings);
+  }
 
   async dashboard() {
     const now = new Date();
@@ -108,6 +116,7 @@ export class AdminService {
   async createUser(dto: AdminCreateUserDto) {
     await this.ensureUnique(dto.phoneNumber);
     const { planId, ...userDto } = dto;
+    const freePlan = await this.freePlanSettings.get();
     const user = await this.userModel.create({
       ...userDto,
       email: userDto.email?.trim().toLowerCase(),
@@ -115,6 +124,9 @@ export class AdminService {
       password: await bcrypt.hash(dto.password, 10),
       isOtpVerified: true,
       otpNumber: '000000',
+      storageLimitGb: freePlan.storageGb,
+      monthlyEmailLimit: freePlan.monthlyEmails,
+      planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
     });
     if (planId) await this.assignPlanToUser(user._id.toString(), planId);
     const { password, ...safeUser } = user.toObject();
@@ -213,6 +225,29 @@ export class AdminService {
   async getStripeSettings() {
     const settings = await this.getRawStripeSettings();
     return this.hideStripeSecrets(settings);
+  }
+
+  async getFreePlanSettings() {
+    return this.freePlanSettings.get();
+  }
+
+  async updateFreePlanSettings(dto: FreePlanSettingDto) {
+    const settings = await this.freePlanSettings.update(dto);
+    await this.syncFreeUsers(settings);
+    return settings;
+  }
+
+  private async syncFreeUsers(settings: { storageGb: number; monthlyEmails: number }) {
+    await this.userModel.updateMany(
+      { planName: 'Free' },
+      {
+        $set: {
+          storageLimitGb: settings.storageGb,
+          monthlyEmailLimit: settings.monthlyEmails,
+          'planFeatures.marketingEmails': settings.monthlyEmails > 0,
+        },
+      },
+    );
   }
 
   async updateStripeSettings(dto: AdminStripeSettingDto) {
@@ -337,14 +372,15 @@ export class AdminService {
   }
 
   async clearUserPlan(userId: string) {
+    const freePlan = await this.freePlanSettings.get();
     await this.userModel.updateOne(
       { _id: userId },
       {
         $set: {
           planName: 'Free',
-          storageLimitGb: 3,
-          monthlyEmailLimit: 0,
-          planFeatures: {},
+          storageLimitGb: freePlan.storageGb,
+          monthlyEmailLimit: freePlan.monthlyEmails,
+          planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
           monthlyEmailsUsed: 0,
           monthlyUsageKey: this.currentMonthKey(),
         },
@@ -360,7 +396,7 @@ export class AdminService {
     const user = await this.userModel.findById(userId).select('planName planFeatures storageLimitGb monthlyEmailLimit').lean();
     return {
       planName: user?.planName ?? 'Free',
-      storageLimitGb: user?.planName === 'Free' && Number(user?.storageLimitGb ?? 0) <= 0 ? 3 : user?.storageLimitGb ?? 3,
+      storageLimitGb: user?.storageLimitGb ?? 0,
       monthlyEmailLimit: user?.monthlyEmailLimit ?? 0,
       features: user?.planFeatures ?? {},
     };

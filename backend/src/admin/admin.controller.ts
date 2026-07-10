@@ -8,6 +8,7 @@ import { AdminService } from './admin.service';
 import { AdminCreatePlanDto, AdminUpdatePlanDto } from './dto/admin-plan.dto';
 import { AdminStripeSettingDto } from './dto/admin-stripe-setting.dto';
 import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
+import { FreePlanSettingDto } from './dto/free-plan-setting.dto';
 
 @Controller('admin')
 @UseGuards(AuthGuard, RolesGuard)
@@ -118,6 +119,17 @@ export class AdminController {
   async stripeSettings() {
     const data = await this.adminService.getStripeSettings();
     return { data };
+  }
+
+  @Get('free-plan')
+  async freePlanSettings() {
+    return { data: await this.adminService.getFreePlanSettings() };
+  }
+
+  @Patch('free-plan')
+  async updateFreePlanSettings(@Body() dto: FreePlanSettingDto) {
+    const data = await this.adminService.updateFreePlanSettings(dto);
+    return { message: 'Free plan settings saved', data };
   }
 
   @Patch('stripe')

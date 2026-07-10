@@ -275,9 +275,8 @@ export class MobileGalleryService {
 
   private async ensureStorageAvailable(userId: string, incomingBytes: number) {
     const user = await this.userModel.findById(userId).select('planName storageLimitGb storageUsedBytes').lean();
-    const limitGb = user?.planName === 'Free' && Number(user?.storageLimitGb ?? 0) <= 0 ? 3 : Number(user?.storageLimitGb ?? 3);
+    const limitGb = Math.max(0, Number(user?.storageLimitGb ?? 0));
     const limitBytes = limitGb * 1024 * 1024 * 1024;
-    if (limitBytes <= 0) return;
     const used = Number(user?.storageUsedBytes ?? 0);
     if (used + incomingBytes > limitBytes) {
       throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');

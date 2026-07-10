@@ -82,6 +82,11 @@ export type AdminStripeSetting = {
   hasWebhookSecret?: boolean;
 };
 
+export type AdminFreePlanSetting = {
+  storageGb: number;
+  monthlyEmails: number;
+};
+
 export type AdminDashboardData = {
   stats: {
     users: number;
@@ -98,6 +103,7 @@ export type AdminDashboardData = {
   collections: AdminCollection[];
   plans: AdminPlan[];
   stripe: AdminStripeSetting;
+  freePlan: AdminFreePlanSetting;
   homeCms: HomeCmsData;
 };
 
@@ -127,7 +133,7 @@ async function adminOptionalRequest<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function getAdminDashboard(): Promise<AdminDashboardData> {
-  const [stats, users, collections, plans, stripe, homeCms] = await Promise.all([
+  const [stats, users, collections, plans, stripe, freePlan, homeCms] = await Promise.all([
     adminRequest<AdminDashboardData["stats"]>("/admin/dashboard"),
     adminRequest<AdminUser[]>("/admin/users"),
     adminRequest<AdminCollection[]>("/admin/collections"),
@@ -138,9 +144,13 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       hasSecretKey: false,
       hasWebhookSecret: false,
     }),
+    adminOptionalRequest<AdminFreePlanSetting>("/admin/free-plan", {
+      storageGb: 3,
+      monthlyEmails: 1000,
+    }),
     adminOptionalRequest<HomeCmsData>("/home-cms", mergeHomeCms()),
   ]);
-  return { stats, users, collections, plans, stripe, homeCms: mergeHomeCms(homeCms) };
+  return { stats, users, collections, plans, stripe, freePlan, homeCms: mergeHomeCms(homeCms) };
 }
 
 export async function createAdminUser(payload: {
@@ -207,6 +217,15 @@ export async function deleteAdminPlan(id: string) {
 
 export async function updateAdminStripeSettings(payload: AdminStripeSetting) {
   const data = await adminRequest<AdminStripeSetting>("/admin/stripe", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/admin");
+  return data;
+}
+
+export async function updateAdminFreePlanSettings(payload: AdminFreePlanSetting) {
+  const data = await adminRequest<AdminFreePlanSetting>("/admin/free-plan", {
     method: "PATCH",
     body: JSON.stringify(payload),
   });

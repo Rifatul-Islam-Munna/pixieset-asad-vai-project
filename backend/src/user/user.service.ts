@@ -10,6 +10,7 @@ import { MobileGalleryImage, MobileGalleryImageDocument } from 'src/mobile-galle
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/update-user.dto';
 import { User, UserDocument, UserType } from './entities/user.entity';
+import { FreePlanSettingService } from 'src/admin/free-plan-setting.service';
 
 @Injectable()
 export class UserService implements OnModuleInit {
@@ -19,6 +20,7 @@ export class UserService implements OnModuleInit {
     @InjectModel(MobileGalleryImage.name) private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly freePlanSettings: FreePlanSettingService,
   ) {}
 
   async onModuleInit() {
@@ -61,6 +63,7 @@ export class UserService implements OnModuleInit {
       throw new HttpException('User already exists', HttpStatus.BAD_REQUEST);
     }
 
+    const freePlan = await this.freePlanSettings.get();
     const user = await this.userModel.create({
       ...dto,
       email: dto.email?.trim().toLowerCase(),
@@ -68,7 +71,9 @@ export class UserService implements OnModuleInit {
       password: await bcrypt.hash(dto.password, 10),
       isOtpVerified: true,
       otpNumber: '000000',
-      storageLimitGb: 3,
+      storageLimitGb: freePlan.storageGb,
+      monthlyEmailLimit: freePlan.monthlyEmails,
+      planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
     });
 
     const { password, ...safeUser } = user.toObject();
@@ -123,6 +128,7 @@ export class UserService implements OnModuleInit {
       $or: [{ email }, { phoneNumber: email }, ...(googleId ? [{ googleId }] : [])],
     });
 
+    const freePlan = await this.freePlanSettings.get();
     const user =
       existing ??
       (await this.userModel.create({
@@ -135,7 +141,9 @@ export class UserService implements OnModuleInit {
         role: UserType.USER,
         isOtpVerified: true,
         otpNumber: '000000',
-        storageLimitGb: 3,
+        storageLimitGb: freePlan.storageGb,
+        monthlyEmailLimit: freePlan.monthlyEmails,
+        planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
       }));
 
     if (existing) {
@@ -178,8 +186,6 @@ export class UserService implements OnModuleInit {
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }
-    if (user.planName === 'Free' && Number(user.storageLimitGb ?? 0) <= 0) user.storageLimitGb = 3;
-
     // Auto-recalculate storage from actual images to fix any drift
     const recalculated = await this.recalculateStorage(id);
     user.storageUsedBytes = recalculated;

@@ -409,9 +409,9 @@ export function ClientDashboard({
     };
   }, []);
   const sidebarUsedGb = bytesToGb(billingUser?.storageUsedBytes ?? 0);
-  const sidebarLimitGb = Number(billingUser?.storageLimitGb ?? 3) || 3;
+  const sidebarLimitGb = Math.max(0, Number(billingUser?.storageLimitGb ?? 0));
   const sidebarStorageLeftGb = Math.max(0, sidebarLimitGb - sidebarUsedGb);
-  const sidebarStoragePercent = Math.min(100, (sidebarUsedGb / sidebarLimitGb) * 100);
+  const sidebarStoragePercent = sidebarLimitGb > 0 ? Math.min(100, (sidebarUsedGb / sidebarLimitGb) * 100) : 0;
   const sidebarEmailLimit = Number(billingUser?.monthlyEmailLimit ?? 0);
   const sidebarEmailsUsed = Number(billingUser?.monthlyEmailsUsed ?? 0);
   const sidebarEmailsLeft = sidebarEmailLimit > 0 ? Math.max(0, sidebarEmailLimit - sidebarEmailsUsed) : 0;
@@ -992,7 +992,7 @@ setNotice("Free plan activated successfully");
           title={user?.planName ?? "Free"}
           label="Storage"
           value={`${usedGb.toFixed(2)} GB used`}
-          limit={limitGb > 0 ? `${limitGb} GB / month` : "No plan limit"}
+          limit={limitGb > 0 ? `${limitGb} GB / month` : "Uploads disabled"}
           percent={storagePercent}
         />
         <UsagePanel
@@ -1000,7 +1000,7 @@ setNotice("Free plan activated successfully");
           title="Monthly emails"
           label="Emails"
           value={`${emailsUsed} sent`}
-          limit={emailLimit > 0 ? `${emailLimit} emails / month` : "No plan limit"}
+          limit={emailLimit > 0 ? `${emailLimit} emails / month` : "Email disabled"}
           percent={emailPercent}
         />
       </div>
