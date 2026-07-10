@@ -1,3 +1,1 @@
-1. repsonse whole site
-2. checka dadmin panel
-3. tes the buy thing
+Browser → S3 direct upload using presigned URLs. VPS stops carrying image bandwidth. AWS officially supports this flow: in the future have to do it
