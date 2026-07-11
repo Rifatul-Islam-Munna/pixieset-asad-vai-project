@@ -28,6 +28,7 @@ export function usePublicGalleryFavorites({
   enabled,
   maxFavorites,
   favoritesPath,
+  marketingOptIn,
 }: {
   collectionId?: string;
   identifier: string;
@@ -36,12 +37,14 @@ export function usePublicGalleryFavorites({
   enabled: boolean;
   maxFavorites: number;
   favoritesPath?: string;
+  marketingOptIn?: boolean;
 }) {
   const router = useRouter();
   const storageKey = `pixieset-public-favorites:${collectionId || identifier}`;
   const emailStorageKey = "pixieset-favorite-email";
   const [favoriteEmail, setFavoriteEmail] = useState("");
   const [emailDraft, setEmailDraft] = useState("");
+  const [marketingAccepted, setMarketingAccepted] = useState(true);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [pendingFavorite, setPendingFavorite] = useState<PendingFavorite>(null);
   const [collectionFavorited, setCollectionFavorited] = useState(false);
@@ -101,7 +104,21 @@ export function usePublicGalleryFavorites({
     window.setTimeout(() => setFavoriteBusy(false), 220);
   }
 
-  function applyImageToggle(imageId: string) {
+  async function syncImageFavorite(imageId: string, email: string) {
+    if (!email) return;
+    const response = await fetch(
+      `/api/public/collections/${encodeURIComponent(identifier)}/image-favorites/${encodeURIComponent(imageId)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      },
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.message || "Favorite save failed");
+  }
+
+  function applyImageToggle(imageId: string, email = favoriteEmail) {
     if (!enabled) {
       setNotice("Favorites are disabled for this gallery");
       return;
@@ -120,6 +137,9 @@ export function usePublicGalleryFavorites({
       setNotice(next.has(imageId) ? "Photo added to My Favorites" : "Photo removed from My Favorites");
       return next;
     });
+    void syncImageFavorite(imageId, email).catch((error) =>
+      setNotice(error instanceof Error ? error.message : "Favorite save failed"),
+    );
     window.setTimeout(() => setFavoriteImageBusy(""), 220);
   }
 
@@ -145,7 +165,7 @@ export function usePublicGalleryFavorites({
     const action = pendingFavorite;
     setPendingFavorite(null);
     if (action?.type === "collection") applyCollectionToggle();
-    if (action?.type === "image") applyImageToggle(action.imageId);
+    if (action?.type === "image") applyImageToggle(action.imageId, email);
   }
 
   const openFavorites = () => {
@@ -175,6 +195,12 @@ export function usePublicGalleryFavorites({
               className="mt-6 h-12 w-full border px-4 text-sm outline-none focus:border-[#16bda8]"
               autoFocus
             />
+            {marketingOptIn && (
+              <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
+                <input type="checkbox" checked={marketingAccepted} onChange={(event) => setMarketingAccepted(event.target.checked)} className="mt-1" />
+                <span>Send me updates and special offers.</span>
+              </label>
+            )}
             <button type="button" onClick={saveEmail} className="mt-4 h-12 w-full bg-[#202326] text-sm font-bold text-white">Continue</button>
           </div>
         </div>

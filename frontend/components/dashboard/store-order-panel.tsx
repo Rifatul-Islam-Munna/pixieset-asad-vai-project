@@ -29,6 +29,7 @@ export function StoreOrderPanel({
     name: "", email: "", phone: "", country: "", line1: "", line2: "",
     city: "", state: "", postalCode: "",
   });
+  const [marketingOptIn, setMarketingOptIn] = useState(true);
   const [professional, setProfessional] = useState({ company: "", taxId: "", invoiceNote: "" });
   const [shippingMethodId, setShippingMethodId] = useState("");
   const [couponCode, setCouponCode] = useState("");
@@ -74,6 +75,7 @@ export function StoreOrderPanel({
       },
     },
     professionalInfo: professional,
+    marketingOptIn,
     shippingMethodId: requiresShipping && shippingMethodId ? shippingMethodId : undefined,
     couponCode,
     items: items.map((item) => ({
@@ -162,6 +164,12 @@ export function StoreOrderPanel({
           <Field type="email" placeholder="Email" value={customer.email} onChange={(email) => setCustomer((v) => ({ ...v, email }))} />
           <Field placeholder="Phone" value={customer.phone} onChange={(phone) => setCustomer((v) => ({ ...v, phone }))} wide />
         </div>
+        {data?.marketing?.optIn?.storeCheckout && (
+          <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
+            <input type="checkbox" checked={marketingOptIn} onChange={(event) => setMarketingOptIn(event.target.checked)} className="mt-1" />
+            <span>Send me updates and special offers.</span>
+          </label>
+        )}
       </Section>
 
       <div className="mt-7 flex items-start gap-3 border bg-[#f8f8f6] p-4 text-sm">

@@ -59,6 +59,28 @@ type PublicCollection = {
     store?: { storeStatus?: boolean; enabled?: boolean; showPrintStoreNav?: boolean; showBuyPhotoButton?: boolean };
     access?: { emailRequired?: boolean; emailAuthorized?: boolean; emailStatus?: string; email?: string };
   };
+  preferences?: {
+    filenameDisplay?: "show" | "hide";
+    searchEngineVisibility?: "homepage" | "all" | "hidden";
+    sharpeningLevel?: "optimal" | "low" | "high";
+    termsOfService?: string;
+    privacyPolicy?: string;
+  };
+  marketing?: {
+    optIn?: {
+      emailRegistration?: boolean;
+      storeCheckout?: boolean;
+      download?: boolean;
+      favoriteSignIn?: boolean;
+    };
+    popup?: {
+      enabled?: boolean;
+      title?: string;
+      body?: string;
+      button?: string;
+      imageUrl?: string;
+    };
+  };
 };
 
 const fallbackPhotos = [
@@ -175,6 +197,9 @@ export function PublicGallery({
   const socialSharingEnabled = boolSetting(generalSettings.socialSharing ?? true);
   const galleryAssistEnabled = boolSetting(generalSettings.galleryAssist);
   const emailRegistrationEnabled = boolSetting(generalSettings.emailRegistration);
+  const marketing = collection?.marketing ?? {};
+  const marketingOptIn = marketing.optIn ?? {};
+  const marketingPopup = marketing.popup ?? {};
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images = collection
     ? loadedImages
@@ -205,6 +230,10 @@ export function PublicGallery({
   const [downloadCount, setDownloadCount] = useState(0);
   const [visitorEmail, setVisitorEmail] = useState("");
   const [visitorEmailSaved, setVisitorEmailSaved] = useState(false);
+  const [visitorMarketingOptIn, setVisitorMarketingOptIn] = useState(true);
+  const [downloadMarketingOptIn, setDownloadMarketingOptIn] = useState(true);
+  const [popupOpen, setPopupOpen] = useState(() => Boolean(marketingPopup.enabled));
+  const [popupEmail, setPopupEmail] = useState("");
   const [zipDownloading, setZipDownloading] = useState(false);
   const [zipStage, setZipStage] = useState("Preparing your photos");
   const [faceBusy, setFaceBusy] = useState(false);
@@ -247,6 +276,9 @@ export function PublicGallery({
     ? "columns-1 sm:columns-2"
     : "columns-1 sm:columns-2 lg:columns-3";
   const downloadsEnabled = boolSetting(download.photoDownload);
+  const preferences = collection?.preferences ?? {};
+  const showFilenames = preferences.filenameDisplay !== "hide";
+  const sharpeningLevel = preferences.sharpeningLevel ?? "optimal";
   const favoriteSettings = collection?.settings?.favorite;
   const favoritesEnabled = favoriteSettings?.favoritePhotos !== false;
   const maxFavoriteCount = Number(favoriteSettings?.maxFavorites || 0);
@@ -257,6 +289,7 @@ export function PublicGallery({
     images: galleryImages,
     enabled: favoritesEnabled,
     maxFavorites: maxFavoriteCount,
+    marketingOptIn: marketingOptIn.favoriteSignIn,
   });
   const {
     collectionFavorited,
@@ -652,12 +685,57 @@ export function PublicGallery({
     return () => window.clearTimeout(timer);
   }, [slideshowIndex, visibleImages.length]);
 
+  useEffect(() => {
+    if (!collection || !marketingPopup.enabled) return;
+    const key = `gallery-marketing-popup:${collection._id}`;
+    if (!window.sessionStorage.getItem(key)) setPopupOpen(true);
+  }, [collection?._id, marketingPopup.enabled]);
+
+  const closeMarketingPopup = () => {
+    if (collection?._id) window.sessionStorage.setItem(`gallery-marketing-popup:${collection._id}`, "1");
+    setPopupOpen(false);
+  };
+
+  const submitMarketingPopup = () => {
+    if (!popupEmail.includes("@")) return;
+    window.localStorage.setItem("gallery-marketing-email", popupEmail.trim().toLowerCase());
+    closeMarketingPopup();
+  };
+
   return (
     <>
       {customFontName && design.customFontDataUrl && (
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
       <ScreenCaptureGuard />
+      {popupOpen && marketingPopup.enabled && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
+          <div className="relative w-full max-w-[450px] bg-white p-8 text-[#111] shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-10">
+            <button className="absolute right-4 top-4" onClick={closeMarketingPopup} aria-label="Close marketing signup" type="button">
+              <X className="size-5" />
+            </button>
+            {marketingPopup.imageUrl && <img src={marketingPopup.imageUrl} alt="" className="mb-6 h-32 w-full object-cover" />}
+            <h2 className="text-2xl font-bold uppercase tracking-[0.12em]">{marketingPopup.title || "Stay Connected"}</h2>
+            <p className="mt-6 whitespace-pre-line text-sm leading-6">{marketingPopup.body || "Sign up to get updates and special offers."}</p>
+            <input
+              value={popupEmail}
+              onChange={(event) => setPopupEmail(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitMarketingPopup();
+              }}
+              placeholder="Your email"
+              className="mt-7 h-12 w-full border bg-white px-4 text-sm outline-none"
+              autoFocus
+            />
+            <button className="mt-5 h-11 w-full bg-[#333] text-xs font-bold uppercase tracking-[0.18em] text-white disabled:opacity-50" disabled={!popupEmail.includes("@")} onClick={submitMarketingPopup} type="button">
+              {marketingPopup.button || "Subscribe"}
+            </button>
+            <p className="mt-7 text-xs leading-5 text-[#777]">
+              By signing up, you agree to receive promotional emails and updates. You can unsubscribe anytime.
+            </p>
+          </div>
+        </div>
+      )}
       {emailAccessLocked ? (
         <main className="flex min-h-screen items-center justify-center bg-[#fafafa] p-6">
           <section className="w-full max-w-md border bg-white p-7 shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
@@ -665,6 +743,12 @@ export function PublicGallery({
             <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
             <p className="mt-3 text-sm leading-6 text-[#666]">Enter an approved email to view this gallery.</p>
             <Input value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} placeholder="you@example.com" className="mt-6 h-11 rounded-none" />
+            {marketingOptIn.emailRegistration && (
+              <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
+                <input type="checkbox" checked={visitorMarketingOptIn} onChange={(event) => setVisitorMarketingOptIn(event.target.checked)} className="mt-1" />
+                <span>Send me updates and special offers.</span>
+              </label>
+            )}
             <Button className="mt-3 h-11 w-full rounded-none bg-[#22bda7] text-white" disabled={accessBusy || !accessEmail.includes("@")} onClick={() => void verifyAccessEmail()}>
               {accessBusy ? "Checking..." : "Enter gallery"}
             </Button>
@@ -829,6 +913,12 @@ export function PublicGallery({
               placeholder="Email for gallery access"
               className="h-10 min-w-0 flex-1 border bg-white px-3 text-sm text-black outline-none"
             />
+            {marketingOptIn.emailRegistration && (
+              <label className="flex min-w-full items-center gap-2 text-xs text-[#666]">
+                <input type="checkbox" checked={visitorMarketingOptIn} onChange={(event) => setVisitorMarketingOptIn(event.target.checked)} />
+                <span>Send me updates and special offers.</span>
+              </label>
+            )}
             <button
               className="h-10 shrink-0 bg-[#202326] px-4 text-sm font-bold text-white disabled:opacity-45"
               disabled={!visitorEmail.includes("@")}
@@ -882,6 +972,8 @@ export function PublicGallery({
                 canFavorite={favoritesEnabled}
                 canDownload={canDownload}
                 canShare={socialSharingEnabled}
+                showFilename={showFilenames}
+                sharpeningLevel={sharpeningLevel}
                 favoriteBusy={favoriteImageBusy === photo._id}
                 favorited={favoriteImageIds.has(photo._id)}
                 onDownload={downloadPhoto}
@@ -898,6 +990,25 @@ export function PublicGallery({
           )}
         </div>
       </section>
+
+      {(preferences.termsOfService || preferences.privacyPolicy) && (
+        <section className="border-t border-black/10 bg-white px-5 py-8 md:px-8">
+          <div className="mx-auto grid max-w-4xl gap-4 text-sm leading-6" style={{ color: fg }}>
+            {preferences.termsOfService && (
+              <details className="border border-black/10 p-4">
+                <summary className="cursor-pointer font-bold">Terms of Service</summary>
+                <p className="mt-3 whitespace-pre-line text-[#666]">{preferences.termsOfService}</p>
+              </details>
+            )}
+            {preferences.privacyPolicy && (
+              <details className="border border-black/10 p-4">
+                <summary className="cursor-pointer font-bold">Privacy Policy</summary>
+                <p className="mt-3 whitespace-pre-line text-[#666]">{preferences.privacyPolicy}</p>
+              </details>
+            )}
+          </div>
+        </section>
+      )}
 
       {favoriteTools.overlays}
       {zipDownloading && (
@@ -937,6 +1048,12 @@ export function PublicGallery({
               className="mt-6 h-12 w-full border bg-white px-4 text-sm text-black outline-none"
               autoFocus
             />
+            {marketingOptIn.download && (
+              <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
+                <input type="checkbox" checked={downloadMarketingOptIn} onChange={(event) => setDownloadMarketingOptIn(event.target.checked)} className="mt-1" />
+                <span>Send me updates and special offers.</span>
+              </label>
+            )}
             <button
               className="mt-5 h-11 w-full bg-[#202326] text-sm font-bold text-white disabled:opacity-50"
               onClick={submitDownloadEmail}
@@ -1143,6 +1260,12 @@ function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
 }
 
+function sharpenStyle(level: "optimal" | "low" | "high"): CSSProperties | undefined {
+  if (level === "low") return { filter: "contrast(1.01)" };
+  if (level === "high") return { filter: "contrast(1.08) saturate(1.04)" };
+  return { filter: "contrast(1.04) saturate(1.02)" };
+}
+
 function isVideo(image: PublicImage) {
   return image.mediaType === "video" || String(image.mimetype || "").startsWith("video/");
 }
@@ -1165,6 +1288,8 @@ function GalleryTile({
   canFavorite,
   canDownload,
   canShare,
+  showFilename,
+  sharpeningLevel,
   favoriteBusy,
   favorited,
   onDownload,
@@ -1177,6 +1302,8 @@ function GalleryTile({
   canFavorite: boolean;
   canDownload: boolean;
   canShare: boolean;
+  showFilename: boolean;
+  sharpeningLevel: "optimal" | "low" | "high";
   favoriteBusy: boolean;
   favorited: boolean;
   onDownload: (photo: PublicImage) => void;
@@ -1204,9 +1331,15 @@ function GalleryTile({
             fallbackSrc={imageSrc(photo.url)}
             alt={photo.originalName ?? ""}
             className="block h-auto w-full"
+            style={sharpenStyle(sharpeningLevel)}
           />
         )}
       </button>
+      {showFilename && photo.originalName && (
+        <p className="truncate bg-white px-3 py-2 text-xs font-semibold text-[#555]">
+          {photo.originalName}
+        </p>
+      )}
       <div className="absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         {canFavorite && isPersistedImageId(photo._id) && (
           <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" title="Favorite" type="button">

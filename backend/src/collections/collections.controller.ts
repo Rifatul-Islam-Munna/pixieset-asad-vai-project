@@ -86,6 +86,17 @@ export class PublicCollectionsController {
     const data = await this.collectionsService.recordPublicDownloadActivity(identifier, body, siteSlug);
     return { message: 'Download activity saved', data };
   }
+
+  @Post(':identifier/image-favorites/:imageId')
+  async favoritePublicImage(
+    @Param('identifier') identifier: string,
+    @Param('imageId') imageId: string,
+    @Body() body: { email?: string },
+    @Query('siteSlug') siteSlug?: string,
+  ) {
+    const data = await this.collectionsService.togglePublicFavoriteImage(identifier, imageId, body, siteSlug);
+    return { message: data.favorited ? 'Photo favorited' : 'Photo unfavorited', data };
+  }
 }
 
 @Controller('collections')

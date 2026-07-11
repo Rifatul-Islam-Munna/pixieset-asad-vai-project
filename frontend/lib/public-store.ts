@@ -88,6 +88,11 @@ export type PublicStoreData = {
     discountType: "percent" | "fixed";
     amount: number;
   }>;
+  marketing?: {
+    optIn?: {
+      storeCheckout?: boolean;
+    };
+  };
 };
 
 export type StoreCrop = {

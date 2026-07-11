@@ -8,6 +8,9 @@ export enum DashboardSettingType {
   PRESET = 'preset',
   EMAIL_TEMPLATE = 'email-template',
   BRANDING = 'branding',
+  PREFERENCE = 'preference',
+  INTEGRATION = 'integration',
+  MARKETING = 'marketing',
 }
 
 @Schema({ timestamps: true, autoIndex: true })

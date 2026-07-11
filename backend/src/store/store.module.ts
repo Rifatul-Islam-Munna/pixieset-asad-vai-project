@@ -27,6 +27,7 @@ import { Collection, CollectionSchema } from 'src/collections/entities/collectio
 import { CollectionImage, CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity';
+import { DashboardSetting, DashboardSettingSchema } from 'src/settings/entities/dashboard-setting.entity';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity'
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: User.name, schema: UserSchema },
       { name: Homepage.name, schema: HomepageSchema },
+      { name: DashboardSetting.name, schema: DashboardSettingSchema },
     ]),
   ],
   controllers: [

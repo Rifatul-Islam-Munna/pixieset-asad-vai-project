@@ -192,6 +192,7 @@ import {
   type PresetFavoriteSettings,
   type PresetGeneralSettings,
   type PresetItem,
+  type PresetStoreSettings,
   type WatermarkItem,
 } from "@/lib/dashboard-store";
 import type {
@@ -206,6 +207,8 @@ import {
   PlanFeatureNotice,
 } from "@/components/dashboard/plan-feature-lock";
 import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
+import { CollectionStoreSettingsPanel } from "@/components/dashboard/collection-store-settings-panel";
+import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { publicCollectionUrl } from "@/lib/public-site-url";
 import {
@@ -242,7 +245,8 @@ export type SettingsPage =
   | "presets"
   | "preset-new"
   | "email-templates"
-  | "preferences";
+  | "preferences"
+  | "integrations";
 
 const switcherItems = [
   {
@@ -1977,6 +1981,38 @@ function bytesToGb(value: number) {
   return Number(value ?? 0) / 1024 / 1024 / 1024;
 }
 
+type MarketingSettings = {
+  optIn: {
+    emailRegistration: boolean;
+    storeCheckout: boolean;
+    download: boolean;
+    favoriteSignIn: boolean;
+  };
+  popup: {
+    enabled: boolean;
+    title: string;
+    body: string;
+    button: string;
+    imageUrl: string;
+  };
+};
+
+const defaultMarketingSettings: MarketingSettings = {
+  optIn: {
+    emailRegistration: true,
+    storeCheckout: true,
+    download: false,
+    favoriteSignIn: false,
+  },
+  popup: {
+    enabled: true,
+    title: "Stay Connected",
+    body: "Sign up to get updates and special offers from your photography studio.",
+    button: "Subscribe",
+    imageUrl: "",
+  },
+};
+
 function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
   const {
     campaignSearch,
@@ -1987,6 +2023,8 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
     startCampaignBuilder,
   } = useDashboardStore();
   const emailTemplateSettings = useDashboardSettings("email-template").query;
+  const { query: marketingSettings, saveSetting: saveMarketingSettings } =
+    useDashboardSettings<MarketingSettings>("marketing");
 
   useEffect(() => {
     const settings = emailTemplateSettings.data?.data ?? [];
@@ -2017,34 +2055,10 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
 
   if (marketingPage === "settings") {
     return (
-      <div>
-        <PageHeader action="Save Settings" title="Marketing Settings" />
-        <div className="mt-8 max-w-[680px] bg-[#fafafa] p-5 sm:mt-12 sm:p-10">
-          <FieldGroup className="gap-8">
-            <Field>
-              <FieldLabel className="font-bold">Sender Name</FieldLabel>
-              <Input
-                className="h-12 rounded-none bg-white"
-                placeholder="Nikoset Studio"
-              />
-            </Field>
-            <Field>
-              <FieldLabel className="font-bold">Reply-to Email</FieldLabel>
-              <Input
-                className="h-12 rounded-none bg-white"
-                placeholder="hello@example.com"
-              />
-            </Field>
-            <Field>
-              <FieldLabel className="font-bold">Opt-in Location</FieldLabel>
-              <Input
-                className="h-12 rounded-none bg-white"
-                placeholder="Client Gallery checkout"
-              />
-            </Field>
-          </FieldGroup>
-        </div>
-      </div>
+      <MarketingSettingsPanel
+        query={marketingSettings}
+        saveSetting={saveMarketingSettings}
+      />
     );
   }
 
@@ -2067,6 +2081,136 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
         />
       )}
     </div>
+  );
+}
+
+function MarketingSettingsPanel({
+  query,
+  saveSetting,
+}: {
+  query: any;
+  saveSetting: any;
+}) {
+  const saved =
+    query.data?.data?.find((item) => item.localId === "gallery-marketing")?.data ??
+    defaultMarketingSettings;
+  const [form, setForm] = useState<MarketingSettings>(saved);
+
+  useEffect(() => {
+    setForm({
+      optIn: { ...defaultMarketingSettings.optIn, ...saved.optIn },
+      popup: { ...defaultMarketingSettings.popup, ...saved.popup },
+    });
+  }, [
+    saved.optIn?.emailRegistration,
+    saved.optIn?.storeCheckout,
+    saved.optIn?.download,
+    saved.optIn?.favoriteSignIn,
+    saved.popup?.enabled,
+    saved.popup?.title,
+    saved.popup?.body,
+    saved.popup?.button,
+    saved.popup?.imageUrl,
+  ]);
+
+  const updateOptIn = (key: keyof MarketingSettings["optIn"], value: boolean) =>
+    setForm((current) => ({ ...current, optIn: { ...current.optIn, [key]: value } }));
+  const updatePopup = (key: keyof MarketingSettings["popup"], value: string | boolean) =>
+    setForm((current) => ({ ...current, popup: { ...current.popup, [key]: value } }));
+  const save = () => {
+    saveSetting.mutate(
+      { localId: "gallery-marketing", name: "Gallery Marketing", data: form },
+      {
+        onSuccess: () => toast.success("Marketing settings saved"),
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <PageHeader title="Marketing Settings" />
+        <Button
+          className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+          disabled={saveSetting.isPending}
+          onClick={save}
+        >
+          {saveSetting.isPending ? "Saving..." : "Save Settings"}
+        </Button>
+      </div>
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,520px)_minmax(360px,530px)]">
+        <div className="space-y-12">
+          <section>
+            <h2 className="text-sm font-bold">Gallery Marketing Opt-in</h2>
+            <div className="mt-5 grid gap-3">
+              <MarketingCheck label="Email registration" checked={form.optIn.emailRegistration} onChange={(value) => updateOptIn("emailRegistration", value)} />
+              <MarketingCheck label="Store checkout" checked={form.optIn.storeCheckout} onChange={(value) => updateOptIn("storeCheckout", value)} />
+              <MarketingCheck label="Photo and video download" checked={form.optIn.download} onChange={(value) => updateOptIn("download", value)} />
+              <MarketingCheck label="Favorite sign-in" checked={form.optIn.favoriteSignIn} onChange={(value) => updateOptIn("favoriteSignIn", value)} />
+            </div>
+            <p className="mt-4 text-sm leading-6 text-[#666]">
+              Show a marketing opt-in checkbox in galleries that have the setting enabled.
+            </p>
+          </section>
+
+          <section className="space-y-6">
+            <SettingSwitch
+              label="Gallery Pop-up Form"
+              checked={form.popup.enabled}
+              onCheckedChange={(value) => updatePopup("enabled", value)}
+              text="Show a pop-up in client galleries that lets visitors subscribe to marketing emails."
+            />
+            <Field>
+              <FieldLabel className="font-bold">Title</FieldLabel>
+              <Input value={form.popup.title} onChange={(event) => updatePopup("title", event.target.value)} className="h-12 rounded-none bg-white" />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Body</FieldLabel>
+              <Textarea value={form.popup.body} maxLength={200} onChange={(event) => updatePopup("body", event.target.value)} className="min-h-40 rounded-none bg-white p-4" />
+              <p className="text-xs text-[#777]">{form.popup.body.length} / 200</p>
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Button</FieldLabel>
+              <Input value={form.popup.button} onChange={(event) => updatePopup("button", event.target.value)} className="h-12 rounded-none bg-white" />
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Image</FieldLabel>
+              <Input value={form.popup.imageUrl} onChange={(event) => updatePopup("imageUrl", event.target.value)} placeholder="https://..." className="h-12 rounded-none bg-white" />
+            </Field>
+          </section>
+        </div>
+        <MarketingPopupPreview settings={form} />
+      </div>
+    </div>
+  );
+}
+
+function MarketingCheck({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-3 text-sm">
+      <Checkbox checked={checked} onCheckedChange={(value) => onChange(Boolean(value))} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function MarketingPopupPreview({ settings }: { settings: MarketingSettings }) {
+  return (
+    <aside className="bg-[#f3f3f3] p-10">
+      <div className="mx-auto max-w-[450px] bg-white p-10 shadow-[0_22px_60px_rgba(0,0,0,0.08)]">
+        {settings.popup.imageUrl && <img src={settings.popup.imageUrl} alt="" className="mb-6 h-32 w-full object-cover" />}
+        <h3 className="text-3xl font-bold uppercase tracking-[0.12em] text-[#202326]">{settings.popup.title}</h3>
+        <p className="mt-7 whitespace-pre-line text-sm leading-6 text-[#111]">{settings.popup.body}</p>
+        <Input placeholder="Your email" className="mt-7 h-12 rounded-none bg-white" readOnly />
+        <button className="mt-5 h-11 w-full bg-[#333] text-xs font-bold uppercase tracking-[0.18em] text-white" type="button">
+          {settings.popup.button}
+        </button>
+        <p className="mt-7 text-xs leading-5 text-[#777]">
+          By signing up, you agree to receive promotional emails and updates. You can unsubscribe anytime.
+        </p>
+      </div>
+    </aside>
   );
 }
 
@@ -3368,6 +3512,7 @@ const settingsTabs = [
   { label: "Presets", page: "presets" },
   { label: "Email Templates", page: "email-templates" },
   { label: "Preferences", page: "preferences" },
+  { label: "Integrations", page: "integrations" },
 ] as const;
 
 const watermarkFonts = [
@@ -3450,6 +3595,8 @@ function SettingsPanel({
           <EmailTemplatesPanel />
         ) : settingsPage === "preferences" ? (
           <PreferencesPanel />
+        ) : settingsPage === "integrations" ? (
+          <IntegrationsPanel />
         ) : (
           <div className="max-w-[560px] bg-[#fafafa] p-8">
             <p className="font-bold">
@@ -3465,7 +3612,55 @@ function SettingsPanel({
   );
 }
 
+type PreferenceSettings = {
+  defaultLanguage: string;
+  filenameDisplay: "show" | "hide";
+  searchEngineVisibility: "homepage" | "all" | "hidden";
+  sharpeningLevel: "optimal" | "low" | "high";
+  rawPhotoSupport: boolean;
+  termsOfService: string;
+  privacyPolicy: string;
+};
+
+const defaultPreferenceSettings: PreferenceSettings = {
+  defaultLanguage: "English",
+  filenameDisplay: "show",
+  searchEngineVisibility: "homepage",
+  sharpeningLevel: "optimal",
+  rawPhotoSupport: false,
+  termsOfService: "",
+  privacyPolicy: "",
+};
+
 function PreferencesPanel() {
+  const { query, saveSetting } = useDashboardSettings<PreferenceSettings>("preference");
+  const saved =
+    (query.data?.data?.[0]?.data as PreferenceSettings | undefined) ??
+    defaultPreferenceSettings;
+  const [form, setForm] = useState<PreferenceSettings>(saved);
+
+  useEffect(() => {
+    setForm({ ...defaultPreferenceSettings, ...saved });
+  }, [
+    saved.defaultLanguage,
+    saved.filenameDisplay,
+    saved.searchEngineVisibility,
+    saved.sharpeningLevel,
+    saved.rawPhotoSupport,
+    saved.termsOfService,
+    saved.privacyPolicy,
+  ]);
+
+  const save = () => {
+    saveSetting.mutate(
+      { localId: "preferences", name: "Preferences", data: form },
+      {
+        onSuccess: () => toast.success("Preferences saved"),
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+
   return (
     <div className="max-w-[560px] space-y-12">
       <FieldGroup>
@@ -3473,8 +3668,15 @@ function PreferencesPanel() {
           <FieldLabel className="font-bold">
             Default Collection Language
           </FieldLabel>
-          <select className="h-12 rounded-none border bg-white px-4 text-sm">
+          <select
+            value={form.defaultLanguage}
+            onChange={(event) => setForm({ ...form, defaultLanguage: event.target.value })}
+            className="h-12 rounded-none border bg-white px-4 text-sm"
+          >
             <option>English</option>
+            <option>Bangla</option>
+            <option>Spanish</option>
+            <option>French</option>
           </select>
           <p className="text-sm leading-6 text-[#666]">
             Select default language for newly created collections.
@@ -3482,9 +3684,13 @@ function PreferencesPanel() {
         </Field>
         <Field>
           <FieldLabel className="font-bold">Filename Display</FieldLabel>
-          <select className="h-12 rounded-none border bg-white px-4 text-sm">
-            <option>Show</option>
-            <option>Hide</option>
+          <select
+            value={form.filenameDisplay}
+            onChange={(event) => setForm({ ...form, filenameDisplay: event.target.value as PreferenceSettings["filenameDisplay"] })}
+            className="h-12 rounded-none border bg-white px-4 text-sm"
+          >
+            <option value="show">Show</option>
+            <option value="hide">Hide</option>
           </select>
           <p className="text-sm leading-6 text-[#666]">
             Choose whether filenames show on collection photos.
@@ -3494,10 +3700,14 @@ function PreferencesPanel() {
           <FieldLabel className="font-bold">
             Search Engine Visibility
           </FieldLabel>
-          <select className="h-12 rounded-none border bg-white px-4 text-sm">
-            <option>Homepage Only</option>
-            <option>All Public Pages</option>
-            <option>Hidden</option>
+          <select
+            value={form.searchEngineVisibility}
+            onChange={(event) => setForm({ ...form, searchEngineVisibility: event.target.value as PreferenceSettings["searchEngineVisibility"] })}
+            className="h-12 rounded-none border bg-white px-4 text-sm"
+          >
+            <option value="homepage">Homepage Only</option>
+            <option value="all">All Public Pages</option>
+            <option value="hidden">Hidden</option>
           </select>
           <p className="text-sm leading-6 text-[#666]">
             Choose whether collections can be searchable on search engines.
@@ -3505,26 +3715,150 @@ function PreferencesPanel() {
         </Field>
         <Field>
           <FieldLabel className="font-bold">Sharpening Level</FieldLabel>
-          <select className="h-12 rounded-none border bg-white px-4 text-sm">
-            <option>Optimal</option>
-            <option>Low</option>
-            <option>High</option>
+          <select
+            value={form.sharpeningLevel}
+            onChange={(event) => setForm({ ...form, sharpeningLevel: event.target.value as PreferenceSettings["sharpeningLevel"] })}
+            className="h-12 rounded-none border bg-white px-4 text-sm"
+          >
+            <option value="optimal">Optimal</option>
+            <option value="low">Low</option>
+            <option value="high">High</option>
           </select>
           <p className="text-sm leading-6 text-[#666]">
             Applies to web display copies only. Originals stay unchanged.
           </p>
         </Field>
+        <SettingSwitch
+          label="RAW Photo Support"
+          checked={form.rawPhotoSupport}
+          onCheckedChange={(value) => setForm({ ...form, rawPhotoSupport: value })}
+          text="Enable RAW photos to be included alongside other file formats."
+        />
       </FieldGroup>
 
       <FieldGroup>
         <Field>
           <FieldLabel className="font-bold">Terms of Service</FieldLabel>
-          <textarea
+          <Textarea
+            value={form.termsOfService}
+            onChange={(event) => setForm({ ...form, termsOfService: event.target.value })}
             className="min-h-36 rounded-none border bg-white p-4 text-sm"
             placeholder="Terms shown on collection pages"
           />
         </Field>
+        <Field>
+          <FieldLabel className="font-bold">Privacy Policy</FieldLabel>
+          <Textarea
+            value={form.privacyPolicy}
+            onChange={(event) => setForm({ ...form, privacyPolicy: event.target.value })}
+            className="min-h-36 rounded-none border bg-white p-4 text-sm"
+            placeholder="Privacy policy shown on collection pages"
+          />
+        </Field>
       </FieldGroup>
+
+      <Button
+        className="h-11 rounded-none bg-[#22bda7] px-8 text-white"
+        disabled={saveSetting.isPending}
+        onClick={save}
+      >
+        {saveSetting.isPending ? "Saving..." : "Save Preferences"}
+      </Button>
+    </div>
+  );
+}
+
+type GoogleAnalyticsSettings = {
+  enabled: boolean;
+  measurementId: string;
+};
+
+const defaultGoogleAnalyticsSettings: GoogleAnalyticsSettings = {
+  enabled: false,
+  measurementId: "",
+};
+
+function cleanGaId(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function IntegrationsPanel() {
+  const { query, saveSetting } = useDashboardSettings<GoogleAnalyticsSettings>("integration");
+  const saved =
+    (query.data?.data?.find((item) => item.localId === "google-analytics")?.data as GoogleAnalyticsSettings | undefined) ??
+    defaultGoogleAnalyticsSettings;
+  const [form, setForm] = useState<GoogleAnalyticsSettings>(saved);
+
+  useEffect(() => {
+    setForm({ ...defaultGoogleAnalyticsSettings, ...saved });
+  }, [saved.enabled, saved.measurementId]);
+
+  const save = () => {
+    const measurementId = cleanGaId(form.measurementId);
+    if (form.enabled && !/^G-[A-Z0-9]+$/.test(measurementId)) {
+      toast.error("Enter a valid GA4 Measurement ID like G-XXXXXXXXXX");
+      return;
+    }
+    saveSetting.mutate(
+      {
+        localId: "google-analytics",
+        name: "Google Analytics",
+        data: { enabled: form.enabled, measurementId },
+      },
+      {
+        onSuccess: () => toast.success("Google Analytics saved"),
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+
+  return (
+    <div className="max-w-[720px]">
+      <div className="grid gap-8 bg-[#f4f4f3] p-8 md:grid-cols-[160px_1fr] md:p-10">
+        <div className="flex items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto grid h-16 w-16 place-items-end gap-1">
+              <span className="inline-block h-6 w-2 rounded-full bg-[#f9ab00]" />
+              <span className="inline-block h-10 w-2 rounded-full bg-[#e37400]" />
+              <span className="inline-block h-14 w-2 rounded-full bg-[#f9ab00]" />
+            </div>
+            <p className="mt-3 text-sm font-bold text-[#666]">Google Analytics</p>
+          </div>
+        </div>
+        <div>
+          <h2 className="text-base font-bold">Google Analytics</h2>
+          <p className="mt-4 max-w-md text-sm leading-6 text-[#444]">
+            Enable Google Analytics on your public homepage and collection pages.
+          </p>
+          <div className="mt-7 grid gap-5">
+            <SettingSwitch
+              label="Google Analytics"
+              checked={form.enabled}
+              onCheckedChange={(value) => setForm({ ...form, enabled: value })}
+              text="Track visits on public pages for this account."
+            />
+            <Field>
+              <FieldLabel className="font-bold">GA4 Measurement ID</FieldLabel>
+              <Input
+                value={form.measurementId}
+                onChange={(event) => setForm({ ...form, measurementId: event.target.value })}
+                placeholder="G-XXXXXXXXXX"
+                className="h-12 rounded-none border bg-white px-4 text-sm"
+              />
+              <p className="text-sm leading-6 text-[#666]">
+                Used on `/home/your-name` and public collection pages.
+              </p>
+            </Field>
+            <Button
+              className="h-11 w-fit rounded-none bg-[#22bda7] px-8 text-white"
+              disabled={saveSetting.isPending}
+              onClick={save}
+            >
+              {saveSetting.isPending ? "Saving..." : "Save Google Analytics"}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4318,6 +4652,29 @@ function PresetEditor({ section }: { section: DashboardSection }) {
         )}
       </div>
     </div>
+  );
+}
+
+function SettingSwitch({
+  checked,
+  label,
+  onCheckedChange,
+  text,
+}: {
+  checked: boolean;
+  label: string;
+  onCheckedChange: (value: boolean) => void;
+  text: string;
+}) {
+  return (
+    <Field>
+      <FieldLabel className="font-bold">{label}</FieldLabel>
+      <div className="flex items-center gap-3">
+        <Switch checked={checked} onCheckedChange={onCheckedChange} />
+        <span>{checked ? "On" : "Off"}</span>
+      </div>
+      <p className="text-sm leading-6 text-[#666]">{text}</p>
+    </Field>
   );
 }
 
@@ -10483,6 +10840,7 @@ function CollectionFilterSelect({
 function CollectionNewPanel({ section }: { section: DashboardSection }) {
   const router = useRouter();
   const presetSettings = useDashboardSettings("preset").query;
+  const preferenceSettings = useDashboardSettings<PreferenceSettings>("preference").query;
   const { hydrateDashboardSettings, presetItems } = useDashboardStore();
   const { createCollection } = useCollections();
   const [form, setForm] = useState({
@@ -10517,6 +10875,13 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
         "View Gallery",
       ),
     };
+    const savedPreferences =
+      (preferenceSettings.data?.data?.[0]?.data as PreferenceSettings | undefined) ??
+      defaultPreferenceSettings;
+    const generalSettings = preset?.general ?? {
+      ...collectionDefaultGeneral,
+      language: savedPreferences.defaultLanguage,
+    };
 
     createCollection.mutate(
       {
@@ -10526,7 +10891,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
         status: form.status,
         design,
         settings: {
-          general: preset?.general ?? collectionDefaultGeneral,
+          general: generalSettings,
           download: preset?.download ?? collectionDefaultDownload,
           favorite: preset?.favorite,
           store: preset?.store,
@@ -10735,6 +11100,9 @@ function CollectionDetailView({
   const [activityPage, setActivityPage] = useState<
     "download" | "favorite" | "orders" | "email"
   >("favorite");
+  const [activeSettingsPanel, setActiveSettingsPanel] = useState<
+    "general" | "privacy" | "download" | "favorite" | "store"
+  >("general");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
   const [addSetOpen, setAddSetOpen] = useState(false);
@@ -10809,6 +11177,9 @@ function CollectionDetailView({
       ),
     [collectionId, ordersQuery.data?.data],
   );
+  const collectionStoreAdmin = useCollectionStoreAdmin(collectionId);
+  const { priceSheetsQuery: collectionStorePriceSheetsQuery } =
+    useStorePriceSheets();
   const activeSetImages = useMemo(
     () =>
       orderedImages.filter(
@@ -10925,11 +11296,9 @@ function CollectionDetailView({
   const presetName = (id?: string) =>
     presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
   const saveCollection = () => {
-    const selectedPreset = presetItems.find(
-      (preset) => preset.id === form.presetId,
-    );
     const payload = {
       name: form.name.trim() || collection?.name,
+      slug: form.slug.trim() || undefined,
       presetId: form.presetId || undefined,
       coverImage: form.coverImage || undefined,
       sets: syncSetsFromPhotoSets(form.sets, form.general.photoSets),
@@ -10948,7 +11317,7 @@ function CollectionDetailView({
         general: form.general,
         download: form.download,
         favorite: form.favorite,
-        store: selectedPreset?.store ?? collection?.settings?.store,
+        store: form.store,
         access: collection?.settings?.access,
       },
     };
@@ -11306,18 +11675,6 @@ function CollectionDetailView({
           >
             <Save data-icon="inline-start" />
             {updateCollection.isPending ? "Saving..." : "Save"}
-          </Button>
-          <Button
-            variant="outline"
-            className="h-10 rounded-none"
-            onClick={() =>
-              router.push(
-                `/dashboard/store-gallery/collections/${collectionId}/store`,
-              )
-            }
-          >
-            <Store data-icon="inline-start" />
-            Store
           </Button>
           <Button
             variant="outline"
@@ -11731,6 +12088,40 @@ function CollectionDetailView({
                 >
                   <Icon className="size-5" />
                   {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {activeTab === "settings" && !detailCollapsed && (
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#fafafa] py-4">
+              <p className="px-5 pb-4 pt-1 text-xs font-bold uppercase tracking-wide text-[#777]">
+                Settings
+              </p>
+              {(
+                [
+                  ["general", Wrench, "General", ""],
+                  ["privacy", Lock, "Privacy", ""],
+                  ["download", Download, "Download", form.download.photoDownload ? "On" : "Off"],
+                  ["favorite", Heart, "Favorite", form.favorite.favoritePhotos ? "On" : "Off"],
+                  ["store", ShoppingCart, "Store", form.store.storeStatus ? "On" : "Off"],
+                ] as const
+              ).map(([panel, Icon, label, status]) => (
+                <button
+                  key={panel}
+                  className={cn(
+                    "flex h-14 w-full items-center gap-3 px-5 text-left",
+                    activeSettingsPanel === panel && "bg-white font-bold",
+                  )}
+                  onClick={() => setActiveSettingsPanel(panel)}
+                  type="button"
+                >
+                  <Icon className="size-4" />
+                  <span className="min-w-0 flex-1">{label}</span>
+                  {status && (
+                    <span className="rounded-full bg-[#e4f7f3] px-3 py-1 text-[10px] font-bold uppercase text-[#008f7f]">
+                      {status}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -12236,6 +12627,7 @@ function CollectionDetailView({
                         general: preset?.general ?? value.general,
                         download: preset?.download ?? value.download,
                         favorite: preset?.favorite ?? value.favorite,
+                        store: preset?.store ?? value.store,
                       }));
                     }}
                     className="h-11 w-full border bg-white px-3 text-sm outline-none"
@@ -12272,12 +12664,7 @@ function CollectionDetailView({
                 images={images}
                 sets={form.sets}
                 favoriteEnabled={form.favorite.favoritePhotos !== false}
-                storeEnabled={Boolean(
-                  form.presetId
-                    ? presetItems.find((preset) => preset.id === form.presetId)
-                        ?.store?.storeStatus
-                    : collection.settings?.store?.storeStatus,
-                )}
+                storeEnabled={Boolean(form.store.storeStatus)}
                 branding={branding}
               />
             </div>
@@ -12285,82 +12672,173 @@ function CollectionDetailView({
 
           {activeTab === "settings" && (
             <div className="max-w-[760px]">
-              <h2 className="text-2xl font-medium">General Settings</h2>
-              <FieldGroup className="mt-8 gap-7">
-                <Field>
-                  <FieldLabel className="font-bold">Collection Name</FieldLabel>
-                  <Input
-                    value={form.name}
-                    onChange={(event) =>
-                      setForm((value) => ({
-                        ...value,
-                        name: event.target.value,
-                      }))
-                    }
-                    className="h-12 rounded-none bg-white"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="collection-status" className="font-bold">
-                    Collection Status
-                  </FieldLabel>
-                  <select
-                    id="collection-status"
-                    value={collectionStatus}
-                    onChange={(event) =>
-                      setCollectionStatus(
-                        event.target.value as "draft" | "published",
-                      )
-                    }
-                    className="h-12 w-full border bg-white px-3 text-sm outline-none"
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                  </select>
-                  <p className="text-xs leading-5 text-[#777]">
-                    Only Published collections are visible on your public
-                    homepage and public gallery URL.
-                  </p>
-                </Field>
-                <Field>
-                  <FieldLabel className="font-bold">Expire Date</FieldLabel>
-                  <Input
-                    type="date"
-                    value={form.expiresAt}
-                    onChange={(event) =>
-                      setForm((value) => ({
-                        ...value,
-                        expiresAt: event.target.value,
-                      }))
-                    }
-                    className="h-12 rounded-none bg-white"
-                  />
-                </Field>
-              </FieldGroup>
-              <div className="mt-12">
-                <PresetGeneralPanel
-                  general={form.general}
-                  section={section}
-                  onChange={(general) =>
-                    setForm((value) => {
-                      const nextGeneral = { ...value.general, ...general };
-                      return {
-                        ...value,
-                        general: nextGeneral,
-                        sets:
-                          general.photoSets !== undefined
-                            ? syncSetsFromPhotoSets(
-                                value.sets,
-                                nextGeneral.photoSets,
-                              )
-                            : value.sets,
-                      };
-                    })
-                  }
-                />
-              </div>
-              <div className="mt-14 border-t pt-12">
-                <h2 className="mb-8 text-2xl font-medium">Download</h2>
+              {activeSettingsPanel === "general" && (
+                <>
+                  <h2 className="text-2xl font-medium">General Settings</h2>
+                  <FieldGroup className="mt-8 gap-7">
+                    <Field>
+                      <FieldLabel className="font-bold">Collection Name</FieldLabel>
+                      <Input
+                        value={form.name}
+                        onChange={(event) =>
+                          setForm((value) => ({
+                            ...value,
+                            name: event.target.value,
+                          }))
+                        }
+                        className="h-12 rounded-none bg-white"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel className="font-bold">Collection URL</FieldLabel>
+                      <Input
+                        value={form.slug}
+                        onChange={(event) =>
+                          setForm((value) => ({
+                            ...value,
+                            slug: event.target.value,
+                          }))
+                        }
+                        className="h-12 rounded-none bg-white"
+                      />
+                      <p className="text-sm leading-6 text-[#666]">Choose a unique URL slug for visitors to access your collection.</p>
+                    </Field>
+                    <Field>
+                      <FieldLabel className="font-bold">Category Tags</FieldLabel>
+                      <Input
+                        value={form.general.collectionTags}
+                        onChange={(event) =>
+                          setForm((value) => ({
+                            ...value,
+                            general: { ...value.general, collectionTags: event.target.value },
+                          }))
+                        }
+                        placeholder="Select or enter tags"
+                        className="h-12 rounded-none bg-white"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel className="font-bold">Default Watermark</FieldLabel>
+                      <select
+                        value={form.general.defaultWatermark}
+                        onChange={(event) =>
+                          setForm((value) => ({
+                            ...value,
+                            general: { ...value.general, defaultWatermark: event.target.value },
+                          }))
+                        }
+                        className="h-12 w-full rounded-none border bg-white px-5"
+                      >
+                        <option>No watermark</option>
+                        {watermarkItems.map((watermark) => (
+                          <option key={watermark.id} value={watermark.id}>{watermark.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field>
+                      <FieldLabel className="font-bold">Auto Expiry</FieldLabel>
+                      <Input
+                        type="date"
+                        value={form.expiresAt}
+                        onChange={(event) =>
+                          setForm((value) => ({
+                            ...value,
+                            expiresAt: event.target.value,
+                          }))
+                        }
+                        className="h-12 rounded-none bg-white"
+                      />
+                    </Field>
+                    <SettingSwitch
+                      label="Slideshow"
+                      checked={form.general.slideshow}
+                      onCheckedChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          general: { ...current.general, slideshow: value },
+                        }))
+                      }
+                      text="Allow visitors to view images as a slideshow."
+                    />
+                    <SettingSwitch
+                      label="Social Sharing"
+                      checked={form.general.socialSharing}
+                      onCheckedChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          general: { ...current.general, socialSharing: value },
+                        }))
+                      }
+                      text="Allow visitors to share your collection."
+                    />
+                    <Field>
+                      <FieldLabel className="font-bold">Language</FieldLabel>
+                      <select
+                        value={form.general.language}
+                        onChange={(event) =>
+                          setForm((value) => ({
+                            ...value,
+                            general: { ...value.general, language: event.target.value },
+                          }))
+                        }
+                        className="h-12 w-full rounded-none border bg-white px-5"
+                      >
+                        <option>English</option>
+                        <option>Bangla</option>
+                        <option>Spanish</option>
+                        <option>French</option>
+                      </select>
+                    </Field>
+                  </FieldGroup>
+                </>
+              )}
+
+              {activeSettingsPanel === "privacy" && (
+                <>
+                  <h2 className="text-2xl font-medium">Privacy Settings</h2>
+                  <FieldGroup className="mt-8 gap-10">
+                    <Field>
+                      <FieldLabel htmlFor="collection-status" className="font-bold">Collection Status</FieldLabel>
+                      <select
+                        id="collection-status"
+                        value={collectionStatus}
+                        onChange={(event) =>
+                          setCollectionStatus(event.target.value as "draft" | "published")
+                        }
+                        className="h-12 w-full border bg-white px-3 text-sm outline-none"
+                      >
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                      </select>
+                      <p className="text-sm leading-6 text-[#666]">Only published collections are visible on public URLs.</p>
+                    </Field>
+                    <SettingSwitch
+                      label="Email Registration"
+                      checked={form.general.emailRegistration}
+                      onCheckedChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          general: { ...current.general, emailRegistration: value },
+                        }))
+                      }
+                      text="Require visitors to enter email before viewing photos."
+                    />
+                    <SettingSwitch
+                      label="Gallery Assist"
+                      checked={form.general.galleryAssist}
+                      onCheckedChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          general: { ...current.general, galleryAssist: value },
+                        }))
+                      }
+                      text="Show walk-through cards for visitors."
+                    />
+                  </FieldGroup>
+                </>
+              )}
+
+              {activeSettingsPanel === "download" && (
                 <PresetDownloadPanel
                   download={form.download}
                   onChange={(download) =>
@@ -12370,8 +12848,9 @@ function CollectionDetailView({
                     }))
                   }
                 />
-              </div>
-              <div className="mt-14 border-t pt-12">
+              )}
+
+              {activeSettingsPanel === "favorite" && (
                 <PresetFavoritePanel
                   favorite={form.favorite}
                   hidePager
@@ -12384,14 +12863,38 @@ function CollectionDetailView({
                     }))
                   }
                 />
-              </div>
-              <Button
-                className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white"
-                disabled={updateCollection.isPending}
-                onClick={saveCollection}
-              >
-                {updateCollection.isPending ? "Saving..." : "Save Settings"}
-              </Button>
+              )}
+
+              {activeSettingsPanel === "store" && (
+                <CollectionStoreSettingsPanel
+                  form={collectionStoreAdmin.form}
+                  busy={collectionStoreAdmin.busy}
+                  priceSheets={collectionStorePriceSheetsQuery.data?.data ?? []}
+                  onChange={(patch) => {
+                    collectionStoreAdmin.setForm((value) => ({ ...value, ...patch }));
+                    setForm((value) => ({
+                      ...value,
+                      store: {
+                        ...value.store,
+                        storeStatus: patch.enabled ?? value.store.storeStatus,
+                        priceSheet: patch.priceSheetId ?? value.store.priceSheet,
+                        productPreview: patch.allowBulkBuy ?? value.store.productPreview,
+                      },
+                    }));
+                  }}
+                  onSave={collectionStoreAdmin.saveSettings}
+                />
+              )}
+
+              {activeSettingsPanel !== "store" && (
+                <Button
+                  className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white"
+                  disabled={updateCollection.isPending}
+                  onClick={saveCollection}
+                >
+                  {updateCollection.isPending ? "Saving..." : "Save Settings"}
+                </Button>
+              )}
             </div>
           )}
 
@@ -13639,6 +14142,12 @@ const collectionDefaultFavorite: PresetFavoriteSettings = {
   description: "",
 };
 
+const collectionDefaultStore: PresetStoreSettings = {
+  storeStatus: false,
+  priceSheet: "",
+  productPreview: false,
+};
+
 type CollectionAccessRequest = {
   id?: string;
   email: string;
@@ -13655,6 +14164,7 @@ type CollectionAccessSettings = {
 
 type CollectionFormState = {
   name: string;
+  slug: string;
   presetId: string;
   coverImage: string;
   expiresAt: string;
@@ -13663,6 +14173,7 @@ type CollectionFormState = {
   general: PresetGeneralSettings;
   download: PresetDownloadSettings;
   favorite: PresetFavoriteSettings;
+  store: PresetStoreSettings;
 };
 
 function coverTextOrDefault(value: string | undefined, fallback: string) {
@@ -13702,6 +14213,7 @@ function collectionForm(collection?: CollectionRecord): CollectionFormState {
 
   return {
     name: collection?.name ?? "",
+    slug: collection?.slug ?? "",
     presetId: collection?.presetId ?? "",
     coverImage: collection?.coverImage ?? "",
     expiresAt: collection?.expiresAt ? collection.expiresAt.slice(0, 10) : "",
@@ -13729,6 +14241,12 @@ function collectionForm(collection?: CollectionRecord): CollectionFormState {
       ...collectionDefaultFavorite,
       ...((collection?.settings?.favorite as
         | Partial<PresetFavoriteSettings>
+        | undefined) ?? {}),
+    },
+    store: {
+      ...collectionDefaultStore,
+      ...((collection?.settings?.store as
+        | Partial<PresetStoreSettings>
         | undefined) ?? {}),
     },
   };

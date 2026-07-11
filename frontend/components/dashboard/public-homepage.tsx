@@ -32,6 +32,12 @@ export type PublicHomepageData = {
   phone?: string;
   address?: string;
   socialLinks?: Record<string, string>;
+  integrations?: {
+    googleAnalytics?: {
+      enabled?: boolean;
+      measurementId?: string;
+    };
+  };
   hasPassword?: boolean;
   locked: boolean;
   collections: PublicHomepageCollection[];

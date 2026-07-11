@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { PublicGallery } from "@/components/dashboard/public-gallery";
 import { PublicGalleryHashOpener } from "@/components/dashboard/public-gallery-hash-opener";
 import { PublicGalleryStoreBridge } from "@/components/dashboard/public-gallery-store-bridge";
@@ -36,7 +37,7 @@ export async function generateMetadata({
     : `View ${collection?.name ?? decodeURIComponent(galary)} photo gallery by ${studio}.`;
   const image = imageSrc(collection?.coverImage || collection?.images?.[0]?.url);
   const autoText = collectSeoText({ studio, collection });
-  return pageMetadata({
+  const metadata = pageMetadata({
     title,
     description,
     keywords: `${collection?.name ?? galary}, ${studio}, photo gallery, client gallery, photography`,
@@ -45,6 +46,17 @@ export async function generateMetadata({
     seo: cms.seo,
     autoText,
   });
+  const visibility = collection?.preferences?.searchEngineVisibility;
+  if (visibility === "hidden" || visibility === "homepage") {
+    metadata.robots = { index: false, follow: false, googleBot: { index: false, follow: false } };
+  }
+  return metadata;
+}
+
+function gaIdFrom(data: any) {
+  const settings = data?.integrations?.googleAnalytics;
+  const id = String(settings?.measurementId ?? "").trim().toUpperCase();
+  return settings?.enabled && /^G-[A-Z0-9]+$/.test(id) ? id : "";
 }
 
 export default async function CollectionGalleryPage({
@@ -54,6 +66,7 @@ export default async function CollectionGalleryPage({
 }) {
   const { name, galary } = await params;
   const collection = await getCollection(galary, name);
+  const gaId = gaIdFrom(collection);
   const studio = decodeURIComponent(name);
   const title = collection?.name ?? decodeURIComponent(galary);
   const image = imageSrc(collection?.coverImage || collection?.images?.[0]?.url);
@@ -69,6 +82,7 @@ export default async function CollectionGalleryPage({
 
   return (
     <>
+      {gaId && <GoogleAnalytics gaId={gaId} />}
       <JsonLdScript data={jsonLd} id="gallery-json-ld" />
       <PublicGalleryHashOpener />
       <PublicGallery name={name} galary={galary} collection={collection} />

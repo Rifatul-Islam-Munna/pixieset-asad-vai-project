@@ -142,6 +142,27 @@ export class CollectionsService {
         localId: 'branding',
       })
       .lean();
+    const preferences = await this.settingModel
+      .findOne({
+        userId: collection.userId,
+        type: DashboardSettingType.PREFERENCE,
+        localId: 'preferences',
+      })
+      .lean();
+    const integrations = await this.settingModel
+      .findOne({
+        userId: collection.userId,
+        type: DashboardSettingType.INTEGRATION,
+        localId: 'google-analytics',
+      })
+      .lean();
+    const marketing = await this.settingModel
+      .findOne({
+        userId: collection.userId,
+        type: DashboardSettingType.MARKETING,
+        localId: 'gallery-marketing',
+      })
+      .lean();
 
     const mergedSettings = {
       general: {
@@ -175,6 +196,11 @@ export class CollectionsService {
         ...(collection.design ?? {}),
       },
       settings: mergedSettings,
+      preferences: (preferences?.data as any) ?? {},
+      integrations: {
+        googleAnalytics: (integrations?.data as any) ?? {},
+      },
+      marketing: (marketing?.data as any) ?? {},
       branding: (branding?.data as any) ?? {},
       images: imagesPage.items,
       imagesPage,
@@ -345,6 +371,46 @@ export class CollectionsService {
       { upsert: true },
     );
     return { favorited: true, imageId, collectionId: image.collectionId };
+  }
+
+  async togglePublicFavoriteImage(
+    identifier: string,
+    imageId: string,
+    body: { email?: string },
+    siteSlug?: string,
+  ) {
+    const email = this.cleanEmail(body?.email);
+    if (!email) throw new BadRequestException('Email is required');
+    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
+    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    const collectionId = collection._id.toString();
+    const image = await this.imageModel.findOne({ _id: imageId, collectionId }).select('_id collectionId').lean();
+    if (!image) throw new NotFoundException('Image not found');
+    const existing = await this.imageFavoriteModel.findOne({ userId: email, imageId }).lean();
+    if (existing) {
+      await this.imageFavoriteModel.deleteOne({ _id: existing._id });
+      return { favorited: false, imageId, collectionId };
+    }
+
+    const favoriteSettings = (collection.settings as any)?.favorite ?? {};
+    const maxFavorites = Number(favoriteSettings.maxFavorites || 0);
+    if (maxFavorites > 0) {
+      const currentCount = await this.imageFavoriteModel.countDocuments({
+        userId: email,
+        collectionId,
+      });
+      if (currentCount >= maxFavorites) {
+        throw new BadRequestException(`Favorite limit reached (${maxFavorites})`);
+      }
+    }
+
+    await this.imageFavoriteModel.updateOne(
+      { userId: email, imageId },
+      { $setOnInsert: { userId: email, imageId, collectionId } },
+      { upsert: true },
+    );
+    return { favorited: true, imageId, collectionId };
   }
 
   async getCollectionActivity(userId: string, collectionId: string) {
@@ -609,6 +675,9 @@ export class CollectionsService {
     if (dto.name !== undefined) {
       collection.name = dto.name;
       collection.slug = await this.uniqueSlug(userId, dto.name, id);
+    }
+    if (dto.slug !== undefined) {
+      collection.slug = await this.uniqueSlug(userId, dto.slug, id);
     }
     if (dto.eventDate !== undefined) collection.eventDate = new Date(dto.eventDate);
     if (dto.presetId !== undefined) collection.presetId = dto.presetId || undefined;

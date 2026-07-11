@@ -94,10 +94,21 @@ export class HomepageService {
     const isLocked = Boolean(homepage.passwordHash);
     const passwordValid = !isLocked || this.hashPassword(homepage.userId, password ?? '') === homepage.passwordHash;
     const base = this.publicBase(homepage);
+    const integrations = await this.settingModel
+      .findOne({
+        userId: homepage.userId,
+        type: DashboardSettingType.INTEGRATION,
+        localId: 'google-analytics',
+      })
+      .lean();
+    const publicIntegrations = {
+      googleAnalytics: (integrations?.data as any) ?? {},
+    };
 
     if (!passwordValid) {
       return {
         ...base,
+        integrations: publicIntegrations,
         locked: true,
         collections: [],
       };
@@ -128,6 +139,7 @@ export class HomepageService {
 
     return {
       ...base,
+      integrations: publicIntegrations,
       locked: false,
       collections: collections.map((collection) => {
         const id = collection._id.toString();

@@ -13,6 +13,12 @@ export class UpdateCollectionDto {
 
   @IsOptional()
   @IsString()
+  @MinLength(1)
+  @MaxLength(160)
+  slug?: string;
+
+  @IsOptional()
+  @IsString()
   presetId?: string;
 
   @IsOptional()

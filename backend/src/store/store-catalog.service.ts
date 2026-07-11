@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { Homepage, HomepageDocument } from 'src/homepage/entities/homepage.entity';
+import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { StoreActivity, StoreActivityDocument, StoreActivityType } from './entities/store-activity.entity';
 import { StoreCoupon, StoreCouponDocument } from './entities/store-coupon.entity';
 import { StorePriceSheet, StorePriceSheetDocument } from './entities/store-price-sheet.entity';
@@ -55,6 +56,8 @@ export class StoreCatalogService {
     private readonly activityModel: Model<StoreActivityDocument>,
     @InjectModel(Homepage.name)
     private readonly homepageModel: Model<HomepageDocument>,
+    @InjectModel(DashboardSetting.name)
+    private readonly dashboardSettingModel: Model<DashboardSettingDocument>,
     private readonly defaultProducts: StoreDefaultProductService,
   ) {}
 
@@ -70,7 +73,7 @@ export class StoreCatalogService {
           .sort({ category: 1, sortOrder: 1, createdAt: 1 })
           .lean()
       : [];
-    const [shipping, taxes, coupons, owner] = await Promise.all([
+    const [shipping, taxes, coupons, owner, marketing] = await Promise.all([
       this.shippingModel.find({ userId: resolved.userId, active: true }).sort({ createdAt: -1 }).lean(),
       this.taxModel.find({ userId: resolved.userId, active: true }).sort({ createdAt: -1 }).lean(),
       this.couponModel
@@ -83,6 +86,11 @@ export class StoreCatalogService {
         .sort({ createdAt: -1 })
         .lean(),
       this.userModel.findById(resolved.userId).select('name email').lean(),
+      this.dashboardSettingModel.findOne({
+        userId: resolved.userId,
+        type: DashboardSettingType.MARKETING,
+        localId: 'gallery-marketing',
+      }).lean(),
     ]);
     const stripe = this.ownerStripe(resolved.settings);
     if (logView && resolved.config.enabled) {
@@ -113,6 +121,7 @@ export class StoreCatalogService {
       shipping,
       taxes,
       coupons,
+      marketing: (marketing?.data as any) ?? {},
     };
   }
 

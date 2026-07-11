@@ -111,7 +111,7 @@ export type EmailTemplateItem = {
 
 export type DashboardSettingRecord<T = unknown> = {
   _id: string;
-  type: "watermark" | "preset" | "email-template" | "branding";
+  type: "watermark" | "preset" | "email-template" | "branding" | "preference" | "integration" | "marketing";
   localId: string;
   name: string;
   data: T;
