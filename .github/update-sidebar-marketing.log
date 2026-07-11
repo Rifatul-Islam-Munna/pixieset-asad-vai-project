@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/runner/work/pixieset-asad-vai-project/pixieset-asad-vai-project/.github/update-sidebar-marketing.py", line 39, in <module>
+    text = replace_once(
+           ^^^^^^^^^^^^^
+  File "/home/runner/work/pixieset-asad-vai-project/pixieset-asad-vai-project/.github/update-sidebar-marketing.py", line 7, in replace_once
+    raise RuntimeError(f"{label}: expected 1 match, found {count}")
+RuntimeError: switcher button: expected 1 match, found 2
