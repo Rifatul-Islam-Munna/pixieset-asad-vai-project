@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
@@ -234,6 +234,8 @@ export function PublicGallery({
   const [downloadMarketingOptIn, setDownloadMarketingOptIn] = useState(true);
   const [popupOpen, setPopupOpen] = useState(() => Boolean(marketingPopup.enabled));
   const [popupEmail, setPopupEmail] = useState("");
+  const [privateImageIds, setPrivateImageIds] = useState<Set<string>>(() => new Set());
+  const [privateImageBusy, setPrivateImageBusy] = useState("");
   const [zipDownloading, setZipDownloading] = useState(false);
   const [zipStage, setZipStage] = useState("Preparing your photos");
   const [faceBusy, setFaceBusy] = useState(false);
@@ -290,6 +292,7 @@ export function PublicGallery({
     enabled: favoritesEnabled,
     maxFavorites: maxFavoriteCount,
     marketingOptIn: marketingOptIn.favoriteSignIn,
+    siteSlug: name,
   });
   const {
     collectionFavorited,
@@ -311,6 +314,29 @@ export function PublicGallery({
       setShareNotice("Downloads unlocked");
     }
   };
+  const recordEmailRegistration = async (
+    email: string,
+    marketingAccepted: boolean,
+    source: "email-registration" | "popup" | "download" | "favorite",
+  ) => {
+    const identifier = collection?.slug ?? galary;
+    const response = await fetch(
+      `/api/public/collections/${encodeURIComponent(identifier)}/email-registration?siteSlug=${encodeURIComponent(name)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          marketingOptIn: marketingAccepted,
+          source,
+        }),
+      },
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.message || "Email registration failed");
+    return payload?.data;
+  };
+
   const savedDownloadEmail = () => downloadEmail || window.localStorage.getItem("pixieset-download-email") || "";
   const openDownloadEmail = (pending: typeof pendingDownload) => {
     setDownloadEmailDraft(savedDownloadEmail());
@@ -329,6 +355,9 @@ export function PublicGallery({
     if (!email) {
       setShareNotice("Email is required before download");
       return;
+    }
+    if (marketingOptIn.download && downloadMarketingOptIn) {
+      void recordEmailRegistration(email, true, "download").catch(() => null);
     }
     const pending = pendingDownload;
     setDownloadEmailOpen(false);
@@ -533,29 +562,36 @@ export function PublicGallery({
   }, [canLoadMoreImages, loadedImages.length, imagesLoadingMore]);
   const verifyAccessEmail = async () => {
     const email = accessEmail.trim().toLowerCase();
-    if (!email.includes("@") || accessBusy) return;
+    if (!/^\S+@\S+\.\S+$/.test(email) || accessBusy) return;
     setAccessBusy(true);
     setAccessNotice("");
-    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
-    const payload = response ? await response.json().catch(() => null) : null;
-    setAccessBusy(false);
-    if (!response?.ok || !payload?.data) {
-      setAccessNotice(payload?.message ?? "Access check failed");
-      return;
-    }
-    setCollection(payload.data);
-    setLoadedImages(payload.data?.images ?? []);
-    setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
-    if (payload.data?.settings?.access?.emailAuthorized) {
+    try {
+      await recordEmailRegistration(
+        email,
+        Boolean(marketingOptIn.emailRegistration && visitorMarketingOptIn),
+        "email-registration",
+      );
+      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
+      const payload = response ? await response.json().catch(() => null) : null;
+      if (!response?.ok || !payload?.data) {
+        setAccessNotice(payload?.message ?? "Access check failed");
+        return;
+      }
+      setCollection(payload.data);
+      setLoadedImages(payload.data?.images ?? []);
+      setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
       setVisitorEmail(email);
       setVisitorEmailSaved(true);
       setDownloadEmail(email);
       window.localStorage.setItem(`collection-access-email:${galary}`, email);
       setAccessNotice("");
-    } else {
-      setAccessNotice(payload.data?.settings?.access?.emailStatus === "declined" ? "Access declined for this email." : "Email not approved for this gallery.");
+    } catch (error) {
+      setAccessNotice(error instanceof Error ? error.message : "Email registration failed");
+    } finally {
+      setAccessBusy(false);
     }
   };
+
   const requestAccess = async () => {
     const email = accessEmail.trim().toLowerCase();
     if (!email.includes("@") || accessBusy) return;
@@ -587,6 +623,54 @@ export function PublicGallery({
     await navigator.clipboard?.writeText(share.url).catch(() => null);
     setShareNotice("Link copied");
   };
+  const togglePrivatePhoto = async (photo: PublicImage) => {
+    if (!isPersistedImageId(photo._id) || privateImageBusy) return;
+    let email =
+      accessSettings?.email ||
+      visitorEmail ||
+      favoriteTools.favoriteEmail ||
+      downloadEmail ||
+      window.localStorage.getItem(`collection-access-email:${galary}`) ||
+      "";
+    if (!email.includes("@")) {
+      email = window.prompt("Enter your email to mark this photo private", "")?.trim().toLowerCase() || "";
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setShareNotice("Email is required");
+      return;
+    }
+    setPrivateImageBusy(photo._id);
+    try {
+      const response = await fetch(
+        `/api/public/collections/${encodeURIComponent(collection?.slug ?? galary)}/private-images/${encodeURIComponent(photo._id)}?siteSlug=${encodeURIComponent(name)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Private photo update failed");
+      setPrivateImageIds((current) => {
+        const next = new Set(current);
+        if (payload?.data?.private) next.add(photo._id);
+        else next.delete(photo._id);
+        if (collection?._id) {
+          window.localStorage.setItem(
+            `collection-private-photos:${collection._id}`,
+            JSON.stringify(Array.from(next)),
+          );
+        }
+        return next;
+      });
+      setShareNotice(payload?.data?.private ? "Photo marked private" : "Photo made visible");
+    } catch (error) {
+      setShareNotice(error instanceof Error ? error.message : "Private photo update failed");
+    } finally {
+      setPrivateImageBusy("");
+    }
+  };
+
   const shareCollection = () =>
     shareItem(
       { title, text: `View ${title}`, url: currentPublicUrl() },
@@ -668,6 +752,18 @@ export function PublicGallery({
   }, [shareNotice]);
 
   useEffect(() => {
+    if (!collection?._id) return;
+    try {
+      const saved = JSON.parse(
+        window.localStorage.getItem(`collection-private-photos:${collection._id}`) || "[]",
+      );
+      setPrivateImageIds(new Set(Array.isArray(saved) ? saved : []));
+    } catch {
+      setPrivateImageIds(new Set());
+    }
+  }, [collection?._id]);
+
+  useEffect(() => {
     const startUrl = `${window.location.pathname}${window.location.search}`;
     const manifestHref = `/manifest.webmanifest?start=${encodeURIComponent(startUrl)}`;
     let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -696,10 +792,16 @@ export function PublicGallery({
     setPopupOpen(false);
   };
 
-  const submitMarketingPopup = () => {
-    if (!popupEmail.includes("@")) return;
-    window.localStorage.setItem("gallery-marketing-email", popupEmail.trim().toLowerCase());
-    closeMarketingPopup();
+  const submitMarketingPopup = async () => {
+    const email = popupEmail.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) return;
+    try {
+      await recordEmailRegistration(email, true, "popup");
+      window.localStorage.setItem("gallery-marketing-email", email);
+      closeMarketingPopup();
+    } catch (error) {
+      setShareNotice(error instanceof Error ? error.message : "Subscription failed");
+    }
   };
 
   return (
@@ -737,31 +839,45 @@ export function PublicGallery({
         </div>
       )}
       {emailAccessLocked ? (
-        <main className="flex min-h-screen items-center justify-center bg-[#fafafa] p-6">
-          <section className="w-full max-w-md border bg-white p-7 shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#00a997]">Email access</p>
-            <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
-            <p className="mt-3 text-sm leading-6 text-[#666]">Enter an approved email to view this gallery.</p>
-            <Input value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} placeholder="you@example.com" className="mt-6 h-11 rounded-none" />
-            {marketingOptIn.emailRegistration && (
-              <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
-                <input type="checkbox" checked={visitorMarketingOptIn} onChange={(event) => setVisitorMarketingOptIn(event.target.checked)} className="mt-1" />
-                <span>Send me updates and special offers.</span>
-              </label>
-            )}
-            <Button className="mt-3 h-11 w-full rounded-none bg-[#22bda7] text-white" disabled={accessBusy || !accessEmail.includes("@")} onClick={() => void verifyAccessEmail()}>
-              {accessBusy ? "Checking..." : "Enter gallery"}
-            </Button>
-            <div className="mt-6 border-t pt-5">
-              <p className="text-sm font-bold">Request access</p>
-              <Textarea value={accessReason} onChange={(event) => setAccessReason(event.target.value)} placeholder="Tell the gallery owner why you need access" className="mt-3 min-h-24 rounded-none" />
-              <Button variant="outline" className="mt-3 h-10 w-full rounded-none bg-white" disabled={accessBusy || !accessEmail.includes("@")} onClick={() => void requestAccess()}>
-                Send request
-              </Button>
-            </div>
-            {accessNotice && <p className="mt-4 text-sm font-semibold text-[#666]">{accessNotice}</p>}
-          </section>
-        </main>
+      <main className="relative flex min-h-screen items-center justify-center bg-[#f6f6f4] p-6">
+        <section className="w-full max-w-md bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.14)]">
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#00a997]">Email registration</p>
+          <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
+          <p className="mt-3 text-sm leading-6 text-[#666]">
+            Enter your email address to view this collection.
+          </p>
+          <Input
+            type="email"
+            value={accessEmail}
+            onChange={(event) => setAccessEmail(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void verifyAccessEmail();
+            }}
+            placeholder="you@example.com"
+            className="mt-6 h-11 rounded-none"
+            autoFocus
+          />
+          {marketingOptIn.emailRegistration && (
+            <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
+              <input
+                type="checkbox"
+                checked={visitorMarketingOptIn}
+                onChange={(event) => setVisitorMarketingOptIn(event.target.checked)}
+                className="mt-1"
+              />
+              <span>Subscribe to updates and special offers.</span>
+            </label>
+          )}
+          <Button
+            className="mt-5 h-11 w-full rounded-none bg-[#22bda7] text-white"
+            disabled={accessBusy || !accessEmail.includes("@")}
+            onClick={() => void verifyAccessEmail()}
+          >
+            {accessBusy ? "Opening..." : "View collection"}
+          </Button>
+          {accessNotice && <p className="mt-4 text-sm font-semibold text-red-600">{accessNotice}</p>}
+        </section>
+      </main>
       ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-black/5 px-4 sm:px-5 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
@@ -976,6 +1092,9 @@ export function PublicGallery({
                 sharpeningLevel={sharpeningLevel}
                 favoriteBusy={favoriteImageBusy === photo._id}
                 favorited={favoriteImageIds.has(photo._id)}
+                privatePhoto={privateImageIds.has(photo._id)}
+                privateBusy={privateImageBusy === photo._id}
+                onPrivate={togglePrivatePhoto}
                 onDownload={downloadPhoto}
                 onFavorite={toggleImageFavorite}
                 onPreview={setActiveImage}
@@ -1292,6 +1411,9 @@ function GalleryTile({
   sharpeningLevel,
   favoriteBusy,
   favorited,
+  privatePhoto,
+  privateBusy,
+  onPrivate,
   onDownload,
   onFavorite,
   onPreview,
@@ -1306,6 +1428,9 @@ function GalleryTile({
   sharpeningLevel: "optimal" | "low" | "high";
   favoriteBusy: boolean;
   favorited: boolean;
+  privatePhoto: boolean;
+  privateBusy: boolean;
+  onPrivate: (photo: PublicImage) => void;
   onDownload: (photo: PublicImage) => void;
   onFavorite: (photo: PublicImage) => void;
   onPreview: (photo: PublicImage) => void;
@@ -1344,6 +1469,18 @@ function GalleryTile({
         {canFavorite && isPersistedImageId(photo._id) && (
           <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" title="Favorite" type="button">
             <Heart className={cn("size-4", favorited && "fill-red-500 text-red-500")} />
+          </button>
+        )}
+        {isPersistedImageId(photo._id) && (
+          <button
+            className="polished-icon-button size-9 sm:size-10"
+            onClick={() => onPrivate(photo)}
+            disabled={privateBusy}
+            aria-label={privatePhoto ? "Make photo visible" : "Mark photo private"}
+            title={privatePhoto ? "Private" : "Mark private"}
+            type="button"
+          >
+            <EyeOff className={cn("size-4", privatePhoto && "text-[#00a997]")} />
           </button>
         )}
         <button className="polished-icon-button size-9 sm:size-10" onClick={() => onPreview(photo)} aria-label="View image" title="View">

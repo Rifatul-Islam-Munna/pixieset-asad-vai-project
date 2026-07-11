@@ -77,6 +77,28 @@ export type CollectionDownloadActivityRecord = {
   updatedAt?: string;
 };
 
+export type CollectionEmailRegistrationRecord = {
+  _id: string;
+  email: string;
+  collectionId: string;
+  collectionName: string;
+  source: string;
+  sources?: string[];
+  marketingOptIn: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CollectionPrivatePhotoActivityRecord = {
+  _id: string;
+  email: string;
+  imageId: string;
+  imageName: string;
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 type ListResponse<T> = { data: T };
 export type ImagesPage<T> = { items: T[]; total: number; limit: number; offset: number; hasMore: boolean };
 
@@ -355,6 +377,8 @@ export function useCollectionActivity(collectionId?: string) {
         ListResponse<{
           favoriteLists: CollectionFavoriteActivityRecord[];
           downloads: CollectionDownloadActivityRecord[];
+          emailRegistrations: CollectionEmailRegistrationRecord[];
+          privatePhotos: CollectionPrivatePhotoActivityRecord[];
         }>
       >(`/collections/${collectionId}/activity`),
   });

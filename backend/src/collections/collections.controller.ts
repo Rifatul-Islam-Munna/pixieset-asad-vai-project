@@ -77,6 +77,27 @@ export class PublicCollectionsController {
     return { message: 'Access request sent', data };
   }
 
+  @Post(':identifier/email-registration')
+  async recordEmailRegistration(
+    @Param('identifier') identifier: string,
+    @Body() body: { email?: string; marketingOptIn?: boolean; source?: string },
+    @Query('siteSlug') siteSlug?: string,
+  ) {
+    const data = await this.collectionsService.recordPublicEmailRegistration(identifier, body, siteSlug);
+    return { message: 'Email registration saved', data };
+  }
+
+  @Post(':identifier/private-images/:imageId')
+  async togglePrivateImage(
+    @Param('identifier') identifier: string,
+    @Param('imageId') imageId: string,
+    @Body() body: { email?: string },
+    @Query('siteSlug') siteSlug?: string,
+  ) {
+    const data = await this.collectionsService.togglePublicPrivateImage(identifier, imageId, body, siteSlug);
+    return { message: data.private ? 'Photo marked private' : 'Photo made visible', data };
+  }
+
   @Post(':identifier/download-activity')
   async recordDownloadActivity(
     @Param('identifier') identifier: string,
@@ -131,6 +152,12 @@ export class CollectionsController {
   @Get('image-favorites')
   async imageFavorites(@Req() req: ExpressRequest) {
     const data = await this.collectionsService.listFavoriteImages(req.user.id);
+    return { data };
+  }
+
+  @Get('marketing-contacts')
+  async marketingContacts(@Req() req: ExpressRequest) {
+    const data = await this.collectionsService.listMarketingContacts(req.user.id);
     return { data };
   }
 

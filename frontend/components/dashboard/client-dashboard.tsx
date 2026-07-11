@@ -138,7 +138,9 @@ import {
   useImageActions,
   fetchCollectionImagesPage,
   type CollectionDownloadActivityRecord,
+  type CollectionEmailRegistrationRecord,
   type CollectionFavoriteActivityRecord,
+  type CollectionPrivatePhotoActivityRecord,
   type CollectionImageRecord,
   type CollectionRecord,
 } from "@/api-hooks/use-collections";
@@ -208,6 +210,8 @@ import {
 } from "@/components/dashboard/plan-feature-lock";
 import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
 import { CollectionStoreSettingsPanel } from "@/components/dashboard/collection-store-settings-panel";
+import { CollectionRegistrationActivity } from "@/components/dashboard/collection-registration-activity";
+import { MarketingContactsGrid } from "@/components/dashboard/marketing-contacts-grid";
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { publicCollectionUrl } from "@/lib/public-site-url";
@@ -2047,7 +2051,7 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
             </p>
             <Input type="file" className="mt-6 h-12 rounded-none bg-white" />
           </div>
-          <ContactGrid />
+          <MarketingContactsGrid />
         </div>
       </div>
     );
@@ -11098,7 +11102,7 @@ function CollectionDetailView({
     "cover" | "typography" | "color" | "grid"
   >("cover");
   const [activityPage, setActivityPage] = useState<
-    "download" | "favorite" | "orders" | "email"
+    "download" | "favorite" | "orders" | "email" | "contacts" | "private"
   >("favorite");
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<
     "general" | "privacy" | "download" | "favorite" | "store"
@@ -13020,6 +13024,8 @@ function CollectionActivityPanel({
   loading,
   favoriteLists,
   downloads,
+  emailRegistrations,
+  privatePhotos,
   orders,
   collectionName,
   collectionImages,
@@ -13038,11 +13044,13 @@ function CollectionActivityPanel({
   loading: boolean;
   favoriteLists: CollectionFavoriteActivityRecord[];
   downloads: CollectionDownloadActivityRecord[];
+  emailRegistrations: CollectionEmailRegistrationRecord[];
+  privatePhotos: CollectionPrivatePhotoActivityRecord[];
   orders: StoreOrderRecord[];
   collectionName: string;
   collectionImages: CollectionImageRecord[];
   publicLink: string;
-  activityPage: "download" | "favorite" | "orders" | "email";
+  activityPage: "download" | "favorite" | "orders" | "email" | "contacts" | "private";
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
   accessSettings: CollectionAccessSettings;
@@ -13414,6 +13422,14 @@ function CollectionActivityPanel({
     <>
       <section className="min-w-0">
         {activityPage === "email" ? (
+          <>
+          <CollectionRegistrationActivity
+            mode="registration"
+            registrations={emailRegistrations}
+            privatePhotos={privatePhotos}
+            collectionName={collectionName}
+          />
+          <div className="hidden" aria-hidden="true">
           <div className="max-h-[calc(100dvh-220px)] min-h-[560px] overflow-y-auto pr-1">
             <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 py-3 backdrop-blur">
               <div>
@@ -13559,6 +13575,23 @@ function CollectionActivityPanel({
               </Table>
             </section>
           </div>
+          </div>
+        </>
+
+        ) : activityPage === "contacts" ? (
+        <CollectionRegistrationActivity
+          mode="contacts"
+          registrations={emailRegistrations}
+          privatePhotos={privatePhotos}
+          collectionName={collectionName}
+        />
+      ) : activityPage === "private" ? (
+        <CollectionRegistrationActivity
+          mode="private"
+          registrations={emailRegistrations}
+          privatePhotos={privatePhotos}
+          collectionName={collectionName}
+        />
         ) : activityPage === "download" ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">

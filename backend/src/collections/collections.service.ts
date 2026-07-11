@@ -21,6 +21,8 @@ import { CollectionImage, CollectionImageDocument } from './entities/collection-
 import { CollectionFavorite, CollectionFavoriteDocument } from './entities/collection-favorite.entity';
 import { CollectionImageFavorite, CollectionImageFavoriteDocument } from './entities/collection-image-favorite.entity';
 import { CollectionDownloadActivity, CollectionDownloadActivityDocument } from './entities/collection-download-activity.entity';
+import { CollectionEmailRegistration, CollectionEmailRegistrationDocument } from './entities/collection-email-registration.entity';
+import { CollectionPrivatePhoto, CollectionPrivatePhotoDocument } from './entities/collection-private-photo.entity';
 
 type WatermarkData = {
   id: string;
@@ -54,6 +56,8 @@ export class CollectionsService {
     @InjectModel(CollectionFavorite.name) private readonly favoriteModel: Model<CollectionFavoriteDocument>,
     @InjectModel(CollectionImageFavorite.name) private readonly imageFavoriteModel: Model<CollectionImageFavoriteDocument>,
     @InjectModel(CollectionDownloadActivity.name) private readonly downloadActivityModel: Model<CollectionDownloadActivityDocument>,
+    @InjectModel(CollectionEmailRegistration.name) private readonly emailRegistrationModel: Model<CollectionEmailRegistrationDocument>,
+    @InjectModel(CollectionPrivatePhoto.name) private readonly privatePhotoModel: Model<CollectionPrivatePhotoDocument>,
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(MobileGalleryImage.name) private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
@@ -131,6 +135,9 @@ export class CollectionsService {
       },
     };
     const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
+    if (emailAccess.required && emailAccess.authorized && emailAccess.email) {
+      await this.saveEmailRegistration(collection, emailAccess.email, false, 'email-registration');
+    }
     const imagesPage = emailAccess.authorized
       ? await this.findPublicImages(identifier, email, limit, offset, siteSlug)
       : { items: [], total: 0, limit: this.pageLimit(limit), offset: this.pageOffset(offset), hasMore: false };
@@ -261,6 +268,73 @@ export class CollectionsService {
       { $set: { settings: { ...settings, access: { ...access, requests: nextRequests } } } },
     );
     return { requested: true, email };
+  }
+
+  async recordPublicEmailRegistration(
+    identifier: string,
+    body: { email?: string; marketingOptIn?: boolean; source?: string },
+    siteSlug?: string,
+  ) {
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
+    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    const email = this.cleanEmail(body.email);
+    if (!email) throw new BadRequestException('Email is required');
+    const source = this.registrationSource(body.source);
+    await this.saveEmailRegistration(collection, email, Boolean(body.marketingOptIn), source);
+    return {
+      registered: true,
+      authorized: true,
+      email,
+      marketingOptIn: Boolean(body.marketingOptIn),
+    };
+  }
+
+  async togglePublicPrivateImage(
+    identifier: string,
+    imageId: string,
+    body: { email?: string },
+    siteSlug?: string,
+  ) {
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
+    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    const email = this.cleanEmail(body.email);
+    if (!email) throw new BadRequestException('Email is required');
+    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
+    const collectionId = collection._id.toString();
+    const image = await this.imageModel.findOne({ _id: imageId, collectionId }).select('_id').lean();
+    if (!image) throw new NotFoundException('Image not found');
+
+    const existing = await this.privatePhotoModel.findOne({ collectionId, email, imageId }).lean();
+    if (existing) {
+      await this.privatePhotoModel.deleteOne({ _id: existing._id });
+      return { private: false, collectionId, imageId, email };
+    }
+
+    await this.privatePhotoModel.updateOne(
+      { collectionId, email, imageId },
+      { $setOnInsert: { collectionId, email, imageId } },
+      { upsert: true },
+    );
+    return { private: true, collectionId, imageId, email };
+  }
+
+  async listMarketingContacts(userId: string) {
+    const contacts = await this.emailRegistrationModel
+      .find({ ownerId: userId, marketingOptIn: true })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    return contacts.map((contact) => ({
+      _id: contact._id,
+      email: contact.email,
+      collectionId: contact.collectionId,
+      collectionName: contact.collectionName,
+      source: contact.lastSource,
+      sources: contact.sources ?? [],
+      marketingOptIn: contact.marketingOptIn,
+      createdAt: contact.createdAt,
+      updatedAt: contact.updatedAt,
+    }));
   }
 
   async listFavoriteCollections(userId: string) {
@@ -417,18 +491,23 @@ export class CollectionsService {
     const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
     if (!collection) throw new NotFoundException('Collection not found');
 
-    const [collectionFavorites, imageFavorites, downloads, images] = await Promise.all([
-      this.favoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
-      this.imageFavoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
-      this.downloadActivityModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
-      this.imageModel.find({ collectionId }).select('_id originalName url thumbnailUrl').lean(),
-    ]);
+    const [collectionFavorites, imageFavorites, downloads, images, emailRegistrations, privatePhotos] =
+      await Promise.all([
+        this.favoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
+        this.imageFavoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
+        this.downloadActivityModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+        this.imageModel.find({ collectionId }).select('_id originalName url thumbnailUrl').lean(),
+        this.emailRegistrationModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+        this.privatePhotoModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+      ]);
+
     const userIds = [...new Set([
       ...collectionFavorites.map((favorite) => favorite.userId),
       ...imageFavorites.map((favorite) => favorite.userId),
     ])];
-    const users = userIds.length
-      ? await this.userModel.find({ _id: { $in: userIds } }).select('_id email name').lean()
+    const accountUserIds = userIds.filter((id) => Types.ObjectId.isValid(id));
+    const users = accountUserIds.length
+      ? await this.userModel.find({ _id: { $in: accountUserIds } }).select('_id email name').lean()
       : [];
     const userMap = new Map(users.map((user) => [user._id.toString(), user]));
     const imageMap = new Map(images.map((image) => [image._id.toString(), image]));
@@ -484,6 +563,29 @@ export class CollectionsService {
         createdAt: download.createdAt,
         updatedAt: download.updatedAt,
       })),
+      emailRegistrations: emailRegistrations.map((registration) => ({
+        _id: registration._id,
+        email: registration.email,
+        collectionId: registration.collectionId,
+        collectionName: registration.collectionName,
+        source: registration.lastSource,
+        sources: registration.sources ?? [],
+        marketingOptIn: registration.marketingOptIn,
+        createdAt: registration.createdAt,
+        updatedAt: registration.updatedAt,
+      })),
+      privatePhotos: privatePhotos.map((privatePhoto) => {
+        const image = imageMap.get(privatePhoto.imageId);
+        return {
+          _id: privatePhoto._id,
+          email: privatePhoto.email,
+          imageId: privatePhoto.imageId,
+          imageName: image?.originalName || privatePhoto.imageId,
+          imageUrl: image?.thumbnailUrl || image?.url || '',
+          createdAt: privatePhoto.createdAt,
+          updatedAt: privatePhoto.updatedAt,
+        };
+      }),
     };
   }
 
@@ -1587,25 +1689,54 @@ export class CollectionsService {
 
   private cleanEmail(value?: string) {
     const email = String(value ?? '').trim().toLowerCase();
-    return email.includes('@') ? email : '';
+    return /^\S+@\S+\.\S+$/.test(email) ? email : '';
+  }
+
+  private registrationSource(value?: string) {
+    const source = String(value ?? 'email-registration').trim().toLowerCase();
+    return ['email-registration', 'popup', 'download', 'favorite', 'store-checkout'].includes(source)
+      ? source
+      : 'email-registration';
+  }
+
+  private async saveEmailRegistration(
+    collection: any,
+    email: string,
+    marketingOptIn: boolean,
+    source: string,
+  ) {
+    const collectionId = collection._id.toString();
+    const existing = await this.emailRegistrationModel
+      .findOne({ collectionId, email })
+      .select('marketingOptIn')
+      .lean();
+    await this.emailRegistrationModel.updateOne(
+      { collectionId, email },
+      {
+        $set: {
+          ownerId: String(collection.userId),
+          collectionName: collection.name,
+          email,
+          lastSource: source,
+          marketingOptIn: Boolean(existing?.marketingOptIn || marketingOptIn),
+        },
+        $setOnInsert: { collectionId },
+        $addToSet: { sources: source },
+      },
+      { upsert: true },
+    );
   }
 
   private resolveEmailAccess(settings: any, email?: string) {
     const general = settings?.general ?? {};
-    const access = settings?.access ?? {};
     const required = this.boolSetting(general.emailRegistration);
     if (!required) return { required: false, authorized: true, status: 'open', email: '' };
     const clean = this.cleanEmail(email);
     if (!clean) return { required: true, authorized: false, status: 'required', email: '' };
-    const allowedEmails = Array.isArray(access.allowedEmails) ? access.allowedEmails.map((item: string) => this.cleanEmail(item)).filter(Boolean) : [];
-    const requests = Array.isArray(access.requests) ? access.requests : [];
-    const request = requests.find((item: any) => this.cleanEmail(item.email) === clean);
-    const approved = request?.status === 'approved';
-    const denied = request?.status === 'declined';
     return {
       required: true,
-      authorized: allowedEmails.includes(clean) || approved,
-      status: allowedEmails.includes(clean) || approved ? 'approved' : denied ? 'declined' : request ? 'pending' : 'unknown',
+      authorized: true,
+      status: 'registered',
       email: clean,
     };
   }
