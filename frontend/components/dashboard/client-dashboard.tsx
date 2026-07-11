@@ -11287,7 +11287,7 @@ function CollectionDetailView({
     "cover" | "typography" | "color" | "grid"
   >("cover");
   const [activityPage, setActivityPage] = useState<
-    "download" | "favorite" | "orders" | "email" | "contacts" | "links" | "private"
+    "download" | "favorite" | "orders" | "email" | "contacts" | "private"
   >("favorite");
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<
     "general" | "privacy" | "download" | "favorite" | "store"
@@ -12344,7 +12344,7 @@ function CollectionDetailView({
                 type="button"
               >
                 <Mail className="size-4" />
-                Email Registration
+                Email Access
               </button>
               <button
                 className={cn(
@@ -12356,17 +12356,6 @@ function CollectionDetailView({
               >
                 <Megaphone className="size-4" />
                 Marketing Contacts
-              </button>
-              <button
-                className={cn(
-                  "flex h-14 w-full items-center gap-3 px-5 text-left",
-                  activityPage === "links" && "bg-[#f3f3f3] font-medium",
-                )}
-                onClick={() => setActivityPage("links")}
-                type="button"
-              >
-                <Link2 className="size-4" />
-                Quick Share Links
               </button>
               <button
                 className={cn(
@@ -13301,7 +13290,7 @@ function CollectionActivityPanel({
   collectionName: string;
   collectionImages: CollectionImageRecord[];
   publicLink: string;
-  activityPage: "download" | "favorite" | "orders" | "email" | "contacts" | "links" | "private";
+  activityPage: "download" | "favorite" | "orders" | "email" | "contacts" | "private";
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
   accessSettings: CollectionAccessSettings;
@@ -13673,14 +13662,6 @@ function CollectionActivityPanel({
     <>
       <section className="min-w-0">
         {activityPage === "email" ? (
-          <>
-          <CollectionRegistrationActivity
-            mode="registration"
-            registrations={emailRegistrations}
-            privatePhotos={privatePhotos}
-            collectionName={collectionName}
-          />
-          <div className="hidden" aria-hidden="true">
           <div className="max-h-[calc(100dvh-220px)] min-h-[560px] overflow-y-auto pr-1">
             <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 py-3 backdrop-blur">
               <div>
@@ -13769,7 +13750,7 @@ function CollectionActivityPanel({
                             (isAllowed ? "allowed" : "pending")}
                         </TableCell>
                         <TableCell className="max-w-80 whitespace-normal text-[#666]">
-                          {request?.reason || "â€”"}
+                          {request?.reason || "—"}
                         </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
@@ -13826,32 +13807,7 @@ function CollectionActivityPanel({
               </Table>
             </section>
           </div>
-          </div>
-        </>
-
-        ) : activityPage === "links" ? (
-        <section className="max-w-[900px]">
-          <h2 className="text-2xl font-medium">Quick Share Links</h2>
-          <p className="mt-2 text-sm text-[#666]">
-            Copy this direct collection link and share it with your client.
-          </p>
-          <div className="mt-8 flex flex-col gap-4 border bg-[#fafafa] p-6 sm:flex-row sm:items-center">
-            <p className="min-w-0 flex-1 break-all bg-white px-4 py-3 text-sm text-[#555]">
-              {publicLink}
-            </p>
-            <Button
-              className="h-11 shrink-0 rounded-none bg-[#22bda7] px-6 text-white"
-              onClick={async () => {
-                await navigator.clipboard.writeText(publicLink);
-                toast.success("Collection link copied");
-              }}
-            >
-              <Copy className="size-4" />
-              Copy Link
-            </Button>
-          </div>
-        </section>
-      ) : activityPage === "contacts" ? (
+        ) : activityPage === "contacts" ? (
         <CollectionRegistrationActivity
           mode="contacts"
           registrations={emailRegistrations}
