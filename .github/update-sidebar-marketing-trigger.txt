@@ -1,1 +1,1 @@
-run compact sidebar and marketing settings update
+retry compact sidebar and marketing settings update
