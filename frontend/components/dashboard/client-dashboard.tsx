@@ -38,6 +38,7 @@ import {
   EyeOff,
   GripVertical,
   Heart,
+  Home,
   Images,
   Info,
   Italic,
@@ -11870,8 +11871,7 @@ function CollectionDetailView({
     setShareFooterText(template?.footerText?.trim() || branding.brandText || "");
   };
   const openShareComposer = () => {
-    applyShareTemplate(selectedShareTemplate);
-    setShareOpen(true);
+    router.push(`/dashboard/${section}/collections/${collectionId}/share`);
   };
   const sendShareEmail = async () => {
     const recipients = shareRecipient
@@ -12185,6 +12185,15 @@ function CollectionDetailView({
             type="button"
           >
             <ArrowLeft className="size-5" />
+          </button>
+          <button
+            className="flex size-8 shrink-0 items-center justify-center text-[#8a8a8a] hover:bg-[#f4f4f4] hover:text-[#222]"
+            onClick={() => router.push(`/dashboard/${section}`)}
+            aria-label="Go to dashboard home"
+            title="Home"
+            type="button"
+          >
+            <Home className="size-5" />
           </button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-5">
