@@ -16,9 +16,11 @@ export type BillingUser = {
   storageUsedBytes?: number;
   monthlyEmailsUsed?: number;
   planFeatures?: Record<string, boolean>;
+  planBillingInterval?: "month" | "year";
+  planExpiresAt?: string;
 };
 
-export type PlanPurchase = { _id: string; planName: string; amount: number; source: "admin" | "checkout" | "free"; status: "active" | "paid"; createdAt: string };
+export type PlanPurchase = { _id: string; planName: string; amount: number; billingInterval?: "month" | "year"; source: "admin" | "checkout" | "free"; status: "active" | "paid"; createdAt: string };
 
 function normalizePlans(value: unknown): AdminPlan[] {
   if (!Array.isArray(value)) return [];
@@ -28,6 +30,8 @@ function normalizePlans(value: unknown): AdminPlan[] {
     storageGb: Number(plan?.storageGb ?? 0),
     monthlyEmails: Number(plan?.monthlyEmails ?? 0),
     priceMonthly: Number(plan?.priceMonthly ?? 0),
+    yearlyEnabled: Boolean(plan?.yearlyEnabled),
+    priceYearly: Number(plan?.priceYearly ?? 0),
     features: plan?.features ?? {},
     active: plan?.active ?? true,
     createdAt: plan?.createdAt,
@@ -81,13 +85,14 @@ export async function getPublicPlans() {
   }
 }
 
-export async function checkoutPlan(planId: string) {
+export async function checkoutPlan(planId: string, billingInterval: "month" | "year" = "month") {
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const data = await authedRequest<{ checkoutUrl?: string | null; activated?: boolean; plan?: AdminPlan }>(`/billing/plans/${planId}/checkout`, {
     method: "POST",
     body: JSON.stringify({
       successUrl: `${origin}/dashboard/client-gallery/storage?plan=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${origin}/dashboard/client-gallery/storage?plan=cancel`,
+      billingInterval,
     }),
   });
   return data;

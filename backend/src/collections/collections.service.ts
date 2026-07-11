@@ -1363,7 +1363,10 @@ export class CollectionsService {
   }
 
   private async ensureStorageAvailable(userId: string, incomingBytes: number) {
-    const user = await this.userModel.findById(userId).select('planName storageLimitGb storageUsedBytes').lean();
+    const user = await this.userModel.findById(userId).select('planName storageLimitGb storageUsedBytes planExpiresAt').lean();
+    if (user?.planExpiresAt && user.planExpiresAt <= new Date()) {
+      throw new BadRequestException('Plan expired. Purchase a plan to continue uploading images.');
+    }
     const limitGb = Math.max(0, Number(user?.storageLimitGb ?? 0));
     const limitBytes = limitGb * 1024 * 1024 * 1024;
     const used = Number(user?.storageUsedBytes ?? 0);

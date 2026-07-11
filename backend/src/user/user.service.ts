@@ -189,6 +189,20 @@ export class UserService implements OnModuleInit {
   async findProfile(id: string) {
     const monthKey = new Date().toISOString().slice(0, 7);
     const userRecord = await this.userModel.findById(id).select('-password');
+    if (userRecord?.planExpiresAt && userRecord.planExpiresAt <= new Date()) {
+      const freePlan = await this.freePlanSettings.get();
+      userRecord.planId = undefined;
+      userRecord.planName = 'Free';
+      userRecord.storageLimitGb = freePlan.storageGb;
+      userRecord.monthlyEmailLimit = freePlan.monthlyEmails;
+      userRecord.planFeatures = { marketingEmails: freePlan.monthlyEmails > 0 };
+      userRecord.monthlyEmailsUsed = 0;
+      userRecord.monthlyUsageKey = monthKey;
+      userRecord.planActivatedAt = undefined;
+      userRecord.planBillingInterval = undefined;
+      userRecord.planExpiresAt = undefined;
+      await userRecord.save();
+    }
     if (userRecord && userRecord.monthlyUsageKey !== monthKey) {
       userRecord.monthlyUsageKey = monthKey;
       userRecord.monthlyEmailsUsed = 0;

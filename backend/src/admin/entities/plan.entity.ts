@@ -17,6 +17,12 @@ export class Plan {
   @Prop({ default: 0, min: 0 })
   priceMonthly: number;
 
+  @Prop({ default: false })
+  yearlyEnabled: boolean;
+
+  @Prop({ default: 0, min: 0 })
+  priceYearly: number;
+
   @Prop({ type: Object, default: {} })
   features: {
     pinSet?: boolean;

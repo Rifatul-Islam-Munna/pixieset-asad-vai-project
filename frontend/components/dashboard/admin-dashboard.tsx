@@ -51,6 +51,8 @@ type PlanForm = {
   storageGb: string;
   monthlyEmails: string;
   priceMonthly: string;
+  yearlyEnabled: boolean;
+  priceYearly: string;
   features: Record<string, boolean>;
   active: boolean;
 };
@@ -72,6 +74,8 @@ const emptyPlanForm: PlanForm = {
   storageGb: "",
   monthlyEmails: "",
   priceMonthly: "",
+  yearlyEnabled: false,
+  priceYearly: "",
   features: {},
   active: true,
 };
@@ -173,6 +177,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       storageGb: Number(planForm.storageGb || 0),
       monthlyEmails: Number(planForm.monthlyEmails || 0),
       priceMonthly: Number(planForm.priceMonthly || 0),
+      yearlyEnabled: planForm.yearlyEnabled,
+      priceYearly: planForm.yearlyEnabled ? Number(planForm.priceYearly || 0) : 0,
       features: planForm.features,
       active: planForm.active,
     };
@@ -243,6 +249,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       storageGb: String(plan.storageGb ?? 0),
       monthlyEmails: String(plan.monthlyEmails ?? 0),
       priceMonthly: String(plan.priceMonthly ?? 0),
+      yearlyEnabled: Boolean(plan.yearlyEnabled),
+      priceYearly: String(plan.priceYearly ?? 0),
       features: plan.features ?? {},
       active: plan.active,
     });
@@ -580,7 +588,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
           <form onSubmit={submitPlan} className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[460px] overflow-y-auto bg-white p-5 shadow-[0_28px_80px_rgba(0,0,0,0.18)] sm:p-6">
             <div className="mb-5 flex items-center justify-between gap-4 border-b pb-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Monthly Plan</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">Billing Plan</p>
                 <h2 className="mt-2 text-xl font-semibold">{planForm.id ? "Edit plan" : "Add plan"}</h2>
               </div>
               <button type="button" onClick={closePlanModal} aria-label="Close plan modal" className="p-2 hover:bg-[#f3f3f3]">
@@ -589,9 +597,20 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             </div>
             <div className="grid gap-3">
               <InputField label="Plan name" value={planForm.name} onChange={(value) => setPlanForm({ ...planForm, name: value })} required />
-              <InputField label="Storage GB / month" value={planForm.storageGb} onChange={(value) => setPlanForm({ ...planForm, storageGb: value })} required type="number" />
+              <InputField label="Storage limit GB" value={planForm.storageGb} onChange={(value) => setPlanForm({ ...planForm, storageGb: value })} required type="number" />
               <InputField label="Emails / month" value={planForm.monthlyEmails} onChange={(value) => setPlanForm({ ...planForm, monthlyEmails: value })} required type="number" />
               <InputField label="Monthly price USD" value={planForm.priceMonthly} onChange={(value) => setPlanForm({ ...planForm, priceMonthly: value })} required type="number" />
+              <label className="flex h-11 items-center justify-between border px-3 text-sm">
+                <span className="font-semibold">Enable yearly billing</span>
+                <input
+                  type="checkbox"
+                  checked={planForm.yearlyEnabled}
+                  onChange={(event) => setPlanForm({ ...planForm, yearlyEnabled: event.target.checked })}
+                />
+              </label>
+              {planForm.yearlyEnabled && (
+                <InputField label="Yearly price USD (total billed yearly)" value={planForm.priceYearly} onChange={(value) => setPlanForm({ ...planForm, priceYearly: value })} required type="number" />
+              )}
               <div className="grid gap-2 sm:grid-cols-2">
                 {planFeatures.map(([key, label]) => (
                   <label key={key} className="flex h-10 items-center justify-between border px-3 text-sm">
@@ -1589,11 +1608,14 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
             <tr key={plan._id} className="border-b last:border-0">
               <td className="px-4 py-4">
                 <p className="font-bold">{plan.name}</p>
-                <p className="mt-1 text-xs text-[#777]">Monthly allowance</p>
+                <p className="mt-1 text-xs text-[#777]">Storage + monthly email allowance</p>
               </td>
-              <td className="px-4 py-4">{plan.storageGb} GB / month</td>
+              <td className="px-4 py-4">{plan.storageGb} GB</td>
               <td className="px-4 py-4">{plan.monthlyEmails} emails / month</td>
-              <td className="px-4 py-4">${Number(plan.priceMonthly ?? 0).toLocaleString()} / month</td>
+              <td className="px-4 py-4">
+                <p>${Number(plan.priceMonthly ?? 0).toLocaleString()} / month</p>
+                {plan.yearlyEnabled && <p className="mt-1 text-xs text-[#777]">${Number(plan.priceYearly ?? 0).toLocaleString()} / year</p>}
+              </td>
               <td className="px-4 py-4">{plan.active ? "Active" : "Inactive"}</td>
               <td className="px-4 py-4">
                 <div className="flex justify-end gap-2">

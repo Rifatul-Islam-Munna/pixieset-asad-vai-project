@@ -19,6 +19,15 @@ export class AdminCreatePlanDto {
   priceMonthly?: number;
 
   @IsOptional()
+  @IsBoolean()
+  yearlyEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  priceYearly?: number;
+
+  @IsOptional()
   features?: Record<string, boolean>;
 
   @IsOptional()
@@ -46,6 +55,15 @@ export class AdminUpdatePlanDto {
   @IsNumber()
   @Min(0)
   priceMonthly?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  yearlyEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  priceYearly?: number;
 
   @IsOptional()
   features?: Record<string, boolean>;

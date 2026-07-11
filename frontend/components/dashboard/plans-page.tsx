@@ -19,6 +19,8 @@ const featureLabels: Record<string, string> = {
   marketingEmails: "Marketing email",
 };
 
+const formatMoney = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function safePlan(plan: Partial<AdminPlan> | null | undefined, index: number): AdminPlan {
   return {
     _id: String(plan?._id ?? index),
@@ -26,6 +28,8 @@ function safePlan(plan: Partial<AdminPlan> | null | undefined, index: number): A
     storageGb: Number(plan?.storageGb ?? 0),
     monthlyEmails: Number(plan?.monthlyEmails ?? 0),
     priceMonthly: Number(plan?.priceMonthly ?? 0),
+    yearlyEnabled: Boolean(plan?.yearlyEnabled),
+    priceYearly: Number(plan?.priceYearly ?? 0),
     features: plan?.features ?? {},
     active: plan?.active ?? true,
     createdAt: plan?.createdAt,
@@ -37,6 +41,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
   const [pendingId, setPendingId] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [billingInterval, setBillingInterval] = useState<"month" | "year">("month");
 
   const safePlans = useMemo(() => {
     return Array.isArray(plans) ? plans.map((plan, index) => safePlan(plan, index)) : [];
@@ -46,7 +51,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
     const term = query.trim().toLowerCase();
     if (!term) return safePlans;
     return safePlans.filter((plan) =>
-      [plan.name, String(plan.storageGb), String(plan.monthlyEmails), String(plan.priceMonthly)]
+      [plan.name, String(plan.storageGb), String(plan.monthlyEmails), String(plan.priceMonthly), String(plan.priceYearly)]
         .some((item) => item.toLowerCase().includes(term)),
     );
   }, [safePlans, query]);
@@ -61,7 +66,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
     setError("");
     startTransition(async () => {
       try {
-        const result = await checkoutPlan(planId);
+        const result = await checkoutPlan(planId, billingInterval);
         if (result.checkoutUrl) window.location.href = result.checkoutUrl;
         else setError("Stripe checkout URL missing");
       } catch (err) {
@@ -89,6 +94,13 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
           </div>
         </header>
 
+        <div className="mt-6 flex justify-center">
+          <div className="inline-flex border bg-white p-1" aria-label="Billing frequency">
+            <button type="button" onClick={() => setBillingInterval("month")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "month" ? "bg-[#111] text-white" : "text-[#555]")}>Monthly</button>
+            <button type="button" onClick={() => setBillingInterval("year")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "year" ? "bg-[#111] text-white" : "text-[#555]")}>Yearly</button>
+          </div>
+        </div>
+
         {(loadError || error) && (
           <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">
             {error || `Could not load plans from /billing/public/plans: ${loadError}`}
@@ -102,7 +114,8 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
           <div className="mt-8 grid gap-4 md:hidden">
             {filtered.map((plan) => {
               const recommended = plan._id === recommendedId;
-              const price = Number(plan.priceMonthly ?? 0);
+              const yearlyAvailable = Boolean(plan.yearlyEnabled) && Number(plan.priceYearly ?? 0) > 0;
+              const price = billingInterval === "year" ? yearlyAvailable ? Number(plan.priceYearly ?? 0) / 12 : 0 : Number(plan.priceMonthly ?? 0);
               return (
                 <article key={plan._id} className={cn("border p-5", recommended ? "bg-[#f1faf8]" : "bg-white")}>
                   <div className="h-5 text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">
@@ -112,7 +125,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                     <div>
                       <h2 className="text-2xl font-medium">{plan.name}</h2>
                       <p className="mt-4 flex items-end gap-1">
-                        <span className="text-5xl font-medium">${price.toLocaleString()}</span>
+                        <span className="text-5xl font-medium">${formatMoney(price)}</span>
                         <span className="pb-2 text-sm">/mo</span>
                       </p>
                     </div>
@@ -120,6 +133,9 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                       {Number(plan.storageGb ?? 0).toLocaleString()} GB
                     </span>
                   </div>
+                  <p className="mt-2 text-xs font-semibold text-[#777]">
+                    {billingInterval === "year" ? yearlyAvailable ? `$${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : "Billed monthly"}
+                  </p>
                   <div className="mt-6 grid gap-3 border-t pt-5 text-sm">
                     <div className="flex justify-between gap-4"><span>Photo storage</span><b>{Number(plan.storageGb ?? 0).toLocaleString()} GB</b></div>
                     <div className="flex justify-between gap-4"><span>Monthly emails</span><b>{Number(plan.monthlyEmails ?? 0).toLocaleString()}</b></div>
@@ -132,7 +148,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                       </p>
                     ))}
                   </div>
-                  <Button className="mt-6 h-11 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending} onClick={() => buy(plan._id)}>
+                  <Button className="mt-6 h-11 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
                     {pending && pendingId === plan._id ? <Loader2 className="size-4 animate-spin" /> : price > 0 ? "Start Plan" : "Start Free"}
                   </Button>
                 </article>
@@ -148,7 +164,8 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
               <div className="border-b border-r bg-white" />
               {filtered.map((plan) => {
                 const recommended = plan._id === recommendedId;
-                const price = Number(plan.priceMonthly ?? 0);
+                const yearlyAvailable = Boolean(plan.yearlyEnabled) && Number(plan.priceYearly ?? 0) > 0;
+                const price = billingInterval === "year" ? yearlyAvailable ? Number(plan.priceYearly ?? 0) / 12 : 0 : Number(plan.priceMonthly ?? 0);
                 return (
                   <div key={plan._id} className={cn("border-b border-r p-5", recommended ? "bg-[#f1faf8]" : "bg-white")}>
                     <div className="h-6 text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">
@@ -156,13 +173,13 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                     </div>
                     <h2 className="mt-3 text-xl font-medium">{plan.name}</h2>
                     <p className="mt-5 flex items-end gap-1">
-                      <span className="text-5xl font-medium tracking-normal">${price.toLocaleString()}</span>
+                      <span className="text-5xl font-medium tracking-normal">${formatMoney(price)}</span>
                       <span className="pb-2 text-sm">/mo</span>
                     </p>
                     <p className="mt-6 min-h-5 text-xs font-semibold text-[#aaa]">
-                      {price > 0 ? "Billed monthly" : "Billed Never"}
+                      {billingInterval === "year" ? yearlyAvailable ? `$${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : price > 0 ? "Billed monthly" : "Billed Never"}
                     </p>
-                    <Button className="mt-9 h-11 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending} onClick={() => buy(plan._id)}>
+                    <Button className="mt-9 h-11 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
                       {pending && pendingId === plan._id ? <Loader2 className="size-4 animate-spin" /> : price > 0 ? "Start Plan" : "Start Free"}
                     </Button>
                   </div>

@@ -36,6 +36,8 @@ export type AdminPlan = {
   storageGb: number;
   monthlyEmails: number;
   priceMonthly?: number;
+  yearlyEnabled?: boolean;
+  priceYearly?: number;
   features?: Record<string, boolean>;
   active: boolean;
   createdAt?: string;

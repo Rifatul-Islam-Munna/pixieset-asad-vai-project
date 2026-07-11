@@ -94,6 +94,12 @@ export class User {
 
   @Prop()
   planActivatedAt?: Date;
+
+  @Prop({ enum: ['month', 'year'] })
+  planBillingInterval?: 'month' | 'year';
+
+  @Prop()
+  planExpiresAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -36,7 +36,7 @@ export class BillingController {
   @Post('plans/:id/checkout')
   @UseGuards(AuthGuard)
   async checkout(@Param('id') id: string, @Body() dto: any, @Req() req: ExpressRequest) {
-    const data = await this.adminService.createPlanCheckout(req.user.id, id, dto.successUrl, dto.cancelUrl);
+    const data = await this.adminService.createPlanCheckout(req.user.id, id, dto.billingInterval, dto.successUrl, dto.cancelUrl);
     return { data };
   }
 

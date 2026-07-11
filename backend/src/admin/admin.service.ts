@@ -194,11 +194,16 @@ export class AdminService implements OnModuleInit {
   }
 
   async createPlan(dto: AdminCreatePlanDto) {
+    if (dto.yearlyEnabled && Number(dto.priceYearly ?? 0) <= 0) {
+      throw new BadRequestException('Yearly price must be greater than zero');
+    }
     const plan = await this.planModel.create({
       name: dto.name.trim(),
       storageGb: Number(dto.storageGb ?? 0),
       monthlyEmails: Number(dto.monthlyEmails ?? 0),
       priceMonthly: Number(dto.priceMonthly ?? 0),
+      yearlyEnabled: Boolean(dto.yearlyEnabled),
+      priceYearly: Number(dto.priceYearly ?? 0),
       features: (dto.features ?? {}) as any,
       active: dto.active ?? true,
     });
@@ -208,10 +213,17 @@ export class AdminService implements OnModuleInit {
   async updatePlan(id: string, dto: AdminUpdatePlanDto) {
     const plan = await this.planModel.findById(id);
     if (!plan) throw new NotFoundException('Plan not found');
+    const yearlyEnabled = dto.yearlyEnabled ?? plan.yearlyEnabled;
+    const priceYearly = dto.priceYearly ?? plan.priceYearly;
+    if (yearlyEnabled && Number(priceYearly ?? 0) <= 0) {
+      throw new BadRequestException('Yearly price must be greater than zero');
+    }
     if (dto.name !== undefined) plan.name = dto.name.trim();
     if (dto.storageGb !== undefined) plan.storageGb = Number(dto.storageGb);
     if (dto.monthlyEmails !== undefined) plan.monthlyEmails = Number(dto.monthlyEmails);
     if (dto.priceMonthly !== undefined) plan.priceMonthly = Number(dto.priceMonthly);
+    if (dto.yearlyEnabled !== undefined) plan.yearlyEnabled = Boolean(dto.yearlyEnabled);
+    if (dto.priceYearly !== undefined) plan.priceYearly = Number(dto.priceYearly);
     if (dto.features !== undefined) plan.features = dto.features as any;
     if (dto.active !== undefined) plan.active = dto.active;
     await plan.save();
@@ -269,32 +281,36 @@ export class AdminService implements OnModuleInit {
     return this.hideStripeSecrets(settings.toObject());
   }
 
-  async createPlanCheckout(userId: string, planId: string, successUrl?: string, cancelUrl?: string) {
+  async createPlanCheckout(userId: string, planId: string, requestedInterval?: string, successUrl?: string, cancelUrl?: string) {
     const [plan, settings, user] = await Promise.all([
       this.planModel.findOne({ _id: planId, active: true }).lean(),
       this.getRawStripeSettings(),
       this.userModel.findById(userId).lean(),
     ]);
     if (!plan) throw new NotFoundException('Plan not found');
-    if (Number(plan.priceMonthly ?? 0) <= 0) {
-      const activatedPlan = await this.assignPlanToUser(userId, plan._id.toString(), 'free');
+    const billingInterval: 'month' | 'year' = requestedInterval === 'year' ? 'year' : 'month';
+    if (billingInterval === 'year' && (!plan.yearlyEnabled || Number(plan.priceYearly ?? 0) <= 0)) {
+      throw new BadRequestException('Yearly billing is not available for this plan');
+    }
+    const amount = billingInterval === 'year' ? Number(plan.priceYearly ?? 0) : Number(plan.priceMonthly ?? 0);
+    if (amount <= 0) {
+      const activatedPlan = await this.assignPlanToUser(userId, plan._id.toString(), 'free', undefined, billingInterval);
       return { activated: true, checkoutUrl: null, sessionId: null, plan: activatedPlan };
     }
     if (!settings.enabled || !settings.secretKey) throw new BadRequestException('Stripe is not configured');
 
     const stripe = new Stripe(settings.secretKey);
     const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
+      mode: 'payment',
       payment_method_types: ['card'],
       line_items: [{
         quantity: 1,
         price_data: {
           currency: 'usd',
-          unit_amount: Math.round(Number(plan.priceMonthly ?? 0) * 100),
-          recurring: { interval: 'month' },
+          unit_amount: Math.round(amount * 100),
           product_data: {
             name: plan.name,
-            description: `${plan.storageGb} GB storage/month, ${plan.monthlyEmails} emails/month`,
+            description: `${plan.storageGb} GB storage, ${plan.monthlyEmails} emails/month, ${billingInterval === 'year' ? '1 year' : '1 month'} access`,
           },
         },
       }],
@@ -305,6 +321,7 @@ export class AdminService implements OnModuleInit {
         type: 'plan',
         userId,
         planId: plan._id.toString(),
+        billingInterval,
       },
     });
 
@@ -322,7 +339,8 @@ export class AdminService implements OnModuleInit {
     if (session.payment_status !== 'paid') {
       throw new BadRequestException('Checkout is not paid');
     }
-    const plan = await this.assignPlanToUser(userId, session.metadata.planId, 'checkout', session.id);
+    const billingInterval = session.metadata.billingInterval === 'year' ? 'year' : 'month';
+    const plan = await this.assignPlanToUser(userId, session.metadata.planId, 'checkout', session.id, billingInterval);
     return plan;
   }
 
@@ -345,16 +363,20 @@ export class AdminService implements OnModuleInit {
         ? await stripe.checkout.sessions.retrieve(webhookSession.id)
         : webhookSession;
       if (session.metadata?.type === 'plan' && session.payment_status === 'paid' && session.metadata.userId && session.metadata.planId) {
-        await this.assignPlanToUser(session.metadata.userId, session.metadata.planId, 'checkout', session.id);
+        const billingInterval = session.metadata.billingInterval === 'year' ? 'year' : 'month';
+        await this.assignPlanToUser(session.metadata.userId, session.metadata.planId, 'checkout', session.id, billingInterval);
       }
     }
 
     return { received: true };
   }
 
-  async assignPlanToUser(userId: string, planId: string, source: 'admin' | 'checkout' | 'free' = 'admin', stripeSessionId?: string) {
+  async assignPlanToUser(userId: string, planId: string, source: 'admin' | 'checkout' | 'free' = 'admin', stripeSessionId?: string, billingInterval: 'month' | 'year' = 'month') {
     const plan = await this.planModel.findById(planId).lean();
     if (!plan) throw new NotFoundException('Plan not found');
+    if (stripeSessionId && await this.planPurchaseModel.exists({ stripeSessionId })) return plan;
+    const expiresAt = new Date();
+    expiresAt.setUTCDate(expiresAt.getUTCDate() + (billingInterval === 'year' ? 365 : 30));
     await this.userModel.updateOne(
       { _id: userId },
       {
@@ -367,10 +389,14 @@ export class AdminService implements OnModuleInit {
           monthlyEmailsUsed: 0,
           monthlyUsageKey: this.currentMonthKey(),
           planActivatedAt: new Date(),
+          planBillingInterval: billingInterval,
+          ...(source === 'checkout' ? { planExpiresAt: expiresAt } : {}),
         },
+        ...(source !== 'checkout' ? { $unset: { planExpiresAt: '' } } : {}),
       },
     );
-    const purchase = { userId, planId: plan._id.toString(), planName: plan.name, amount: Number(plan.priceMonthly ?? 0), source, stripeSessionId, status: source === 'checkout' ? 'paid' : 'active' } as const;
+    const amount = billingInterval === 'year' ? Number(plan.priceYearly ?? 0) : Number(plan.priceMonthly ?? 0);
+    const purchase = { userId, planId: plan._id.toString(), planName: plan.name, amount, billingInterval, source, stripeSessionId, status: source === 'checkout' ? 'paid' : 'active' } as const;
     if (stripeSessionId) await this.planPurchaseModel.updateOne({ stripeSessionId }, { $setOnInsert: purchase }, { upsert: true });
     else await this.planPurchaseModel.create(purchase);
     return plan;
@@ -396,6 +422,8 @@ export class AdminService implements OnModuleInit {
         $unset: {
           planId: '',
           planActivatedAt: '',
+          planBillingInterval: '',
+          planExpiresAt: '',
         },
       },
     );
@@ -414,7 +442,11 @@ export class AdminService implements OnModuleInit {
   async addEmailUsage(userId: string, count: number) {
     const safeCount = Math.max(1, Number(count ?? 1));
     const monthKey = this.currentMonthKey();
-    const user = await this.userModel.findById(userId).select('monthlyEmailLimit monthlyEmailsUsed monthlyUsageKey planFeatures').lean();
+    const user = await this.userModel.findById(userId).select('monthlyEmailLimit monthlyEmailsUsed monthlyUsageKey planFeatures planExpiresAt').lean();
+    if (user?.planExpiresAt && user.planExpiresAt <= new Date()) {
+      await this.clearUserPlan(userId);
+      throw new BadRequestException('Plan expired. Purchase a plan to continue sending emails.');
+    }
     if (!user?.planFeatures?.marketingEmails) {
       throw new BadRequestException('Marketing email is not included in your current plan.');
     }

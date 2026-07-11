@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type DragEvent, type PointerEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type DragEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, isValid, parse, parseISO } from "date-fns";
@@ -107,7 +116,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -127,9 +143,20 @@ import {
 import { PostRequestAxios } from "@/api-hooks/api-hooks";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import { logOutUser } from "@/actions/auth";
-import { checkoutPlan, confirmPlanCheckout, getBillingOverview, getPurchaseHistory, recordEmailUsage, type BillingUser, type PlanPurchase } from "@/actions/billing";
+import {
+  checkoutPlan,
+  confirmPlanCheckout,
+  getBillingOverview,
+  getPurchaseHistory,
+  recordEmailUsage,
+  type BillingUser,
+  type PlanPurchase,
+} from "@/actions/billing";
 import type { AdminPlan } from "@/actions/admin";
-import { CoverPreview, coverOptions } from "@/components/dashboard/cover-designs";
+import {
+  CoverPreview,
+  coverOptions,
+} from "@/components/dashboard/cover-designs";
 import {
   useStorePriceSheet,
   useStorePriceSheetDetails,
@@ -165,14 +192,25 @@ import {
   type PresetItem,
   type WatermarkItem,
 } from "@/lib/dashboard-store";
-import type { BrandSettings, CustomCoverTemplate, HomeCmsData } from "@/lib/home-cms";
+import type {
+  BrandSettings,
+  CustomCoverTemplate,
+  HomeCmsData,
+} from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
-import { PlanFeatureLock, PlanFeatureNotice } from "@/components/dashboard/plan-feature-lock";
+import {
+  PlanFeatureLock,
+  PlanFeatureNotice,
+} from "@/components/dashboard/plan-feature-lock";
 import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { publicCollectionUrl } from "@/lib/public-site-url";
-import { checkUsername, useAccount, type AccountProfile } from "@/api-hooks/use-account";
+import {
+  checkUsername,
+  useAccount,
+  type AccountProfile,
+} from "@/api-hooks/use-account";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
 export type DashboardPage =
@@ -285,10 +323,9 @@ async function sendUniversalEmail(payload: {
   html?: string;
   replyTo?: string;
 }) {
-  const [data, error] = await PostRequestAxios<{ data: { sent: boolean; skipped?: boolean; reason?: string } }>(
-    "/mail/send",
-    payload,
-  );
+  const [data, error] = await PostRequestAxios<{
+    data: { sent: boolean; skipped?: boolean; reason?: string };
+  }>("/mail/send", payload);
   if (error || !data) throw new Error(error?.message || "Email send failed");
   return data.data;
 }
@@ -296,11 +333,29 @@ async function sendUniversalEmail(payload: {
 const libraryFilters = [
   {
     title: "Camera Settings",
-    items: ["Camera", "Lens", "Focal Length", "Shutter Speed", "Aperture", "ISO", "Flash"],
+    items: [
+      "Camera",
+      "Lens",
+      "Focal Length",
+      "Shutter Speed",
+      "Aperture",
+      "ISO",
+      "Flash",
+    ],
   },
   {
     title: "Metadata",
-    items: ["Filename", "Title", "Caption", "Headline", "Keyword", "Orientation", "Rating", "Color Label", "Color Space"],
+    items: [
+      "Filename",
+      "Title",
+      "Caption",
+      "Headline",
+      "Keyword",
+      "Orientation",
+      "Rating",
+      "Color Label",
+      "Color Space",
+    ],
   },
   {
     title: "Nikoset",
@@ -386,27 +441,32 @@ export function ClientDashboard({
     sidebarItems[section].find((item) => item.page === page)?.label ??
     (page === "marketing" ? "Marketing" : "Storage");
   const isCollectionIndex =
-    page === "collections" || (section === "store-gallery" && page === "products");
+    page === "collections" ||
+    (section === "store-gallery" && page === "products");
   const isCollectionDetail = page === "collections" && Boolean(collectionId);
   const isPriceSheetDetail =
     (page === "products" && Boolean(priceSheetId)) ||
     (section === "store-gallery" && page === "pricing" && Boolean(productId));
-  const dashboardChromeOpen = !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail;
+  const dashboardChromeOpen =
+    !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail;
   const storeTopNavOpen = dashboardChromeOpen && section === "store-gallery";
   const [logoutPending, startLogoutTransition] = useTransition();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [billingUser, setBillingUser] = useState<BillingUser | null>(null);
   useEffect(() => {
     let active = true;
-    const loadBilling = () => getBillingOverview()
-      .then((value) => {
-        if (active) setBillingUser(value.user);
-      })
-      .catch(() => undefined);
+    const loadBilling = () =>
+      getBillingOverview()
+        .then((value) => {
+          if (active) setBillingUser(value.user);
+        })
+        .catch(() => undefined);
     const onStorageChanged = () => {
       void loadBilling();
     };
-    const onVisible = () => { if (document.visibilityState === "visible") void loadBilling(); };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadBilling();
+    };
     void loadBilling();
     window.addEventListener("storage-usage-changed", onStorageChanged);
     window.addEventListener("focus", loadBilling);
@@ -423,11 +483,20 @@ export function ClientDashboard({
   const sidebarUsedGb = bytesToGb(billingUser?.storageUsedBytes ?? 0);
   const sidebarLimitGb = Math.max(0, Number(billingUser?.storageLimitGb ?? 0));
   const sidebarStorageLeftGb = Math.max(0, sidebarLimitGb - sidebarUsedGb);
-  const sidebarStoragePercent = sidebarLimitGb > 0 ? Math.min(100, (sidebarUsedGb / sidebarLimitGb) * 100) : 0;
+  const sidebarStoragePercent =
+    sidebarLimitGb > 0
+      ? Math.min(100, (sidebarUsedGb / sidebarLimitGb) * 100)
+      : 0;
   const sidebarEmailLimit = Number(billingUser?.monthlyEmailLimit ?? 0);
   const sidebarEmailsUsed = Number(billingUser?.monthlyEmailsUsed ?? 0);
-  const sidebarEmailsLeft = sidebarEmailLimit > 0 ? Math.max(0, sidebarEmailLimit - sidebarEmailsUsed) : 0;
-  const sidebarEmailPercent = sidebarEmailLimit > 0 ? Math.min(100, (sidebarEmailsUsed / sidebarEmailLimit) * 100) : 0;
+  const sidebarEmailsLeft =
+    sidebarEmailLimit > 0
+      ? Math.max(0, sidebarEmailLimit - sidebarEmailsUsed)
+      : 0;
+  const sidebarEmailPercent =
+    sidebarEmailLimit > 0
+      ? Math.min(100, (sidebarEmailsUsed / sidebarEmailLimit) * 100)
+      : 0;
   const logout = () => {
     startLogoutTransition(async () => {
       await logOutUser();
@@ -437,199 +506,283 @@ export function ClientDashboard({
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-white text-[#151515]">
-      {dashboardChromeOpen && !storeTopNavOpen && <aside
+      {dashboardChromeOpen && !storeTopNavOpen && (
+        <aside
+          className={cn(
+            "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
+            collapsed ? "w-[76px]" : "w-[292px]",
+          )}
+        >
+          <div className="flex h-[62px] items-center justify-between border-b border-[#f1f1f1] px-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 text-sm font-bold outline-none">
+                  <span
+                    className={cn("size-5 rounded-full", activeSwitcher?.mark)}
+                  />
+                  {!collapsed && active.title}
+                  {!collapsed && <ChevronDown className="size-3 text-[#777]" />}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
+                <DropdownMenuGroup className="p-5">
+                  {switcherItems.map((item) => (
+                    <DropdownMenuItem key={item.key} asChild className="p-0">
+                      <Link
+                        href={item.href}
+                        className="flex gap-4 rounded-none px-2 py-4"
+                      >
+                        <span
+                          className={cn(
+                            "mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br",
+                            item.accent,
+                          )}
+                        />
+                        <span className="flex flex-col gap-1">
+                          <span className="font-bold text-[#151515]">
+                            {item.title}
+                          </span>
+                          <span className="text-xs leading-5 text-[#777]">
+                            {item.text}
+                          </span>
+                        </span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+                <div className="bg-[#f7f7f7] p-5 text-center">
+                  <Link
+                    href="/dashboard/overview"
+                    className="inline-flex items-center gap-2 text-sm text-[#333]"
+                  >
+                    <LayoutGrid className="size-4 text-[#999]" />
+                    View Dashboard
+                  </Link>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div
+              className={cn("flex items-center gap-4", collapsed && "hidden")}
+            >
+              {section === "client-gallery" && <DashboardNotifications />}
+              <Link
+                href="/dashboard/client-gallery/account"
+                aria-label="Account profile"
+              >
+                <Avatar className="size-7">
+                  <AvatarImage src={billingUser?.avatar || ""} />
+                  <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">
+                    {billingUser?.name?.slice(0, 1).toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+              </Link>
+              <button
+                aria-label="Logout"
+                className="text-[#555] hover:text-red-600 disabled:opacity-50"
+                disabled={logoutPending}
+                onClick={logout}
+              >
+                <LogOut className="size-5" />
+              </button>
+            </div>
+          </div>
+
+          <nav className="flex flex-1 flex-col px-4 py-7">
+            <div className="flex flex-col gap-8">
+              {sidebarItems[section].map((item) => (
+                <Link
+                  key={item.label}
+                  href={
+                    item.page === "collections"
+                      ? `/dashboard/${section}`
+                      : `/dashboard/${section}/${item.page}`
+                  }
+                  className={cn(
+                    "flex items-center gap-4 text-left text-base text-[#222]",
+                    activeNav === item.label && "font-semibold text-[#00a997]",
+                  )}
+                >
+                  <item.icon
+                    className={cn(
+                      "size-5 text-[#333]",
+                      activeNav === item.label && "text-[#00a997]",
+                    )}
+                  />
+                  {!collapsed && item.label}
+                </Link>
+              ))}
+            </div>
+
+            {section === "client-gallery" && (
+              <div className="mt-11 flex flex-col gap-8">
+                {!collapsed && <p className="text-base text-[#777]">Tools</p>}
+                <Link
+                  href={`/dashboard/${section}/marketing/email-campaigns`}
+                  className={cn(
+                    "flex items-center gap-4 text-left text-base text-[#222]",
+                    page === "marketing" && "font-semibold text-[#00a997]",
+                  )}
+                >
+                  <Megaphone
+                    className={cn(
+                      "size-5 text-[#333]",
+                      page === "marketing" && "text-[#00a997]",
+                    )}
+                  />
+                  {!collapsed && "Marketing"}
+                </Link>
+                {!collapsed && (
+                  <div className="ml-7 flex flex-col border-l border-[#e8e8e8] pl-4">
+                    {[
+                      {
+                        label: "Email Campaigns",
+                        slug: "email-campaigns",
+                        icon: Mail,
+                      },
+                      { label: "Contacts", slug: "contacts", icon: Users },
+                      { label: "Settings", slug: "settings", icon: MailCheck },
+                    ].map((item) => (
+                      <Link
+                        key={item.slug}
+                        href={`/dashboard/${section}/marketing/${item.slug}`}
+                        className={cn(
+                          "flex h-12 items-center gap-4 px-3 text-base text-[#222]",
+                          marketingPage === item.slug &&
+                            "bg-[#f3f3f3] font-medium",
+                        )}
+                      >
+                        <item.icon className="size-5" />
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-auto grid gap-4 pt-8">
+              {section === "client-gallery" && (
+                <Link
+                  href={`/dashboard/${section}/storage`}
+                  className={cn(
+                    "flex items-center gap-3 bg-[#f3faf6] text-left",
+                    collapsed
+                      ? "mx-auto size-12 justify-center p-0"
+                      : "w-full p-4",
+                  )}
+                  title="Storage"
+                >
+                  <div className="flex size-10 items-center justify-center rounded-full bg-[#dff6ef] text-[#19bba7]">
+                    <Database className="size-5" />
+                  </div>
+                  {!collapsed && (
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-[#00a997]">
+                          Storage
+                        </p>
+                        <PlusCircle className="size-4 text-[#16bda8]" />
+                      </div>
+                      <p className="mt-1 text-xs text-[#777]">
+                        {sidebarUsedGb.toFixed(2)} GB used /{" "}
+                        {sidebarStorageLeftGb.toFixed(2)} GB left
+                      </p>
+                      <Progress
+                        value={sidebarStoragePercent}
+                        className="mt-2 bg-[#dceee8]"
+                      />
+                      {sidebarEmailLimit > 0 && (
+                        <>
+                          <p className="mt-3 text-xs text-[#777]">
+                            {sidebarEmailsUsed} emails used /{" "}
+                            {sidebarEmailsLeft} left
+                          </p>
+                          <Progress
+                            value={sidebarEmailPercent}
+                            className="mt-2 bg-[#dceee8]"
+                          />
+                        </>
+                      )}
+                    </div>
+                  )}
+                </Link>
+              )}
+              <button
+                className={cn(
+                  "flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50",
+                  collapsed && "justify-center",
+                )}
+                onClick={logout}
+                disabled={logoutPending}
+              >
+                <LogOut className="size-5" />
+                {!collapsed && "Logout"}
+              </button>
+              <button
+                className={cn(
+                  "flex items-center text-[#333]",
+                  collapsed && "justify-center",
+                )}
+                onClick={toggleCollapsed}
+                aria-label="Toggle sidebar"
+              >
+                <ChevronsLeft
+                  className={cn("size-6", collapsed && "rotate-180")}
+                />
+              </button>
+            </div>
+          </nav>
+        </aside>
+      )}
+
+      <section
         className={cn(
-          "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
-          collapsed ? "w-[76px]" : "w-[292px]"
+          "min-h-screen transition-all",
+          dashboardChromeOpen && !storeTopNavOpen
+            ? collapsed
+              ? "md:pl-[76px]"
+              : "md:pl-[292px]"
+            : "",
         )}
       >
-        <div className="flex h-[62px] items-center justify-between border-b border-[#f1f1f1] px-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 text-sm font-bold outline-none">
-                <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
-                {!collapsed && active.title}
-                {!collapsed && <ChevronDown className="size-3 text-[#777]" />}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
-              <DropdownMenuGroup className="p-5">
-                {switcherItems.map((item) => (
-                  <DropdownMenuItem key={item.key} asChild className="p-0">
-                    <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
-                      <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
-                      <span className="flex flex-col gap-1">
-                        <span className="font-bold text-[#151515]">{item.title}</span>
-                        <span className="text-xs leading-5 text-[#777]">{item.text}</span>
-                      </span>
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-              <div className="bg-[#f7f7f7] p-5 text-center">
-                <Link href="/dashboard/overview" className="inline-flex items-center gap-2 text-sm text-[#333]">
-                  <LayoutGrid className="size-4 text-[#999]" />
-                  View Dashboard
-                </Link>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <div className={cn("flex items-center gap-4", collapsed && "hidden")}>
-            {section === "client-gallery" && <DashboardNotifications />}
-            <Link href="/dashboard/client-gallery/account" aria-label="Account profile">
-              <Avatar className="size-7">
-                <AvatarImage src={billingUser?.avatar || ""} />
-                <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">{billingUser?.name?.slice(0, 1).toUpperCase() || "U"}</AvatarFallback>
-              </Avatar>
-            </Link>
+        {storeTopNavOpen && (
+          <StoreTopNavigation
+            activePage={page}
+            logout={logout}
+            logoutPending={logoutPending}
+          />
+        )}
+        {dashboardChromeOpen && !storeTopNavOpen && (
+          <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
             <button
-              aria-label="Logout"
-              className="text-[#555] hover:text-red-600 disabled:opacity-50"
-              disabled={logoutPending}
-              onClick={logout}
+              className="flex size-10 items-center justify-center bg-[#111] text-white"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open dashboard menu"
             >
-              <LogOut className="size-5" />
+              <Menu className="size-5" />
             </button>
-          </div>
-        </div>
-
-        <nav className="flex flex-1 flex-col px-4 py-7">
-          <div className="flex flex-col gap-8">
-            {sidebarItems[section].map((item) => (
-              <Link
-                key={item.label}
-                href={item.page === "collections" ? `/dashboard/${section}` : `/dashboard/${section}/${item.page}`}
-                className={cn(
-                  "flex items-center gap-4 text-left text-base text-[#222]",
-                  activeNav === item.label && "font-semibold text-[#00a997]"
-                )}
-              >
-                <item.icon
-                  className={cn(
-                    "size-5 text-[#333]",
-                    activeNav === item.label && "text-[#00a997]"
-                  )}
-                />
-                {!collapsed && item.label}
-              </Link>
-            ))}
-          </div>
-
-          {section === "client-gallery" && (
-            <div className="mt-11 flex flex-col gap-8">
-              {!collapsed && <p className="text-base text-[#777]">Tools</p>}
-              <Link
-                href={`/dashboard/${section}/marketing/email-campaigns`}
-                className={cn(
-                  "flex items-center gap-4 text-left text-base text-[#222]",
-                  page === "marketing" && "font-semibold text-[#00a997]"
-                )}
-              >
-                <Megaphone
-                  className={cn(
-                    "size-5 text-[#333]",
-                    page === "marketing" && "text-[#00a997]"
-                  )}
-                />
-                {!collapsed && "Marketing"}
-              </Link>
-              {!collapsed && (
-                <div className="ml-7 flex flex-col border-l border-[#e8e8e8] pl-4">
-                  {[
-                    { label: "Email Campaigns", slug: "email-campaigns", icon: Mail },
-                    { label: "Contacts", slug: "contacts", icon: Users },
-                    { label: "Settings", slug: "settings", icon: MailCheck },
-                  ].map((item) => (
-                    <Link
-                      key={item.slug}
-                      href={`/dashboard/${section}/marketing/${item.slug}`}
-                      className={cn(
-                        "flex h-12 items-center gap-4 px-3 text-base text-[#222]",
-                        marketingPage === item.slug && "bg-[#f3f3f3] font-medium"
-                      )}
-                    >
-                      <item.icon className="size-5" />
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
+            <div className="flex min-w-0 items-center gap-2 text-sm font-bold">
+              <span
+                className={cn("size-5 rounded-full", activeSwitcher?.mark)}
+              />
+              <span className="truncate">{active.title}</span>
             </div>
-          )}
-
-          <div className="mt-auto grid gap-4 pt-8">
-            {section === "client-gallery" && (
-              <Link
-                href={`/dashboard/${section}/storage`}
-                className={cn(
-                  "flex items-center gap-3 bg-[#f3faf6] text-left",
-                  collapsed ? "mx-auto size-12 justify-center p-0" : "w-full p-4"
-                )}
-                title="Storage"
-              >
-                <div className="flex size-10 items-center justify-center rounded-full bg-[#dff6ef] text-[#19bba7]">
-                  <Database className="size-5" />
-                </div>
-                {!collapsed && <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-[#00a997]">Storage</p>
-                    <PlusCircle className="size-4 text-[#16bda8]" />
-                  </div>
-                  <p className="mt-1 text-xs text-[#777]">
-                    {sidebarUsedGb.toFixed(2)} GB used / {sidebarStorageLeftGb.toFixed(2)} GB left
-                  </p>
-                  <Progress value={sidebarStoragePercent} className="mt-2 bg-[#dceee8]" />
-                  {sidebarEmailLimit > 0 && (
-                    <>
-                      <p className="mt-3 text-xs text-[#777]">
-                        {sidebarEmailsUsed} emails used / {sidebarEmailsLeft} left
-                      </p>
-                      <Progress value={sidebarEmailPercent} className="mt-2 bg-[#dceee8]" />
-                    </>
-                  )}
-                </div>}
-              </Link>
-            )}
-            <button
-              className={cn(
-                "flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50",
-                collapsed && "justify-center"
+            <div className="flex items-center gap-2">
+              {section === "client-gallery" && (
+                <DashboardNotifications mobile />
               )}
-              onClick={logout}
-              disabled={logoutPending}
-            >
-              <LogOut className="size-5" />
-              {!collapsed && "Logout"}
-            </button>
-            <button
-              className={cn("flex items-center text-[#333]", collapsed && "justify-center")}
-              onClick={toggleCollapsed}
-              aria-label="Toggle sidebar"
-            >
-              <ChevronsLeft className={cn("size-6", collapsed && "rotate-180")} />
-            </button>
+              <button
+                aria-label="Logout"
+                onClick={logout}
+                disabled={logoutPending}
+                className="flex size-10 items-center justify-center bg-[#f4f4f4]"
+              >
+                <LogOut className="size-5" />
+              </button>
+            </div>
           </div>
-        </nav>
-      </aside>}
-
-      <section className={cn("min-h-screen transition-all", dashboardChromeOpen && !storeTopNavOpen ? collapsed ? "md:pl-[76px]" : "md:pl-[292px]" : "")}>
-        {storeTopNavOpen && <StoreTopNavigation activePage={page} logout={logout} logoutPending={logoutPending} />}
-        {dashboardChromeOpen && !storeTopNavOpen && <div className="flex h-14 items-center justify-between border-b border-[#f1f1f1] px-4 md:hidden">
-          <button className="flex size-10 items-center justify-center bg-[#111] text-white" onClick={() => setMobileMenuOpen(true)} aria-label="Open dashboard menu">
-            <Menu className="size-5" />
-          </button>
-          <div className="flex min-w-0 items-center gap-2 text-sm font-bold">
-            <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
-            <span className="truncate">{active.title}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {section === "client-gallery" && <DashboardNotifications mobile />}
-            <button aria-label="Logout" onClick={logout} disabled={logoutPending} className="flex size-10 items-center justify-center bg-[#f4f4f4]">
-              <LogOut className="size-5" />
-            </button>
-          </div>
-        </div>}
+        )}
 
         {mobileMenuOpen && dashboardChromeOpen && !storeTopNavOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 md:hidden">
@@ -638,7 +791,12 @@ export function ClientDashboard({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 text-sm font-bold outline-none">
-                      <span className={cn("size-5 rounded-full", activeSwitcher?.mark)} />
+                      <span
+                        className={cn(
+                          "size-5 rounded-full",
+                          activeSwitcher?.mark,
+                        )}
+                      />
                       {active.title}
                       <ChevronDown className="size-3" />
                     </button>
@@ -646,30 +804,51 @@ export function ClientDashboard({
                   <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[300px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
                     <DropdownMenuGroup>
                       {switcherItems.map((item) => (
-                        <DropdownMenuItem key={item.key} asChild className="p-0">
+                        <DropdownMenuItem
+                          key={item.key}
+                          asChild
+                          className="p-0"
+                        >
                           <Link
                             href={item.href}
                             onClick={() => setMobileMenuOpen(false)}
                             className="flex gap-4 px-4 py-4"
                           >
-                            <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
+                            <span
+                              className={cn(
+                                "mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br",
+                                item.accent,
+                              )}
+                            />
                             <span className="flex flex-col gap-1">
-                              <span className="font-bold text-[#151515]">{item.title}</span>
-                              <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                              <span className="font-bold text-[#151515]">
+                                {item.title}
+                              </span>
+                              <span className="text-xs leading-5 text-[#777]">
+                                {item.text}
+                              </span>
                             </span>
                           </Link>
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuGroup>
                     <div className="bg-[#f7f7f7] p-4 text-center">
-                      <Link href="/dashboard/overview" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center gap-2 text-sm text-[#333]">
+                      <Link
+                        href="/dashboard/overview"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="inline-flex items-center gap-2 text-sm text-[#333]"
+                      >
                         <LayoutGrid className="size-4 text-[#999]" />
                         View Dashboard
                       </Link>
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <button className="flex size-10 items-center justify-center bg-[#f4f4f4]" onClick={() => setMobileMenuOpen(false)} aria-label="Close dashboard menu">
+                <button
+                  className="flex size-10 items-center justify-center bg-[#f4f4f4]"
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Close dashboard menu"
+                >
                   <X className="size-5" />
                 </button>
               </div>
@@ -678,30 +857,62 @@ export function ClientDashboard({
                 {sidebarItems[section].map((item) => (
                   <Link
                     key={item.label}
-                    href={item.page === "collections" ? `/dashboard/${section}` : `/dashboard/${section}/${item.page}`}
+                    href={
+                      item.page === "collections"
+                        ? `/dashboard/${section}`
+                        : `/dashboard/${section}/${item.page}`
+                    }
                     onClick={() => setMobileMenuOpen(false)}
-                    className={cn("flex items-center gap-4 text-base text-[#222]", activeNav === item.label && "font-semibold text-[#00a997]")}
+                    className={cn(
+                      "flex items-center gap-4 text-base text-[#222]",
+                      activeNav === item.label &&
+                        "font-semibold text-[#00a997]",
+                    )}
                   >
-                    <item.icon className={cn("size-5 text-[#333]", activeNav === item.label && "text-[#00a997]")} />
+                    <item.icon
+                      className={cn(
+                        "size-5 text-[#333]",
+                        activeNav === item.label && "text-[#00a997]",
+                      )}
+                    />
                     {item.label}
                   </Link>
                 ))}
                 {section === "client-gallery" && (
                   <>
-                    <p className="mt-4 text-sm font-semibold text-[#777]">Tools</p>
+                    <p className="mt-4 text-sm font-semibold text-[#777]">
+                      Tools
+                    </p>
                     <Link
                       href={`/dashboard/${section}/marketing/email-campaigns`}
                       onClick={() => setMobileMenuOpen(false)}
-                      className={cn("flex items-center gap-4 text-base text-[#222]", page === "marketing" && "font-semibold text-[#00a997]")}
+                      className={cn(
+                        "flex items-center gap-4 text-base text-[#222]",
+                        page === "marketing" && "font-semibold text-[#00a997]",
+                      )}
                     >
-                      <Megaphone className={cn("size-5 text-[#333]", page === "marketing" && "text-[#00a997]")} />
+                      <Megaphone
+                        className={cn(
+                          "size-5 text-[#333]",
+                          page === "marketing" && "text-[#00a997]",
+                        )}
+                      />
                       Marketing
                     </Link>
                     <div className="ml-9 grid gap-3">
                       {[
-                        ["Email Campaigns", `/dashboard/${section}/marketing/email-campaigns`],
-                        ["Contacts", `/dashboard/${section}/marketing/contacts`],
-                        ["Settings", `/dashboard/${section}/marketing/settings`],
+                        [
+                          "Email Campaigns",
+                          `/dashboard/${section}/marketing/email-campaigns`,
+                        ],
+                        [
+                          "Contacts",
+                          `/dashboard/${section}/marketing/contacts`,
+                        ],
+                        [
+                          "Settings",
+                          `/dashboard/${section}/marketing/settings`,
+                        ],
                       ].map(([label, href]) => (
                         <Link
                           key={href}
@@ -722,7 +933,8 @@ export function ClientDashboard({
                       <span>
                         <span className="block">Storage</span>
                         <span className="mt-1 block text-xs text-[#777]">
-                          {sidebarUsedGb.toFixed(2)} GB used / {sidebarStorageLeftGb.toFixed(2)} GB left
+                          {sidebarUsedGb.toFixed(2)} GB used /{" "}
+                          {sidebarStorageLeftGb.toFixed(2)} GB left
                         </span>
                       </span>
                     </Link>
@@ -730,7 +942,11 @@ export function ClientDashboard({
                 )}
               </nav>
 
-              <button className="mt-10 flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50" onClick={logout} disabled={logoutPending}>
+              <button
+                className="mt-10 flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50"
+                onClick={logout}
+                disabled={logoutPending}
+              >
                 <LogOut className="size-5" />
                 Logout
               </button>
@@ -738,91 +954,129 @@ export function ClientDashboard({
           </div>
         )}
 
-        <div className={cn("mx-auto min-h-screen", campaignBuilderOpen ? "" : isCollectionDetail || isPriceSheetDetail ? "max-w-none px-0 py-0" : storeTopNavOpen ? "max-w-[1220px] px-4 py-10 sm:px-5 md:py-14" : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20")}>
+        <div
+          className={cn(
+            "mx-auto min-h-screen",
+            campaignBuilderOpen
+              ? ""
+              : isCollectionDetail || isPriceSheetDetail
+                ? "max-w-none px-0 py-0"
+                : storeTopNavOpen
+                  ? "max-w-[1220px] px-4 py-10 sm:px-5 md:py-14"
+                  : "max-w-[1220px] px-4 py-10 sm:px-5 md:py-20",
+          )}
+        >
           <PlanFeatureLock
             feature={section === "store-gallery" ? "store" : "marketingEmails"}
             label={section === "store-gallery" ? "Store" : "Marketing email"}
-            className={section === "store-gallery" || page === "marketing" || campaignBuilderOpen ? "min-h-[520px]" : "contents"}
-            bypass={section !== "store-gallery" && page !== "marketing" && !campaignBuilderOpen}
+            className={
+              section === "store-gallery" ||
+              page === "marketing" ||
+              campaignBuilderOpen
+                ? "min-h-[520px]"
+                : "contents"
+            }
+            bypass={
+              section !== "store-gallery" &&
+              page !== "marketing" &&
+              !campaignBuilderOpen
+            }
           >
-          {campaignBuilderOpen ? (
-            <CampaignBuilder onClose={closeCampaignBuilder} />
-          ) : wizardOpen ? (
-            <CollectionWizard />
-          ) : page === "library" ? (
-            <LibraryPanel onNewCollection={startWizard} />
-          ) : page === "starred" ? (
-            <StarredPanel />
-          ) : section === "store-gallery" && page === "settings" ? (
-            <StoreSettingsPanel />
-          ) : page === "settings" ? (
-            <SettingsPanel section={section} settingsPage={settingsPage} />
-          ) : page === "homepage" ? (
-            <HomepageSettings />
-          ) : page === "storage" ? (
-            <StoragePlanPanel />
-          ) : page === "account" ? (
-            <AccountPanel />
-          ) : page === "marketing" ? (
-            <MarketingPanel marketingPage={marketingPage} />
-          ) : page === "collection-new" ? (
-            <CollectionNewPanel section={section} />
-          ) : section === "store-gallery" && page === "get-started" ? (
-            <StoreGetStartedPanel />
-          ) : section === "store-gallery" && page === "storefront" ? (
-            <StoreDashboardPanel />
-          ) : section === "store-gallery" && page === "orders" ? (
-            <StoreOrdersPanel />
-          ) : section === "store-gallery" && page === "customers" ? (
-            <StoreCustomersPanel />
-          ) : section === "store-gallery" && page === "coupons" ? (
-            <StoreCouponsPanel />
-          ) : section === "store-gallery" && page === "taxes" ? (
-            <StoreTaxesPanel />
-          ) : section === "store-gallery" && page === "shipping" ? (
-            <StoreShippingPanel />
-          ) : section === "store-gallery" && page === "pricing" && productId ? (
-            <StorePricingRouteEditor productId={productId} productType={productType} />
-          ) : section === "store-gallery" && page === "pricing" ? (
-            <StorePricingPanel />
-          ) : page === "products" && priceSheetId && productId ? (
-            <StoreProductRouteEditor
-              priceSheetId={priceSheetId}
-              productId={productId}
-              productType={productType}
-            />
-          ) : page === "products" && priceSheetId ? (
-            <StorePriceSheetDetail priceSheetId={priceSheetId} />
-          ) : page === "collections" && collectionId ? (
-            <CollectionDetailView section={section} collectionId={collectionId} />
-          ) : section === "store-gallery" && page === "products" ? (
-            <StoreProductsPanel />
-          ) : isCollectionIndex ? (
-            <CollectionsPanel section={section} />
-          ) : (
-            <DashboardPlaceholder page={page} title={activeNav} />
-          )}
-</PlanFeatureLock>
+            {campaignBuilderOpen ? (
+              <CampaignBuilder onClose={closeCampaignBuilder} />
+            ) : wizardOpen ? (
+              <CollectionWizard />
+            ) : page === "library" ? (
+              <LibraryPanel onNewCollection={startWizard} />
+            ) : page === "starred" ? (
+              <StarredPanel />
+            ) : section === "store-gallery" && page === "settings" ? (
+              <StoreSettingsPanel />
+            ) : page === "settings" ? (
+              <SettingsPanel section={section} settingsPage={settingsPage} />
+            ) : page === "homepage" ? (
+              <HomepageSettings />
+            ) : page === "storage" ? (
+              <StoragePlanPanel />
+            ) : page === "account" ? (
+              <AccountPanel />
+            ) : page === "marketing" ? (
+              <MarketingPanel marketingPage={marketingPage} />
+            ) : page === "collection-new" ? (
+              <CollectionNewPanel section={section} />
+            ) : section === "store-gallery" && page === "get-started" ? (
+              <StoreGetStartedPanel />
+            ) : section === "store-gallery" && page === "storefront" ? (
+              <StoreDashboardPanel />
+            ) : section === "store-gallery" && page === "orders" ? (
+              <StoreOrdersPanel />
+            ) : section === "store-gallery" && page === "customers" ? (
+              <StoreCustomersPanel />
+            ) : section === "store-gallery" && page === "coupons" ? (
+              <StoreCouponsPanel />
+            ) : section === "store-gallery" && page === "taxes" ? (
+              <StoreTaxesPanel />
+            ) : section === "store-gallery" && page === "shipping" ? (
+              <StoreShippingPanel />
+            ) : section === "store-gallery" &&
+              page === "pricing" &&
+              productId ? (
+              <StorePricingRouteEditor
+                productId={productId}
+                productType={productType}
+              />
+            ) : section === "store-gallery" && page === "pricing" ? (
+              <StorePricingPanel />
+            ) : page === "products" && priceSheetId && productId ? (
+              <StoreProductRouteEditor
+                priceSheetId={priceSheetId}
+                productId={productId}
+                productType={productType}
+              />
+            ) : page === "products" && priceSheetId ? (
+              <StorePriceSheetDetail priceSheetId={priceSheetId} />
+            ) : page === "collections" && collectionId ? (
+              <CollectionDetailView
+                section={section}
+                collectionId={collectionId}
+              />
+            ) : section === "store-gallery" && page === "products" ? (
+              <StoreProductsPanel />
+            ) : isCollectionIndex ? (
+              <CollectionsPanel section={section} />
+            ) : (
+              <DashboardPlaceholder page={page} title={activeNav} />
+            )}
+          </PlanFeatureLock>
         </div>
       </section>
-
     </main>
   );
 }
 
 function AccountPanel() {
   const { query, update } = useAccount();
-  const [tab, setTab] = useState<"profile" | "account" | "purchases">("profile");
+  const [tab, setTab] = useState<"profile" | "account" | "purchases">(
+    "profile",
+  );
   const [purchases, setPurchases] = useState<PlanPurchase[]>([]);
-  const [form, setForm] = useState<Partial<AccountProfile> & { password?: string }>({});
-  const [usernameState, setUsernameState] = useState<"idle" | "checking" | "available" | "unavailable">("idle");
+  const [form, setForm] = useState<
+    Partial<AccountProfile> & { password?: string }
+  >({});
+  const [usernameState, setUsernameState] = useState<
+    "idle" | "checking" | "available" | "unavailable"
+  >("idle");
   const [usernameMessage, setUsernameMessage] = useState("");
 
   useEffect(() => {
     if (query.data?.data) setForm(query.data.data);
   }, [query.data]);
 
-  useEffect(() => { getPurchaseHistory().then(setPurchases).catch(() => setPurchases([])); }, []);
+  useEffect(() => {
+    getPurchaseHistory()
+      .then(setPurchases)
+      .catch(() => setPurchases([]));
+  }, []);
 
   useEffect(() => {
     const username = form.username?.trim() || "";
@@ -836,7 +1090,9 @@ function AccountPanel() {
       checkUsername(username)
         .then(({ data }) => {
           setUsernameState(data.available ? "available" : "unavailable");
-          setUsernameMessage(data.available ? "Username available" : data.reason);
+          setUsernameMessage(
+            data.available ? "Username available" : data.reason,
+          );
         })
         .catch(() => {
           setUsernameState("unavailable");
@@ -846,62 +1102,252 @@ function AccountPanel() {
     return () => window.clearTimeout(timer);
   }, [form.username, query.data?.data?.username]);
 
-  const field = (key: keyof AccountProfile, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const save = () => update.mutate(form, {
-    onSuccess: () => toast.success("Account saved"),
-    onError: (error) => toast.error(error.message),
-  });
+  const field = (key: keyof AccountProfile, value: string) =>
+    setForm((current) => ({ ...current, [key]: value }));
+  const save = () =>
+    update.mutate(form, {
+      onSuccess: () => toast.success("Account saved"),
+      onError: (error) => toast.error(error.message),
+    });
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "gallerista.app";
 
-  if (query.isLoading) return <div className="mx-auto max-w-[800px]"><Skeleton className="h-[520px] w-full" /></div>;
-  if (query.isError) return <p className="text-center text-red-600">Could not load account.</p>;
+  if (query.isLoading)
+    return (
+      <div className="mx-auto max-w-[800px]">
+        <Skeleton className="h-[520px] w-full" />
+      </div>
+    );
+  if (query.isError)
+    return <p className="text-center text-red-600">Could not load account.</p>;
 
   return (
     <section className="mx-auto max-w-[800px] pb-20">
       <header className="border-b pb-5">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00a997]">Workspace identity</p>
-        <h1 className="mt-2 text-3xl font-medium">{tab === "profile" ? "Profile" : tab === "account" ? "Account" : "Purchases"}</h1>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00a997]">
+          Workspace identity
+        </p>
+        <h1 className="mt-2 text-3xl font-medium">
+          {tab === "profile"
+            ? "Profile"
+            : tab === "account"
+              ? "Account"
+              : "Purchases"}
+        </h1>
       </header>
       <nav className="mt-6 flex gap-8 border-b" aria-label="Account sections">
         {(["profile", "account", "purchases"] as const).map((item) => (
-          <button key={item} type="button" onClick={() => setTab(item)} className={cn("border-b-2 px-1 pb-3 text-sm capitalize", tab === item ? "border-[#00b7a5] font-semibold text-[#111]" : "border-transparent text-[#777]")}>{item}</button>
+          <button
+            key={item}
+            type="button"
+            onClick={() => setTab(item)}
+            className={cn(
+              "border-b-2 px-1 pb-3 text-sm capitalize",
+              tab === item
+                ? "border-[#00b7a5] font-semibold text-[#111]"
+                : "border-transparent text-[#777]",
+            )}
+          >
+            {item}
+          </button>
         ))}
-        <Link href="/dashboard/client-gallery/storage" className="px-1 pb-3 text-sm text-[#777]">Billing</Link>
+        <Link
+          href="/dashboard/client-gallery/storage"
+          className="px-1 pb-3 text-sm text-[#777]"
+        >
+          Billing
+        </Link>
       </nav>
 
       {tab === "profile" ? (
         <div className="mt-10 grid gap-7">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">Business details</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">
+            Business details
+          </p>
           <div className="flex items-center gap-5">
-            <Avatar className="size-24 rounded-none bg-[#f1f1f1]"><AvatarImage src={form.avatar || ""} className="object-cover" /><AvatarFallback className="rounded-none text-2xl">{form.businessName?.slice(0, 1) || "+"}</AvatarFallback></Avatar>
-            <FieldInput label="Profile image URL" value={form.avatar || ""} onChange={(value) => field("avatar", value)} help="Square image shown on galleries and account pages." />
+            <Avatar className="size-24 rounded-none bg-[#f1f1f1]">
+              <AvatarImage src={form.avatar || ""} className="object-cover" />
+              <AvatarFallback className="rounded-none text-2xl">
+                {form.businessName?.slice(0, 1) || "+"}
+              </AvatarFallback>
+            </Avatar>
+            <FieldInput
+              label="Profile image URL"
+              value={form.avatar || ""}
+              onChange={(value) => field("avatar", value)}
+              help="Square image shown on galleries and account pages."
+            />
           </div>
-          <FieldInput label="Business Name" value={form.businessName || ""} onChange={(value) => field("businessName", value)} />
-          <div className="grid gap-6 sm:grid-cols-2"><FieldInput label="First Name" value={form.firstName || ""} onChange={(value) => field("firstName", value)} /><FieldInput label="Last Name" value={form.lastName || ""} onChange={(value) => field("lastName", value)} /></div>
-          <FieldInput label="Contact Email" value={form.email || ""} onChange={(value) => field("email", value)} type="email" />
-          <FieldInput label="Phone Number" value={form.phoneNumber || ""} onChange={(value) => field("phoneNumber", value)} />
-          <FieldInput label="Website" value={form.website || ""} onChange={(value) => field("website", value)} />
-          <FieldInput label="Business Address" value={form.businessAddress || ""} onChange={(value) => field("businessAddress", value)} />
-          <label className="grid gap-2"><span className="text-sm font-bold">Biography</span><Textarea value={form.biography || ""} onChange={(event) => field("biography", event.target.value)} className="min-h-32 rounded-none" /></label>
+          <FieldInput
+            label="Business Name"
+            value={form.businessName || ""}
+            onChange={(value) => field("businessName", value)}
+          />
+          <div className="grid gap-6 sm:grid-cols-2">
+            <FieldInput
+              label="First Name"
+              value={form.firstName || ""}
+              onChange={(value) => field("firstName", value)}
+            />
+            <FieldInput
+              label="Last Name"
+              value={form.lastName || ""}
+              onChange={(value) => field("lastName", value)}
+            />
+          </div>
+          <FieldInput
+            label="Contact Email"
+            value={form.email || ""}
+            onChange={(value) => field("email", value)}
+            type="email"
+          />
+          <FieldInput
+            label="Phone Number"
+            value={form.phoneNumber || ""}
+            onChange={(value) => field("phoneNumber", value)}
+          />
+          <FieldInput
+            label="Website"
+            value={form.website || ""}
+            onChange={(value) => field("website", value)}
+          />
+          <FieldInput
+            label="Business Address"
+            value={form.businessAddress || ""}
+            onChange={(value) => field("businessAddress", value)}
+          />
+          <label className="grid gap-2">
+            <span className="text-sm font-bold">Biography</span>
+            <Textarea
+              value={form.biography || ""}
+              onChange={(event) => field("biography", event.target.value)}
+              className="min-h-32 rounded-none"
+            />
+          </label>
         </div>
       ) : tab === "account" ? (
         <div className="mt-10 grid gap-7">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">Account info</p>
-          <FieldInput label="Username" value={form.username || ""} onChange={(value) => field("username", value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} help={`Homepage: https://${form.username || "username"}.${rootDomain}`} />
-          {usernameState !== "idle" && <p className={cn("-mt-5 text-sm font-semibold", usernameState === "available" ? "text-emerald-600" : usernameState === "checking" ? "text-[#777]" : "text-red-600")}>{usernameState === "checking" ? "Checking…" : usernameMessage}</p>}
-          <FieldInput label="Account Email" value={form.email || ""} onChange={(value) => field("email", value)} type="email" />
-          <FieldInput label="New Password" value={form.password || ""} onChange={(value) => setForm((current) => ({ ...current, password: value }))} type="password" help="Leave blank to keep current password." />
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">
+            Account info
+          </p>
+          <FieldInput
+            label="Username"
+            value={form.username || ""}
+            onChange={(value) =>
+              field("username", value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
+            }
+            help={`Homepage: https://${form.username || "username"}.${rootDomain}`}
+          />
+          {usernameState !== "idle" && (
+            <p
+              className={cn(
+                "-mt-5 text-sm font-semibold",
+                usernameState === "available"
+                  ? "text-emerald-600"
+                  : usernameState === "checking"
+                    ? "text-[#777]"
+                    : "text-red-600",
+              )}
+            >
+              {usernameState === "checking" ? "Checking…" : usernameMessage}
+            </p>
+          )}
+          <FieldInput
+            label="Account Email"
+            value={form.email || ""}
+            onChange={(value) => field("email", value)}
+            type="email"
+          />
+          <FieldInput
+            label="New Password"
+            value={form.password || ""}
+            onChange={(value) =>
+              setForm((current) => ({ ...current, password: value }))
+            }
+            type="password"
+            help="Leave blank to keep current password."
+          />
         </div>
       ) : (
-        <div className="mt-10"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">Plan purchase history</p>{purchases.length ? <div className="mt-5 divide-y border-y">{purchases.map((purchase) => <div key={purchase._id} className="flex items-center justify-between py-5"><div><b>{purchase.planName}</b><p className="mt-1 text-xs capitalize text-[#888]">{purchase.source} · {purchase.status}</p></div><div className="text-right"><b>${Number(purchase.amount).toFixed(2)}</b><p className="mt-1 text-xs text-[#888]">{new Date(purchase.createdAt).toLocaleDateString()}</p></div></div>)}</div> : <p className="mt-5 text-sm text-[#888]">No plan purchases yet.</p>}</div>
+        <div className="mt-10">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">
+            Plan purchase history
+          </p>
+          {purchases.length ? (
+            <div className="mt-5 divide-y border-y">
+              {purchases.map((purchase) => (
+                <div
+                  key={purchase._id}
+                  className="flex items-center justify-between py-5"
+                >
+                  <div>
+                    <b>{purchase.planName}</b>
+                    <p className="mt-1 text-xs capitalize text-[#888]">
+                      {purchase.source} · {purchase.status}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <b>${Number(purchase.amount).toFixed(2)}</b>
+                    <p className="mt-1 text-xs text-[#888]">
+                      {new Date(purchase.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-5 text-sm text-[#888]">No plan purchases yet.</p>
+          )}
+        </div>
       )}
-      {tab !== "purchases" && <div className="mt-10 border-t pt-6"><Button type="button" onClick={save} disabled={update.isPending || usernameState === "checking" || usernameState === "unavailable"} className="h-11 rounded-none bg-[#00ad9c] px-8 font-bold text-white">{update.isPending ? <Loader2 className="size-4 animate-spin" /> : "Save changes"}</Button></div>}
+      {tab !== "purchases" && (
+        <div className="mt-10 border-t pt-6">
+          <Button
+            type="button"
+            onClick={save}
+            disabled={
+              update.isPending ||
+              usernameState === "checking" ||
+              usernameState === "unavailable"
+            }
+            className="h-11 rounded-none bg-[#00ad9c] px-8 font-bold text-white"
+          >
+            {update.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              "Save changes"
+            )}
+          </Button>
+        </div>
+      )}
     </section>
   );
 }
 
-function FieldInput({ label, value, onChange, help, type = "text" }: { label: string; value: string; onChange: (value: string) => void; help?: string; type?: string }) {
-  return <label className="grid w-full gap-2"><span className="text-sm font-bold">{label}</span><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-12 rounded-none border-[#d8d8d8] px-4 shadow-none focus-visible:ring-[#00b7a5]" />{help && <span className="text-xs leading-5 text-[#888]">{help}</span>}</label>;
+function FieldInput({
+  label,
+  value,
+  onChange,
+  help,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  help?: string;
+  type?: string;
+}) {
+  return (
+    <label className="grid w-full gap-2">
+      <span className="text-sm font-bold">{label}</span>
+      <Input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-12 rounded-none border-[#d8d8d8] px-4 shadow-none focus-visible:ring-[#00b7a5]"
+      />
+      {help && <span className="text-xs leading-5 text-[#888]">{help}</span>}
+    </label>
+  );
 }
 
 function StoreTopNavigation({
@@ -919,63 +1365,93 @@ function StoreTopNavigation({
     <header className="border-t-[5px] border-[#202020] bg-white text-[#1e1e1e]">
       <div className="bg-[#f7f7f7] px-4 sm:px-8">
         <div className="mx-auto flex h-[50px] max-w-[1220px] items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3 sm:gap-5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex min-w-0 items-center gap-2 text-sm font-semibold outline-none">
-                <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]"><span className="h-[2px] w-3 bg-white" /></span>
-                <span>Store Gallery</span>
-                <ChevronDown className="size-4 text-[#333]" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
-              <DropdownMenuGroup className="p-5">
-              {switcherItems.map((item) => (
-                <DropdownMenuItem key={item.key} asChild className="p-0">
-                  <Link href={item.href} className="flex gap-4 rounded-none px-2 py-4">
-                    <span className={cn("mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br", item.accent)} />
-                    <span className="flex flex-col gap-1">
-                      <span className="font-bold text-[#151515]">{item.title}</span>
-                      <span className="text-xs leading-5 text-[#777]">{item.text}</span>
-                    </span>
+          <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex min-w-0 items-center gap-2 text-sm font-semibold outline-none">
+                  <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]">
+                    <span className="h-[2px] w-3 bg-white" />
+                  </span>
+                  <span>Store Gallery</span>
+                  <ChevronDown className="size-4 text-[#333]" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-[calc(100vw-2rem)] max-w-[340px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]"
+              >
+                <DropdownMenuGroup className="p-5">
+                  {switcherItems.map((item) => (
+                    <DropdownMenuItem key={item.key} asChild className="p-0">
+                      <Link
+                        href={item.href}
+                        className="flex gap-4 rounded-none px-2 py-4"
+                      >
+                        <span
+                          className={cn(
+                            "mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br",
+                            item.accent,
+                          )}
+                        />
+                        <span className="flex flex-col gap-1">
+                          <span className="font-bold text-[#151515]">
+                            {item.title}
+                          </span>
+                          <span className="text-xs leading-5 text-[#777]">
+                            {item.text}
+                          </span>
+                        </span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+                <div className="bg-[#f7f7f7] p-5 text-center">
+                  <Link
+                    href="/dashboard/overview"
+                    className="inline-flex items-center gap-2 text-sm text-[#333]"
+                  >
+                    <LayoutGrid className="size-4 text-[#999]" />
+                    View Dashboard
                   </Link>
-                </DropdownMenuItem>
-              ))}
-              </DropdownMenuGroup>
-              <div className="bg-[#f7f7f7] p-5 text-center">
-                <Link href="/dashboard/overview" className="inline-flex items-center gap-2 text-sm text-[#333]">
-                  <LayoutGrid className="size-4 text-[#999]" />
-                  View Dashboard
-                </Link>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-        <div className="flex shrink-0 items-center gap-3 text-[#666]">
-          <DashboardNotifications />
-          <button className="flex size-8 items-center justify-center rounded-full bg-white text-[#555] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50" onClick={logout} disabled={logoutPending} aria-label="Logout" title="Logout">
-            <LogOut className="size-5" />
-          </button>
-        </div>
+          <div className="flex shrink-0 items-center gap-3 text-[#666]">
+            <DashboardNotifications />
+            <button
+              className="flex size-8 items-center justify-center rounded-full bg-white text-[#555] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              onClick={logout}
+              disabled={logoutPending}
+              aria-label="Logout"
+              title="Logout"
+            >
+              <LogOut className="size-5" />
+            </button>
+          </div>
         </div>
       </div>
       <nav className="overflow-x-auto border-b border-[#ececec] bg-white px-4 sm:px-8">
         <div className="mx-auto max-w-[1220px]">
-        <div className="flex min-w-max items-center gap-7">
-          {items.map((item) => (
-            <Link
-              key={item.label}
-              href={item.page === "storefront" ? "/dashboard/store-gallery" : `/dashboard/store-gallery/${item.page}`}
-              className={cn(
-                "flex h-10 items-center border-b-2 border-transparent text-sm text-[#777] transition-colors hover:text-[#111]",
-                activePage === item.page && "border-[#00a997] text-[#111]"
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
+          <div className="flex min-w-max items-center gap-7">
+            {items.map((item) => (
+              <Link
+                key={item.label}
+                href={
+                  item.page === "storefront"
+                    ? "/dashboard/store-gallery"
+                    : `/dashboard/store-gallery/${item.page}`
+                }
+                className={cn(
+                  "flex h-10 items-center border-b-2 border-transparent text-sm text-[#777] transition-colors hover:text-[#111]",
+                  activePage === item.page && "border-[#00a997] text-[#111]",
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
         </div>
       </nav>
     </header>
@@ -1002,7 +1478,9 @@ function StoreGetStartedPanel() {
   return (
     <div className="mx-auto max-w-[950px] pb-20 text-[#1f2933]">
       <div className="border-b border-[#e8e8e8] pb-4">
-        <h1 className="text-[25px] font-normal tracking-wide">Launch your Store in 2 easy steps</h1>
+        <h1 className="text-[25px] font-normal tracking-wide">
+          Launch your Store in 2 easy steps
+        </h1>
       </div>
 
       <div className="mt-7 grid gap-3 md:grid-cols-2">
@@ -1013,16 +1491,16 @@ function StoreGetStartedPanel() {
             className="flex h-40 flex-col items-center justify-center bg-[#f2f2f2] text-center transition-colors hover:bg-[#ebebeb]"
           >
             <step.icon className="size-9 stroke-[1.8] text-[#29313a]" />
-            <span className="mt-6 text-base font-semibold text-[#151515]">{step.title}</span>
+            <span className="mt-6 text-base font-semibold text-[#151515]">
+              {step.title}
+            </span>
           </button>
         ))}
       </div>
 
       <div className="mt-3 grid gap-6 text-sm text-[#6a7280] md:grid-cols-2">
         {steps.map((step) => (
-          <p key={step.title}>
-            {step.text}
-          </p>
+          <p key={step.title}>{step.text}</p>
         ))}
       </div>
     </div>
@@ -1033,28 +1511,40 @@ function StoragePlanPanel() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [data, setData] = useState<{ plans: AdminPlan[]; user: BillingUser } | null>(null);
+  const [billingInterval, setBillingInterval] = useState<"month" | "year">(
+    "month",
+  );
+  const [data, setData] = useState<{
+    plans: AdminPlan[];
+    user: BillingUser;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
     const load = async (confirmCheckout = false) => {
-      if (confirmCheckout && sessionId) await confirmPlanCheckout(sessionId).catch(() => null);
+      if (confirmCheckout && sessionId)
+        await confirmPlanCheckout(sessionId).catch(() => null);
       return getBillingOverview();
     };
-    const applyBilling = (value: Awaited<ReturnType<typeof getBillingOverview>>) => {
+    const applyBilling = (
+      value: Awaited<ReturnType<typeof getBillingOverview>>,
+    ) => {
       if (active) setData(value);
     };
     const onStorageChanged = () => {
-      void load().then(applyBilling).catch(() => undefined);
+      void load()
+        .then(applyBilling)
+        .catch(() => undefined);
     };
     load(true)
       .then((value) => {
         applyBilling(value);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Billing failed");
+        if (active)
+          setError(err instanceof Error ? err.message : "Billing failed");
       });
     window.addEventListener("storage-usage-changed", onStorageChanged);
     return () => {
@@ -1066,20 +1556,22 @@ function StoragePlanPanel() {
   const user = data?.user;
   const usedGb = bytesToGb(user?.storageUsedBytes ?? 0);
   const limitGb = Number(user?.storageLimitGb ?? 0);
-  const storagePercent = limitGb > 0 ? Math.min(100, (usedGb / limitGb) * 100) : 0;
+  const storagePercent =
+    limitGb > 0 ? Math.min(100, (usedGb / limitGb) * 100) : 0;
   const emailLimit = Number(user?.monthlyEmailLimit ?? 0);
   const emailsUsed = Number(user?.monthlyEmailsUsed ?? 0);
-  const emailPercent = emailLimit > 0 ? Math.min(100, (emailsUsed / emailLimit) * 100) : 0;
+  const emailPercent =
+    emailLimit > 0 ? Math.min(100, (emailsUsed / emailLimit) * 100) : 0;
 
   const buyPlan = (planId: string) => {
     startTransition(async () => {
       setError("");
       try {
-        const result = await checkoutPlan(planId);
+        const result = await checkoutPlan(planId, billingInterval);
         if (result.checkoutUrl) window.location.href = result.checkoutUrl;
         else if (result.activated) {
-setData(await getBillingOverview());
-setNotice("Free plan activated successfully");
+          setData(await getBillingOverview());
+          setNotice("Free plan activated successfully");
         } else setError("Plan activation failed");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Checkout failed");
@@ -1090,20 +1582,81 @@ setNotice("Free plan activated successfully");
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <PageHeader title="Storage & Plan" action="Monthly Plan" />
-        <Button asChild className="h-11 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]">
+        <PageHeader title="Storage & Plan" />
+        <Button
+          asChild
+          className="h-11 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
+        >
           <Link href="/pricing">View Pricing Plans</Link>
         </Button>
       </div>
-      {error && <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">{error}</p>}
-      {notice && <p className="mt-5 border-l-2 border-[#22bda7] pl-3 text-sm font-semibold text-[#008f80]">{notice}</p>}
+      {error && (
+        <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="mt-5 border-l-2 border-[#22bda7] pl-3 text-sm font-semibold text-[#008f80]">
+          {notice}
+        </p>
+      )}
+      <div
+        className="mt-6 inline-flex border bg-white p-1"
+        aria-label="Billing frequency"
+      >
+        <button
+          type="button"
+          onClick={() => setBillingInterval("month")}
+          className={cn(
+            "h-10 px-5 text-sm font-bold",
+            billingInterval === "month"
+              ? "bg-[#111] text-white"
+              : "text-[#555]",
+          )}
+        >
+          Monthly
+        </button>
+        <button
+          type="button"
+          onClick={() => setBillingInterval("year")}
+          className={cn(
+            "h-10 px-5 text-sm font-bold",
+            billingInterval === "year" ? "bg-[#111] text-white" : "text-[#555]",
+          )}
+        >
+          Yearly
+        </button>
+      </div>
+      <div className="mt-5 border-l-4 border-[#22bda7] bg-[#f1faf8] px-5 py-4">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#008f80]">
+          Current plan
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+          <p>
+            <b>{user?.planName ?? "Free"}</b>
+            {user?.planBillingInterval
+              ? ` - ${user.planBillingInterval === "year" ? "Yearly" : "Monthly"}`
+              : ""}
+          </p>
+          <p>
+            <span className="text-[#666]">Expires:</span>{" "}
+            <b>
+              {user?.planExpiresAt
+                ? new Intl.DateTimeFormat(undefined, {
+                    dateStyle: "long",
+                  }).format(new Date(user.planExpiresAt))
+                : "No expiry"}
+            </b>
+          </p>
+        </div>
+      </div>
       <div className="mt-10 grid gap-5 lg:grid-cols-2">
         <UsagePanel
           icon={<Database className="size-5" />}
           title={user?.planName ?? "Free"}
           label="Storage"
           value={`${usedGb.toFixed(2)} GB used`}
-          limit={limitGb > 0 ? `${limitGb} GB / month` : "Uploads disabled"}
+          limit={limitGb > 0 ? `${limitGb} GB total` : "Uploads disabled"}
           percent={storagePercent}
         />
         <UsagePanel
@@ -1111,34 +1664,79 @@ setNotice("Free plan activated successfully");
           title="Monthly emails"
           label="Emails"
           value={`${emailsUsed} sent`}
-          limit={emailLimit > 0 ? `${emailLimit} emails / month` : "Email disabled"}
+          limit={
+            emailLimit > 0 ? `${emailLimit} emails / month` : "Email disabled"
+          }
           percent={emailPercent}
         />
       </div>
       <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {(data?.plans ?? []).map((plan) => (
-          <article key={plan._id} className="border bg-white p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-semibold">{plan.name}</h2>
-                <p className="mt-2 text-sm text-[#666]">Monthly allowance</p>
+        {(data?.plans ?? []).map((plan) => {
+          const yearlyAvailable =
+            Boolean(plan.yearlyEnabled) && Number(plan.priceYearly ?? 0) > 0;
+          const monthlyEquivalent =
+            billingInterval === "year"
+              ? yearlyAvailable
+                ? Number(plan.priceYearly ?? 0) / 12
+                : 0
+              : Number(plan.priceMonthly ?? 0);
+          return (
+            <article key={plan._id} className="border bg-white p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold">{plan.name}</h2>
+                  <p className="mt-2 text-sm text-[#666]">
+                    Storage allowance + monthly email quota
+                  </p>
+                </div>
+                <CreditCard className="size-5 text-[#00a997]" />
               </div>
-              <CreditCard className="size-5 text-[#00a997]" />
-            </div>
-            <div className="mt-8 grid gap-3 text-sm">
-              <div className="flex justify-between"><span>Storage</span><b>{plan.storageGb} GB</b></div>
-              <div className="flex justify-between"><span>Emails</span><b>{plan.monthlyEmails}</b></div>
-              <div className="flex justify-between"><span>Price</span><b>${Number(plan.priceMonthly ?? 0)}/month</b></div>
-            </div>
-            <Button
-              className="mt-6 h-11 w-full rounded-none bg-[#111] text-white"
-              disabled={pending || !Number(plan.priceMonthly ?? 0)}
-              onClick={() => buyPlan(plan._id)}
-            >
-              {pending ? <Loader2 className="size-4 animate-spin" /> : "Buy Plan"}
-            </Button>
-          </article>
-        ))}
+              <div className="mt-8 grid gap-3 text-sm">
+                <div className="flex justify-between">
+                  <span>Storage</span>
+                  <b>{plan.storageGb} GB</b>
+                </div>
+                <div className="flex justify-between">
+                  <span>Emails</span>
+                  <b>{plan.monthlyEmails}</b>
+                </div>
+                <div className="flex justify-between">
+                  <span>Price</span>
+                  <b>
+                    ${monthlyEquivalent.toFixed(2)}{" "}
+                    {billingInterval === "year" ? "/yearly" : "/month"}
+                  </b>
+                </div>
+                {/* {billingInterval === "year" && (
+                  <div className="flex justify-between">
+                    <span>Billed</span>
+                    <b>
+                      {yearlyAvailable
+                        ? `$${Number(plan.priceYearly).toFixed(2)} yearly`
+                        : "Unavailable"}
+                    </b>
+                  </div>
+                )} */}
+              </div>
+              <Button
+                className="mt-6 h-11 w-full rounded-none bg-[#111] text-white"
+                disabled={
+                  pending ||
+                  (billingInterval === "year"
+                    ? !yearlyAvailable
+                    : !Number(plan.priceMonthly ?? 0))
+                }
+                onClick={() => buyPlan(plan._id)}
+              >
+                {pending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  "Buy Plan"
+                )}
+              </Button>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
@@ -1162,9 +1760,13 @@ function UsagePanel({
   return (
     <div className="border bg-white p-6">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center bg-[#e3f6f1] text-[#00a997]">{icon}</span>
+        <span className="flex size-10 items-center justify-center bg-[#e3f6f1] text-[#00a997]">
+          {icon}
+        </span>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">{label}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">
+            {label}
+          </p>
           <h2 className="mt-1 text-lg font-semibold">{title}</h2>
         </div>
       </div>
@@ -1188,11 +1790,15 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
   const { collectionsQuery } = useCollections();
   const { ordersQuery } = useStoreOrders();
   const collections = collectionsQuery.data?.data ?? [];
-  const activities = useCollectionActivities(collections.map((collection) => collection._id));
+  const activities = useCollectionActivities(
+    collections.map((collection) => collection._id),
+  );
   const [readIds, setReadIds] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const recentItems = useMemo(() => {
-    const collectionMap = new Map(collections.map((collection) => [collection._id, collection]));
+    const collectionMap = new Map(
+      collections.map((collection) => [collection._id, collection]),
+    );
     const items: Array<DashboardNotificationItem & { timestamp: number }> = [];
 
     activities.forEach((query, index) => {
@@ -1206,7 +1812,9 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
           title: `${collection.name}: download`,
           meta: `${download.email || "Visitor"} downloaded ${download.imageName || "collection files"}`,
           time: download.updatedAt,
-          timestamp: new Date(download.updatedAt ?? download.createdAt ?? 0).getTime(),
+          timestamp: new Date(
+            download.updatedAt ?? download.createdAt ?? 0,
+          ).getTime(),
         });
       });
 
@@ -1216,26 +1824,34 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
           title: `${collection.name}: favorites`,
           meta: `${favorite.email || favorite.name || "Visitor"} saved ${favorite.photos} photo${favorite.photos === 1 ? "" : "s"}`,
           time: favorite.updatedAt,
-          timestamp: new Date(favorite.updatedAt ?? favorite.createdAt ?? 0).getTime(),
+          timestamp: new Date(
+            favorite.updatedAt ?? favorite.createdAt ?? 0,
+          ).getTime(),
         });
       });
     });
 
     collections.forEach((collection) => {
-      const requests = (collection.settings?.access as CollectionAccessSettings | undefined)?.requests ?? [];
-      requests.filter((request) => (request.status ?? "pending") === "pending").forEach((request) => {
-        items.push({
-          id: `access-${collection._id}-${request.id || request.email}`,
-          title: `${collection.name}: access request`,
-          meta: `${request.email} requested gallery access`,
-          time: request.createdAt,
-          timestamp: new Date(request.createdAt ?? 0).getTime(),
+      const requests =
+        (collection.settings?.access as CollectionAccessSettings | undefined)
+          ?.requests ?? [];
+      requests
+        .filter((request) => (request.status ?? "pending") === "pending")
+        .forEach((request) => {
+          items.push({
+            id: `access-${collection._id}-${request.id || request.email}`,
+            title: `${collection.name}: access request`,
+            meta: `${request.email} requested gallery access`,
+            time: request.createdAt,
+            timestamp: new Date(request.createdAt ?? 0).getTime(),
+          });
         });
-      });
     });
 
     (ordersQuery.data?.data ?? []).forEach((order) => {
-      const collection = order.collectionId ? collectionMap.get(order.collectionId) : null;
+      const collection = order.collectionId
+        ? collectionMap.get(order.collectionId)
+        : null;
       items.push({
         id: `order-${order._id}`,
         title: `${collection?.name ?? "Store"}: order`,
@@ -1252,7 +1868,9 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
   }, [activities, collections, ordersQuery.data?.data]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("dashboard-notification-read-ids");
+    const saved = window.localStorage.getItem(
+      "dashboard-notification-read-ids",
+    );
     if (!saved) return;
     try {
       const parsed = JSON.parse(saved);
@@ -1262,13 +1880,20 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
     }
   }, []);
 
-  const unreadCount = recentItems.filter((item) => !readIds.includes(item.id)).length;
+  const unreadCount = recentItems.filter(
+    (item) => !readIds.includes(item.id),
+  ).length;
   const markRead = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (!nextOpen || !recentItems.length) return;
     setReadIds((current) => {
-      const next = [...new Set([...current, ...recentItems.map((item) => item.id)])].slice(-80);
-      window.localStorage.setItem("dashboard-notification-read-ids", JSON.stringify(next));
+      const next = [
+        ...new Set([...current, ...recentItems.map((item) => item.id)]),
+      ].slice(-80);
+      window.localStorage.setItem(
+        "dashboard-notification-read-ids",
+        JSON.stringify(next),
+      );
       return next;
     });
   };
@@ -1291,32 +1916,54 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[calc(100vw-1.5rem)] max-w-[380px] rounded-xl p-0 shadow-[0_22px_55px_rgba(0,0,0,0.18)]">
+      <DropdownMenuContent
+        align="end"
+        className="w-[calc(100vw-1.5rem)] max-w-[380px] rounded-xl p-0 shadow-[0_22px_55px_rgba(0,0,0,0.18)]"
+      >
         <div className="flex items-start justify-between gap-4 border-b px-4 py-4">
           <div>
             <p className="text-sm font-bold text-[#222]">Notifications</p>
-            <p className="mt-1 text-xs text-[#777]">Recent collection and store activity</p>
+            <p className="mt-1 text-xs text-[#777]">
+              Recent collection and store activity
+            </p>
           </div>
           <span className="rounded-full bg-[#eef8f6] px-2.5 py-1 text-[11px] font-bold text-[#008f80]">
             {recentItems.length}
           </span>
         </div>
         <ScrollArea className="h-[430px]">
-          {recentItems.length ? recentItems.map((item) => (
-            <div key={item.id} className="flex gap-3 border-b px-4 py-3.5 last:border-b-0">
-              <span className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eef8f6] text-[#009b8c]">
-                {item.id.startsWith("download") ? <Download /> : item.id.startsWith("favorite") ? <Heart /> : <ShoppingBag />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-[#222]">{item.title}</p>
-                <p className="mt-1 text-xs leading-5 text-[#666]">{item.meta}</p>
-                <p className="mt-2 text-[11px] font-medium uppercase text-[#999]">
-                  {formatActivityDate(item.time)}
-                </p>
+          {recentItems.length ? (
+            recentItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex gap-3 border-b px-4 py-3.5 last:border-b-0"
+              >
+                <span className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eef8f6] text-[#009b8c]">
+                  {item.id.startsWith("download") ? (
+                    <Download />
+                  ) : item.id.startsWith("favorite") ? (
+                    <Heart />
+                  ) : (
+                    <ShoppingBag />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-[#222]">
+                    {item.title}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[#666]">
+                    {item.meta}
+                  </p>
+                  <p className="mt-2 text-[11px] font-medium uppercase text-[#999]">
+                    {formatActivityDate(item.time)}
+                  </p>
+                </div>
               </div>
+            ))
+          ) : (
+            <div className="px-4 py-8 text-center text-sm text-[#777]">
+              No notifications yet.
             </div>
-          )) : (
-            <div className="px-4 py-8 text-center text-sm text-[#777]">No notifications yet.</div>
           )}
         </ScrollArea>
       </DropdownMenuContent>
@@ -1350,10 +1997,7 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
   if (marketingPage === "contacts") {
     return (
       <div>
-        <PageHeader
-          action="Upload Contacts"
-          title="Contacts"
-        />
+        <PageHeader action="Upload Contacts" title="Contacts" />
         <div className="mt-12 grid gap-5 md:grid-cols-[360px_1fr]">
           <div className="border bg-[#fafafa] p-8">
             <FileUp className="size-9 text-[#22bda7]" />
@@ -1377,15 +2021,24 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
           <FieldGroup className="gap-8">
             <Field>
               <FieldLabel className="font-bold">Sender Name</FieldLabel>
-              <Input className="h-12 rounded-none bg-white" placeholder="Nikoset Studio" />
+              <Input
+                className="h-12 rounded-none bg-white"
+                placeholder="Nikoset Studio"
+              />
             </Field>
             <Field>
               <FieldLabel className="font-bold">Reply-to Email</FieldLabel>
-              <Input className="h-12 rounded-none bg-white" placeholder="hello@example.com" />
+              <Input
+                className="h-12 rounded-none bg-white"
+                placeholder="hello@example.com"
+              />
             </Field>
             <Field>
               <FieldLabel className="font-bold">Opt-in Location</FieldLabel>
-              <Input className="h-12 rounded-none bg-white" placeholder="Client Gallery checkout" />
+              <Input
+                className="h-12 rounded-none bg-white"
+                placeholder="Client Gallery checkout"
+              />
             </Field>
           </FieldGroup>
         </div>
@@ -1428,7 +2081,9 @@ function CampaignListHeader({
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
-          <h1 className="text-[28px] font-medium leading-none">Email Campaigns</h1>
+          <h1 className="text-[28px] font-medium leading-none">
+            Email Campaigns
+          </h1>
           <div className="flex h-10 w-full items-center gap-3 bg-white sm:w-[280px]">
             <Search className="size-5 text-[#333]" />
             <Input
@@ -1451,9 +2106,6 @@ function CampaignListHeader({
           Status <ChevronDown className="ml-1 inline size-3" />
         </button>
         <div className="flex items-center gap-5">
-          <Button className="h-7 rounded-full bg-[#e3f6f1] px-4 text-[11px] font-bold uppercase tracking-widest text-[#00a997] hover:bg-[#d6f2eb]">
-            Upgrade to Send
-          </Button>
           <ListFilter className="size-5 text-[#777]" />
         </div>
       </div>
@@ -1487,7 +2139,9 @@ function CampaignTable({
           <Mail className="absolute -left-3 top-3 size-10 text-[#444]" />
           <MailCheck className="absolute left-12 top-14 size-9 text-[#444]" />
         </div>
-        <h2 className="mt-10 text-lg font-bold">Create your first email campaign</h2>
+        <h2 className="mt-10 text-lg font-bold">
+          Create your first email campaign
+        </h2>
         <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#333]">
           Power up your marketing with email campaigns to opted-in contacts.
         </p>
@@ -1568,7 +2222,11 @@ function TemplateGrid({
         >
           <div className="flex h-28 items-center justify-center bg-[#090d0f] text-white">
             {template.image ? (
-              <img src={template.image} alt="" className="h-full w-full object-cover opacity-75" />
+              <img
+                src={template.image}
+                alt=""
+                className="h-full w-full object-cover opacity-75"
+              />
             ) : (
               <span className="px-3 text-center text-xl font-bold uppercase tracking-wide">
                 {template.title}
@@ -1576,7 +2234,9 @@ function TemplateGrid({
             )}
           </div>
           <p className="mt-4 font-bold">{template.name}</p>
-          <p className="mt-2 line-clamp-2 text-sm text-[#666]">{template.subject}</p>
+          <p className="mt-2 line-clamp-2 text-sm text-[#666]">
+            {template.subject}
+          </p>
         </button>
       ))}
     </div>
@@ -1610,22 +2270,37 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
   } = useDashboardStore();
   const [sendPending, startSendTransition] = useTransition();
   const [sendError, setSendError] = useState("");
-  const recipients = ["Avery Woodward", "Jessie Ryan", "Morgan Wells", "Isla Bennett"];
-  const collections = ["Autumn Florals", "Black Friday Clients", "Wedding Leads"];
+  const recipients = [
+    "Avery Woodward",
+    "Jessie Ryan",
+    "Morgan Wells",
+    "Isla Bennett",
+  ];
+  const collections = [
+    "Autumn Florals",
+    "Black Friday Clients",
+    "Wedding Leads",
+  ];
   const sendNow = () => {
     setSendError("");
     startSendTransition(async () => {
       try {
-        const emails = selectedRecipients.filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
+        const emails = selectedRecipients.filter((value) =>
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+        );
         await recordEmailUsage(Math.max(1, selectedRecipients.length));
         if (emails.length) {
           const body = [
             campaignMessage,
             "",
-            campaignButtonText && campaignButtonLink ? `${campaignButtonText}: ${campaignButtonLink}` : "",
+            campaignButtonText && campaignButtonLink
+              ? `${campaignButtonText}: ${campaignButtonLink}`
+              : "",
             "",
             campaignFooterText,
-          ].filter(Boolean).join("\n");
+          ]
+            .filter(Boolean)
+            .join("\n");
           await sendUniversalEmail({
             to: emails,
             subject: campaignSubject || campaignTemplate,
@@ -1635,7 +2310,9 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
         }
         onClose();
       } catch (error) {
-        setSendError(error instanceof Error ? error.message : "Email send failed");
+        setSendError(
+          error instanceof Error ? error.message : "Email send failed",
+        );
       }
     });
   };
@@ -1654,22 +2331,46 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex items-center gap-8">
           <button className="text-sm font-semibold">Send Test</button>
-          <Button className="h-12 rounded-none bg-[#22bda7] px-9 text-sm font-bold text-white hover:bg-[#19a995]" onClick={sendNow} disabled={sendPending}>
-            {sendPending ? <Loader2 className="size-4 animate-spin" /> : "Send Now"}
+          <Button
+            className="h-12 rounded-none bg-[#22bda7] px-9 text-sm font-bold text-white hover:bg-[#19a995]"
+            onClick={sendNow}
+            disabled={sendPending}
+          >
+            {sendPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              "Send Now"
+            )}
           </Button>
         </div>
       </header>
-      {sendError && <p className="border-l-2 border-red-500 bg-white px-8 py-3 text-sm font-semibold text-red-600">{sendError}</p>}
+      {sendError && (
+        <p className="border-l-2 border-red-500 bg-white px-8 py-3 text-sm font-semibold text-red-600">
+          {sendError}
+        </p>
+      )}
 
       <div className="grid min-h-[calc(100vh-48px)] lg:grid-cols-[468px_1fr]">
         <aside className="border-r bg-white">
-          <Tabs value={campaignTab} onValueChange={(value) => setCampaignTab(value as "email" | "recipients")} className="gap-0">
+          <Tabs
+            value={campaignTab}
+            onValueChange={(value) =>
+              setCampaignTab(value as "email" | "recipients")
+            }
+            className="gap-0"
+          >
             <TabsList className="grid h-16 w-full grid-cols-2 rounded-none bg-[#fafafa] p-0">
-              <TabsTrigger value="email" className="rounded-none data-active:border-b-2 data-active:border-[#22bda7] data-active:bg-white">
+              <TabsTrigger
+                value="email"
+                className="rounded-none data-active:border-b-2 data-active:border-[#22bda7] data-active:bg-white"
+              >
                 <Mail data-icon="inline-start" />
                 Email
               </TabsTrigger>
-              <TabsTrigger value="recipients" className="rounded-none data-active:border-b-2 data-active:border-[#22bda7] data-active:bg-white">
+              <TabsTrigger
+                value="recipients"
+                className="rounded-none data-active:border-b-2 data-active:border-[#22bda7] data-active:bg-white"
+              >
                 <Users data-icon="inline-start" />
                 Recipients
               </TabsTrigger>
@@ -1679,7 +2380,9 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
               <h2 className="text-lg font-bold">Design Email</h2>
               <FieldGroup className="mt-8 gap-8">
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Subject</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Subject
+                  </FieldLabel>
                   <Input
                     className="h-12 rounded-none"
                     value={campaignSubject}
@@ -1687,23 +2390,33 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Preview Text</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Preview Text
+                  </FieldLabel>
                   <Input
                     className="h-12 rounded-none"
                     value={campaignPreviewText}
-                    onChange={(event) => setCampaignPreviewText(event.target.value)}
+                    onChange={(event) =>
+                      setCampaignPreviewText(event.target.value)
+                    }
                   />
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Title</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Title
+                  </FieldLabel>
                   <Input
                     className="h-12 rounded-none"
                     value={campaignTemplate}
-                    onChange={(event) => setCampaignTemplate(event.target.value)}
+                    onChange={(event) =>
+                      setCampaignTemplate(event.target.value)
+                    }
                   />
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Image</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Image
+                  </FieldLabel>
                   <Input
                     type="file"
                     accept="image/*"
@@ -1721,12 +2434,16 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-xl font-bold uppercase">{campaignTemplate}</span>
+                      <span className="text-xl font-bold uppercase">
+                        {campaignTemplate}
+                      </span>
                     )}
                   </div>
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Message</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Message
+                  </FieldLabel>
                   <div className="flex h-8 items-center gap-4 border bg-[#f3f3f3] px-3 text-[#777]">
                     <Bold className="size-4" />
                     <Italic className="size-4" />
@@ -1741,39 +2458,55 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Button Text</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Button Text
+                  </FieldLabel>
                   <Input
                     className="h-12 rounded-none"
                     value={campaignButtonText}
-                    onChange={(event) => setCampaignButtonText(event.target.value)}
+                    onChange={(event) =>
+                      setCampaignButtonText(event.target.value)
+                    }
                   />
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Button Link</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Button Link
+                  </FieldLabel>
                   <Input
                     className="h-12 rounded-none"
                     value={campaignButtonLink}
-                    onChange={(event) => setCampaignButtonLink(event.target.value)}
+                    onChange={(event) =>
+                      setCampaignButtonLink(event.target.value)
+                    }
                   />
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Button Color</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Button Color
+                  </FieldLabel>
                   <div className="flex gap-3">
                     <Input
                       type="color"
                       className="h-12 w-16 rounded-none p-1"
                       value={campaignButtonColor}
-                      onChange={(event) => setCampaignButtonColor(event.target.value)}
+                      onChange={(event) =>
+                        setCampaignButtonColor(event.target.value)
+                      }
                     />
                     <Input
                       className="h-12 rounded-none"
                       value={campaignButtonColor}
-                      onChange={(event) => setCampaignButtonColor(event.target.value)}
+                      onChange={(event) =>
+                        setCampaignButtonColor(event.target.value)
+                      }
                     />
                   </div>
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Footer Text</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Footer Text
+                  </FieldLabel>
                   <div className="flex h-8 items-center gap-4 border bg-[#f3f3f3] px-3 text-[#777]">
                     <Bold className="size-4" />
                     <Italic className="size-4" />
@@ -1783,7 +2516,9 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                   <textarea
                     className="min-h-[140px] w-full border px-4 py-4 text-sm leading-6 outline-none"
                     value={campaignFooterText}
-                    onChange={(event) => setCampaignFooterText(event.target.value)}
+                    onChange={(event) =>
+                      setCampaignFooterText(event.target.value)
+                    }
                   />
                 </Field>
               </FieldGroup>
@@ -1793,10 +2528,15 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
               <h2 className="text-lg font-bold">Recipients</h2>
               <div className="mt-8 flex flex-col gap-8">
                 <div>
-                  <p className="mb-4 text-sm font-bold uppercase text-[#777]">Select individually</p>
+                  <p className="mb-4 text-sm font-bold uppercase text-[#777]">
+                    Select individually
+                  </p>
                   <div className="grid gap-3">
                     {recipients.map((name) => (
-                      <label key={name} className="flex items-center gap-3 border p-4">
+                      <label
+                        key={name}
+                        className="flex items-center gap-3 border p-4"
+                      >
                         <Checkbox
                           checked={selectedRecipients.includes(name)}
                           onCheckedChange={() => toggleRecipient(name)}
@@ -1807,17 +2547,25 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
                 <div>
-                  <p className="mb-4 text-sm font-bold uppercase text-[#777]">Select collection</p>
+                  <p className="mb-4 text-sm font-bold uppercase text-[#777]">
+                    Select collection
+                  </p>
                   <div className="grid gap-3">
                     {collections.map((name) => (
-                      <button key={name} className="border p-4 text-left" onClick={() => toggleRecipient(name)}>
+                      <button
+                        key={name}
+                        className="border p-4 text-left"
+                        onClick={() => toggleRecipient(name)}
+                      >
                         {name}
                       </button>
                     ))}
                   </div>
                 </div>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">Upload new collection</FieldLabel>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Upload new collection
+                  </FieldLabel>
                   <Input type="file" className="h-12 rounded-none" />
                 </Field>
               </div>
@@ -1907,17 +2655,16 @@ function CampaignPreview({
   );
 }
 
-function PageHeader({ title, action }: { title: string; action: string }) {
+function PageHeader({ title, action }: { title: string; action?: string }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <h1 className="text-[28px] font-medium leading-none">{title}</h1>
       <div className="flex flex-wrap items-center gap-3 sm:gap-5">
-        <Button className="h-10 rounded-none bg-[#22bda7] px-5 text-sm font-bold text-white hover:bg-[#19a995] sm:px-7">
-          {action}
-        </Button>
-        <Button className="h-7 rounded-full bg-[#e3f6f1] px-4 text-[11px] font-bold uppercase tracking-widest text-[#00a997] hover:bg-[#d6f2eb]">
-          Upgrade to Send
-        </Button>
+        {action && (
+          <Button className="h-10 rounded-none bg-[#22bda7] px-5 text-sm font-bold text-white hover:bg-[#19a995] sm:px-7">
+            {action}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -1968,9 +2715,15 @@ type FavoriteCollectionRecord = {
 };
 
 function FavoriteCollectionsPanel() {
-  const [photoFavorites, setPhotoFavorites] = useState<FavoriteImageRecord[]>([]);
-  const [collectionFavorites, setCollectionFavorites] = useState<FavoriteCollectionRecord[]>([]);
-  const [previewImage, setPreviewImage] = useState<FavoriteImageRecord | null>(null);
+  const [photoFavorites, setPhotoFavorites] = useState<FavoriteImageRecord[]>(
+    [],
+  );
+  const [collectionFavorites, setCollectionFavorites] = useState<
+    FavoriteCollectionRecord[]
+  >([]);
+  const [previewImage, setPreviewImage] = useState<FavoriteImageRecord | null>(
+    null,
+  );
   const [photosLoading, setPhotosLoading] = useState(true);
   const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1981,11 +2734,15 @@ function FavoriteCollectionsPanel() {
     fetch("/api/collection-image-favorites", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.message ?? "Favorite photos failed");
+        if (!response.ok)
+          throw new Error(payload?.message ?? "Favorite photos failed");
         if (active) setPhotoFavorites(payload?.data ?? []);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Favorite photos failed");
+        if (active)
+          setError(
+            err instanceof Error ? err.message : "Favorite photos failed",
+          );
       })
       .finally(() => {
         if (active) setPhotosLoading(false);
@@ -2001,11 +2758,15 @@ function FavoriteCollectionsPanel() {
     fetch("/api/collection-favorites", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.message ?? "Favorite collections failed");
+        if (!response.ok)
+          throw new Error(payload?.message ?? "Favorite collections failed");
         if (active) setCollectionFavorites(payload?.data ?? []);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Favorite collections failed");
+        if (active)
+          setError(
+            err instanceof Error ? err.message : "Favorite collections failed",
+          );
       })
       .finally(() => {
         if (active) setCollectionsLoading(false);
@@ -2018,7 +2779,9 @@ function FavoriteCollectionsPanel() {
   return (
     <div>
       <h1 className="text-[28px] font-medium leading-none">Favorites</h1>
-      {error ? <p className="mt-8 text-sm font-semibold text-red-600">{error}</p> : null}
+      {error ? (
+        <p className="mt-8 text-sm font-semibold text-red-600">{error}</p>
+      ) : null}
       <Tabs defaultValue="albums" className="mt-8 gap-0">
         <TabsList className="h-auto gap-8 bg-transparent p-0">
           <TabsTrigger
@@ -2037,19 +2800,28 @@ function FavoriteCollectionsPanel() {
 
         <TabsContent value="albums" className="mt-12">
           {collectionsLoading ? (
-            <p className="text-sm font-semibold text-[#777]">Loading favorite albums...</p>
+            <p className="text-sm font-semibold text-[#777]">
+              Loading favorite albums...
+            </p>
           ) : collectionFavorites.length ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {collectionFavorites.map((favorite) => (
                 <button
                   key={favorite._id}
                   className="group text-left"
-                  onClick={() => favorite.url && window.open(favorite.url, "_blank", "noopener,noreferrer")}
+                  onClick={() =>
+                    favorite.url &&
+                    window.open(favorite.url, "_blank", "noopener,noreferrer")
+                  }
                   type="button"
                 >
                   <span className="relative block overflow-hidden bg-[#f3f3f3]">
                     {favorite.coverImage ? (
-                      <img src={imageSrc(favorite.coverImage)} alt={favorite.name} className="aspect-[1.35] w-full object-cover transition-transform group-hover:scale-105" />
+                      <img
+                        src={imageSrc(favorite.coverImage)}
+                        alt={favorite.name}
+                        className="aspect-[1.35] w-full object-cover transition-transform group-hover:scale-105"
+                      />
                     ) : (
                       <span className="flex aspect-[1.35] items-center justify-center bg-[#f3f3f3]">
                         <Images className="size-8 text-[#bbb]" />
@@ -2061,7 +2833,9 @@ function FavoriteCollectionsPanel() {
                     {favorite.name}
                   </span>
                   <span className="mt-1 block truncate text-xs text-[#777]">
-                    {favorite.eventDate ? format(parseISO(favorite.eventDate), "MMM d, yyyy") : "Favorite album"}
+                    {favorite.eventDate
+                      ? format(parseISO(favorite.eventDate), "MMM d, yyyy")
+                      : "Favorite album"}
                   </span>
                 </button>
               ))}
@@ -2069,15 +2843,21 @@ function FavoriteCollectionsPanel() {
           ) : (
             <div className="mx-auto flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
               <Heart className="size-10 text-[#22bda7]" />
-              <h2 className="mt-5 text-xl font-semibold">No favorite albums yet</h2>
-              <p className="mt-3 text-sm leading-6 text-[#666]">Favorite albums from public collection galleries.</p>
+              <h2 className="mt-5 text-xl font-semibold">
+                No favorite albums yet
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-[#666]">
+                Favorite albums from public collection galleries.
+              </p>
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="photos" className="mt-12">
           {photosLoading ? (
-            <p className="text-sm font-semibold text-[#777]">Loading favorite photos...</p>
+            <p className="text-sm font-semibold text-[#777]">
+              Loading favorite photos...
+            </p>
           ) : photoFavorites.length ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
               {photoFavorites.map((favorite) => (
@@ -2089,7 +2869,11 @@ function FavoriteCollectionsPanel() {
                 >
                   <span className="relative block overflow-hidden bg-[#f3f3f3]">
                     {favorite.url ? (
-                      <img src={imageSrc(favorite.thumbnailUrl || favorite.url)} alt={favorite.originalName ?? ""} className="aspect-square w-full object-cover transition-transform group-hover:scale-105" />
+                      <img
+                        src={imageSrc(favorite.thumbnailUrl || favorite.url)}
+                        alt={favorite.originalName ?? ""}
+                        className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+                      />
                     ) : (
                       <span className="flex aspect-square items-center justify-center">
                         <Heart className="size-9 text-[#bbb]" />
@@ -2109,13 +2893,20 @@ function FavoriteCollectionsPanel() {
           ) : (
             <div className="mx-auto flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
               <Heart className="size-10 text-[#22bda7]" />
-              <h2 className="mt-5 text-xl font-semibold">No favorite photos yet</h2>
-              <p className="mt-3 text-sm leading-6 text-[#666]">Favorite photos from public collection galleries.</p>
+              <h2 className="mt-5 text-xl font-semibold">
+                No favorite photos yet
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-[#666]">
+                Favorite photos from public collection galleries.
+              </p>
             </div>
           )}
         </TabsContent>
       </Tabs>
-      <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
+      <Dialog
+        open={Boolean(previewImage)}
+        onOpenChange={(open) => !open && setPreviewImage(null)}
+      >
         <DialogContent className="max-h-[94dvh] overflow-y-auto rounded-none border-0 p-0 sm:max-w-[92vw]">
           {previewImage && (
             <div className="grid bg-white lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -2148,7 +2939,14 @@ function FavoriteCollectionsPanel() {
                 <div className="grid gap-3">
                   <Button
                     className="h-11 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"
-                    onClick={() => previewImage.galleryUrl && window.open(previewImage.galleryUrl, "_blank", "noopener,noreferrer")}
+                    onClick={() =>
+                      previewImage.galleryUrl &&
+                      window.open(
+                        previewImage.galleryUrl,
+                        "_blank",
+                        "noopener,noreferrer",
+                      )
+                    }
                     disabled={!previewImage.galleryUrl}
                   >
                     <Images data-icon="inline-start" />
@@ -2257,45 +3055,52 @@ function StarredGrid({
         const src = isCollection ? collection.coverImage : image.url;
         const title = isCollection
           ? collection.name
-          : image.originalName ?? image.metadata?.filename ?? "Image";
+          : (image.originalName ?? image.metadata?.filename ?? "Image");
         const subtitle = isCollection
           ? `${collection.imageCount ?? 0} images`
           : `${image.collectionName ?? "Collection"} / ${image.setName ?? "Highlights"}`;
 
         return (
-        <button
-          key={`${kind}-${item._id}`}
-          className="group text-left"
-          onClick={() =>
-            isCollection
-              ? router.push(`/dashboard/client-gallery/collections/${collection._id}`)
-              : router.push(`/dashboard/client-gallery/collections/${image.collectionId}`)
-          }
-        >
-          <span className="relative block overflow-hidden bg-[#f3f3f3]">
-            {src ? (
-              <img
-                src={imageSrc(src)}
-                alt={title}
-                className={cn(
-                  "w-full object-cover transition-transform group-hover:scale-105",
-                  isCollection ? "aspect-[1.35]" : "aspect-square",
-                )}
-              />
-            ) : (
-              <span className={cn("flex items-center justify-center bg-[#f3f3f3]", isCollection ? "aspect-[1.35]" : "aspect-square")}>
-                <Images className="size-8 text-[#bbb]" />
-              </span>
-            )}
-            <Star className="absolute right-3 top-3 size-5 fill-white text-white drop-shadow" />
-          </span>
-          <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
-            {title}
-          </span>
-          <span className="mt-1 block text-xs text-[#777]">
-            {subtitle}
-          </span>
-        </button>
+          <button
+            key={`${kind}-${item._id}`}
+            className="group text-left"
+            onClick={() =>
+              isCollection
+                ? router.push(
+                    `/dashboard/client-gallery/collections/${collection._id}`,
+                  )
+                : router.push(
+                    `/dashboard/client-gallery/collections/${image.collectionId}`,
+                  )
+            }
+          >
+            <span className="relative block overflow-hidden bg-[#f3f3f3]">
+              {src ? (
+                <img
+                  src={imageSrc(src)}
+                  alt={title}
+                  className={cn(
+                    "w-full object-cover transition-transform group-hover:scale-105",
+                    isCollection ? "aspect-[1.35]" : "aspect-square",
+                  )}
+                />
+              ) : (
+                <span
+                  className={cn(
+                    "flex items-center justify-center bg-[#f3f3f3]",
+                    isCollection ? "aspect-[1.35]" : "aspect-square",
+                  )}
+                >
+                  <Images className="size-8 text-[#bbb]" />
+                </span>
+              )}
+              <Star className="absolute right-3 top-3 size-5 fill-white text-white drop-shadow" />
+            </span>
+            <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
+              {title}
+            </span>
+            <span className="mt-1 block text-xs text-[#777]">{subtitle}</span>
+          </button>
         );
       })}
     </div>
@@ -2310,7 +3115,8 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
   const images = imagesQuery.data?.data ?? [];
   const [debouncedQuery, setDebouncedQuery] = useState(libraryQuery);
   const [collectionFilter, setCollectionFilter] = useState("all");
-  const [previewImage, setPreviewImage] = useState<CollectionImageRecord | null>(null);
+  const [previewImage, setPreviewImage] =
+    useState<CollectionImageRecord | null>(null);
   const [libraryPage, setLibraryPage] = useState(1);
   const collections = Array.from(
     new Map(
@@ -2339,10 +3145,15 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
       .join(" ")
       .toLowerCase();
 
-    return matchesCollection && (!normalizedQuery || text.includes(normalizedQuery));
+    return (
+      matchesCollection && (!normalizedQuery || text.includes(normalizedQuery))
+    );
   });
   const libraryPageSize = 48;
-  const totalLibraryPages = Math.max(1, Math.ceil(visiblePhotos.length / libraryPageSize));
+  const totalLibraryPages = Math.max(
+    1,
+    Math.ceil(visiblePhotos.length / libraryPageSize),
+  );
   const paginatedPhotos = visiblePhotos.slice(
     (libraryPage - 1) * libraryPageSize,
     libraryPage * libraryPageSize,
@@ -2401,61 +3212,68 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
       {imagesQuery.isLoading ? (
         <p className="mt-10 text-sm text-[#666]">Loading images...</p>
       ) : (
-      <div className="mt-10 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
-        {paginatedPhotos.map((photo) => (
-          <div
-            key={photo._id}
-            className="group text-left"
-          >
-            <span className="relative block bg-[#f3f3f3]">
-              <span className="block overflow-hidden">
-              <img
-                src={imageSrc(photo.url)}
-                alt={photo.originalName ?? ""}
-                className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
-              />
+        <div className="mt-10 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
+          {paginatedPhotos.map((photo) => (
+            <div key={photo._id} className="group text-left">
+              <span className="relative block bg-[#f3f3f3]">
+                <span className="block overflow-hidden">
+                  <img
+                    src={imageSrc(photo.url)}
+                    alt={photo.originalName ?? ""}
+                    className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                </span>
+                <span className="absolute right-2 top-2 hidden gap-1 group-hover:flex">
+                  <button
+                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                    onClick={() =>
+                      starImage.mutate({
+                        collectionId: photo.collectionId,
+                        imageId: photo._id,
+                        starred: photo.metadata?.starred !== true,
+                      })
+                    }
+                    aria-label="Star image"
+                  >
+                    <Star
+                      className={cn(
+                        "size-4",
+                        photo.metadata?.starred === true &&
+                          "fill-[#00a997] text-[#00a997]",
+                      )}
+                    />
+                  </button>
+                  <button
+                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                    onClick={() => setPreviewImage(photo)}
+                    aria-label="View image"
+                  >
+                    <Eye className="size-4" />
+                  </button>
+                  <a
+                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                    href={imageSrc(photo.url)}
+                    download={photo.originalName ?? "image"}
+                    aria-label="Download image"
+                  >
+                    <Download className="size-4" />
+                  </a>
+                  <button
+                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                    onClick={() =>
+                      router.push(
+                        `/dashboard/client-gallery/collections/${photo.collectionId}`,
+                      )
+                    }
+                    aria-label="View in collection"
+                  >
+                    <Images className="size-4" />
+                  </button>
+                </span>
               </span>
-              <span className="absolute right-2 top-2 hidden gap-1 group-hover:flex">
-                <button
-                  className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
-                  onClick={() =>
-                    starImage.mutate({
-                      collectionId: photo.collectionId,
-                      imageId: photo._id,
-                      starred: photo.metadata?.starred !== true,
-                    })
-                  }
-                  aria-label="Star image"
-                >
-                  <Star className={cn("size-4", photo.metadata?.starred === true && "fill-[#00a997] text-[#00a997]")} />
-                </button>
-                <button
-                  className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
-                  onClick={() => setPreviewImage(photo)}
-                  aria-label="View image"
-                >
-                  <Eye className="size-4" />
-                </button>
-                <a
-                  className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
-                  href={imageSrc(photo.url)}
-                  download={photo.originalName ?? "image"}
-                  aria-label="Download image"
-                >
-                  <Download className="size-4" />
-                </a>
-                <button
-                  className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
-                  onClick={() => router.push(`/dashboard/client-gallery/collections/${photo.collectionId}`)}
-                  aria-label="View in collection"
-                >
-                  <Images className="size-4" />
-                </button>
-              </span>
-            </span>
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {!imagesQuery.isLoading && visiblePhotos.length > libraryPageSize && (
@@ -2476,7 +3294,9 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
             variant="outline"
             className="h-9 rounded-none"
             disabled={libraryPage >= totalLibraryPages}
-            onClick={() => setLibraryPage((page) => Math.min(totalLibraryPages, page + 1))}
+            onClick={() =>
+              setLibraryPage((page) => Math.min(totalLibraryPages, page + 1))
+            }
           >
             Next
             <ArrowRight data-icon="inline-end" />
@@ -2484,7 +3304,10 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
         </div>
       )}
 
-      <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
+      <Dialog
+        open={Boolean(previewImage)}
+        onOpenChange={(open) => !open && setPreviewImage(null)}
+      >
         <DialogContent className="max-h-[92dvh] overflow-y-auto rounded-none sm:max-w-[92vw]">
           <DialogHeader>
             <DialogTitle>View Image</DialogTitle>
@@ -2495,9 +3318,12 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
           {previewImage && (
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-4 text-sm text-[#666]">
-                <span className="truncate">{previewImage.originalName ?? "Image"}</span>
+                <span className="truncate">
+                  {previewImage.originalName ?? "Image"}
+                </span>
                 <span>
-                  {formatMetaValue(previewImage.metadata?.width)} x {formatMetaValue(previewImage.metadata?.height)}
+                  {formatMetaValue(previewImage.metadata?.width)} x{" "}
+                  {formatMetaValue(previewImage.metadata?.height)}
                 </span>
               </div>
               <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
@@ -2598,7 +3424,7 @@ function SettingsPanel({
             className={cn(
               "pb-2 text-sm font-semibold",
               activeTab === tab.page &&
-                "underline decoration-[#22bda7] decoration-2 underline-offset-[10px]"
+                "underline decoration-[#22bda7] decoration-2 underline-offset-[10px]",
             )}
           >
             {tab.label}
@@ -2641,11 +3467,15 @@ function PreferencesPanel() {
     <div className="max-w-[560px] space-y-12">
       <FieldGroup>
         <Field>
-          <FieldLabel className="font-bold">Default Collection Language</FieldLabel>
+          <FieldLabel className="font-bold">
+            Default Collection Language
+          </FieldLabel>
           <select className="h-12 rounded-none border bg-white px-4 text-sm">
             <option>English</option>
           </select>
-          <p className="text-sm leading-6 text-[#666]">Select default language for newly created collections.</p>
+          <p className="text-sm leading-6 text-[#666]">
+            Select default language for newly created collections.
+          </p>
         </Field>
         <Field>
           <FieldLabel className="font-bold">Filename Display</FieldLabel>
@@ -2653,16 +3483,22 @@ function PreferencesPanel() {
             <option>Show</option>
             <option>Hide</option>
           </select>
-          <p className="text-sm leading-6 text-[#666]">Choose whether filenames show on collection photos.</p>
+          <p className="text-sm leading-6 text-[#666]">
+            Choose whether filenames show on collection photos.
+          </p>
         </Field>
         <Field>
-          <FieldLabel className="font-bold">Search Engine Visibility</FieldLabel>
+          <FieldLabel className="font-bold">
+            Search Engine Visibility
+          </FieldLabel>
           <select className="h-12 rounded-none border bg-white px-4 text-sm">
             <option>Homepage Only</option>
             <option>All Public Pages</option>
             <option>Hidden</option>
           </select>
-          <p className="text-sm leading-6 text-[#666]">Choose whether collections can be searchable on search engines.</p>
+          <p className="text-sm leading-6 text-[#666]">
+            Choose whether collections can be searchable on search engines.
+          </p>
         </Field>
         <Field>
           <FieldLabel className="font-bold">Sharpening Level</FieldLabel>
@@ -2671,14 +3507,19 @@ function PreferencesPanel() {
             <option>Low</option>
             <option>High</option>
           </select>
-          <p className="text-sm leading-6 text-[#666]">Applies to web display copies only. Originals stay unchanged.</p>
+          <p className="text-sm leading-6 text-[#666]">
+            Applies to web display copies only. Originals stay unchanged.
+          </p>
         </Field>
       </FieldGroup>
 
       <FieldGroup>
         <Field>
           <FieldLabel className="font-bold">Terms of Service</FieldLabel>
-          <textarea className="min-h-36 rounded-none border bg-white p-4 text-sm" placeholder="Terms shown on collection pages" />
+          <textarea
+            className="min-h-36 rounded-none border bg-white p-4 text-sm"
+            placeholder="Terms shown on collection pages"
+          />
         </Field>
       </FieldGroup>
     </div>
@@ -2693,30 +3534,43 @@ const defaultBrandSettings: BrandSettings = {
 };
 
 function BrandingSettings() {
-  const { query, saveSetting } = useDashboardSettings<BrandSettings>("branding");
-  const saved = (query.data?.data?.[0]?.data as BrandSettings | undefined) ?? defaultBrandSettings;
+  const { query, saveSetting } =
+    useDashboardSettings<BrandSettings>("branding");
+  const saved =
+    (query.data?.data?.[0]?.data as BrandSettings | undefined) ??
+    defaultBrandSettings;
   const [form, setForm] = useState<BrandSettings>(saved);
 
   useEffect(() => {
     setForm(saved);
   }, [saved.logoUrl, saved.brandText, saved.brandImageUrl, saved.accentColor]);
 
-  const readImage = (file: File | undefined, key: keyof Pick<BrandSettings, "logoUrl" | "brandImageUrl">) => {
+  const readImage = (
+    file: File | undefined,
+    key: keyof Pick<BrandSettings, "logoUrl" | "brandImageUrl">,
+  ) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setForm((current) => ({ ...current, [key]: String(reader.result ?? "") }));
+    reader.onload = () =>
+      setForm((current) => ({
+        ...current,
+        [key]: String(reader.result ?? ""),
+      }));
     reader.readAsDataURL(file);
   };
 
   const save = () => {
-    saveSetting.mutate({
-      localId: "branding",
-      name: "Branding",
-      data: form,
-    }, {
-      onSuccess: () => toast.success("Branding saved"),
-      onError: (error) => toast.error(error.message),
-    });
+    saveSetting.mutate(
+      {
+        localId: "branding",
+        name: "Branding",
+        data: form,
+      },
+      {
+        onSuccess: () => toast.success("Branding saved"),
+        onError: (error) => toast.error(error.message),
+      },
+    );
   };
 
   return (
@@ -2724,45 +3578,106 @@ function BrandingSettings() {
       <div className="bg-white">
         <h2 className="text-2xl font-medium">Branding</h2>
         <p className="mt-3 text-sm leading-6 text-[#666]">
-          Brand logo, text, color, and image can appear on custom admin cover templates.
+          Brand logo, text, color, and image can appear on custom admin cover
+          templates.
         </p>
         <FieldGroup className="mt-8 gap-7">
           <Field>
             <FieldLabel className="font-bold">Brand Text</FieldLabel>
-            <Input value={form.brandText} onChange={(event) => setForm({ ...form, brandText: event.target.value })} className="h-12 rounded-none bg-white" />
+            <Input
+              value={form.brandText}
+              onChange={(event) =>
+                setForm({ ...form, brandText: event.target.value })
+              }
+              className="h-12 rounded-none bg-white"
+            />
           </Field>
           <Field>
             <FieldLabel className="font-bold">Accent Color</FieldLabel>
             <div className="flex gap-3">
-              <Input type="color" value={form.accentColor} onChange={(event) => setForm({ ...form, accentColor: event.target.value })} className="size-12 rounded-none p-1" />
-              <Input value={form.accentColor} onChange={(event) => setForm({ ...form, accentColor: event.target.value })} className="h-12 rounded-none bg-white" />
+              <Input
+                type="color"
+                value={form.accentColor}
+                onChange={(event) =>
+                  setForm({ ...form, accentColor: event.target.value })
+                }
+                className="size-12 rounded-none p-1"
+              />
+              <Input
+                value={form.accentColor}
+                onChange={(event) =>
+                  setForm({ ...form, accentColor: event.target.value })
+                }
+                className="h-12 rounded-none bg-white"
+              />
             </div>
           </Field>
           <Field>
             <FieldLabel className="font-bold">Brand Logo</FieldLabel>
-            <Input type="file" accept="image/*" onChange={(event) => readImage(event.target.files?.[0], "logoUrl")} className="h-12 rounded-none bg-white" />
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(event) =>
+                readImage(event.target.files?.[0], "logoUrl")
+              }
+              className="h-12 rounded-none bg-white"
+            />
           </Field>
           <Field>
             <FieldLabel className="font-bold">Brand Image</FieldLabel>
-            <Input type="file" accept="image/*" onChange={(event) => readImage(event.target.files?.[0], "brandImageUrl")} className="h-12 rounded-none bg-white" />
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(event) =>
+                readImage(event.target.files?.[0], "brandImageUrl")
+              }
+              className="h-12 rounded-none bg-white"
+            />
           </Field>
         </FieldGroup>
-        <Button className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white" disabled={saveSetting.isPending} onClick={save}>
+        <Button
+          className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white"
+          disabled={saveSetting.isPending}
+          onClick={save}
+        >
           {saveSetting.isPending ? "Saving..." : "Save Branding"}
         </Button>
       </div>
 
       <div className="flex min-h-[480px] items-center justify-center bg-[#f4f4f4] p-8">
         <div className="relative aspect-[1.45] w-full max-w-[760px] overflow-hidden bg-[#151515] text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
-          {form.brandImageUrl ? <img src={form.brandImageUrl} alt="" className="h-full w-full object-cover opacity-70" /> : <div className="h-full w-full bg-[#202326]" />}
+          {form.brandImageUrl ? (
+            <img
+              src={form.brandImageUrl}
+              alt=""
+              className="h-full w-full object-cover opacity-70"
+            />
+          ) : (
+            <div className="h-full w-full bg-[#202326]" />
+          )}
           <div className="absolute inset-0 bg-black/25" />
           <div className="absolute left-8 top-8 flex items-center gap-4">
-            {form.logoUrl && <img src={form.logoUrl} alt="" className="size-16 object-contain" />}
-            <p className="text-xl font-semibold uppercase tracking-[0.22em]" style={{ color: form.accentColor }}>{form.brandText}</p>
+            {form.logoUrl && (
+              <img
+                src={form.logoUrl}
+                alt=""
+                className="size-16 object-contain"
+              />
+            )}
+            <p
+              className="text-xl font-semibold uppercase tracking-[0.22em]"
+              style={{ color: form.accentColor }}
+            >
+              {form.brandText}
+            </p>
           </div>
           <div className="absolute bottom-10 left-10 max-w-[70%]">
-            <p className="text-sm uppercase tracking-[0.28em]">Client Gallery</p>
-            <h3 className="mt-4 text-5xl font-semibold uppercase tracking-[0.12em]">Brand Preview</h3>
+            <p className="text-sm uppercase tracking-[0.28em]">
+              Client Gallery
+            </p>
+            <h3 className="mt-4 text-5xl font-semibold uppercase tracking-[0.12em]">
+              Brand Preview
+            </h3>
           </div>
         </div>
       </div>
@@ -2784,8 +3699,7 @@ function EmailTemplatesPanel() {
     startCampaignBuilder,
     updateEmailTemplate,
   } = useDashboardStore();
-  const { saveSetting, deleteSetting } =
-    useDashboardSettings("email-template");
+  const { saveSetting, deleteSetting } = useDashboardSettings("email-template");
   const activeTemplate =
     emailTemplates.find((template) => template.id === activeEmailTemplateId) ??
     emailTemplates[0];
@@ -2830,7 +3744,9 @@ function EmailTemplatesPanel() {
       <div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
-            <h2 className="text-[28px] font-medium leading-none">Email Templates</h2>
+            <h2 className="text-[28px] font-medium leading-none">
+              Email Templates
+            </h2>
             <div className="flex h-10 w-full items-center gap-3 bg-white sm:w-[280px]">
               <Search className="size-5 text-[#333]" />
               <Input
@@ -2856,9 +3772,12 @@ function EmailTemplatesPanel() {
               <Mail className="absolute -left-3 top-3 size-10 text-[#444]" />
               <MailCheck className="absolute left-12 top-14 size-9 text-[#444]" />
             </div>
-            <h3 className="mt-10 text-lg font-bold">Create your first email template</h3>
+            <h3 className="mt-10 text-lg font-bold">
+              Create your first email template
+            </h3>
             <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#333]">
-              Saved templates from your account will appear here and can be used in Marketing email campaigns.
+              Saved templates from your account will appear here and can be used
+              in Marketing email campaigns.
             </p>
             <Button
               className="mt-7 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
@@ -2883,7 +3802,9 @@ function EmailTemplatesPanel() {
                   className="grid w-full grid-cols-[2fr_2fr_1.2fr_1.2fr_40px] items-center border-b py-5 text-left text-sm hover:bg-[#fafafa]"
                   onClick={() => editTemplate(template.id)}
                 >
-                  <span className="font-bold">{template.name || "Untitled Template"}</span>
+                  <span className="font-bold">
+                    {template.name || "Untitled Template"}
+                  </span>
                   <span className="truncate pr-8 text-[#555]">
                     {template.subject || "-"}
                   </span>
@@ -2914,7 +3835,10 @@ function EmailTemplatesPanel() {
     <div className="-mx-5 -mt-9">
       <div className="flex min-h-[72px] items-center justify-between gap-4 border-b border-[#eee] bg-white px-5">
         <div className="flex min-w-0 items-center gap-4">
-          <button onClick={() => setEditorOpen(false)} aria-label="Back to templates">
+          <button
+            onClick={() => setEditorOpen(false)}
+            aria-label="Back to templates"
+          >
             <ArrowLeft className="size-5 text-[#777]" />
           </button>
           <Input
@@ -2963,15 +3887,21 @@ function EmailTemplatesPanel() {
         <section className="border-r p-4 sm:p-7">
           <FieldGroup className="gap-7">
             <Field>
-              <FieldLabel className="font-bold uppercase text-[#777]">Subject</FieldLabel>
+              <FieldLabel className="font-bold uppercase text-[#777]">
+                Subject
+              </FieldLabel>
               <Input
                 className="h-12 rounded-none"
                 value={activeTemplate.subject}
-                onChange={(event) => updateEmailTemplate({ subject: event.target.value })}
+                onChange={(event) =>
+                  updateEmailTemplate({ subject: event.target.value })
+                }
               />
             </Field>
             <Field>
-              <FieldLabel className="font-bold uppercase text-[#777]">Preview Text</FieldLabel>
+              <FieldLabel className="font-bold uppercase text-[#777]">
+                Preview Text
+              </FieldLabel>
               <Input
                 className="h-12 rounded-none"
                 value={activeTemplate.previewText}
@@ -2981,36 +3911,49 @@ function EmailTemplatesPanel() {
               />
             </Field>
             <Field>
-              <FieldLabel className="font-bold uppercase text-[#777]">Email Title</FieldLabel>
+              <FieldLabel className="font-bold uppercase text-[#777]">
+                Email Title
+              </FieldLabel>
               <Input
                 className="h-12 rounded-none"
                 value={activeTemplate.title}
-                onChange={(event) => updateEmailTemplate({ title: event.target.value })}
+                onChange={(event) =>
+                  updateEmailTemplate({ title: event.target.value })
+                }
               />
             </Field>
             <Field>
-              <FieldLabel className="font-bold uppercase text-[#777]">Hero Image</FieldLabel>
+              <FieldLabel className="font-bold uppercase text-[#777]">
+                Hero Image
+              </FieldLabel>
               <Input
                 type="file"
                 accept="image/*"
                 className="h-12 rounded-none"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (file) updateEmailTemplate({ image: URL.createObjectURL(file) });
+                  if (file)
+                    updateEmailTemplate({ image: URL.createObjectURL(file) });
                 }}
               />
             </Field>
             <Field>
-              <FieldLabel className="font-bold uppercase text-[#777]">Message</FieldLabel>
+              <FieldLabel className="font-bold uppercase text-[#777]">
+                Message
+              </FieldLabel>
               <Textarea
                 className="min-h-[210px] resize-none rounded-none leading-6"
                 value={activeTemplate.message}
-                onChange={(event) => updateEmailTemplate({ message: event.target.value })}
+                onChange={(event) =>
+                  updateEmailTemplate({ message: event.target.value })
+                }
               />
             </Field>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
-                <FieldLabel className="font-bold uppercase text-[#777]">Button Text</FieldLabel>
+                <FieldLabel className="font-bold uppercase text-[#777]">
+                  Button Text
+                </FieldLabel>
                 <Input
                   className="h-12 rounded-none"
                   value={activeTemplate.buttonText}
@@ -3020,7 +3963,9 @@ function EmailTemplatesPanel() {
                 />
               </Field>
               <Field>
-                <FieldLabel className="font-bold uppercase text-[#777]">Button Link</FieldLabel>
+                <FieldLabel className="font-bold uppercase text-[#777]">
+                  Button Link
+                </FieldLabel>
                 <Input
                   className="h-12 rounded-none"
                   value={activeTemplate.buttonLink}
@@ -3031,7 +3976,9 @@ function EmailTemplatesPanel() {
               </Field>
             </div>
             <Field>
-              <FieldLabel className="font-bold uppercase text-[#777]">Button Color</FieldLabel>
+              <FieldLabel className="font-bold uppercase text-[#777]">
+                Button Color
+              </FieldLabel>
               <div className="flex gap-3">
                 <Input
                   type="color"
@@ -3051,7 +3998,9 @@ function EmailTemplatesPanel() {
               </div>
             </Field>
             <Field>
-              <FieldLabel className="font-bold uppercase text-[#777]">Footer Text</FieldLabel>
+              <FieldLabel className="font-bold uppercase text-[#777]">
+                Footer Text
+              </FieldLabel>
               <Textarea
                 className="min-h-[120px] resize-none rounded-none leading-6"
                 value={activeTemplate.footerText}
@@ -3088,9 +4037,12 @@ function PresetList({ section }: { section: DashboardSection }) {
     <div>
       <div className="flex items-center justify-between gap-6">
         <div>
-          <h2 className="text-[28px] font-medium leading-none">Collection Presets</h2>
+          <h2 className="text-[28px] font-medium leading-none">
+            Collection Presets
+          </h2>
           <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#666]">
-            Presets save collection defaults by user and can be applied when creating a collection.
+            Presets save collection defaults by user and can be applied when
+            creating a collection.
           </p>
         </div>
         <Link
@@ -3129,7 +4081,9 @@ function PresetList({ section }: { section: DashboardSection }) {
                 className="grid grid-cols-[1.6fr_1.2fr_1.2fr_1.3fr_1.1fr_40px] items-center border-b py-5 text-left text-sm hover:bg-[#fafafa]"
                 onClick={() => selectPreset(preset.id)}
               >
-                <span className="font-bold">{preset.name || "Untitled Preset"}</span>
+                <span className="font-bold">
+                  {preset.name || "Untitled Preset"}
+                </span>
                 <span className="truncate pr-6 text-[#555]">
                   {preset.collectionId || "-"}
                 </span>
@@ -3175,7 +4129,9 @@ function PresetEditor({ section }: { section: DashboardSection }) {
     setPresetStore,
   } = useDashboardStore();
   const { saveSetting, deleteSetting } = useDashboardSettings("preset");
-  const [presetDesignPanel, setPresetDesignPanel] = useState<"cover" | "typography" | "color" | "grid">("cover");
+  const [presetDesignPanel, setPresetDesignPanel] = useState<
+    "cover" | "typography" | "color" | "grid"
+  >("cover");
   useEffect(() => {
     if (!activePresetId) addPresetDraft();
   }, [activePresetId, addPresetDraft]);
@@ -3252,7 +4208,7 @@ function PresetEditor({ section }: { section: DashboardSection }) {
             className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
             onClick={savePresetToDb}
           >
-          Save
+            Save
           </Button>
           {activePresetId && (
             <button
@@ -3274,7 +4230,7 @@ function PresetEditor({ section }: { section: DashboardSection }) {
                 "flex items-center gap-6 border-l-2 py-1 pl-6 text-left text-base",
                 presetEditorPanel === item.panel
                   ? "border-[#22bda7] font-semibold text-[#111]"
-                  : "border-transparent text-[#777]"
+                  : "border-transparent text-[#777]",
               )}
               onClick={() => setPresetEditorPanel(item.panel)}
             >
@@ -3294,15 +4250,21 @@ function PresetEditor({ section }: { section: DashboardSection }) {
         {presetEditorPanel === "design" && (
           <div className="grid gap-8 lg:grid-cols-[160px_minmax(0,1fr)]">
             <div className="flex flex-col gap-1 border-r pr-4">
-              {([
-                ["cover", PanelTop, "Cover"],
-                ["typography", Bold, "Typography"],
-                ["color", Palette, "Color"],
-                ["grid", LayoutGrid, "Grid"],
-              ] as const).map(([panel, Icon, label]) => (
+              {(
+                [
+                  ["cover", PanelTop, "Cover"],
+                  ["typography", Bold, "Typography"],
+                  ["color", Palette, "Color"],
+                  ["grid", LayoutGrid, "Grid"],
+                ] as const
+              ).map(([panel, Icon, label]) => (
                 <button
                   key={panel}
-                  className={cn("flex h-12 items-center gap-3 px-3 text-left text-sm", presetDesignPanel === panel && "bg-[#f5f5f5] font-bold text-[#00a997]")}
+                  className={cn(
+                    "flex h-12 items-center gap-3 px-3 text-left text-sm",
+                    presetDesignPanel === panel &&
+                      "bg-[#f5f5f5] font-bold text-[#00a997]",
+                  )}
                   onClick={() => setPresetDesignPanel(panel)}
                   type="button"
                 >
@@ -3339,7 +4301,9 @@ function PresetEditor({ section }: { section: DashboardSection }) {
             onChange={setPresetStore}
           />
         )}
-        {!["general", "design", "download", "favorite", "store"].includes(presetEditorPanel) && (
+        {!["general", "design", "download", "favorite", "store"].includes(
+          presetEditorPanel,
+        ) && (
           <div className="max-w-[560px]">
             <h2 className="text-2xl font-medium capitalize">
               {presetEditorPanel}
@@ -3381,7 +4345,9 @@ function PresetGeneralPanel({
           <FieldLabel className="font-bold">Collection Tags</FieldLabel>
           <Input
             value={general.collectionTags}
-            onChange={(event) => onChange({ collectionTags: event.target.value })}
+            onChange={(event) =>
+              onChange({ collectionTags: event.target.value })
+            }
             placeholder="Optional"
             className="h-12 rounded-none bg-white px-5"
           />
@@ -3399,26 +4365,35 @@ function PresetGeneralPanel({
             className="h-12 rounded-none bg-white px-5"
           />
           <p className="text-sm leading-6 text-[#666]">
-            Separate photo sets by comma. e.g. Highlights, Reception, Getting Ready
+            Separate photo sets by comma. e.g. Highlights, Reception, Getting
+            Ready
           </p>
         </Field>
         <Field>
           <FieldLabel className="font-bold">Default Watermark</FieldLabel>
           <select
             value={general.defaultWatermark}
-            onChange={(event) => onChange({ defaultWatermark: event.target.value })}
+            onChange={(event) =>
+              onChange({ defaultWatermark: event.target.value })
+            }
             className="h-12 rounded-none border bg-white px-5"
           >
             <option>No watermark</option>
             {watermarkItems.map((watermark) => (
-              <option key={watermark.id} value={watermark.id}>{watermark.name}</option>
+              <option key={watermark.id} value={watermark.id}>
+                {watermark.name}
+              </option>
             ))}
           </select>
           <p className="text-sm leading-6 text-[#666]">
             Set default watermark. Manage watermarks in{" "}
-            <Link href={`/dashboard/${section}/settings/watermark`} className="text-[#00a997]">
+            <Link
+              href={`/dashboard/${section}/settings/watermark`}
+              className="text-[#00a997]"
+            >
               App Settings
-            </Link>.
+            </Link>
+            .
           </p>
         </Field>
 
@@ -3461,9 +4436,7 @@ function PresetGeneralPanel({
                 />
                 <span>{general[typedKey] ? "On" : "Off"}</span>
               </div>
-              <p className="text-sm leading-6 text-[#666]">
-                {text}
-              </p>
+              <p className="text-sm leading-6 text-[#666]">{text}</p>
               {key === "slideshow" && (
                 <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
                   Additional options <ChevronDown className="size-4" />
@@ -3526,8 +4499,8 @@ function PresetFavoritePanel({
             <span>{favorite.favoritePhotos ? "On" : "Off"}</span>
           </div>
           <p className="text-sm leading-6 text-[#666]">
-            Allow visitors to favorite photos. You can review these afterwards in
-            Favorite Activity.
+            Allow visitors to favorite photos. You can review these afterwards
+            in Favorite Activity.
           </p>
         </Field>
         <Field>
@@ -3553,9 +4526,7 @@ function PresetFavoritePanel({
             placeholder="Unlimited"
             className="h-12 rounded-none bg-white"
           />
-          <p className="text-sm leading-6 text-[#666]">
-            Empty means no max.
-          </p>
+          <p className="text-sm leading-6 text-[#666]">Empty means no max.</p>
         </Field>
         <Field>
           <FieldLabel className="font-bold">Favorite Description</FieldLabel>
@@ -3587,77 +4558,80 @@ function PresetStorePanel({
 }) {
   return (
     <PlanFeatureLock feature="store" label="Store">
-    <div className="max-w-[560px]">
-      <h2 className="text-2xl font-medium">Store</h2>
-      <div className="mt-8 bg-[#eef7f9] p-6">
-        <p className="font-bold">Activate Store</p>
-        <p className="mt-4 text-sm leading-7 text-[#222]">
-          Setup Nikoset Store to start selling prints, digital downloads, and
-          more directly from your collections.
-        </p>
-        <button className="mt-3 text-sm font-semibold text-[#00a997]">
-          Get Started
-        </button>
-      </div>
-
-      <FieldGroup className="mt-12 gap-12">
-        <Field>
-          <FieldLabel className="font-bold">Store Status</FieldLabel>
-          <div className="flex items-center gap-3">
-            <Switch
-              checked={store.storeStatus}
-              onCheckedChange={(value) => onChange({ storeStatus: value })}
-            />
-            <span>{store.storeStatus ? "On" : "Off"}</span>
-          </div>
-          <p className="text-sm leading-6 text-[#666]">
-            Allow visitors to purchase products from collections.
+      <div className="max-w-[560px]">
+        <h2 className="text-2xl font-medium">Store</h2>
+        <div className="mt-8 bg-[#eef7f9] p-6">
+          <p className="font-bold">Activate Store</p>
+          <p className="mt-4 text-sm leading-7 text-[#222]">
+            Setup Nikoset Store to start selling prints, digital downloads, and
+            more directly from your collections.
           </p>
-        </Field>
+          <button className="mt-3 text-sm font-semibold text-[#00a997]">
+            Get Started
+          </button>
+        </div>
 
-        <Field>
-          <FieldLabel className="font-bold">Price Sheet</FieldLabel>
-          <select
-            value={store.priceSheet}
-            onChange={(event) => onChange({ priceSheet: event.target.value })}
-            className="h-12 rounded-none border bg-white px-5"
+        <FieldGroup className="mt-12 gap-12">
+          <Field>
+            <FieldLabel className="font-bold">Store Status</FieldLabel>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={store.storeStatus}
+                onCheckedChange={(value) => onChange({ storeStatus: value })}
+              />
+              <span>{store.storeStatus ? "On" : "Off"}</span>
+            </div>
+            <p className="text-sm leading-6 text-[#666]">
+              Allow visitors to purchase products from collections.
+            </p>
+          </Field>
+
+          <Field>
+            <FieldLabel className="font-bold">Price Sheet</FieldLabel>
+            <select
+              value={store.priceSheet}
+              onChange={(event) => onChange({ priceSheet: event.target.value })}
+              className="h-12 rounded-none border bg-white px-5"
+            >
+              <option>My Price Sheet</option>
+              <option>Wedding Price Sheet</option>
+              <option>Portrait Price Sheet</option>
+            </select>
+            <p className="text-sm leading-6 text-[#666]">
+              Set which products are for sale in collections. Manage price
+              sheets in <span className="text-[#00a997]">Store</span>
+            </p>
+          </Field>
+
+          <Field>
+            <FieldLabel className="font-bold">
+              Personalized Product Preview
+            </FieldLabel>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={store.productPreview}
+                onCheckedChange={(value) => onChange({ productPreview: value })}
+              />
+              <span>{store.productPreview ? "On" : "Off"}</span>
+            </div>
+            <p className="text-sm leading-6 text-[#666]">
+              This feature is only available with a lab price sheet on our next
+              generation Store system. Create a new Price Sheet to gain full
+              access or select existing price sheet that matches requirements.
+            </p>
+          </Field>
+        </FieldGroup>
+
+        <div className="mt-14">
+          <button
+            className="inline-flex items-center gap-2 font-semibold"
+            onClick={onBack}
           >
-            <option>My Price Sheet</option>
-            <option>Wedding Price Sheet</option>
-            <option>Portrait Price Sheet</option>
-          </select>
-          <p className="text-sm leading-6 text-[#666]">
-            Set which products are for sale in collections. Manage price sheets
-            in <span className="text-[#00a997]">Store</span>
-          </p>
-        </Field>
-
-        <Field>
-          <FieldLabel className="font-bold">
-            Personalized Product Preview
-          </FieldLabel>
-          <div className="flex items-center gap-3">
-            <Switch
-              checked={store.productPreview}
-              onCheckedChange={(value) => onChange({ productPreview: value })}
-            />
-            <span>{store.productPreview ? "On" : "Off"}</span>
-          </div>
-          <p className="text-sm leading-6 text-[#666]">
-            This feature is only available with a lab price sheet on our next
-            generation Store system. Create a new Price Sheet to gain full access
-            or select existing price sheet that matches requirements.
-          </p>
-        </Field>
-      </FieldGroup>
-
-      <div className="mt-14">
-        <button className="inline-flex items-center gap-2 font-semibold" onClick={onBack}>
-          <ArrowLeft className="size-4" />
-          Back
-        </button>
+            <ArrowLeft className="size-4" />
+            Back
+          </button>
+        </div>
       </div>
-    </div>
     </PlanFeatureLock>
   );
 }
@@ -3671,11 +4645,17 @@ function PresetPager({
 }) {
   return (
     <div className="mt-14 flex justify-between">
-      <button className="inline-flex items-center gap-2 font-semibold" onClick={onBack}>
+      <button
+        className="inline-flex items-center gap-2 font-semibold"
+        onClick={onBack}
+      >
         <ArrowLeft className="size-4" />
         Back
       </button>
-      <button className="inline-flex items-center gap-2 font-semibold" onClick={onNext}>
+      <button
+        className="inline-flex items-center gap-2 font-semibold"
+        onClick={onNext}
+      >
         Next <ArrowRight className="size-4" />
       </button>
     </div>
@@ -3748,14 +4728,21 @@ function PresetDesignPanel({
   onChange: (value: Partial<typeof design>) => void;
 }) {
   type UploadedFont = { name: string; url: string; fileName: string };
-  const [adminCoverTemplates, setAdminCoverTemplates] = useState<CustomCoverTemplate[]>([]);
+  const [adminCoverTemplates, setAdminCoverTemplates] = useState<
+    CustomCoverTemplate[]
+  >([]);
   const [fontUploading, setFontUploading] = useState(false);
   const fontLibrary = useDashboardSettings<UploadedFont>("branding");
-  const uploadedFonts = (fontLibrary.query.data?.data ?? []).filter((item) => item.localId.startsWith("font:"));
+  const uploadedFonts = (fontLibrary.query.data?.data ?? []).filter((item) =>
+    item.localId.startsWith("font:"),
+  );
   const customCoverAccess = usePlanFeatureAccess("customCover");
   const uploadFonts = async (files: FileList | null) => {
-    const valid = Array.from(files ?? []).filter((file) => /\.(woff2?|ttf|otf)$/i.test(file.name));
-    if (!valid.length) return toast.error("Choose WOFF, WOFF2, TTF, or OTF fonts");
+    const valid = Array.from(files ?? []).filter((file) =>
+      /\.(woff2?|ttf|otf)$/i.test(file.name),
+    );
+    if (!valid.length)
+      return toast.error("Choose WOFF, WOFF2, TTF, or OTF fonts");
     setFontUploading(true);
     try {
       for (const file of valid) {
@@ -3767,9 +4754,13 @@ function PresetDesignPanel({
           data: { name, url, fileName: file.name },
         });
       }
-      toast.success(`${valid.length} font${valid.length === 1 ? "" : "s"} uploaded`);
+      toast.success(
+        `${valid.length} font${valid.length === 1 ? "" : "s"} uploaded`,
+      );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Font upload failed");
+      toast.error(
+        error instanceof Error ? error.message : "Font upload failed",
+      );
     } finally {
       setFontUploading(false);
     }
@@ -3779,185 +4770,347 @@ function PresetDesignPanel({
     const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
     fetch(`${base}/home-cms`)
       .then((response) => response.json())
-      .then((payload: { data?: HomeCmsData }) => setAdminCoverTemplates(payload.data?.coverTemplates ?? []))
+      .then((payload: { data?: HomeCmsData }) =>
+        setAdminCoverTemplates(payload.data?.coverTemplates ?? []),
+      )
       .catch(() => setAdminCoverTemplates([]));
   }, []);
 
   return (
     <div className="min-w-0 border bg-white p-7">
-        {activePanel === "cover" && (
-          <>
-            <h2 className="text-2xl font-medium">Cover</h2>
-            <OptionSection title="Cover Text">
-              <FieldGroup className="gap-5">
-                {([
+      {activePanel === "cover" && (
+        <>
+          <h2 className="text-2xl font-medium">Cover</h2>
+          <OptionSection title="Cover Text">
+            <FieldGroup className="gap-5">
+              {(
+                [
                   ["Small Title", "coverSmallTitle", "showCoverSmallTitle"],
                   ["Title", "coverTitle", "showCoverTitle"],
                   ["Date", "coverDate", "showCoverDate"],
                   ["Button", "coverButtonText", "showCoverButton"],
-                ] as const).map(([label, key, toggle]) => {
-                  const selectedCoverDate = key === "coverDate" ? parseDisplayDate(design.coverDate) : undefined;
+                ] as const
+              ).map(([label, key, toggle]) => {
+                const selectedCoverDate =
+                  key === "coverDate"
+                    ? parseDisplayDate(design.coverDate)
+                    : undefined;
 
-                  return (
-                    <Field key={key}>
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={design[toggle]}
-                          onCheckedChange={(value) => onChange({ [toggle]: Boolean(value) } as Partial<typeof design>)}
-                        />
-                        <FieldLabel className="font-bold">{label}</FieldLabel>
-                      </div>
-                      {key === "coverDate" ? (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "mt-2 h-11 w-full justify-between rounded-none bg-white px-3 text-left font-normal",
-                                !design.coverDate && "text-[#777]"
-                              )}
-                            >
-                              {design.coverDate || "Select date"}
-                              <CalendarIcon data-icon="inline-end" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto rounded-none p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={selectedCoverDate}
-                              onSelect={(date) => onChange({ coverDate: date ? format(date, "PPP") : "" })}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      ) : (
-                        <Input
-                          value={design[key]}
-                          onChange={(event) => onChange({ [key]: event.target.value } as Partial<typeof design>)}
-                          className="mt-2 h-11 rounded-none bg-white"
-                        />
-                      )}
-                    </Field>
-                  );
-                })}
-              </FieldGroup>
-            </OptionSection>
-            <p className="mt-10 text-sm font-bold">Cover</p>
-            <PlanFeatureNotice feature="customCover" label="Custom cover templates" />
-            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8">
-              {adminCoverTemplates.map((template) => (
-                <button
-                  key={template.id}
-                  className={cn("relative text-center", customCoverAccess.locked && "cursor-not-allowed opacity-45")}
-                  disabled={customCoverAccess.locked}
-                  onClick={() => onChange({ cover: `custom:${template.id}`, customCoverTemplate: template } as Partial<typeof design>)}
-                  type="button"
+                return (
+                  <Field key={key}>
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={design[toggle]}
+                        onCheckedChange={(value) =>
+                          onChange({ [toggle]: Boolean(value) } as Partial<
+                            typeof design
+                          >)
+                        }
+                      />
+                      <FieldLabel className="font-bold">{label}</FieldLabel>
+                    </div>
+                    {key === "coverDate" ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "mt-2 h-11 w-full justify-between rounded-none bg-white px-3 text-left font-normal",
+                              !design.coverDate && "text-[#777]",
+                            )}
+                          >
+                            {design.coverDate || "Select date"}
+                            <CalendarIcon data-icon="inline-end" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="w-auto rounded-none p-0"
+                          align="start"
+                        >
+                          <Calendar
+                            mode="single"
+                            selected={selectedCoverDate}
+                            onSelect={(date) =>
+                              onChange({
+                                coverDate: date ? format(date, "PPP") : "",
+                              })
+                            }
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <Input
+                        value={design[key]}
+                        onChange={(event) =>
+                          onChange({ [key]: event.target.value } as Partial<
+                            typeof design
+                          >)
+                        }
+                        className="mt-2 h-11 rounded-none bg-white"
+                      />
+                    )}
+                  </Field>
+                );
+              })}
+            </FieldGroup>
+          </OptionSection>
+          <p className="mt-10 text-sm font-bold">Cover</p>
+          <PlanFeatureNotice
+            feature="customCover"
+            label="Custom cover templates"
+          />
+          <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8">
+            {adminCoverTemplates.map((template) => (
+              <button
+                key={template.id}
+                className={cn(
+                  "relative text-center",
+                  customCoverAccess.locked && "cursor-not-allowed opacity-45",
+                )}
+                disabled={customCoverAccess.locked}
+                onClick={() =>
+                  onChange({
+                    cover: `custom:${template.id}`,
+                    customCoverTemplate: template,
+                  } as Partial<typeof design>)
+                }
+                type="button"
+              >
+                <span
+                  className={cn(
+                    "block border p-1",
+                    design.cover === `custom:${template.id}` &&
+                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                  )}
                 >
-                  <span className={cn("block border p-1", design.cover === `custom:${template.id}` && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-                    <span className="relative block aspect-[1.45] overflow-hidden bg-white">
-                      <CoverPreview design={{ ...design, cover: `custom:${template.id}`, customCoverTemplate: template }} compact className="min-h-0" />
-                    </span>
+                  <span className="relative block aspect-[1.45] overflow-hidden bg-white">
+                    <CoverPreview
+                      design={{
+                        ...design,
+                        cover: `custom:${template.id}`,
+                        customCoverTemplate: template,
+                      }}
+                      compact
+                      className="min-h-0"
+                    />
                   </span>
-                  <span className="mt-3 block text-sm">{template.name}</span>
-                </button>
-              ))}
-              {coverOptions.map(([name]) => (
-                <button key={name} className="text-center" onClick={() => onChange({ cover: name })} type="button">
-                  <span className={cn("block border p-1", design.cover === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-                    <span className="relative block aspect-[1.45] overflow-hidden bg-white">
-                      <CoverPreview design={{ ...design, cover: name }} compact className="min-h-0" />
-                    </span>
+                </span>
+                <span className="mt-3 block text-sm">{template.name}</span>
+              </button>
+            ))}
+            {coverOptions.map(([name]) => (
+              <button
+                key={name}
+                className="text-center"
+                onClick={() => onChange({ cover: name })}
+                type="button"
+              >
+                <span
+                  className={cn(
+                    "block border p-1",
+                    design.cover === name &&
+                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                  )}
+                >
+                  <span className="relative block aspect-[1.45] overflow-hidden bg-white">
+                    <CoverPreview
+                      design={{ ...design, cover: name }}
+                      compact
+                      className="min-h-0"
+                    />
                   </span>
-                  <span className="mt-3 block text-sm">{name}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+                </span>
+                <span className="mt-3 block text-sm">{name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
-        {activePanel === "typography" && (
-          <PlanFeatureLock feature="advancedDesign" label="Advanced design">
-            <h2 className="text-2xl font-medium">Typography</h2>
-            <div className="mt-8 grid grid-cols-2 gap-3">
-              {uploadedFonts.map((font) => (
-                <button key={font.localId} className="text-center" onClick={() => onChange({ typography: "Custom", customFontName: font.data.name, customFontDataUrl: font.data.url } as Partial<typeof design>)} type="button">
-                  <span className={cn("block border p-8 text-left", design.customFontDataUrl === font.data.url && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-                    <style>{`@font-face{font-family:"${font.data.name.replace(/"/g, "")}";src:url("${font.data.url}");font-display:swap;}`}</style>
-                    <span className="block truncate text-xl" style={{ fontFamily: `"${font.data.name.replace(/"/g, "")}", serif` }}>Aa {font.data.name}</span>
-                    <span className="mt-3 block text-xs text-[#555]">Saved font</span>
-                  </span>
-                  <span className="mt-3 block truncate text-sm">{font.data.name}</span>
-                </button>
-              ))}
-              {typographyOptions.map(([name, sample, desc]) => (
-                <button key={name} className="text-center" onClick={() => onChange({ typography: name, customFontName: "", customFontDataUrl: "" } as Partial<typeof design>)} type="button">
-                  <span className={cn("block border p-8 text-left", design.typography === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-                    <span className="block text-xl tracking-widest">{sample}</span>
-                    <span className="mt-3 block text-sm text-[#555]">{desc}</span>
-                  </span>
-                  <span className="mt-3 block text-sm">{name}</span>
-                </button>
-              ))}
-            </div>
-            <div className="mt-8 border bg-[#fafafa] p-5">
-              <p className="font-bold">Your Font Library</p>
-              <p className="mt-2 text-sm text-[#666]">Upload many once. Choose any saved font later.</p>
-              <label className="mt-4 inline-flex h-10 cursor-pointer items-center gap-2 bg-[#111] px-4 text-sm font-bold text-white">
-                {fontUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-                {fontUploading ? "Uploading..." : "Upload Fonts"}
-                <input
-                  type="file"
-                  multiple
-                  accept=".woff,.woff2,.ttf,.otf,font/*"
-                  className="hidden"
-                  disabled={fontUploading}
-                  onChange={(event) => { void uploadFonts(event.target.files); event.currentTarget.value = ""; }}
-                />
-              </label>
-              {design.customFontDataUrl && (
-                <button
-                  className="ml-3 h-10 border bg-white px-4 text-sm font-bold"
-                  onClick={() => onChange({ typography: "Classic", customFontName: "", customFontDataUrl: "" } as Partial<typeof design>)}
-                  type="button"
+      {activePanel === "typography" && (
+        <PlanFeatureLock feature="advancedDesign" label="Advanced design">
+          <h2 className="text-2xl font-medium">Typography</h2>
+          <div className="mt-8 grid grid-cols-2 gap-3">
+            {uploadedFonts.map((font) => (
+              <button
+                key={font.localId}
+                className="text-center"
+                onClick={() =>
+                  onChange({
+                    typography: "Custom",
+                    customFontName: font.data.name,
+                    customFontDataUrl: font.data.url,
+                  } as Partial<typeof design>)
+                }
+                type="button"
+              >
+                <span
+                  className={cn(
+                    "block border p-8 text-left",
+                    design.customFontDataUrl === font.data.url &&
+                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                  )}
                 >
-                  Remove
-                </button>
+                  <style>{`@font-face{font-family:"${font.data.name.replace(/"/g, "")}";src:url("${font.data.url}");font-display:swap;}`}</style>
+                  <span
+                    className="block truncate text-xl"
+                    style={{
+                      fontFamily: `"${font.data.name.replace(/"/g, "")}", serif`,
+                    }}
+                  >
+                    Aa {font.data.name}
+                  </span>
+                  <span className="mt-3 block text-xs text-[#555]">
+                    Saved font
+                  </span>
+                </span>
+                <span className="mt-3 block truncate text-sm">
+                  {font.data.name}
+                </span>
+              </button>
+            ))}
+            {typographyOptions.map(([name, sample, desc]) => (
+              <button
+                key={name}
+                className="text-center"
+                onClick={() =>
+                  onChange({
+                    typography: name,
+                    customFontName: "",
+                    customFontDataUrl: "",
+                  } as Partial<typeof design>)
+                }
+                type="button"
+              >
+                <span
+                  className={cn(
+                    "block border p-8 text-left",
+                    design.typography === name &&
+                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                  )}
+                >
+                  <span className="block text-xl tracking-widest">
+                    {sample}
+                  </span>
+                  <span className="mt-3 block text-sm text-[#555]">{desc}</span>
+                </span>
+                <span className="mt-3 block text-sm">{name}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-8 border bg-[#fafafa] p-5">
+            <p className="font-bold">Your Font Library</p>
+            <p className="mt-2 text-sm text-[#666]">
+              Upload many once. Choose any saved font later.
+            </p>
+            <label className="mt-4 inline-flex h-10 cursor-pointer items-center gap-2 bg-[#111] px-4 text-sm font-bold text-white">
+              {fontUploading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
               )}
-            </div>
-          </PlanFeatureLock>
-        )}
+              {fontUploading ? "Uploading..." : "Upload Fonts"}
+              <input
+                type="file"
+                multiple
+                accept=".woff,.woff2,.ttf,.otf,font/*"
+                className="hidden"
+                disabled={fontUploading}
+                onChange={(event) => {
+                  void uploadFonts(event.target.files);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            {design.customFontDataUrl && (
+              <button
+                className="ml-3 h-10 border bg-white px-4 text-sm font-bold"
+                onClick={() =>
+                  onChange({
+                    typography: "Classic",
+                    customFontName: "",
+                    customFontDataUrl: "",
+                  } as Partial<typeof design>)
+                }
+                type="button"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </PlanFeatureLock>
+      )}
 
-        {activePanel === "color" && (
-          <PlanFeatureLock feature="advancedDesign" label="Advanced design">
-            <h2 className="text-2xl font-medium">Color</h2>
-            <div className="mt-8 grid grid-cols-2 gap-3">
-              {colorOptions.map(([name, colors]) => (
-                <button key={name} className="text-center" onClick={() => onChange({ color: name })} type="button">
-                  <span className={cn("flex h-[118px] items-center justify-center gap-2 border", design.color === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-                    {colors.map((color) => (
-                      <span key={color} className="size-10 rounded-full border" style={{ backgroundColor: color }} />
-                    ))}
-                  </span>
-                  <span className="mt-3 block text-sm">{name}</span>
-                </button>
-              ))}
-            </div>
-          </PlanFeatureLock>
-        )}
+      {activePanel === "color" && (
+        <PlanFeatureLock feature="advancedDesign" label="Advanced design">
+          <h2 className="text-2xl font-medium">Color</h2>
+          <div className="mt-8 grid grid-cols-2 gap-3">
+            {colorOptions.map(([name, colors]) => (
+              <button
+                key={name}
+                className="text-center"
+                onClick={() => onChange({ color: name })}
+                type="button"
+              >
+                <span
+                  className={cn(
+                    "flex h-[118px] items-center justify-center gap-2 border",
+                    design.color === name &&
+                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                  )}
+                >
+                  {colors.map((color) => (
+                    <span
+                      key={color}
+                      className="size-10 rounded-full border"
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </span>
+                <span className="mt-3 block text-sm">{name}</span>
+              </button>
+            ))}
+          </div>
+        </PlanFeatureLock>
+      )}
 
-        {activePanel === "grid" && (
-          <PlanFeatureLock feature="layouts" label="Layouts">
-            <h2 className="text-2xl font-medium">Grid</h2>
-            <OptionSection title="Thumbnail Size">
-              <TwoOption value={design.thumbnailSize} a="Regular" b="Large" onPick={(value) => onChange({ thumbnailSize: value as "Regular" | "Large" })} />
-            </OptionSection>
-            <OptionSection title="Grid Spacing">
-              <TwoOption value={design.gridSpacing} a="Regular" b="Large" onPick={(value) => onChange({ gridSpacing: value as "Regular" | "Large" })} />
-            </OptionSection>
-            <OptionSection title="Navigation Style">
-              <TwoOption value={design.navigationStyle} a="Icon Only" b="Icon & Text" onPick={(value) => onChange({ navigationStyle: value as "Icon Only" | "Icon & Text" })} />
-            </OptionSection>
-          </PlanFeatureLock>
-        )}
+      {activePanel === "grid" && (
+        <PlanFeatureLock feature="layouts" label="Layouts">
+          <h2 className="text-2xl font-medium">Grid</h2>
+          <OptionSection title="Thumbnail Size">
+            <TwoOption
+              value={design.thumbnailSize}
+              a="Regular"
+              b="Large"
+              onPick={(value) =>
+                onChange({ thumbnailSize: value as "Regular" | "Large" })
+              }
+            />
+          </OptionSection>
+          <OptionSection title="Grid Spacing">
+            <TwoOption
+              value={design.gridSpacing}
+              a="Regular"
+              b="Large"
+              onPick={(value) =>
+                onChange({ gridSpacing: value as "Regular" | "Large" })
+              }
+            />
+          </OptionSection>
+          <OptionSection title="Navigation Style">
+            <TwoOption
+              value={design.navigationStyle}
+              a="Icon Only"
+              b="Icon & Text"
+              onPick={(value) =>
+                onChange({
+                  navigationStyle: value as "Icon Only" | "Icon & Text",
+                })
+              }
+            />
+          </OptionSection>
+        </PlanFeatureLock>
+      )}
     </div>
   );
 }
@@ -3986,23 +5139,33 @@ function CollectionDesignLivePreview({
   const previewImages = images.length ? images.slice(0, 6) : [];
   const firstSets = sets.slice(0, 5);
   const masonryGapPx = design.gridSpacing === "Large" ? 8 : 3;
-  const masonryColumns = design.thumbnailSize === "Large" ? "columns-2" : "columns-3";
+  const masonryColumns =
+    design.thumbnailSize === "Large" ? "columns-2" : "columns-3";
   const [bg, fg, accent] =
-    collectionPreviewThemeMap[design.color as keyof typeof collectionPreviewThemeMap] ?? collectionPreviewThemeMap.Rose;
+    collectionPreviewThemeMap[
+      design.color as keyof typeof collectionPreviewThemeMap
+    ] ?? collectionPreviewThemeMap.Rose;
   const fallbackFontFamily =
-    collectionPreviewTypeMap[design.typography as keyof typeof collectionPreviewTypeMap] ?? collectionPreviewTypeMap.Classic;
+    collectionPreviewTypeMap[
+      design.typography as keyof typeof collectionPreviewTypeMap
+    ] ?? collectionPreviewTypeMap.Classic;
   const customFontName = design.customFontName?.trim();
   const fontFamily = customFontName
     ? `"${customFontName.replace(/"/g, "")}", ${fallbackFontFamily}`
     : fallbackFontFamily;
-  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">(
+    "desktop",
+  );
   const isMobilePreview = previewDevice === "mobile";
 
   return (
     <aside className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-hidden bg-[#f4f4f4] px-8 py-6 xl:block">
       <div className="mb-4 flex items-center justify-center gap-4 text-[#777]">
         <button
-          className={cn("flex size-9 items-center justify-center", !isMobilePreview && "bg-white text-[#111] shadow-sm")}
+          className={cn(
+            "flex size-9 items-center justify-center",
+            !isMobilePreview && "bg-white text-[#111] shadow-sm",
+          )}
           onClick={() => setPreviewDevice("desktop")}
           aria-label="Desktop preview"
           type="button"
@@ -4010,7 +5173,10 @@ function CollectionDesignLivePreview({
           <Monitor className="size-5" />
         </button>
         <button
-          className={cn("flex size-9 items-center justify-center", isMobilePreview && "bg-white text-[#111] shadow-sm")}
+          className={cn(
+            "flex size-9 items-center justify-center",
+            isMobilePreview && "bg-white text-[#111] shadow-sm",
+          )}
           onClick={() => setPreviewDevice("mobile")}
           aria-label="Mobile preview"
           type="button"
@@ -4018,13 +5184,32 @@ function CollectionDesignLivePreview({
           <Smartphone className="size-5" />
         </button>
       </div>
-      <div className={cn("mx-auto w-full transition-all duration-300", isMobilePreview ? "max-w-[320px]" : "max-w-[650px]")}>
+      <div
+        className={cn(
+          "mx-auto w-full transition-all duration-300",
+          isMobilePreview ? "max-w-[320px]" : "max-w-[650px]",
+        )}
+      >
         {customFontName && design.customFontDataUrl && (
           <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
         )}
-        <div className={cn("shadow-[0_28px_80px_rgba(0,0,0,0.18)]", isMobilePreview && "rounded-[28px] border-[10px] border-[#1d1d1d]")} style={{ backgroundColor: bg, color: fg, fontFamily }}>
-          <div className="overflow-hidden border border-white" style={{ backgroundColor: bg }}>
-            <div className={cn("overflow-hidden", isMobilePreview ? "h-[210px]" : "h-[260px]")}>
+        <div
+          className={cn(
+            "shadow-[0_28px_80px_rgba(0,0,0,0.18)]",
+            isMobilePreview && "rounded-[28px] border-[10px] border-[#1d1d1d]",
+          )}
+          style={{ backgroundColor: bg, color: fg, fontFamily }}
+        >
+          <div
+            className="overflow-hidden border border-white"
+            style={{ backgroundColor: bg }}
+          >
+            <div
+              className={cn(
+                "overflow-hidden",
+                isMobilePreview ? "h-[210px]" : "h-[260px]",
+              )}
+            >
               <CoverPreview
                 design={{
                   ...design,
@@ -4038,34 +5223,81 @@ function CollectionDesignLivePreview({
             </div>
             <div className="flex items-center justify-between border-b border-black/10 px-3 py-2">
               <div className="min-w-0">
-                <p className="text-[7px] uppercase tracking-[0.24em]" style={{ color: accent }}>Masonry Gallery</p>
-                <p className="mt-1 truncate text-[14px] font-semibold">{collectionName}</p>
-                <p className="mt-1 text-[7px] uppercase tracking-[0.18em]" style={{ color: accent }}>{design.coverSmallTitle || "Studio"}</p>
+                <p
+                  className="text-[7px] uppercase tracking-[0.24em]"
+                  style={{ color: accent }}
+                >
+                  Masonry Gallery
+                </p>
+                <p className="mt-1 truncate text-[14px] font-semibold">
+                  {collectionName}
+                </p>
+                <p
+                  className="mt-1 text-[7px] uppercase tracking-[0.18em]"
+                  style={{ color: accent }}
+                >
+                  {design.coverSmallTitle || "Studio"}
+                </p>
               </div>
-              <div className="flex items-center gap-2" style={{ color: accent }}>
+              <div
+                className="flex items-center gap-2"
+                style={{ color: accent }}
+              >
                 {favoriteEnabled && <Heart className="size-3" />}
                 <Download className="size-3" />
                 <Share2 className="size-3" />
                 {storeEnabled && <ShoppingBag className="size-3" />}
               </div>
             </div>
-            <div className="flex items-center gap-5 overflow-hidden px-3 py-2 text-[7px]" style={{ color: accent }}>
-              {firstSets.length ? firstSets.map((set) => (
-                <span key={set.id} className="shrink-0">{set.name}</span>
-              )) : <span>Highlights</span>}
+            <div
+              className="flex items-center gap-5 overflow-hidden px-3 py-2 text-[7px]"
+              style={{ color: accent }}
+            >
+              {firstSets.length ? (
+                firstSets.map((set) => (
+                  <span key={set.id} className="shrink-0">
+                    {set.name}
+                  </span>
+                ))
+              ) : (
+                <span>Highlights</span>
+              )}
             </div>
-            <div className={isMobilePreview ? "columns-2" : masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
-              {previewImages.length ? previewImages.map((image, index) => (
-                <div key={image._id} className="break-inside-avoid overflow-hidden bg-[#ececec]" style={{ marginBottom: `${masonryGapPx}px` }}>
-                  <img
-                    src={imageSrc(image.thumbnailUrl || image.url)}
-                    alt=""
-                    className={cn("block w-full object-cover", index % 3 === 0 ? "aspect-[0.82]" : index % 3 === 1 ? "aspect-[1.3]" : "aspect-square")}
-                  />
-                </div>
-              )) : Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className={cn("break-inside-avoid bg-[#e8e8e8]", index % 2 ? "aspect-[1.25]" : "aspect-square")} style={{ marginBottom: `${masonryGapPx}px` }} />
-              ))}
+            <div
+              className={isMobilePreview ? "columns-2" : masonryColumns}
+              style={{ columnGap: `${masonryGapPx}px` }}
+            >
+              {previewImages.length
+                ? previewImages.map((image, index) => (
+                    <div
+                      key={image._id}
+                      className="break-inside-avoid overflow-hidden bg-[#ececec]"
+                      style={{ marginBottom: `${masonryGapPx}px` }}
+                    >
+                      <img
+                        src={imageSrc(image.thumbnailUrl || image.url)}
+                        alt=""
+                        className={cn(
+                          "block w-full object-cover",
+                          index % 3 === 0
+                            ? "aspect-[0.82]"
+                            : index % 3 === 1
+                              ? "aspect-[1.3]"
+                              : "aspect-square",
+                        )}
+                      />
+                    </div>
+                  ))
+                : Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "break-inside-avoid bg-[#e8e8e8]",
+                        index % 2 ? "aspect-[1.25]" : "aspect-square",
+                      )}
+                      style={{ marginBottom: `${masonryGapPx}px` }}
+                    />
+                  ))}
             </div>
           </div>
         </div>
@@ -4074,7 +5306,13 @@ function CollectionDesignLivePreview({
   );
 }
 
-function OptionSection({ title, children }: { title: string; children: ReactNode }) {
+function OptionSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <section className="mt-14">
       <p className="mb-5 text-sm font-bold">{title}</p>
@@ -4098,7 +5336,12 @@ function TwoOption({
     <div className="grid max-w-[340px] grid-cols-2 gap-2">
       {[a, b].map((item) => (
         <button key={item} className="text-center" onClick={() => onPick(item)}>
-          <span className={cn("flex h-[108px] items-center justify-center border", value === item && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+          <span
+            className={cn(
+              "flex h-[108px] items-center justify-center border",
+              value === item && "border-[#22bda7] ring-1 ring-[#22bda7]",
+            )}
+          >
             <LayoutGrid className="size-7" />
           </span>
           <span className="mt-3 block text-sm">{item}</span>
@@ -4135,7 +5378,10 @@ function PresetDownloadPanel({
         <Field>
           <FieldLabel className="font-bold">Photo Download</FieldLabel>
           <div className="flex items-center gap-3">
-            <Switch checked={download.photoDownload} onCheckedChange={(value) => onChange({ photoDownload: value })} />
+            <Switch
+              checked={download.photoDownload}
+              onCheckedChange={(value) => onChange({ photoDownload: value })}
+            />
             <span>{download.photoDownload ? "On" : "Off"}</span>
           </div>
           <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
@@ -4144,10 +5390,17 @@ function PresetDownloadPanel({
         </Field>
 
         <Field>
-          <FieldLabel className="font-bold">Photo Downloadable Sizes</FieldLabel>
+          <FieldLabel className="font-bold">
+            Photo Downloadable Sizes
+          </FieldLabel>
           <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
             <label className="flex items-center gap-2">
-              <Checkbox checked={download.highResolution} onCheckedChange={(value) => onChange({ highResolution: Boolean(value) })} />
+              <Checkbox
+                checked={download.highResolution}
+                onCheckedChange={(value) =>
+                  onChange({ highResolution: Boolean(value) })
+                }
+              />
               High Resolution
             </label>
             {(["Original", "3600px"] as const).map((size) => (
@@ -4157,11 +5410,18 @@ function PresetDownloadPanel({
                   checked={download.highResolutionSize === size}
                   onChange={() => onChange({ highResolutionSize: size })}
                 />
-                {size === "Original" ? "Original - Upgrade required. Upgrade" : size}
+                {size === "Original"
+                  ? "Original - Upgrade required. Upgrade"
+                  : size}
               </label>
             ))}
             <label className="flex items-center gap-2">
-              <Checkbox checked={download.webSize} onCheckedChange={(value) => onChange({ webSize: Boolean(value) })} />
+              <Checkbox
+                checked={download.webSize}
+                onCheckedChange={(value) =>
+                  onChange({ webSize: Boolean(value) })
+                }
+              />
               Web Size
             </label>
             {(["2048px", "1024px", "640px"] as const).map((size) => (
@@ -4182,10 +5442,25 @@ function PresetDownloadPanel({
 
         <PlanFeatureNotice feature="pinSet" label="Download PIN" />
         {[
-          ["Video Download", "videoDownload", "Control video download availability."],
-          ["Download PIN", "downloadPin", "If enabled, all collections created from this preset will have a download PIN set automatically."],
+          [
+            "Video Download",
+            "videoDownload",
+            "Control video download availability.",
+          ],
+          [
+            "Download PIN",
+            "downloadPin",
+            "If enabled, all collections created from this preset will have a download PIN set automatically.",
+          ],
         ].map(([label, key, text]) => (
-          <Field key={key} className={cn(key === "downloadPin" && pinAccess.locked && "pointer-events-none opacity-45")}>
+          <Field
+            key={key}
+            className={cn(
+              key === "downloadPin" &&
+                pinAccess.locked &&
+                "pointer-events-none opacity-45",
+            )}
+          >
             <FieldLabel className="font-bold">{label}</FieldLabel>
             <div className="flex items-center gap-3">
               <Switch
@@ -4195,15 +5470,19 @@ function PresetDownloadPanel({
                   onChange({ [key]: value } as Partial<typeof download>)
                 }
               />
-              <span>{download[key as "videoDownload" | "downloadPin"] ? "On" : "Off"}</span>
+              <span>
+                {download[key as "videoDownload" | "downloadPin"]
+                  ? "On"
+                  : "Off"}
+              </span>
             </div>
-            <p className="text-sm leading-6 text-[#666]">
-              {text}
-            </p>
+            <p className="text-sm leading-6 text-[#666]">{text}</p>
             {key === "downloadPin" && download.downloadPin && (
               <Input
                 value={download.downloadPinCode}
-                onChange={(event) => onChange({ downloadPinCode: event.target.value })}
+                onChange={(event) =>
+                  onChange({ downloadPinCode: event.target.value })
+                }
                 placeholder="Set download PIN"
                 className="mt-3 h-12 rounded-none bg-white px-5"
               />
@@ -4218,26 +5497,47 @@ function PresetDownloadPanel({
           </p>
           <FieldGroup className="gap-12">
             {[
-              ["Restrict Downloads to Collection Contacts", "restrictDownloads", "Allow only assigned Collection Contacts to download photos."],
-              ["Limit Photo Downloads", "limitDownloads", "Set number of photos that can be downloaded in these collections."],
+              [
+                "Restrict Downloads to Collection Contacts",
+                "restrictDownloads",
+                "Allow only assigned Collection Contacts to download photos.",
+              ],
+              [
+                "Limit Photo Downloads",
+                "limitDownloads",
+                "Set number of photos that can be downloaded in these collections.",
+              ],
             ].map(([label, key, text]) => (
-              <Field key={key} className={cn(limitAccess.locked && "pointer-events-none opacity-45")}>
+              <Field
+                key={key}
+                className={cn(
+                  limitAccess.locked && "pointer-events-none opacity-45",
+                )}
+              >
                 <FieldLabel className="font-bold">{label}</FieldLabel>
                 <div className="flex items-center gap-3">
                   <Switch
                     disabled={limitAccess.locked}
-                    checked={download[key as "restrictDownloads" | "limitDownloads"]}
-                  onCheckedChange={(value) =>
-                    onChange({ [key]: value } as Partial<typeof download>)
-                  }
+                    checked={
+                      download[key as "restrictDownloads" | "limitDownloads"]
+                    }
+                    onCheckedChange={(value) =>
+                      onChange({ [key]: value } as Partial<typeof download>)
+                    }
                   />
-                  <span>{download[key as "restrictDownloads" | "limitDownloads"] ? "On" : "Off"}</span>
+                  <span>
+                    {download[key as "restrictDownloads" | "limitDownloads"]
+                      ? "On"
+                      : "Off"}
+                  </span>
                 </div>
                 <p className="text-sm leading-6 text-[#666]">{text}</p>
                 {key === "limitDownloads" && download.limitDownloads && (
                   <Input
                     value={download.limitPinUsage}
-                    onChange={(event) => onChange({ limitPinUsage: event.target.value })}
+                    onChange={(event) =>
+                      onChange({ limitPinUsage: event.target.value })
+                    }
                     placeholder="Number of downloads e.g. 5"
                     className="mt-3 h-12 rounded-none bg-white px-5"
                   />
@@ -4252,11 +5552,8 @@ function PresetDownloadPanel({
 }
 
 function WatermarkList({ section }: { section: DashboardSection }) {
-  const {
-    addWatermarkDraft,
-    selectWatermark,
-    watermarkItems,
-  } = useDashboardStore();
+  const { addWatermarkDraft, selectWatermark, watermarkItems } =
+    useDashboardStore();
 
   return (
     <div className="max-w-[760px]">
@@ -4264,8 +5561,8 @@ function WatermarkList({ section }: { section: DashboardSection }) {
         <div>
           <p className="text-sm font-bold">Watermarks</p>
           <p className="mt-3 max-w-[560px] text-sm leading-6 text-[#666]">
-            Create multiple watermarks, then pick one as default inside collection
-            presets.
+            Create multiple watermarks, then pick one as default inside
+            collection presets.
           </p>
         </div>
         <Link
@@ -4330,7 +5627,10 @@ function WatermarkList({ section }: { section: DashboardSection }) {
 async function uploadDashboardAsset(file: File) {
   const form = new FormData();
   form.append("file", file);
-  const response = await fetch("/api/mobile-gallery/assets", { method: "POST", body: form });
+  const response = await fetch("/api/mobile-gallery/assets", {
+    method: "POST",
+    body: form,
+  });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message || "Upload failed");
   const url = String(payload?.data?.url || "");
@@ -4371,7 +5671,15 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
   const safePosition = () => {
     const textPad =
       watermarkType === "text"
-        ? Math.min(45, Math.max(5, ((watermarkText || "Watermark").length * Math.max(14, watermarkScale / 2)) / 12))
+        ? Math.min(
+            45,
+            Math.max(
+              5,
+              ((watermarkText || "Watermark").length *
+                Math.max(14, watermarkScale / 2)) /
+                12,
+            ),
+          )
         : Math.min(45, Math.max(5, watermarkScale / 6));
     const yPad = Math.min(45, Math.max(5, watermarkScale / 10));
 
@@ -4411,7 +5719,9 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
       setWatermarkImage(url);
       toast.success("Watermark image uploaded");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Watermark upload failed");
+      toast.error(
+        error instanceof Error ? error.message : "Watermark upload failed",
+      );
     } finally {
       setWatermarkImageUploading(false);
       URL.revokeObjectURL(previewUrl);
@@ -4471,7 +5781,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
                 key={type}
                 className={cn(
                   "h-10 text-xs font-bold uppercase tracking-widest",
-                  watermarkType === type && "bg-white shadow-sm"
+                  watermarkType === type && "bg-white shadow-sm",
                 )}
                 onClick={() => setWatermarkType(type)}
               >
@@ -4513,7 +5823,8 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
                     key={color}
                     className={cn(
                       "size-10 rounded-full border",
-                      watermarkColor === color && "ring-2 ring-[#22bda7] ring-offset-2"
+                      watermarkColor === color &&
+                        "ring-2 ring-[#22bda7] ring-offset-2",
                     )}
                     style={{ backgroundColor: color }}
                     onClick={() => setWatermarkColor(color)}
@@ -4542,7 +5853,11 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
                 event.currentTarget.value = "";
               }}
             />
-            {watermarkImageUploading && <p className="mt-2 text-xs font-semibold text-[#00a997]">Uploading watermark image...</p>}
+            {watermarkImageUploading && (
+              <p className="mt-2 text-xs font-semibold text-[#00a997]">
+                Uploading watermark image...
+              </p>
+            )}
           </Field>
         )}
 
@@ -4584,12 +5899,12 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
                     "size-4 rounded-full bg-[#d8d8d8]",
                     Math.abs(watermarkPosition.x - x) < 16 &&
                       Math.abs(watermarkPosition.y - y) < 16 &&
-                      "bg-[#22bda7]"
+                      "bg-[#22bda7]",
                   )}
                   onClick={() => setWatermarkPosition({ x, y })}
                   aria-label={`Set watermark ${x} ${y}`}
                 />
-              ))
+              )),
             )}
           </div>
           <p className="mt-3 text-sm text-[#666]">
@@ -4747,7 +6062,10 @@ function SearchBox({
           </PopoverContent>
         </Popover>
       </div>
-      <PopoverContent className="w-[calc(100vw-2rem)] max-w-[480px] rounded-none border-0 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.12)] sm:p-6" align="start">
+      <PopoverContent
+        className="w-[calc(100vw-2rem)] max-w-[480px] rounded-none border-0 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.12)] sm:p-6"
+        align="start"
+      >
         <div className="flex flex-col gap-6">
           {libraryFilters.map((group) => (
             <div key={group.title}>
@@ -4813,7 +6131,9 @@ function StoreDashboardPanel() {
       <div className="grid gap-4 md:grid-cols-3">
         {stats.map(([label, value]) => (
           <div key={label} className="border bg-white p-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-[#777]">{label}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-[#777]">
+              {label}
+            </p>
             <p className="mt-3 text-2xl font-semibold">{value}</p>
           </div>
         ))}
@@ -4836,9 +6156,14 @@ function StoreDashboardPanel() {
           <p className="text-sm font-bold">Status Breakdown</p>
           <div className="mt-5 flex flex-col gap-3">
             {orderStatuses.map((status) => (
-              <div key={status} className="flex items-center justify-between text-sm">
+              <div
+                key={status}
+                className="flex items-center justify-between text-sm"
+              >
                 <span className="capitalize text-[#555]">{status}</span>
-                <span className="font-bold">{data?.statusCounts?.[status] ?? 0}</span>
+                <span className="font-bold">
+                  {data?.statusCounts?.[status] ?? 0}
+                </span>
               </div>
             ))}
           </div>
@@ -4850,12 +6175,20 @@ function StoreDashboardPanel() {
 
 function storeOrderImageSrc(url?: string) {
   if (!url) return "";
-  if (url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (
+    url.startsWith("data:") ||
+    url.startsWith("http://") ||
+    url.startsWith("https://")
+  )
+    return url;
   const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
   return url.startsWith("/") ? `${base}${url}` : url;
 }
 
-async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], filename: string) {
+async function downloadStoreOrderImage(
+  item: StoreOrderRecord["items"][number],
+  filename: string,
+) {
   const source = storeOrderImageSrc(item.imageUrl);
   if (!source) return;
 
@@ -4876,9 +6209,12 @@ async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], 
       image.onerror = () => reject(new Error("Image could not be loaded"));
     });
 
-    const [ratioW, ratioH] = String(item.crop.aspectRatio || "4:3").split(":").map(Number);
+    const [ratioW, ratioH] = String(item.crop.aspectRatio || "4:3")
+      .split(":")
+      .map(Number);
     const width = 1600;
-    const height = ratioW > 0 && ratioH > 0 ? Math.round(width * (ratioH / ratioW)) : 1200;
+    const height =
+      ratioW > 0 && ratioH > 0 ? Math.round(width * (ratioH / ratioW)) : 1200;
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -4887,13 +6223,23 @@ async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], 
 
     context.fillStyle = "#fff";
     context.fillRect(0, 0, width, height);
-    context.translate(width / 2 + (width * Number(item.crop.x ?? 0)) / 100, height / 2 + (height * Number(item.crop.y ?? 0)) / 100);
+    context.translate(
+      width / 2 + (width * Number(item.crop.x ?? 0)) / 100,
+      height / 2 + (height * Number(item.crop.y ?? 0)) / 100,
+    );
     context.rotate((Number(item.crop.rotation ?? 0) * Math.PI) / 180);
-    const baseScale = item.crop.fit === "contain"
-      ? Math.min(width / image.width, height / image.height)
-      : Math.max(width / image.width, height / image.height);
+    const baseScale =
+      item.crop.fit === "contain"
+        ? Math.min(width / image.width, height / image.height)
+        : Math.max(width / image.width, height / image.height);
     const scale = baseScale * Number(item.crop.zoom ?? 1);
-    context.drawImage(image, -image.width * scale / 2, -image.height * scale / 2, image.width * scale, image.height * scale);
+    context.drawImage(
+      image,
+      (-image.width * scale) / 2,
+      (-image.height * scale) / 2,
+      image.width * scale,
+      image.height * scale,
+    );
 
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
@@ -4905,7 +6251,9 @@ async function downloadStoreOrderImage(item: StoreOrderRecord["items"][number], 
 }
 
 function storeCropRatio(value?: string) {
-  const [width, height] = String(value || "4:3").split(":").map(Number);
+  const [width, height] = String(value || "4:3")
+    .split(":")
+    .map(Number);
   return width > 0 && height > 0 ? width / height : 4 / 3;
 }
 
@@ -4919,8 +6267,10 @@ async function downloadStoreOrderImages(order: StoreOrderRecord) {
 }
 
 function StoreOrdersPanel() {
-  const { ordersQuery, createOrder, updateOrder, deleteOrder } = useStoreOrders();
-  const { rulesQuery: shippingQuery } = useStoreRules<StoreShippingRecord>("shipping");
+  const { ordersQuery, createOrder, updateOrder, deleteOrder } =
+    useStoreOrders();
+  const { rulesQuery: shippingQuery } =
+    useStoreRules<StoreShippingRecord>("shipping");
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const orders = ordersQuery.data?.data ?? [];
@@ -4959,7 +6309,8 @@ function StoreOrdersPanel() {
         shipping: Number(form.shipping) || 0,
         shippingMethodId: form.shippingMethodId || undefined,
         shippingMethodName:
-          shippingMethods.find((method) => method._id === form.shippingMethodId)?.name ?? "",
+          shippingMethods.find((method) => method._id === form.shippingMethodId)
+            ?.name ?? "",
         shippingNote: form.shippingNote,
         discount: Number(form.discount) || 0,
         status: form.status,
@@ -4999,7 +6350,17 @@ function StoreOrdersPanel() {
       <div className="border bg-white">
         <StoreTableHeader title={`${orders.length} Orders`} />
         <StoreTable
-          columns={["Order", "Customer", "Items", "Shipping", "Tracking", "Status", "Payment", "Total", "Actions"]}
+          columns={[
+            "Order",
+            "Customer",
+            "Items",
+            "Shipping",
+            "Tracking",
+            "Status",
+            "Payment",
+            "Total",
+            "Actions",
+          ]}
           rows={orders.map((order) => [
             order.orderNumber,
             <div key="customer">
@@ -5009,7 +6370,9 @@ function StoreOrdersPanel() {
             `${order.items?.length ?? 0} item`,
             <div key="shipping">
               <p>{money(order.shipping ?? 0, currency)}</p>
-              <p className="text-xs text-[#777]">{order.shippingMethodName || order.shippingNote || "-"}</p>
+              <p className="text-xs text-[#777]">
+                {order.shippingMethodName || order.shippingNote || "-"}
+              </p>
             </div>,
             order.trackingNumber || "-",
             <select
@@ -5024,7 +6387,9 @@ function StoreOrdersPanel() {
               className="h-8 border bg-white px-2 text-xs outline-none"
             >
               {orderStatuses.map((status) => (
-                <option key={status} value={status}>{status}</option>
+                <option key={status} value={status}>
+                  {status}
+                </option>
               ))}
             </select>,
             <StatusBadge key="payment" value={order.paymentStatus} />,
@@ -5049,12 +6414,20 @@ function StoreOrdersPanel() {
           empty="No orders yet"
         />
       </div>
-      <Dialog open={Boolean(viewOrder)} onOpenChange={(next) => !next && setViewOrder(null)}>
+      <Dialog
+        open={Boolean(viewOrder)}
+        onOpenChange={(next) => !next && setViewOrder(null)}
+      >
         <DialogContent className="rounded-none sm:max-w-[900px]">
           <DialogHeader>
-            <DialogTitle>{viewOrder?.orderNumber ?? "Order details"}</DialogTitle>
+            <DialogTitle>
+              {viewOrder?.orderNumber ?? "Order details"}
+            </DialogTitle>
             <DialogDescription>
-              {viewOrder?.customer?.name} {viewOrder?.customer?.email ? `- ${viewOrder.customer.email}` : ""}
+              {viewOrder?.customer?.name}{" "}
+              {viewOrder?.customer?.email
+                ? `- ${viewOrder.customer.email}`
+                : ""}
             </DialogDescription>
           </DialogHeader>
           {viewOrder && (
@@ -5070,37 +6443,65 @@ function StoreOrdersPanel() {
                 </button>
               )}
               <div className="grid gap-3 text-sm sm:grid-cols-3">
-                <div className="border p-3"><p className="text-xs text-[#777]">Status</p><StatusBadge value={viewOrder.status} /></div>
-                <div className="border p-3"><p className="text-xs text-[#777]">Payment</p><StatusBadge value={viewOrder.paymentStatus} /></div>
-                <div className="border p-3"><p className="text-xs text-[#777]">Total</p><p className="mt-1 font-semibold">{money(viewOrder.total, currency)}</p></div>
+                <div className="border p-3">
+                  <p className="text-xs text-[#777]">Status</p>
+                  <StatusBadge value={viewOrder.status} />
+                </div>
+                <div className="border p-3">
+                  <p className="text-xs text-[#777]">Payment</p>
+                  <StatusBadge value={viewOrder.paymentStatus} />
+                </div>
+                <div className="border p-3">
+                  <p className="text-xs text-[#777]">Total</p>
+                  <p className="mt-1 font-semibold">
+                    {money(viewOrder.total, currency)}
+                  </p>
+                </div>
               </div>
               <div className="mt-5 grid gap-4">
                 {viewOrder.items.map((item, index) => (
-                  <article key={`${item.productId ?? item.name}-${index}`} className="grid gap-4 border p-4 md:grid-cols-[180px_1fr]">
-                    <div className="relative overflow-hidden bg-[#f1f1ef]" style={{ aspectRatio: storeCropRatio(item.crop?.aspectRatio) }}>
+                  <article
+                    key={`${item.productId ?? item.name}-${index}`}
+                    className="grid gap-4 border p-4 md:grid-cols-[180px_1fr]"
+                  >
+                    <div
+                      className="relative overflow-hidden bg-[#f1f1ef]"
+                      style={{
+                        aspectRatio: storeCropRatio(item.crop?.aspectRatio),
+                      }}
+                    >
                       {item.imageUrl ? (
                         <img
                           src={storeOrderImageSrc(item.imageUrl)}
                           alt={item.name}
                           className="absolute left-1/2 top-1/2 h-full w-full max-w-none"
                           style={{
-                            objectFit: item.crop?.fit === "contain" ? "contain" : "cover",
+                            objectFit:
+                              item.crop?.fit === "contain"
+                                ? "contain"
+                                : "cover",
                             transform: item.crop
                               ? `translate(calc(-50% + ${item.crop.x}%), calc(-50% + ${item.crop.y}%)) scale(${item.crop.zoom}) rotate(${item.crop.rotation}deg)`
                               : "translate(-50%, -50%)",
                           }}
                         />
                       ) : (
-                        <div className="flex h-full items-center justify-center text-xs text-[#888]">No image</div>
+                        <div className="flex h-full items-center justify-center text-xs text-[#888]">
+                          No image
+                        </div>
                       )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="font-semibold">{item.name}</h3>
-                          <p className="mt-1 text-xs text-[#777]">{item.variantLabel || item.type}</p>
+                          <p className="mt-1 text-xs text-[#777]">
+                            {item.variantLabel || item.type}
+                          </p>
                         </div>
-                        <p className="font-semibold">{money(item.total, currency)}</p>
+                        <p className="font-semibold">
+                          {money(item.total, currency)}
+                        </p>
                       </div>
                       <div className="mt-4 grid gap-2 text-sm text-[#555] sm:grid-cols-3">
                         <p>Qty: {item.quantity}</p>
@@ -5109,17 +6510,25 @@ function StoreOrdersPanel() {
                       </div>
                       {item.crop && (
                         <p className="mt-3 text-xs text-[#777]">
-                          Crop: {item.crop.aspectRatio || "custom"} / zoom {Number(item.crop.zoom ?? 1).toFixed(2)}
+                          Crop: {item.crop.aspectRatio || "custom"} / zoom{" "}
+                          {Number(item.crop.zoom ?? 1).toFixed(2)}
                         </p>
                       )}
                       {item.imageUrl && (
                         <button
                           className="mt-4 inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
-                          onClick={() => void downloadStoreOrderImage(item, `${viewOrder.orderNumber}-${index + 1}`)}
+                          onClick={() =>
+                            void downloadStoreOrderImage(
+                              item,
+                              `${viewOrder.orderNumber}-${index + 1}`,
+                            )
+                          }
                           type="button"
                         >
                           <Download className="size-4" />
-                          {item.crop ? "Download modified image" : "Download image"}
+                          {item.crop
+                            ? "Download modified image"
+                            : "Download image"}
                         </button>
                       )}
                     </div>
@@ -5134,24 +6543,70 @@ function StoreOrdersPanel() {
         <DialogContent className="rounded-none sm:max-w-[760px]">
           <DialogHeader>
             <DialogTitle>Add Order</DialogTitle>
-            <DialogDescription>Manual order entry with customer and tracking.</DialogDescription>
+            <DialogDescription>
+              Manual order entry with customer and tracking.
+            </DialogDescription>
           </DialogHeader>
           <FieldGroup className="gap-6">
             <div className="grid gap-4 sm:grid-cols-3">
-              <StoreInput label="Customer Name" value={form.name} onChange={(name) => setForm((v) => ({ ...v, name }))} />
-              <StoreInput label="Email" value={form.email} onChange={(email) => setForm((v) => ({ ...v, email }))} />
-              <StoreInput label="Phone" value={form.phone} onChange={(phone) => setForm((v) => ({ ...v, phone }))} />
+              <StoreInput
+                label="Customer Name"
+                value={form.name}
+                onChange={(name) => setForm((v) => ({ ...v, name }))}
+              />
+              <StoreInput
+                label="Email"
+                value={form.email}
+                onChange={(email) => setForm((v) => ({ ...v, email }))}
+              />
+              <StoreInput
+                label="Phone"
+                value={form.phone}
+                onChange={(phone) => setForm((v) => ({ ...v, phone }))}
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
-              <StoreInput label="Item" value={form.itemName} onChange={(itemName) => setForm((v) => ({ ...v, itemName }))} />
-              <StoreInput label="Qty" value={form.quantity} onChange={(quantity) => setForm((v) => ({ ...v, quantity }))} />
-              <StoreInput label="Unit Price" value={form.unitPrice} onChange={(unitPrice) => setForm((v) => ({ ...v, unitPrice }))} />
+              <StoreInput
+                label="Item"
+                value={form.itemName}
+                onChange={(itemName) => setForm((v) => ({ ...v, itemName }))}
+              />
+              <StoreInput
+                label="Qty"
+                value={form.quantity}
+                onChange={(quantity) => setForm((v) => ({ ...v, quantity }))}
+              />
+              <StoreInput
+                label="Unit Price"
+                value={form.unitPrice}
+                onChange={(unitPrice) => setForm((v) => ({ ...v, unitPrice }))}
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-4">
-              <StoreInput label="Tax" value={form.tax} onChange={(tax) => setForm((v) => ({ ...v, tax }))} />
-              <StoreInput label="Discount" value={form.discount} onChange={(discount) => setForm((v) => ({ ...v, discount }))} />
-              <StoreInput label="Tracking" value={form.trackingNumber} onChange={(trackingNumber) => setForm((v) => ({ ...v, trackingNumber }))} />
-              <StoreInput label="Shipping Note" value={form.shippingNote} onChange={(shippingNote) => setForm((v) => ({ ...v, shippingNote }))} />
+              <StoreInput
+                label="Tax"
+                value={form.tax}
+                onChange={(tax) => setForm((v) => ({ ...v, tax }))}
+              />
+              <StoreInput
+                label="Discount"
+                value={form.discount}
+                onChange={(discount) => setForm((v) => ({ ...v, discount }))}
+              />
+              <StoreInput
+                label="Tracking"
+                value={form.trackingNumber}
+                onChange={(trackingNumber) =>
+                  setForm((v) => ({ ...v, trackingNumber }))
+                }
+              />
+              <StoreInput
+                label="Shipping Note"
+                value={form.shippingNote}
+                onChange={(shippingNote) =>
+                  setForm((v) => ({ ...v, shippingNote }))
+                }
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
@@ -5159,12 +6614,18 @@ function StoreOrdersPanel() {
                 <select
                   value={form.shippingMethodId}
                   onChange={(event) => {
-                    const method = shippingMethods.find((item) => item._id === event.target.value);
+                    const method = shippingMethods.find(
+                      (item) => item._id === event.target.value,
+                    );
                     setForm((value) => ({
                       ...value,
                       shippingMethodId: event.target.value,
-                      shipping: method ? String(method.price ?? 0) : value.shipping,
-                      shippingNote: method ? method.region ?? "" : value.shippingNote,
+                      shipping: method
+                        ? String(method.price ?? 0)
+                        : value.shipping,
+                      shippingNote: method
+                        ? (method.region ?? "")
+                        : value.shippingNote,
                     }));
                   }}
                   className="h-11 border bg-white px-3 text-sm outline-none"
@@ -5177,12 +6638,26 @@ function StoreOrdersPanel() {
                   ))}
                 </select>
               </Field>
-              <StoreInput label="Shipping Charge" value={form.shipping} onChange={(shipping) => setForm((v) => ({ ...v, shipping }))} />
+              <StoreInput
+                label="Shipping Charge"
+                value={form.shipping}
+                onChange={(shipping) => setForm((v) => ({ ...v, shipping }))}
+              />
             </div>
           </FieldGroup>
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#22bda7] text-white" disabled={!form.email.trim()} onClick={addOrder}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#22bda7] text-white"
+              disabled={!form.email.trim()}
+              onClick={addOrder}
+            >
               Save Order
             </Button>
           </DialogFooter>
@@ -5237,16 +6712,40 @@ function StoreCustomersPanel() {
         <DialogContent className="rounded-none sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>Add Customer</DialogTitle>
-            <DialogDescription>Customer records merge by email.</DialogDescription>
+            <DialogDescription>
+              Customer records merge by email.
+            </DialogDescription>
           </DialogHeader>
           <FieldGroup>
-            <StoreInput label="Name" value={form.name} onChange={(name) => setForm((v) => ({ ...v, name }))} />
-            <StoreInput label="Email" value={form.email} onChange={(email) => setForm((v) => ({ ...v, email }))} />
-            <StoreInput label="Phone" value={form.phone} onChange={(phone) => setForm((v) => ({ ...v, phone }))} />
+            <StoreInput
+              label="Name"
+              value={form.name}
+              onChange={(name) => setForm((v) => ({ ...v, name }))}
+            />
+            <StoreInput
+              label="Email"
+              value={form.email}
+              onChange={(email) => setForm((v) => ({ ...v, email }))}
+            />
+            <StoreInput
+              label="Phone"
+              value={form.phone}
+              onChange={(phone) => setForm((v) => ({ ...v, phone }))}
+            />
           </FieldGroup>
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#22bda7] text-white" disabled={!form.email.trim()} onClick={addCustomer}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#22bda7] text-white"
+              disabled={!form.email.trim()}
+              onClick={addCustomer}
+            >
               Save Customer
             </Button>
           </DialogFooter>
@@ -5257,30 +6756,47 @@ function StoreCustomersPanel() {
 }
 
 function StoreCouponsPanel() {
-  const { rulesQuery, saveRule, deleteRule } = useStoreRules<StoreCouponRecord>("coupons");
+  const { rulesQuery, saveRule, deleteRule } =
+    useStoreRules<StoreCouponRecord>("coupons");
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const coupons = rulesQuery.data?.data ?? [];
-  const [form, setForm] = useState({ code: "", name: "", discountType: "percent", amount: "" });
+  const [form, setForm] = useState({
+    code: "",
+    name: "",
+    discountType: "percent",
+    amount: "",
+  });
   return (
     <StorePageShell title="Coupons" subtitle="Discount codes for checkout.">
       <StoreRuleForm
         fields={[
           ["Code", form.code, (code) => setForm((v) => ({ ...v, code }))],
           ["Name", form.name, (name) => setForm((v) => ({ ...v, name }))],
-          ["Amount", form.amount, (amount) => setForm((v) => ({ ...v, amount }))],
+          [
+            "Amount",
+            form.amount,
+            (amount) => setForm((v) => ({ ...v, amount })),
+          ],
         ]}
         extra={
           <select
             value={form.discountType}
-            onChange={(event) => setForm((v) => ({ ...v, discountType: event.target.value }))}
+            onChange={(event) =>
+              setForm((v) => ({ ...v, discountType: event.target.value }))
+            }
             className="h-11 border bg-white px-3 text-sm outline-none"
           >
             <option value="percent">Percent</option>
             <option value="fixed">Fixed</option>
           </select>
         }
-        onSave={() => saveRule.mutate({ ...form, amount: Number(form.amount) } as Partial<StoreCouponRecord>)}
+        onSave={() =>
+          saveRule.mutate({
+            ...form,
+            amount: Number(form.amount),
+          } as Partial<StoreCouponRecord>)
+        }
       />
       <StoreTable
         columns={["Code", "Name", "Type", "Amount", "Used", "Status", ""]}
@@ -5288,10 +6804,18 @@ function StoreCouponsPanel() {
           coupon.code,
           coupon.name,
           coupon.discountType,
-          coupon.discountType === "percent" ? `${coupon.amount}%` : money(coupon.amount, currency),
+          coupon.discountType === "percent"
+            ? `${coupon.amount}%`
+            : money(coupon.amount, currency),
           String(coupon.usageCount ?? 0),
           <StatusBadge key="active" value={coupon.active ? "active" : "off"} />,
-          <button key="delete" className="text-red-600" onClick={() => deleteRule.mutate(coupon._id)}>Delete</button>,
+          <button
+            key="delete"
+            className="text-red-600"
+            onClick={() => deleteRule.mutate(coupon._id)}
+          >
+            Delete
+          </button>,
         ])}
         empty="No coupons yet"
       />
@@ -5300,7 +6824,8 @@ function StoreCouponsPanel() {
 }
 
 function StoreTaxesPanel() {
-  const { rulesQuery, saveRule, deleteRule } = useStoreRules<StoreTaxRecord>("taxes");
+  const { rulesQuery, saveRule, deleteRule } =
+    useStoreRules<StoreTaxRecord>("taxes");
   const taxes = rulesQuery.data?.data ?? [];
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -5354,7 +6879,10 @@ function StoreTaxesPanel() {
       <div className="max-w-[920px]">
         <Tabs defaultValue="rates">
           <TabsList className="rounded-none border-b bg-transparent p-0">
-            <TabsTrigger value="rates" className="h-14 rounded-none border border-b-0 px-5 data-[state=active]:bg-white">
+            <TabsTrigger
+              value="rates"
+              className="h-14 rounded-none border border-b-0 px-5 data-[state=active]:bg-white"
+            >
               Tax Rates
             </TabsTrigger>
           </TabsList>
@@ -5367,9 +6895,17 @@ function StoreTaxesPanel() {
                 [
                   tax.applyShipping ? "Shipping" : "",
                   tax.applyDigitalDownloads ? "Digital Downloads" : "",
-                ].filter(Boolean).join(", ") || "-",
-                <StatusBadge key="active" value={tax.active ? "active" : "off"} />,
-                <div key="actions" className="flex justify-end gap-4 text-[#00a997]">
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "-",
+                <StatusBadge
+                  key="active"
+                  value={tax.active ? "active" : "off"}
+                />,
+                <div
+                  key="actions"
+                  className="flex justify-end gap-4 text-[#00a997]"
+                >
                   <button
                     aria-label="Edit tax rate"
                     onClick={() => {
@@ -5378,14 +6914,18 @@ function StoreTaxesPanel() {
                         region: tax.region || "United States",
                         rate: String(tax.rate ?? 0),
                         applyShipping: tax.applyShipping ?? true,
-                        applyDigitalDownloads: tax.applyDigitalDownloads ?? true,
+                        applyDigitalDownloads:
+                          tax.applyDigitalDownloads ?? true,
                       });
                       setOpen(true);
                     }}
                   >
                     <Settings className="size-4" />
                   </button>
-                  <button aria-label="Delete tax rate" onClick={() => deleteRule.mutate(tax._id)}>
+                  <button
+                    aria-label="Delete tax rate"
+                    onClick={() => deleteRule.mutate(tax._id)}
+                  >
                     <Trash2 className="size-4" />
                   </button>
                 </div>,
@@ -5399,8 +6939,12 @@ function StoreTaxesPanel() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="rounded-none p-0 sm:max-w-[700px]">
           <DialogHeader className="bg-[#f7f7f7] px-9 py-8">
-            <DialogTitle className="text-base tracking-[0.18em]">ADD TAX RATE</DialogTitle>
-            <DialogDescription className="sr-only">Create or edit tax rate.</DialogDescription>
+            <DialogTitle className="text-base tracking-[0.18em]">
+              ADD TAX RATE
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Create or edit tax rate.
+            </DialogDescription>
           </DialogHeader>
           <div className="px-12 py-10">
             <FieldGroup className="gap-7">
@@ -5408,7 +6952,12 @@ function StoreTaxesPanel() {
                 <FieldLabel className="font-bold">Country</FieldLabel>
                 <select
                   value={form.region}
-                  onChange={(event) => setForm((value) => ({ ...value, region: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((value) => ({
+                      ...value,
+                      region: event.target.value,
+                    }))
+                  }
                   className="h-12 w-full border bg-white px-4 text-base outline-none"
                 >
                   <option>United States</option>
@@ -5419,14 +6968,17 @@ function StoreTaxesPanel() {
                   <option>Germany</option>
                 </select>
                 <p className="text-sm leading-6 text-[#7a828c]">
-                  Add the country you would like to collect taxes from, then enter a country-wide sales tax rate.
+                  Add the country you would like to collect taxes from, then
+                  enter a country-wide sales tax rate.
                 </p>
               </Field>
               <Field>
                 <FieldLabel className="font-bold">Tax Rate (%)</FieldLabel>
                 <Input
                   value={form.rate}
-                  onChange={(event) => setForm((value) => ({ ...value, rate: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((value) => ({ ...value, rate: event.target.value }))
+                  }
                   className="h-12 rounded-none text-base"
                   inputMode="decimal"
                 />
@@ -5435,7 +6987,10 @@ function StoreTaxesPanel() {
                 <Checkbox
                   checked={form.applyShipping}
                   onCheckedChange={(checked) =>
-                    setForm((value) => ({ ...value, applyShipping: Boolean(checked) }))
+                    setForm((value) => ({
+                      ...value,
+                      applyShipping: Boolean(checked),
+                    }))
                   }
                 />
                 Apply Tax on Shipping
@@ -5455,10 +7010,17 @@ function StoreTaxesPanel() {
             </FieldGroup>
           </div>
           <DialogFooter className="px-12 pb-10">
-            <Button variant="outline" className="rounded-none border-0" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              className="rounded-none border-0"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
-            <Button className="rounded-none bg-[#22bda7] px-8 text-white" onClick={saveTax}>
+            <Button
+              className="rounded-none bg-[#22bda7] px-8 text-white"
+              onClick={saveTax}
+            >
               Save
             </Button>
           </DialogFooter>
@@ -5469,7 +7031,8 @@ function StoreTaxesPanel() {
 }
 
 function StoreShippingPanel() {
-  const { rulesQuery, saveRule, deleteRule } = useStoreRules<StoreShippingRecord>("shipping");
+  const { rulesQuery, saveRule, deleteRule } =
+    useStoreRules<StoreShippingRecord>("shipping");
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const rates = rulesQuery.data?.data ?? [];
@@ -5524,17 +7087,24 @@ function StoreShippingPanel() {
       <div className="max-w-[920px]">
         <Tabs defaultValue="self">
           <TabsList className="rounded-none border-b bg-transparent p-0">
-            <TabsTrigger value="self" className="h-14 rounded-none border border-b-0 px-5 data-[state=active]:bg-white">
+            <TabsTrigger
+              value="self"
+              className="h-14 rounded-none border border-b-0 px-5 data-[state=active]:bg-white"
+            >
               Self Fulfillment
             </TabsTrigger>
-            <TabsTrigger value="auto" className="h-14 rounded-none px-5 text-[#00a997]">
+            <TabsTrigger
+              value="auto"
+              className="h-14 rounded-none px-5 text-[#00a997]"
+            >
               Automatic Fulfillment
             </TabsTrigger>
           </TabsList>
           <TabsContent value="self" className="mt-8">
             <p className="max-w-[850px] text-sm leading-6 text-[#7a828c]">
-              Create shipping methods that will apply to all your Self fulfillment price sheets.
-              You will need to create at least one shipping method for the country you'd like to sell to.
+              Create shipping methods that will apply to all your Self
+              fulfillment price sheets. You will need to create at least one
+              shipping method for the country you'd like to sell to.
             </p>
             <div className="mt-8 overflow-x-auto">
               <table className="w-full min-w-[760px] border-collapse text-left text-sm">
@@ -5547,42 +7117,53 @@ function StoreShippingPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rates.length ? rates.map((rate) => (
-                    <tr key={rate._id} className="border-b">
-                      <td className="px-2 py-5">{rate.name}</td>
-                      <td className="px-2 py-5">{money(rate.price, currency)}</td>
-                      <td className="px-2 py-5">
-                        {rate.shipInternational ? "International" : rate.region || "United States"}
-                      </td>
-                      <td className="px-2 py-5">
-                        <div className="flex justify-end gap-4 text-[#00a997]">
-                          <button
-                            aria-label="Edit shipping method"
-                            onClick={() => {
-                              setForm({
-                                _id: rate._id,
-                                name: rate.name,
-                                region: rate.region || "United States",
-                                price: String(rate.price ?? 0),
-                                shipInternational: Boolean(rate.shipInternational),
-                              });
-                              setOpen(true);
-                            }}
-                          >
-                            <Settings className="size-4" />
-                          </button>
-                          <button
-                            aria-label="Delete shipping method"
-                            onClick={() => deleteRule.mutate(rate._id)}
-                          >
-                            <Trash2 className="size-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )) : (
+                  {rates.length ? (
+                    rates.map((rate) => (
+                      <tr key={rate._id} className="border-b">
+                        <td className="px-2 py-5">{rate.name}</td>
+                        <td className="px-2 py-5">
+                          {money(rate.price, currency)}
+                        </td>
+                        <td className="px-2 py-5">
+                          {rate.shipInternational
+                            ? "International"
+                            : rate.region || "United States"}
+                        </td>
+                        <td className="px-2 py-5">
+                          <div className="flex justify-end gap-4 text-[#00a997]">
+                            <button
+                              aria-label="Edit shipping method"
+                              onClick={() => {
+                                setForm({
+                                  _id: rate._id,
+                                  name: rate.name,
+                                  region: rate.region || "United States",
+                                  price: String(rate.price ?? 0),
+                                  shipInternational: Boolean(
+                                    rate.shipInternational,
+                                  ),
+                                });
+                                setOpen(true);
+                              }}
+                            >
+                              <Settings className="size-4" />
+                            </button>
+                            <button
+                              aria-label="Delete shipping method"
+                              onClick={() => deleteRule.mutate(rate._id)}
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
                     <tr>
-                      <td colSpan={4} className="px-2 py-12 text-center text-[#777]">
+                      <td
+                        colSpan={4}
+                        className="px-2 py-12 text-center text-[#777]"
+                      >
                         No shipping methods yet
                       </td>
                     </tr>
@@ -5591,8 +7172,12 @@ function StoreShippingPanel() {
               </table>
             </div>
           </TabsContent>
-          <TabsContent value="auto" className="mt-8 border bg-[#fafafa] p-8 text-sm leading-6 text-[#667085]">
-            Automatic fulfillment can be connected later when vendor integration is ready.
+          <TabsContent
+            value="auto"
+            className="mt-8 border bg-[#fafafa] p-8 text-sm leading-6 text-[#667085]"
+          >
+            Automatic fulfillment can be connected later when vendor integration
+            is ready.
           </TabsContent>
         </Tabs>
       </div>
@@ -5600,28 +7185,44 @@ function StoreShippingPanel() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="rounded-none p-0 sm:max-w-[700px]">
           <DialogHeader className="bg-[#f7f7f7] px-9 py-8">
-            <DialogTitle className="text-base tracking-[0.18em]">ADD SHIPPING METHOD</DialogTitle>
-            <DialogDescription className="sr-only">Create or edit self fulfillment shipping method.</DialogDescription>
+            <DialogTitle className="text-base tracking-[0.18em]">
+              ADD SHIPPING METHOD
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Create or edit self fulfillment shipping method.
+            </DialogDescription>
           </DialogHeader>
           <div className="px-12 py-10">
             <FieldGroup className="gap-7">
               <Field>
-                <FieldLabel className="font-bold">Name this Shipping method</FieldLabel>
+                <FieldLabel className="font-bold">
+                  Name this Shipping method
+                </FieldLabel>
                 <Input
                   value={form.name}
-                  onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((value) => ({ ...value, name: event.target.value }))
+                  }
                   placeholder="e.g. USPS Priority Mail Express, Fedex 2Days"
                   className="h-12 rounded-none text-base"
                 />
                 <p className="text-sm leading-6 text-[#7a828c]">
-                  You can add multiple shipping methods for each country. Each order is charged a flat fee.
+                  You can add multiple shipping methods for each country. Each
+                  order is charged a flat fee.
                 </p>
               </Field>
               <Field>
-                <FieldLabel className="font-bold">Flat fee per order</FieldLabel>
+                <FieldLabel className="font-bold">
+                  Flat fee per order
+                </FieldLabel>
                 <Input
                   value={form.price}
-                  onChange={(event) => setForm((value) => ({ ...value, price: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((value) => ({
+                      ...value,
+                      price: event.target.value,
+                    }))
+                  }
                   placeholder="0.00"
                   className="h-12 rounded-none text-base"
                   inputMode="decimal"
@@ -5631,7 +7232,12 @@ function StoreShippingPanel() {
                 <FieldLabel className="font-bold">Country</FieldLabel>
                 <select
                   value={form.region}
-                  onChange={(event) => setForm((value) => ({ ...value, region: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((value) => ({
+                      ...value,
+                      region: event.target.value,
+                    }))
+                  }
                   className="h-12 w-full border bg-white px-4 text-base outline-none"
                   disabled={form.shipInternational}
                 >
@@ -5650,7 +7256,10 @@ function StoreShippingPanel() {
                 <Checkbox
                   checked={form.shipInternational}
                   onCheckedChange={(checked) =>
-                    setForm((value) => ({ ...value, shipInternational: Boolean(checked) }))
+                    setForm((value) => ({
+                      ...value,
+                      shipInternational: Boolean(checked),
+                    }))
                   }
                 />
                 Ship to international
@@ -5658,7 +7267,11 @@ function StoreShippingPanel() {
             </FieldGroup>
           </div>
           <DialogFooter className="px-12 pb-10">
-            <Button variant="outline" className="rounded-none border-0" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              className="rounded-none border-0"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -5682,7 +7295,12 @@ const defaultStoreSettings: StoreSettingsRecord = {
   maintainMarkup: true,
   roundPricesUpTo: ".00",
   paymentMethods: {
-    stripe: { enabled: false, accountLink: "", publishableKey: "", secretKey: "" },
+    stripe: {
+      enabled: false,
+      accountLink: "",
+      publishableKey: "",
+      secretKey: "",
+    },
   },
   links: [],
   domain: { hostname: "", dnsTarget: "store.nikoset.local", verified: false },
@@ -5723,7 +7341,10 @@ function StoreSettingsPanel() {
     }));
   };
 
-  const updateLink = (index: number, value: Partial<{ label: string; url: string }>) => {
+  const updateLink = (
+    index: number,
+    value: Partial<{ label: string; url: string }>,
+  ) => {
     setForm((current) => ({
       ...current,
       links: current.links.map((link, itemIndex) =>
@@ -5751,7 +7372,9 @@ function StoreSettingsPanel() {
             />
             <span className="text-sm">{form.globalStatus ? "On" : "Off"}</span>
           </div>
-          <p className="mt-3 text-xs text-[#777]">Turn store checkout on/off globally.</p>
+          <p className="mt-3 text-xs text-[#777]">
+            Turn store checkout on/off globally.
+          </p>
         </section>
 
         <section className="mt-8">
@@ -5785,11 +7408,15 @@ function StoreSettingsPanel() {
                 <Input
                   type="password"
                   value={form.paymentMethods.stripe?.secretKey ?? ""}
-                  onChange={(event) => setStripe({ secretKey: event.target.value })}
+                  onChange={(event) =>
+                    setStripe({ secretKey: event.target.value })
+                  }
                   placeholder="Write secret key only when changing"
                   className="h-11 rounded-none bg-white"
                 />
-                <p className="text-xs text-[#777]">Write-only. Saved key is never shown again.</p>
+                <p className="text-xs text-[#777]">
+                  Write-only. Saved key is never shown again.
+                </p>
               </Field>
               <StoreInput
                 label="Stripe Account / Dashboard Link"
@@ -5806,7 +7433,10 @@ function StoreSettingsPanel() {
             <select
               value={form.currency}
               onChange={(event) =>
-                setForm((current) => ({ ...current, currency: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  currency: event.target.value,
+                }))
               }
               className="mt-3 h-11 w-full border bg-white px-3 text-sm outline-none"
             >
@@ -5821,7 +7451,10 @@ function StoreSettingsPanel() {
             <select
               value={form.orderDelay}
               onChange={(event) =>
-                setForm((current) => ({ ...current, orderDelay: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  orderDelay: event.target.value,
+                }))
               }
               className="mt-3 h-11 w-full border bg-white px-3 text-sm outline-none"
             >
@@ -5840,7 +7473,9 @@ function StoreSettingsPanel() {
                   setForm((current) => ({ ...current, maintainMarkup }))
                 }
               />
-              <span className="text-sm">{form.maintainMarkup ? "On" : "Off"}</span>
+              <span className="text-sm">
+                {form.maintainMarkup ? "On" : "Off"}
+              </span>
             </div>
           </div>
           <div>
@@ -5848,7 +7483,10 @@ function StoreSettingsPanel() {
             <select
               value={form.roundPricesUpTo}
               onChange={(event) =>
-                setForm((current) => ({ ...current, roundPricesUpTo: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  roundPricesUpTo: event.target.value,
+                }))
               }
               className="mt-3 h-11 w-full border bg-white px-3 text-sm outline-none"
             >
@@ -5902,16 +7540,23 @@ function StoreSettingsPanel() {
           </div>
           <div className="mt-4 flex flex-col gap-3">
             {form.links.map((link, index) => (
-              <div key={index} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+              <div
+                key={index}
+                className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
+              >
                 <Input
                   value={link.label}
-                  onChange={(event) => updateLink(index, { label: event.target.value })}
+                  onChange={(event) =>
+                    updateLink(index, { label: event.target.value })
+                  }
                   placeholder="Label"
                   className="h-11 rounded-none"
                 />
                 <Input
                   value={link.url}
-                  onChange={(event) => updateLink(index, { url: event.target.value })}
+                  onChange={(event) =>
+                    updateLink(index, { url: event.target.value })
+                  }
                   placeholder="https://..."
                   className="h-11 rounded-none"
                 />
@@ -5921,7 +7566,9 @@ function StoreSettingsPanel() {
                   onClick={() =>
                     setForm((current) => ({
                       ...current,
-                      links: current.links.filter((_, itemIndex) => itemIndex !== index),
+                      links: current.links.filter(
+                        (_, itemIndex) => itemIndex !== index,
+                      ),
                     }))
                   }
                 >
@@ -5934,11 +7581,16 @@ function StoreSettingsPanel() {
 
         <section className="mt-10">
           <Field>
-            <FieldLabel className="font-bold">Gift Card Sharing Email</FieldLabel>
+            <FieldLabel className="font-bold">
+              Gift Card Sharing Email
+            </FieldLabel>
             <Input
               value={form.giftCardSharingEmail}
               onChange={(event) =>
-                setForm((current) => ({ ...current, giftCardSharingEmail: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  giftCardSharingEmail: event.target.value,
+                }))
               }
               className="mt-3 h-11 rounded-none"
               placeholder="Gift Card Sharing"
@@ -6029,10 +7681,15 @@ function StorePageShell({
       <div className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-[28px] font-medium leading-none">{title}</h1>
-          <p className="mt-3 max-w-[680px] text-sm leading-6 text-[#666]">{subtitle}</p>
+          <p className="mt-3 max-w-[680px] text-sm leading-6 text-[#666]">
+            {subtitle}
+          </p>
         </div>
         {action && (
-          <Button className="h-10 w-fit rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white" onClick={onAction}>
+          <Button
+            className="h-10 w-fit rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
+            onClick={onAction}
+          >
             <PlusCircle data-icon="inline-start" />
             {action}
           </Button>
@@ -6066,20 +7723,32 @@ function StoreTable({
         <thead className="bg-[#fafafa] text-xs uppercase tracking-wide text-[#777]">
           <tr>
             {columns.map((column) => (
-              <th key={column} className="border-b px-5 py-4 font-bold">{column}</th>
+              <th key={column} className="border-b px-5 py-4 font-bold">
+                {column}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.length ? rows.map((row, index) => (
-            <tr key={index} className="border-b last:border-b-0">
-              {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="px-5 py-4 align-middle text-[#333]">{cell}</td>
-              ))}
-            </tr>
-          )) : (
+          {rows.length ? (
+            rows.map((row, index) => (
+              <tr key={index} className="border-b last:border-b-0">
+                {row.map((cell, cellIndex) => (
+                  <td
+                    key={cellIndex}
+                    className="px-5 py-4 align-middle text-[#333]"
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))
+          ) : (
             <tr>
-              <td colSpan={columns.length} className="px-5 py-12 text-center text-[#777]">
+              <td
+                colSpan={columns.length}
+                className="px-5 py-12 text-center text-[#777]"
+              >
                 {empty}
               </td>
             </tr>
@@ -6102,7 +7771,11 @@ function StoreInput({
   return (
     <Field>
       <FieldLabel className="font-bold">{label}</FieldLabel>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-none" />
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 rounded-none"
+      />
     </Field>
   );
 }
@@ -6120,11 +7793,24 @@ function StoreRuleForm({
     <div className="mb-6 border bg-[#fafafa] p-5">
       <div className="grid gap-4 md:grid-cols-4">
         {fields.map(([label, value, onChange]) => (
-          <StoreInput key={label} label={label} value={value} onChange={onChange} />
+          <StoreInput
+            key={label}
+            label={label}
+            value={value}
+            onChange={onChange}
+          />
         ))}
-        {extra && <Field><FieldLabel className="font-bold">Type</FieldLabel>{extra}</Field>}
+        {extra && (
+          <Field>
+            <FieldLabel className="font-bold">Type</FieldLabel>
+            {extra}
+          </Field>
+        )}
       </div>
-      <Button className="mt-4 h-10 rounded-none bg-[#22bda7] px-6 text-white" onClick={onSave}>
+      <Button
+        className="mt-4 h-10 rounded-none bg-[#22bda7] px-6 text-white"
+        onClick={onSave}
+      >
         Save
       </Button>
     </div>
@@ -6152,36 +7838,41 @@ function money(value: number, currency = "EUR") {
   return `${currency} ${Number(value || 0).toFixed(2)}`;
 }
 
-function getPricingProductCount(sheet?: (StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null) {
+function getPricingProductCount(
+  sheet?: (StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null,
+) {
   return (sheet?.products ?? []).length;
 }
 
 function pickPrimaryPricingSheet(
   sheets: StorePriceSheetRecord[],
-  detailedSheets: Array<(StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null>,
+  detailedSheets: Array<
+    (StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null
+  >,
 ) {
   if (!detailedSheets.length) return null;
 
-  return detailedSheets.reduce<(StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null>(
-    (best, current) => {
-      if (!current) return best;
-      if (!best) return current;
+  return detailedSheets.reduce<
+    (StorePriceSheetRecord & { products?: StoreProductRecord[] }) | null
+  >((best, current) => {
+    if (!current) return best;
+    if (!best) return current;
 
-      const currentCount = getPricingProductCount(current);
-      const bestCount = getPricingProductCount(best);
+    const currentCount = getPricingProductCount(current);
+    const bestCount = getPricingProductCount(best);
 
-      if (currentCount > bestCount) return current;
-      if (currentCount < bestCount) return best;
+    if (currentCount > bestCount) return current;
+    if (currentCount < bestCount) return best;
 
-      if (current.isDefault && !best.isDefault) return current;
-      if (!current.isDefault && best.isDefault) return best;
+    if (current.isDefault && !best.isDefault) return current;
+    if (!current.isDefault && best.isDefault) return best;
 
-      const currentIndex = sheets.findIndex((sheet) => sheet._id === current._id);
-      const bestIndex = sheets.findIndex((sheet) => sheet._id === best._id);
-      return currentIndex !== -1 && (bestIndex === -1 || currentIndex < bestIndex) ? current : best;
-    },
-    null,
-  );
+    const currentIndex = sheets.findIndex((sheet) => sheet._id === current._id);
+    const bestIndex = sheets.findIndex((sheet) => sheet._id === best._id);
+    return currentIndex !== -1 && (bestIndex === -1 || currentIndex < bestIndex)
+      ? current
+      : best;
+  }, null);
 }
 
 function StorePricingPanel() {
@@ -6191,18 +7882,32 @@ function StorePricingPanel() {
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const sheets = priceSheetsQuery.data?.data ?? [];
-  const priceSheetDetails = useStorePriceSheetDetails(sheets.map((sheet) => sheet._id));
+  const priceSheetDetails = useStorePriceSheetDetails(
+    sheets.map((sheet) => sheet._id),
+  );
   const detailedSheets = priceSheetDetails
     .map((query) => query.data?.data ?? null)
-    .filter((sheet): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } => Boolean(sheet));
+    .filter(
+      (
+        sheet,
+      ): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } =>
+        Boolean(sheet),
+    );
   const pricingSheet = pickPrimaryPricingSheet(sheets, detailedSheets);
   const products = detailedSheets.flatMap((sheet) => sheet.products ?? []);
   const creatingDefault = useRef(false);
   const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
-  const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(
+    null,
+  );
 
   useEffect(() => {
-    if (priceSheetsQuery.isLoading || sheets.length || createPriceSheet.isPending || creatingDefault.current) {
+    if (
+      priceSheetsQuery.isLoading ||
+      sheets.length ||
+      createPriceSheet.isPending ||
+      creatingDefault.current
+    ) {
       return;
     }
     creatingDefault.current = true;
@@ -6222,15 +7927,23 @@ function StorePricingPanel() {
 
   const groupedProducts = products.reduce<Record<string, StoreProductRecord[]>>(
     (groups, product) => {
-      const key = product.type === "digital-download" ? "Digital Downloads" : product.category || "Prints";
+      const key =
+        product.type === "digital-download"
+          ? "Digital Downloads"
+          : product.category || "Prints";
       groups[key] = [...(groups[key] ?? []), product];
       return groups;
     },
     {},
   );
   const orderedGroups = [
-    ...["Prints", "Wall Art", "Digital Downloads"].filter((category) => groupedProducts[category]?.length),
-    ...Object.keys(groupedProducts).filter((category) => !["Prints", "Wall Art", "Digital Downloads"].includes(category)),
+    ...["Prints", "Wall Art", "Digital Downloads"].filter(
+      (category) => groupedProducts[category]?.length,
+    ),
+    ...Object.keys(groupedProducts).filter(
+      (category) =>
+        !["Prints", "Wall Art", "Digital Downloads"].includes(category),
+    ),
   ];
 
   const goAdd = (type: StoreProductType) => {
@@ -6238,7 +7951,11 @@ function StorePricingPanel() {
     router.push(`/dashboard/store-gallery/pricing/new?type=${type}`);
   };
 
-  if (priceSheetsQuery.isLoading || createPriceSheet.isPending || pricingLoading) {
+  if (
+    priceSheetsQuery.isLoading ||
+    createPriceSheet.isPending ||
+    pricingLoading
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
         Loading pricing...
@@ -6271,9 +7988,12 @@ function StorePricingPanel() {
     <div className="mx-auto max-w-[950px] px-5 py-8">
       <div className="flex flex-wrap items-center justify-between gap-5 border-b pb-5">
         <div>
-          <h1 className="text-[28px] font-medium leading-none">Pricing Sheet</h1>
+          <h1 className="text-[28px] font-medium leading-none">
+            Pricing Sheet
+          </h1>
           <p className="mt-3 text-sm text-[#666]">
-            Update digital downloads, print items, and fulfillment products used by public galleries.
+            Update digital downloads, print items, and fulfillment products used
+            by public galleries.
           </p>
         </div>
         <DropdownMenu>
@@ -6283,7 +8003,10 @@ function StorePricingPanel() {
               Add Product
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
+          <DropdownMenuContent
+            className="w-[calc(100vw-2rem)] max-w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]"
+            align="end"
+          >
             <DropdownMenuGroup className="flex flex-col gap-4">
               <DropdownMenuItem
                 className="cursor-pointer items-start gap-4 rounded-none p-2"
@@ -6291,9 +8014,12 @@ function StorePricingPanel() {
               >
                 <Images className="mt-1 size-5 text-[#8a949e]" />
                 <span>
-                  <span className="block font-bold text-[#222]">Print / Wall Art Item</span>
+                  <span className="block font-bold text-[#222]">
+                    Print / Wall Art Item
+                  </span>
                   <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
-                    Add a product with image, prices, variants, and hide controls.
+                    Add a product with image, prices, variants, and hide
+                    controls.
                   </span>
                 </span>
               </DropdownMenuItem>
@@ -6303,7 +8029,9 @@ function StorePricingPanel() {
               >
                 <Download className="mt-1 size-5 text-[#8a949e]" />
                 <span>
-                  <span className="block font-bold text-[#222]">Digital Download</span>
+                  <span className="block font-bold text-[#222]">
+                    Digital Download
+                  </span>
                   <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
                     Sell downloadable files from the public gallery.
                   </span>
@@ -6325,7 +8053,11 @@ function StorePricingPanel() {
                     key={product._id}
                     product={product}
                     currency={currency}
-                    onEdit={() => router.push(`/dashboard/store-gallery/pricing/${product._id}`)}
+                    onEdit={() =>
+                      router.push(
+                        `/dashboard/store-gallery/pricing/${product._id}`,
+                      )
+                    }
                     onDelete={() => setDeleteTarget(product)}
                   />
                 ))}
@@ -6337,19 +8069,28 @@ function StorePricingPanel() {
         <div className="mt-9 flex min-h-[260px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
           <Package className="size-10 text-[#aaa]" />
           <p className="mt-5 font-bold">No pricing products yet</p>
-          <p className="mt-2 text-sm text-[#666]">Add digital downloads or fulfillment products.</p>
+          <p className="mt-2 text-sm text-[#666]">
+            Add digital downloads or fulfillment products.
+          </p>
         </div>
       )}
       <DeleteConfirmDialog
         open={Boolean(deleteTarget)}
         title="Delete product"
-        description={deleteTarget ? `Delete "${deleteTarget.name}" from this pricing sheet?` : ""}
+        description={
+          deleteTarget
+            ? `Delete "${deleteTarget.name}" from this pricing sheet?`
+            : ""
+        }
         pending={deleteProduct.isPending}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => {
           if (!deleteTarget?.priceSheetId) return;
           deleteProduct.mutate(
-            { priceSheetId: deleteTarget.priceSheetId, productId: deleteTarget._id },
+            {
+              priceSheetId: deleteTarget.priceSheetId,
+              productId: deleteTarget._id,
+            },
             { onSuccess: () => setDeleteTarget(null) },
           );
         }}
@@ -6368,26 +8109,42 @@ function StorePricingRouteEditor({
   const router = useRouter();
   const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
   const sheets = priceSheetsQuery.data?.data ?? [];
-  const priceSheetDetails = useStorePriceSheetDetails(sheets.map((sheet) => sheet._id));
+  const priceSheetDetails = useStorePriceSheetDetails(
+    sheets.map((sheet) => sheet._id),
+  );
   const detailedSheets = priceSheetDetails
     .map((query) => query.data?.data ?? null)
-    .filter((sheet): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } => Boolean(sheet));
+    .filter(
+      (
+        sheet,
+      ): sheet is StorePriceSheetRecord & { products: StoreProductRecord[] } =>
+        Boolean(sheet),
+    );
   const pricingSheet = pickPrimaryPricingSheet(sheets, detailedSheets);
   const ownerSheet =
     productId === "new"
       ? pricingSheet
-      : detailedSheets.find((sheet) => (sheet.products ?? []).some((item) => item._id === productId)) ?? null;
+      : (detailedSheets.find((sheet) =>
+          (sheet.products ?? []).some((item) => item._id === productId),
+        ) ?? null);
   const editingProduct =
     productId === "new"
       ? null
-      : ownerSheet?.products?.find((item) => item._id === productId) ?? null;
+      : (ownerSheet?.products?.find((item) => item._id === productId) ?? null);
   const type = editingProduct?.type ?? productType ?? "self-fulfilled";
-  const { createProduct, updateProduct, deleteProduct } = useStorePriceSheet(ownerSheet?._id);
+  const { createProduct, updateProduct, deleteProduct } = useStorePriceSheet(
+    ownerSheet?._id,
+  );
   const creatingDefault = useRef(false);
   const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
 
   useEffect(() => {
-    if (priceSheetsQuery.isLoading || sheets.length || createPriceSheet.isPending || creatingDefault.current) {
+    if (
+      priceSheetsQuery.isLoading ||
+      sheets.length ||
+      createPriceSheet.isPending ||
+      creatingDefault.current
+    ) {
       return;
     }
     creatingDefault.current = true;
@@ -6406,12 +8163,28 @@ function StorePricingRouteEditor({
   }, [createPriceSheet, priceSheetsQuery.isLoading, sheets.length]);
 
   useEffect(() => {
-    if (productId !== "new" && !priceSheetsQuery.isLoading && !pricingLoading && !editingProduct) {
+    if (
+      productId !== "new" &&
+      !priceSheetsQuery.isLoading &&
+      !pricingLoading &&
+      !editingProduct
+    ) {
       router.push("/dashboard/store-gallery/pricing");
     }
-  }, [editingProduct, priceSheetsQuery.isLoading, pricingLoading, productId, router]);
+  }, [
+    editingProduct,
+    priceSheetsQuery.isLoading,
+    pricingLoading,
+    productId,
+    router,
+  ]);
 
-  if (priceSheetsQuery.isLoading || createPriceSheet.isPending || pricingLoading || !ownerSheet?._id) {
+  if (
+    priceSheetsQuery.isLoading ||
+    createPriceSheet.isPending ||
+    pricingLoading ||
+    !ownerSheet?._id
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-[#666]">
         Loading pricing product...
@@ -6433,7 +8206,8 @@ function StorePricingRouteEditor({
           ? updateProduct.mutate(
               { productId: editingProduct._id, payload },
               {
-                onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
+                onSuccess: () =>
+                  router.push("/dashboard/store-gallery/pricing"),
               },
             )
           : createProduct.mutate(payload, {
@@ -6443,12 +8217,10 @@ function StorePricingRouteEditor({
       onHide={
         editingProduct
           ? () => {
-              deleteProduct.mutate(
-                editingProduct._id,
-                {
-                  onSuccess: () => router.push("/dashboard/store-gallery/pricing"),
-                },
-              );
+              deleteProduct.mutate(editingProduct._id, {
+                onSuccess: () =>
+                  router.push("/dashboard/store-gallery/pricing"),
+              });
             }
           : undefined
       }
@@ -6459,13 +8231,18 @@ function StorePricingRouteEditor({
 
 function StoreProductsPanel() {
   const router = useRouter();
-  const { priceSheetsQuery, createPriceSheet, deletePriceSheet } = useStorePriceSheets();
+  const { priceSheetsQuery, createPriceSheet, deletePriceSheet } =
+    useStorePriceSheets();
   const sheets = priceSheetsQuery.data?.data ?? [];
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sheetName, setSheetName] = useState("My Price Sheet");
   const [minimumOrderAmount, setMinimumOrderAmount] = useState("0");
-  const [fulfillment, setFulfillment] = useState<"self-fulfilled" | "auto">("self-fulfilled");
-  const [deleteSheet, setDeleteSheet] = useState<StorePriceSheetRecord | null>(null);
+  const [fulfillment, setFulfillment] = useState<"self-fulfilled" | "auto">(
+    "self-fulfilled",
+  );
+  const [deleteSheet, setDeleteSheet] = useState<StorePriceSheetRecord | null>(
+    null,
+  );
 
   const addSheet = () => {
     createPriceSheet.mutate(
@@ -6491,7 +8268,9 @@ function StoreProductsPanel() {
       <div className="flex items-center justify-between gap-5 border-b pb-4">
         <div>
           <h1 className="text-[26px] font-medium leading-none">Price Sheets</h1>
-          <p className="mt-3 text-sm text-[#777]">Manage store price sheets outside collection pages.</p>
+          <p className="mt-3 text-sm text-[#777]">
+            Manage store price sheets outside collection pages.
+          </p>
         </div>
         <Button
           className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
@@ -6521,30 +8300,30 @@ function StoreProductsPanel() {
       ) : (
         <div className="mt-8 grid gap-7 sm:grid-cols-2">
           {sheets.map((sheet) => (
-            <article
-              key={sheet._id}
-              className="group relative text-left"
-            >
+            <article key={sheet._id} className="group relative text-left">
               <button
                 className="block w-full text-left"
-                onClick={() => router.push(`/dashboard/store-gallery/products/${sheet._id}`)}
+                onClick={() =>
+                  router.push(`/dashboard/store-gallery/products/${sheet._id}`)
+                }
                 type="button"
               >
                 <span className="relative flex aspect-[1.8] items-center justify-center bg-[#f4f4f4]">
-                {sheet.isDefault && (
-                  <span className="absolute left-3 top-3 bg-[#e7e7e7] px-2 py-1 text-[10px] font-bold uppercase">
-                    Default
-                  </span>
-                )}
-                <CircleUserRound className="size-10 text-[#2f3438]" />
-              </span>
+                  {sheet.isDefault && (
+                    <span className="absolute left-3 top-3 bg-[#e7e7e7] px-2 py-1 text-[10px] font-bold uppercase">
+                      Default
+                    </span>
+                  )}
+                  <CircleUserRound className="size-10 text-[#2f3438]" />
+                </span>
                 <span className="mt-4 flex items-center justify-between gap-4">
-                <span className="font-bold uppercase">{sheet.name}</span>
-                <MoreHorizontal className="size-5 text-[#00a997]" />
-              </span>
+                  <span className="font-bold uppercase">{sheet.name}</span>
+                  <MoreHorizontal className="size-5 text-[#00a997]" />
+                </span>
                 <span className="mt-2 block text-sm text-[#777]">
-                {sheet.productCount ?? 0} Products &nbsp; {sheet.collectionCount ?? 0} Collection
-              </span>
+                  {sheet.productCount ?? 0} Products &nbsp;{" "}
+                  {sheet.collectionCount ?? 0} Collection
+                </span>
               </button>
               <button
                 className="absolute right-3 top-3 flex size-9 items-center justify-center bg-white text-red-600 opacity-0 shadow-sm transition group-hover:opacity-100"
@@ -6562,7 +8341,9 @@ function StoreProductsPanel() {
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="rounded-none sm:max-w-[630px]">
           <DialogHeader>
-            <DialogTitle className="tracking-[0.18em]">PRICE SHEET SETTINGS</DialogTitle>
+            <DialogTitle className="tracking-[0.18em]">
+              PRICE SHEET SETTINGS
+            </DialogTitle>
             <DialogDescription>
               Name, minimum order, and collection connection.
             </DialogDescription>
@@ -6575,7 +8356,9 @@ function StoreProductsPanel() {
             <TabsContent value="general" className="mt-7">
               <FieldGroup className="gap-7">
                 <Field>
-                  <FieldLabel className="font-bold">Price Sheet Name</FieldLabel>
+                  <FieldLabel className="font-bold">
+                    Price Sheet Name
+                  </FieldLabel>
                   <Input
                     value={sheetName}
                     onChange={(event) => setSheetName(event.target.value)}
@@ -6585,42 +8368,67 @@ function StoreProductsPanel() {
                 <Field>
                   <FieldLabel className="font-bold">Fulfillment</FieldLabel>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {([
-                      ["self-fulfilled", "Self fulfillment", "Empty sheet. You add products manually."],
-                      ["auto", "Auto defaults", "Create sheet with default Print and Wall Art products."],
-                    ] as const).map(([value, label, text]) => (
+                    {(
+                      [
+                        [
+                          "self-fulfilled",
+                          "Self fulfillment",
+                          "Empty sheet. You add products manually.",
+                        ],
+                        [
+                          "auto",
+                          "Auto defaults",
+                          "Create sheet with default Print and Wall Art products.",
+                        ],
+                      ] as const
+                    ).map(([value, label, text]) => (
                       <button
                         key={value}
                         type="button"
                         className={cn(
                           "border px-4 py-4 text-left",
-                          fulfillment === value && "border-[#22bda7] bg-[#f2fbf9]",
+                          fulfillment === value &&
+                            "border-[#22bda7] bg-[#f2fbf9]",
                         )}
                         onClick={() => setFulfillment(value)}
                       >
                         <span className="block text-sm font-bold">{label}</span>
-                        <span className="mt-1 block text-xs leading-5 text-[#777]">{text}</span>
+                        <span className="mt-1 block text-xs leading-5 text-[#777]">
+                          {text}
+                        </span>
                       </button>
                     ))}
                   </div>
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold">Minimum Order Amount</FieldLabel>
+                  <FieldLabel className="font-bold">
+                    Minimum Order Amount
+                  </FieldLabel>
                   <Input
                     value={minimumOrderAmount}
-                    onChange={(event) => setMinimumOrderAmount(event.target.value)}
+                    onChange={(event) =>
+                      setMinimumOrderAmount(event.target.value)
+                    }
                     className="h-12 rounded-none bg-white"
                     inputMode="decimal"
                   />
                 </Field>
               </FieldGroup>
             </TabsContent>
-            <TabsContent value="advanced" className="mt-7 text-sm leading-6 text-[#666]">
-              Collections use the Store Gallery Pricing defaults unless changed by store settings.
+            <TabsContent
+              value="advanced"
+              className="mt-7 text-sm leading-6 text-[#666]"
+            >
+              Collections use the Store Gallery Pricing defaults unless changed
+              by store settings.
             </TabsContent>
           </Tabs>
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setSettingsOpen(false)}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setSettingsOpen(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -6636,7 +8444,11 @@ function StoreProductsPanel() {
       <DeleteConfirmDialog
         open={Boolean(deleteSheet)}
         title="Delete price sheet"
-        description={deleteSheet ? `Delete "${deleteSheet.name}" and all products inside it?` : ""}
+        description={
+          deleteSheet
+            ? `Delete "${deleteSheet.name}" and all products inside it?`
+            : ""
+        }
         pending={deletePriceSheet.isPending}
         onCancel={() => setDeleteSheet(null)}
         onConfirm={() => {
@@ -6663,7 +8475,9 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
     name: "",
     minimumOrderAmount: "0",
   });
-  const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!sheet) return;
@@ -6675,7 +8489,10 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
 
   const groupedProducts = products.reduce<Record<string, StoreProductRecord[]>>(
     (groups, product) => {
-      const key = product.type === "digital-download" ? "Digital Downloads" : product.category || "Prints";
+      const key =
+        product.type === "digital-download"
+          ? "Digital Downloads"
+          : product.category || "Prints";
       groups[key] = [...(groups[key] ?? []), product];
       return groups;
     },
@@ -6737,30 +8554,41 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                 Add Product
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[calc(100vw-2rem)] max-w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]" align="end">
+            <DropdownMenuContent
+              className="w-[calc(100vw-2rem)] max-w-[300px] rounded-none border-[#dedede] p-5 shadow-[0_18px_35px_rgba(0,0,0,0.18)]"
+              align="end"
+            >
               <DropdownMenuGroup className="flex flex-col gap-4">
-                {([
-                  {
-                    type: "self-fulfilled",
-                    icon: Images,
-                    title: "Self Fulfilled Item",
-                    text: "Items to be fulfilled manually by yourself at your preferred vendor.",
-                  },
-                  {
-                    type: "digital-download",
-                    icon: Download,
-                    title: "Digital Download",
-                    text: "Digital files are automatically delivered via a secure link.",
-                  },
-                ] as const).map((item) => (
+                {(
+                  [
+                    {
+                      type: "self-fulfilled",
+                      icon: Images,
+                      title: "Self Fulfilled Item",
+                      text: "Items to be fulfilled manually by yourself at your preferred vendor.",
+                    },
+                    {
+                      type: "digital-download",
+                      icon: Download,
+                      title: "Digital Download",
+                      text: "Digital files are automatically delivered via a secure link.",
+                    },
+                  ] as const
+                ).map((item) => (
                   <DropdownMenuItem
                     key={item.type}
                     className="cursor-pointer items-start gap-4 rounded-none p-2"
-                    onClick={() => router.push(`/dashboard/store-gallery/products/${priceSheetId}/new?type=${item.type}`)}
+                    onClick={() =>
+                      router.push(
+                        `/dashboard/store-gallery/products/${priceSheetId}/new?type=${item.type}`,
+                      )
+                    }
                   >
                     <item.icon className="mt-1 size-5 text-[#8a949e]" />
                     <span>
-                      <span className="block font-bold text-[#222]">{item.title}</span>
+                      <span className="block font-bold text-[#222]">
+                        {item.title}
+                      </span>
                       <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
                         {item.text}
                       </span>
@@ -6774,13 +8602,24 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
       </div>
 
       <div className="mt-7 bg-[#f7f7f7] p-7">
-        <p className="mb-5 text-xs font-bold uppercase tracking-wide">Price Sheet Details</p>
+        <p className="mb-5 text-xs font-bold uppercase tracking-wide">
+          Price Sheet Details
+        </p>
         <div className="grid gap-7 text-sm sm:grid-cols-3">
           <DetailStat label="Name" value={sheet.name} />
-          <DetailStat label="Assigned To" value={`${sheet.collectionCount ?? 0} Collection`} />
+          <DetailStat
+            label="Assigned To"
+            value={`${sheet.collectionCount ?? 0} Collection`}
+          />
           <DetailStat label="Fulfillment" value="Self Fulfillment" />
-          <DetailStat label="Minimum Order Value" value={money(sheet.minimumOrderAmount ?? 0, currency)} />
-          <DetailStat label="Available Products" value={`${products.length} Items`} />
+          <DetailStat
+            label="Minimum Order Value"
+            value={money(sheet.minimumOrderAmount ?? 0, currency)}
+          />
+          <DetailStat
+            label="Available Products"
+            value={`${products.length} Items`}
+          />
         </div>
       </div>
 
@@ -6795,7 +8634,11 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                     key={product._id}
                     product={product}
                     currency={currency}
-                    onEdit={() => router.push(`/dashboard/store-gallery/products/${priceSheetId}/${product._id}`)}
+                    onEdit={() =>
+                      router.push(
+                        `/dashboard/store-gallery/products/${priceSheetId}/${product._id}`,
+                      )
+                    }
                     onDelete={() => setDeleteTarget(product)}
                   />
                 ))}
@@ -6807,15 +8650,21 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
         <div className="mt-9 flex min-h-[260px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
           <Package className="size-10 text-[#aaa]" />
           <p className="mt-5 font-bold">No products yet</p>
-          <p className="mt-2 text-sm text-[#666]">Add digital downloads or self fulfilled items.</p>
+          <p className="mt-2 text-sm text-[#666]">
+            Add digital downloads or self fulfilled items.
+          </p>
         </div>
       )}
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="rounded-none sm:max-w-[630px]">
           <DialogHeader>
-            <DialogTitle className="tracking-[0.18em]">PRICE SHEET SETTINGS</DialogTitle>
-            <DialogDescription>General settings for this sheet.</DialogDescription>
+            <DialogTitle className="tracking-[0.18em]">
+              PRICE SHEET SETTINGS
+            </DialogTitle>
+            <DialogDescription>
+              General settings for this sheet.
+            </DialogDescription>
           </DialogHeader>
           <FieldGroup className="gap-7">
             <Field>
@@ -6823,7 +8672,10 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
               <Input
                 value={settingsForm.name}
                 onChange={(event) =>
-                  setSettingsForm((value) => ({ ...value, name: event.target.value }))
+                  setSettingsForm((value) => ({
+                    ...value,
+                    name: event.target.value,
+                  }))
                 }
                 className="h-12 rounded-none"
               />
@@ -6833,7 +8685,9 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
               <p className="text-sm">Self Fulfillment</p>
             </Field>
             <Field>
-              <FieldLabel className="font-bold">Minimum Order Amount</FieldLabel>
+              <FieldLabel className="font-bold">
+                Minimum Order Amount
+              </FieldLabel>
               <Input
                 value={settingsForm.minimumOrderAmount}
                 onChange={(event) =>
@@ -6850,10 +8704,17 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
             </Field>
           </FieldGroup>
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setSettingsOpen(false)}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setSettingsOpen(false)}
+            >
               Cancel
             </Button>
-            <Button className="rounded-none bg-[#22bda7] text-white" onClick={saveSettings}>
+            <Button
+              className="rounded-none bg-[#22bda7] text-white"
+              onClick={saveSettings}
+            >
               Save
             </Button>
           </DialogFooter>
@@ -6862,7 +8723,11 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
       <DeleteConfirmDialog
         open={Boolean(deleteTarget)}
         title="Delete product"
-        description={deleteTarget ? `Delete "${deleteTarget.name}" from this pricing sheet?` : ""}
+        description={
+          deleteTarget
+            ? `Delete "${deleteTarget.name}" from this pricing sheet?`
+            : ""
+        }
         pending={deleteProduct.isPending}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => {
@@ -6872,7 +8737,6 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
           });
         }}
       />
-
     </div>
   );
 }
@@ -6887,12 +8751,14 @@ function StoreProductRouteEditor({
   productType?: StoreProductType;
 }) {
   const router = useRouter();
-  const { priceSheetQuery, createProduct, updateProduct, deleteProduct } = useStorePriceSheet(priceSheetId);
+  const { priceSheetQuery, createProduct, updateProduct, deleteProduct } =
+    useStorePriceSheet(priceSheetId);
   const sheet = priceSheetQuery.data?.data;
   const editingProduct =
     productId === "new"
       ? null
-      : (sheet?.products ?? []).find((item) => item._id === productId) ?? null;
+      : ((sheet?.products ?? []).find((item) => item._id === productId) ??
+        null);
   const type = editingProduct?.type ?? productType ?? "self-fulfilled";
   const listPath = `/dashboard/store-gallery/products/${priceSheetId}`;
 
@@ -6934,12 +8800,9 @@ function StoreProductRouteEditor({
       onHide={
         editingProduct
           ? () => {
-              deleteProduct.mutate(
-                editingProduct._id,
-                {
-                  onSuccess: () => router.push(listPath),
-                },
-              );
+              deleteProduct.mutate(editingProduct._id, {
+                onSuccess: () => router.push(listPath),
+              });
             }
           : undefined
       }
@@ -6980,10 +8843,19 @@ function DeleteConfirmDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" className="rounded-none" disabled={pending} onClick={onCancel}>
+          <Button
+            variant="outline"
+            className="rounded-none"
+            disabled={pending}
+            onClick={onCancel}
+          >
             Cancel
           </Button>
-          <Button className="rounded-none bg-red-600 text-white hover:bg-red-700" disabled={pending} onClick={onConfirm}>
+          <Button
+            className="rounded-none bg-red-600 text-white hover:bg-red-700"
+            disabled={pending}
+            onClick={onConfirm}
+          >
             {pending ? "Deleting..." : "Delete"}
           </Button>
         </DialogFooter>
@@ -7007,7 +8879,11 @@ function ProductTile({
     <div className="group">
       <div className="relative flex aspect-square items-center justify-center bg-[#f3f3f3]">
         {product.images?.[0] ? (
-          <img src={product.images[0]} alt="" className="h-full w-full object-cover" />
+          <img
+            src={product.images[0]}
+            alt=""
+            className="h-full w-full object-cover"
+          />
         ) : product.type === "digital-download" ? (
           <Download className="size-9 text-[#999]" />
         ) : (
@@ -7021,12 +8897,18 @@ function ProductTile({
           <Trash2 className="size-4" />
         </button>
       </div>
-      <button className="mt-3 flex w-full items-start justify-between gap-3 text-left" onClick={onEdit}>
+      <button
+        className="mt-3 flex w-full items-start justify-between gap-3 text-left"
+        onClick={onEdit}
+      >
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{product.name}</p>
-          <p className="mt-1 text-sm text-[#777]">From {money(productDisplayPrice(product), currency)}</p>
+          <p className="mt-1 text-sm text-[#777]">
+            From {money(productDisplayPrice(product), currency)}
+          </p>
           <p className="mt-1 text-xs text-[#999]">
-            {productTypeLabels[product.type]}{product.active === false ? " â€¢ Hidden" : ""}
+            {productTypeLabels[product.type]}
+            {product.active === false ? " â€¢ Hidden" : ""}
           </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#00a997]" />
@@ -7040,7 +8922,9 @@ function productDisplayPrice(product: StoreProductRecord) {
     .filter((variant) => !variant.hidden)
     .map((variant) => Number(variant.price))
     .filter((price) => Number.isFinite(price));
-  return visiblePrices.length ? Math.min(...visiblePrices) : Number(product.price || 0);
+  return visiblePrices.length
+    ? Math.min(...visiblePrices)
+    : Number(product.price || 0);
 }
 
 function RichTextEditor({
@@ -7082,7 +8966,8 @@ function RichTextEditor({
     if (!editor) return;
     const current = editor.getHTML();
     const next = value || "";
-    if (current !== next) editor.commands.setContent(next, { emitUpdate: false });
+    if (current !== next)
+      editor.commands.setContent(next, { emitUpdate: false });
   }, [editor, value]);
 
   const setLink = () => {
@@ -7094,7 +8979,12 @@ function RichTextEditor({
       editor.chain().focus().unsetLink().run();
       return;
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: href.trim() }).run();
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({ href: href.trim() })
+      .run();
   };
 
   const tools = [
@@ -7154,7 +9044,18 @@ function RichTextEditor({
 }
 
 const defaultSelfFulfilledOptions: StoreProductOption[] = [
-  { name: "Size", values: ["4 x 6", "5 x 7", "8 x 10", "8 x 12", "11 x 14", "12 x 18", "16 x 20"] },
+  {
+    name: "Size",
+    values: [
+      "4 x 6",
+      "5 x 7",
+      "8 x 10",
+      "8 x 12",
+      "11 x 14",
+      "12 x 18",
+      "16 x 20",
+    ],
+  },
   { name: "Paper", values: ["Glossy", "Matte"] },
 ];
 
@@ -7181,13 +9082,20 @@ function buildProductVariants(
   basePrice: number,
 ) {
   const activeOptions = options
-    .map((option) => ({ name: option.name.trim(), values: option.values.map((value) => value.trim()).filter(Boolean) }))
+    .map((option) => ({
+      name: option.name.trim(),
+      values: option.values.map((value) => value.trim()).filter(Boolean),
+    }))
     .filter((option) => option.name && option.values.length);
   if (!activeOptions.length) return [];
 
-  const combinations = activeOptions.reduce<Record<string, string>[]>((rows, option) =>
-    rows.flatMap((row) => option.values.map((value) => ({ ...row, [option.name]: value }))),
-  [{}]);
+  const combinations = activeOptions.reduce<Record<string, string>[]>(
+    (rows, option) =>
+      rows.flatMap((row) =>
+        option.values.map((value) => ({ ...row, [option.name]: value })),
+      ),
+    [{}],
+  );
 
   return combinations.map((combo) => {
     const id = variantId(combo);
@@ -7246,20 +9154,26 @@ function ProductEditorDialog({
         description: product.description ?? "",
         price: String(product.price ?? 0),
         extraShipping: String(product.extraShipping ?? 0),
-        category: product.category ?? (type === "digital-download" ? "Digital Downloads" : "Prints"),
+        category:
+          product.category ??
+          (type === "digital-download" ? "Digital Downloads" : "Prints"),
         images: product.images ?? [],
         downloadType: product.downloadType ?? "single-photo",
-        downloadSize: product.downloadSize ?? "High Resolution Original (Full res)",
+        downloadSize:
+          product.downloadSize ?? "High Resolution Original (Full res)",
         noImageRequired: Boolean(product.noImageRequired),
         exemptFromSalesTax: Boolean(product.exemptFromSalesTax),
         limitOnePerCheckout: Boolean(product.limitOnePerCheckout),
         allowBulkPurchase: Boolean(product.allowBulkPurchase),
-        options: product.options ?? (type === "self-fulfilled" ? defaultSelfFulfilledOptions : []),
+        options:
+          product.options ??
+          (type === "self-fulfilled" ? defaultSelfFulfilledOptions : []),
         variants: product.variants ?? [],
       });
       return;
     }
-    const defaultOptions = type === "self-fulfilled" ? defaultSelfFulfilledOptions : [];
+    const defaultOptions =
+      type === "self-fulfilled" ? defaultSelfFulfilledOptions : [];
     setForm({
       name:
         type === "digital-download"
@@ -7277,9 +9191,10 @@ function ProductEditorDialog({
       limitOnePerCheckout: false,
       allowBulkPurchase: false,
       options: defaultOptions,
-      variants: type === "self-fulfilled"
-        ? buildProductVariants(defaultOptions, [], 0)
-        : [],
+      variants:
+        type === "self-fulfilled"
+          ? buildProductVariants(defaultOptions, [], 0)
+          : [],
     });
   }, [open, product, type]);
 
@@ -7287,7 +9202,11 @@ function ProductEditorDialog({
     if (!open || type !== "self-fulfilled") return;
     setForm((current) => ({
       ...current,
-      variants: buildProductVariants(current.options, current.variants, Number(current.price) || 0),
+      variants: buildProductVariants(
+        current.options,
+        current.variants,
+        Number(current.price) || 0,
+      ),
     }));
   }, [form.options, form.price, open, type]);
 
@@ -7325,7 +9244,10 @@ function ProductEditorDialog({
           }),
       ),
     );
-    setForm((current) => ({ ...current, images: [...current.images, ...images] }));
+    setForm((current) => ({
+      ...current,
+      images: [...current.images, ...images],
+    }));
   };
 
   return (
@@ -7333,7 +9255,11 @@ function ProductEditorDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
         <DialogHeader>
           <DialogTitle>
-            {product ? "Edit Product" : type === "digital-download" ? "Add Digital Download" : "Add Product"}
+            {product
+              ? "Edit Product"
+              : type === "digital-download"
+                ? "Add Digital Download"
+                : "Add Product"}
           </DialogTitle>
           <DialogDescription>{productTypeLabels[type]}</DialogDescription>
         </DialogHeader>
@@ -7343,17 +9269,24 @@ function ProductEditorDialog({
             <Field>
               <FieldLabel className="font-bold">Download Type</FieldLabel>
               <div className="flex gap-4">
-                {([
-                  ["single-photo", Images, "Single Photo"],
-                  ["all-photos", LayoutGrid, "All Photos"],
-                ] as const).map(([value, Icon, label]) => (
+                {(
+                  [
+                    ["single-photo", Images, "Single Photo"],
+                    ["all-photos", LayoutGrid, "All Photos"],
+                  ] as const
+                ).map(([value, Icon, label]) => (
                   <button
                     key={value}
                     className={cn(
                       "flex size-24 flex-col items-center justify-center border text-xs",
                       form.downloadType === value && "border-[#22bda7]",
                     )}
-                    onClick={() => setForm((current) => ({ ...current, downloadType: value }))}
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        downloadType: value,
+                      }))
+                    }
                   >
                     <Icon className="mb-3 size-6" />
                     {label}
@@ -7369,7 +9302,10 @@ function ProductEditorDialog({
               <select
                 value={form.downloadSize}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, downloadSize: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    downloadSize: event.target.value,
+                  }))
                 }
                 className="h-12 w-full border bg-white px-3 text-sm outline-none"
               >
@@ -7384,8 +9320,12 @@ function ProductEditorDialog({
             <FieldLabel className="font-bold">Product Images</FieldLabel>
             <label className="flex min-h-[150px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white text-center">
               <FileUp className="size-8 text-[#22bda7]" />
-              <span className="mt-3 text-sm font-bold">Upload product photo</span>
-              <span className="mt-1 text-xs text-[#777]">Shown in store product cards.</span>
+              <span className="mt-3 text-sm font-bold">
+                Upload product photo
+              </span>
+              <span className="mt-1 text-xs text-[#777]">
+                Shown in store product cards.
+              </span>
               <input
                 type="file"
                 accept="image/*"
@@ -7400,15 +9340,24 @@ function ProductEditorDialog({
             {form.images.length > 0 && (
               <div className="mt-3 grid grid-cols-4 gap-3">
                 {form.images.map((image, index) => (
-                  <div key={`${image.slice(0, 24)}-${index}`} className="group relative aspect-square bg-[#f3f3f3]">
-                    <img src={image} alt="" className="h-full w-full object-cover" />
+                  <div
+                    key={`${image.slice(0, 24)}-${index}`}
+                    className="group relative aspect-square bg-[#f3f3f3]"
+                  >
+                    <img
+                      src={image}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
                     <button
                       type="button"
                       className="absolute right-1 top-1 hidden size-7 items-center justify-center bg-white text-red-600 shadow-sm group-hover:flex"
                       onClick={() =>
                         setForm((current) => ({
                           ...current,
-                          images: current.images.filter((_, itemIndex) => itemIndex !== index),
+                          images: current.images.filter(
+                            (_, itemIndex) => itemIndex !== index,
+                          ),
                         }))
                       }
                       aria-label="Remove product image"
@@ -7425,7 +9374,9 @@ function ProductEditorDialog({
             <FieldLabel className="font-bold">Name</FieldLabel>
             <Input
               value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, name: event.target.value }))
+              }
               placeholder='e.g. 4x6" Print, 8x10" Print Metallic, 16x20" Canvas'
               className="h-12 rounded-none"
             />
@@ -7446,7 +9397,12 @@ function ProductEditorDialog({
               <FieldLabel className="font-bold">Price</FieldLabel>
               <Input
                 value={form.price}
-                onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    price: event.target.value,
+                  }))
+                }
                 placeholder="e.g. 0.00"
                 className="h-12 rounded-none"
               />
@@ -7457,7 +9413,10 @@ function ProductEditorDialog({
                 <Input
                   value={form.extraShipping}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, extraShipping: event.target.value }))
+                    setForm((current) => ({
+                      ...current,
+                      extraShipping: event.target.value,
+                    }))
                   }
                   className="h-12 rounded-none"
                 />
@@ -7470,7 +9429,12 @@ function ProductEditorDialog({
               <FieldLabel className="font-bold">Category</FieldLabel>
               <select
                 value={form.category}
-                onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    category: event.target.value,
+                  }))
+                }
                 className="h-12 w-full border bg-white px-3 text-sm outline-none"
               >
                 <option>Prints</option>
@@ -7491,14 +9455,19 @@ function ProductEditorDialog({
                 <p className="text-base font-bold">Product Options</p>
                 <div className="mt-3 grid gap-2">
                   {form.options.map((option, index) => (
-                    <div key={`${option.name}-${index}`} className="grid gap-3 bg-[#f7f7f7] p-4 md:grid-cols-[170px_1fr_auto]">
+                    <div
+                      key={`${option.name}-${index}`}
+                      className="grid gap-3 bg-[#f7f7f7] p-4 md:grid-cols-[170px_1fr_auto]"
+                    >
                       <Input
                         value={option.name}
                         onChange={(event) =>
                           setForm((current) => ({
                             ...current,
                             options: current.options.map((item, itemIndex) =>
-                              itemIndex === index ? { ...item, name: event.target.value } : item,
+                              itemIndex === index
+                                ? { ...item, name: event.target.value }
+                                : item,
                             ),
                           }))
                         }
@@ -7511,7 +9480,12 @@ function ProductEditorDialog({
                           setForm((current) => ({
                             ...current,
                             options: current.options.map((item, itemIndex) =>
-                              itemIndex === index ? { ...item, values: optionValueList(event.target.value) } : item,
+                              itemIndex === index
+                                ? {
+                                    ...item,
+                                    values: optionValueList(event.target.value),
+                                  }
+                                : item,
                             ),
                           }))
                         }
@@ -7524,7 +9498,9 @@ function ProductEditorDialog({
                         onClick={() =>
                           setForm((current) => ({
                             ...current,
-                            options: current.options.filter((_, itemIndex) => itemIndex !== index),
+                            options: current.options.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
                           }))
                         }
                         aria-label="Remove option"
@@ -7540,7 +9516,10 @@ function ProductEditorDialog({
                   onClick={() =>
                     setForm((current) => ({
                       ...current,
-                      options: [...current.options, { name: "Option", values: ["Value"] }],
+                      options: [
+                        ...current.options,
+                        { name: "Option", values: ["Value"] },
+                      ],
                     }))
                   }
                 >
@@ -7551,7 +9530,9 @@ function ProductEditorDialog({
               <div>
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-base font-bold">Pricing</p>
-                  <p className="text-xs font-semibold text-[#777]">Hide variants clients should not order.</p>
+                  <p className="text-xs font-semibold text-[#777]">
+                    Hide variants clients should not order.
+                  </p>
                 </div>
                 <div className="mt-3 max-h-[360px] overflow-y-auto border bg-white">
                   <div className="grid grid-cols-[1fr_120px_64px] border-b bg-[#fafafa] px-4 py-3 text-xs font-bold uppercase text-[#777]">
@@ -7560,15 +9541,30 @@ function ProductEditorDialog({
                     <span className="text-center">Hide</span>
                   </div>
                   {form.variants.map((variant) => (
-                    <div key={variant.id} className="grid grid-cols-[1fr_120px_64px] items-center gap-3 border-b px-4 py-2 last:border-b-0">
-                      <span className={cn("text-sm", variant.hidden && "text-[#aaa] line-through")}>{variant.label}</span>
+                    <div
+                      key={variant.id}
+                      className="grid grid-cols-[1fr_120px_64px] items-center gap-3 border-b px-4 py-2 last:border-b-0"
+                    >
+                      <span
+                        className={cn(
+                          "text-sm",
+                          variant.hidden && "text-[#aaa] line-through",
+                        )}
+                      >
+                        {variant.label}
+                      </span>
                       <Input
                         value={String(variant.price)}
                         onChange={(event) =>
                           setForm((current) => ({
                             ...current,
                             variants: current.variants.map((item) =>
-                              item.id === variant.id ? { ...item, price: Number(event.target.value) || 0 } : item,
+                              item.id === variant.id
+                                ? {
+                                    ...item,
+                                    price: Number(event.target.value) || 0,
+                                  }
+                                : item,
                             ),
                           }))
                         }
@@ -7581,18 +9577,29 @@ function ProductEditorDialog({
                           setForm((current) => ({
                             ...current,
                             variants: current.variants.map((item) =>
-                              item.id === variant.id ? { ...item, hidden: !item.hidden } : item,
+                              item.id === variant.id
+                                ? { ...item, hidden: !item.hidden }
+                                : item,
                             ),
                           }))
                         }
-                        aria-label={variant.hidden ? "Show variation" : "Hide variation"}
+                        aria-label={
+                          variant.hidden ? "Show variation" : "Hide variation"
+                        }
                       >
-                        <Eye className={cn("size-4", variant.hidden && "opacity-35")} />
+                        <Eye
+                          className={cn(
+                            "size-4",
+                            variant.hidden && "opacity-35",
+                          )}
+                        />
                       </button>
                     </div>
                   ))}
                   {!form.variants.length && (
-                    <p className="px-4 py-6 text-sm text-[#777]">Add options to create variations.</p>
+                    <p className="px-4 py-6 text-sm text-[#777]">
+                      Add options to create variations.
+                    </p>
                   )}
                 </div>
               </div>
@@ -7601,13 +9608,18 @@ function ProductEditorDialog({
 
           {type === "self-fulfilled" && (
             <div className="grid gap-5">
-              {([
-                ["noImageRequired", "No Image Required"],
-                ["exemptFromSalesTax", "Exempt From Sales Tax"],
-                ["limitOnePerCheckout", "Limit One Per Checkout"],
-                ["allowBulkPurchase", "Allow Bulk Purchase"],
-              ] as const).map(([key, label]) => (
-                <label key={key} className="flex items-center justify-between gap-5 text-sm font-bold">
+              {(
+                [
+                  ["noImageRequired", "No Image Required"],
+                  ["exemptFromSalesTax", "Exempt From Sales Tax"],
+                  ["limitOnePerCheckout", "Limit One Per Checkout"],
+                  ["allowBulkPurchase", "Allow Bulk Purchase"],
+                ] as const
+              ).map(([key, label]) => (
+                <label
+                  key={key}
+                  className="flex items-center justify-between gap-5 text-sm font-bold"
+                >
                   {label}
                   <Switch
                     checked={form[key]}
@@ -7632,7 +9644,11 @@ function ProductEditorDialog({
               {hidePending ? "Deleting..." : "Delete"}
             </Button>
           )}
-          <Button variant="outline" className="rounded-none" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            className="rounded-none"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button
@@ -7649,12 +9665,21 @@ function ProductEditorDialog({
 }
 
 function CollectionsPanel({ section }: { section: DashboardSection }) {
-  const { collectionsQuery, updateCollection, deleteCollection, duplicateCollection } = useCollections();
+  const {
+    collectionsQuery,
+    updateCollection,
+    deleteCollection,
+    duplicateCollection,
+  } = useCollections();
   const homepage = useHomepageSettings().query;
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
   const [quickEdit, setQuickEdit] = useState<CollectionRecord | null>(null);
-  const [quickForm, setQuickForm] = useState({ name: "", eventDate: "", status: "draft" as "draft" | "published" });
+  const [quickForm, setQuickForm] = useState({
+    name: "",
+    eventDate: "",
+    status: "draft" as "draft" | "published",
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -7665,7 +9690,14 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   const [sortFilter, setSortFilter] = useState("newest");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const statuses = useMemo(
-    () => [...new Set(collections.map((item) => item.status).filter((value): value is string => Boolean(value)))].sort(),
+    () =>
+      [
+        ...new Set(
+          collections
+            .map((item) => item.status)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ].sort(),
     [collections],
   );
   const tags = useMemo(
@@ -7674,7 +9706,10 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   );
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 250);
+    const timer = window.setTimeout(
+      () => setDebouncedSearchTerm(searchTerm),
+      250,
+    );
     return () => window.clearTimeout(timer);
   }, [searchTerm]);
   useEffect(() => {
@@ -7692,22 +9727,36 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const matches = collections.filter((collection) => {
-      const searchable = [collection.name, collection.status, ...(collection.tags ?? [])]
+      const searchable = [
+        collection.name,
+        collection.status,
+        ...(collection.tags ?? []),
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
       if (query && !searchable.includes(query)) return false;
-      if (statusFilter !== "all" && collection.status !== statusFilter) return false;
-      if (tagFilter !== "all" && !(collection.tags ?? []).includes(tagFilter)) return false;
+      if (statusFilter !== "all" && collection.status !== statusFilter)
+        return false;
+      if (tagFilter !== "all" && !(collection.tags ?? []).includes(tagFilter))
+        return false;
 
-      const event = collection.eventDate ? new Date(collection.eventDate) : null;
-      if (eventDateFilter === "upcoming" && (!event || event < today)) return false;
-      if (eventDateFilter === "past" && (!event || event >= today)) return false;
+      const event = collection.eventDate
+        ? new Date(collection.eventDate)
+        : null;
+      if (eventDateFilter === "upcoming" && (!event || event < today))
+        return false;
+      if (eventDateFilter === "past" && (!event || event >= today))
+        return false;
       if (eventDateFilter === "none" && event) return false;
 
-      const expiry = collection.expiresAt ? new Date(collection.expiresAt) : null;
-      if (expiryDateFilter === "active" && (!expiry || expiry < now)) return false;
-      if (expiryDateFilter === "expired" && (!expiry || expiry >= now)) return false;
+      const expiry = collection.expiresAt
+        ? new Date(collection.expiresAt)
+        : null;
+      if (expiryDateFilter === "active" && (!expiry || expiry < now))
+        return false;
+      if (expiryDateFilter === "expired" && (!expiry || expiry >= now))
+        return false;
       if (expiryDateFilter === "none" && expiry) return false;
 
       const isStarred = collection.settings?.starred === true;
@@ -7718,15 +9767,36 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
 
     return [...matches].sort((left, right) => {
       if (sortFilter === "name-asc") return left.name.localeCompare(right.name);
-      if (sortFilter === "name-desc") return right.name.localeCompare(left.name);
-      const leftTime = new Date(left.createdAt ?? left.eventDate ?? 0).getTime();
-      const rightTime = new Date(right.createdAt ?? right.eventDate ?? 0).getTime();
-      return sortFilter === "oldest" ? leftTime - rightTime : rightTime - leftTime;
+      if (sortFilter === "name-desc")
+        return right.name.localeCompare(left.name);
+      const leftTime = new Date(
+        left.createdAt ?? left.eventDate ?? 0,
+      ).getTime();
+      const rightTime = new Date(
+        right.createdAt ?? right.eventDate ?? 0,
+      ).getTime();
+      return sortFilter === "oldest"
+        ? leftTime - rightTime
+        : rightTime - leftTime;
     });
-  }, [collections, debouncedSearchTerm, eventDateFilter, expiryDateFilter, sortFilter, starredFilter, statusFilter, tagFilter]);
+  }, [
+    collections,
+    debouncedSearchTerm,
+    eventDateFilter,
+    expiryDateFilter,
+    sortFilter,
+    starredFilter,
+    statusFilter,
+    tagFilter,
+  ]);
   const filtersActive = Boolean(
-    searchTerm || statusFilter !== "all" || tagFilter !== "all" || eventDateFilter !== "all" ||
-      expiryDateFilter !== "all" || starredFilter !== "all" || sortFilter !== "newest",
+    searchTerm ||
+    statusFilter !== "all" ||
+    tagFilter !== "all" ||
+    eventDateFilter !== "all" ||
+    expiryDateFilter !== "all" ||
+    starredFilter !== "all" ||
+    sortFilter !== "newest",
   );
   const clearFilters = () => {
     setSearchTerm("");
@@ -7739,18 +9809,37 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   };
   const openCollectionPreview = (collection: CollectionRecord) => {
     const siteSlug = homepage.data?.data?.slug;
-    if (!siteSlug) return toast.error("Homepage address is still loading. Try Preview again.");
-    const url = publicCollectionUrl(siteSlug, collection.slug ?? collection._id, window.location.origin);
+    if (!siteSlug)
+      return toast.error(
+        "Homepage address is still loading. Try Preview again.",
+      );
+    const url = publicCollectionUrl(
+      siteSlug,
+      collection.slug ?? collection._id,
+      window.location.origin,
+    );
     if (collection.status === "published") {
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
-    if (!window.confirm("This collection is Draft. Publish it and open Preview?")) return;
+    if (
+      !window.confirm("This collection is Draft. Publish it and open Preview?")
+    )
+      return;
     const previewTab = window.open("about:blank", "_blank");
-    updateCollection.mutate({ collectionId: collection._id, payload: { status: "published" } }, {
-      onSuccess: () => { if (previewTab) previewTab.location.href = url; else window.location.assign(url); },
-      onError: (error) => { previewTab?.close(); toast.error(error.message); },
-    });
+    updateCollection.mutate(
+      { collectionId: collection._id, payload: { status: "published" } },
+      {
+        onSuccess: () => {
+          if (previewTab) previewTab.location.href = url;
+          else window.location.assign(url);
+        },
+        onError: (error) => {
+          previewTab?.close();
+          toast.error(error.message);
+        },
+      },
+    );
   };
   const shareCollection = async (collection: CollectionRecord) => {
     if (collection.status !== "published") {
@@ -7759,7 +9848,11 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     }
     const siteSlug = homepage.data?.data?.slug;
     if (!siteSlug) return toast.error("Homepage address is still loading.");
-    const url = publicCollectionUrl(siteSlug, collection.slug ?? collection._id, window.location.origin);
+    const url = publicCollectionUrl(
+      siteSlug,
+      collection.slug ?? collection._id,
+      window.location.origin,
+    );
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Collection link copied");
@@ -7775,20 +9868,23 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   };
   const saveQuickEdit = () => {
     if (!quickEdit) return;
-    updateCollection.mutate({
-      collectionId: quickEdit._id,
-      payload: {
-        name: quickForm.name.trim(),
-        eventDate: quickForm.eventDate || undefined,
-        status: quickForm.status,
+    updateCollection.mutate(
+      {
+        collectionId: quickEdit._id,
+        payload: {
+          name: quickForm.name.trim(),
+          eventDate: quickForm.eventDate || undefined,
+          status: quickForm.status,
+        },
       },
-    }, {
-      onSuccess: () => {
-        toast.success("Collection updated");
-        setQuickEdit(null);
+      {
+        onSuccess: () => {
+          toast.success("Collection updated");
+          setQuickEdit(null);
+        },
+        onError: (error) => toast.error(error.message),
       },
-      onError: (error) => toast.error(error.message),
-    });
+    );
   };
   const toggleCollectionStar = (collection: CollectionRecord) => {
     const isStarred = collection.settings?.starred === true;
@@ -7803,7 +9899,8 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     });
   };
   const removeCollection = (collection: CollectionRecord) => {
-    if (!window.confirm(`Delete "${collection.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete "${collection.name}"? This cannot be undone.`))
+      return;
     deleteCollection.mutate(collection._id, {
       onSuccess: () => toast.success("Collection deleted"),
       onError: (error) => toast.error(error.message),
@@ -7812,19 +9909,31 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
 
   return (
     <div className="min-h-full bg-white">
-      <Dialog open={Boolean(quickEdit)} onOpenChange={(open) => !open && setQuickEdit(null)}>
+      <Dialog
+        open={Boolean(quickEdit)}
+        onOpenChange={(open) => !open && setQuickEdit(null)}
+      >
         <DialogContent className="rounded-none sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>Quick edit</DialogTitle>
-            <DialogDescription>Rename the collection and choose Draft or Published.</DialogDescription>
+            <DialogDescription>
+              Rename the collection and choose Draft or Published.
+            </DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="quick-collection-name">Collection Name</FieldLabel>
+              <FieldLabel htmlFor="quick-collection-name">
+                Collection Name
+              </FieldLabel>
               <Input
                 id="quick-collection-name"
                 value={quickForm.name}
-                onChange={(event) => setQuickForm((current) => ({ ...current, name: event.target.value }))}
+                onChange={(event) =>
+                  setQuickForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
                 className="rounded-none"
               />
             </Field>
@@ -7834,7 +9943,12 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 id="quick-event-date"
                 type="date"
                 value={quickForm.eventDate}
-                onChange={(event) => setQuickForm((current) => ({ ...current, eventDate: event.target.value }))}
+                onChange={(event) =>
+                  setQuickForm((current) => ({
+                    ...current,
+                    eventDate: event.target.value,
+                  }))
+                }
                 className="rounded-none"
               />
             </Field>
@@ -7843,18 +9957,35 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               <select
                 id="quick-status"
                 value={quickForm.status}
-                onChange={(event) => setQuickForm((current) => ({ ...current, status: event.target.value as "draft" | "published" }))}
+                onChange={(event) =>
+                  setQuickForm((current) => ({
+                    ...current,
+                    status: event.target.value as "draft" | "published",
+                  }))
+                }
                 className="h-11 w-full border bg-white px-3 text-sm outline-none"
               >
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
               </select>
-              <p className="text-xs leading-5 text-[#777]">Only Published collections appear on your public homepage.</p>
+              <p className="text-xs leading-5 text-[#777]">
+                Only Published collections appear on your public homepage.
+              </p>
             </Field>
           </FieldGroup>
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setQuickEdit(null)}>Cancel</Button>
-            <Button className="rounded-none bg-[#22bda7] text-white hover:bg-[#19a995]" disabled={updateCollection.isPending || !quickForm.name.trim()} onClick={saveQuickEdit}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setQuickEdit(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#22bda7] text-white hover:bg-[#19a995]"
+              disabled={updateCollection.isPending || !quickForm.name.trim()}
+              onClick={saveQuickEdit}
+            >
               {updateCollection.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
@@ -7881,7 +10012,9 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
         <div className="flex flex-wrap items-center gap-5">
           <button
             className="text-sm font-semibold text-[#333]"
-            onClick={() => router.push(`/dashboard/${section}/settings/presets`)}
+            onClick={() =>
+              router.push(`/dashboard/${section}/settings/presets`)
+            }
             type="button"
           >
             View Presets
@@ -7898,42 +10031,84 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
 
       <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-2">
-          <CollectionFilterSelect value={statusFilter} onValueChange={setStatusFilter} placeholder="Status: All">
+          <CollectionFilterSelect
+            value={statusFilter}
+            onValueChange={setStatusFilter}
+            placeholder="Status: All"
+          >
             <SelectItem value="all">Status: All</SelectItem>
-            {statuses.map((value) => <SelectItem key={value} value={value}>Status: {titleCase(value)}</SelectItem>)}
+            {statuses.map((value) => (
+              <SelectItem key={value} value={value}>
+                Status: {titleCase(value)}
+              </SelectItem>
+            ))}
           </CollectionFilterSelect>
-          <CollectionFilterSelect value={tagFilter} onValueChange={setTagFilter} placeholder="Category Tag: All">
+          <CollectionFilterSelect
+            value={tagFilter}
+            onValueChange={setTagFilter}
+            placeholder="Category Tag: All"
+          >
             <SelectItem value="all">Category Tag: All</SelectItem>
-            {tags.map((value) => <SelectItem key={value} value={value}>Category Tag: {value}</SelectItem>)}
+            {tags.map((value) => (
+              <SelectItem key={value} value={value}>
+                Category Tag: {value}
+              </SelectItem>
+            ))}
           </CollectionFilterSelect>
-          <CollectionFilterSelect value={eventDateFilter} onValueChange={setEventDateFilter} placeholder="Event Date: All">
+          <CollectionFilterSelect
+            value={eventDateFilter}
+            onValueChange={setEventDateFilter}
+            placeholder="Event Date: All"
+          >
             <SelectItem value="all">Event Date: All</SelectItem>
             <SelectItem value="upcoming">Event Date: Upcoming</SelectItem>
             <SelectItem value="past">Event Date: Past</SelectItem>
             <SelectItem value="none">Event Date: None</SelectItem>
           </CollectionFilterSelect>
-          <CollectionFilterSelect value={expiryDateFilter} onValueChange={setExpiryDateFilter} placeholder="Expiry Date: All">
+          <CollectionFilterSelect
+            value={expiryDateFilter}
+            onValueChange={setExpiryDateFilter}
+            placeholder="Expiry Date: All"
+          >
             <SelectItem value="all">Expiry Date: All</SelectItem>
             <SelectItem value="active">Expiry Date: Not expired</SelectItem>
             <SelectItem value="expired">Expiry Date: Expired</SelectItem>
             <SelectItem value="none">Expiry Date: None</SelectItem>
           </CollectionFilterSelect>
-          <CollectionFilterSelect value={starredFilter} onValueChange={setStarredFilter} placeholder="Starred: All">
+          <CollectionFilterSelect
+            value={starredFilter}
+            onValueChange={setStarredFilter}
+            placeholder="Starred: All"
+          >
             <SelectItem value="all">Starred: All</SelectItem>
             <SelectItem value="yes">Starred: Yes</SelectItem>
             <SelectItem value="no">Starred: No</SelectItem>
           </CollectionFilterSelect>
-          <CollectionFilterSelect value={sortFilter} onValueChange={setSortFilter} placeholder="Sort: Newest">
+          <CollectionFilterSelect
+            value={sortFilter}
+            onValueChange={setSortFilter}
+            placeholder="Sort: Newest"
+          >
             <SelectItem value="newest">Sort: Newest</SelectItem>
             <SelectItem value="oldest">Sort: Oldest</SelectItem>
             <SelectItem value="name-asc">Sort: Name A-Z</SelectItem>
             <SelectItem value="name-desc">Sort: Name Z-A</SelectItem>
           </CollectionFilterSelect>
-          {filtersActive && <button className="h-9 px-3 text-xs font-semibold text-[#00a997]" onClick={clearFilters}>Clear filters</button>}
+          {filtersActive && (
+            <button
+              className="h-9 px-3 text-xs font-semibold text-[#00a997]"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-4 text-[#777]">
           <button
-            className={cn("flex size-9 items-center justify-center border", viewMode === "grid" && "border-[#222] bg-[#222] text-white")}
+            className={cn(
+              "flex size-9 items-center justify-center border",
+              viewMode === "grid" && "border-[#222] bg-[#222] text-white",
+            )}
             onClick={() => setViewMode("grid")}
             aria-label="Grid view"
             type="button"
@@ -7941,7 +10116,10 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             <LayoutGrid className="size-4" />
           </button>
           <button
-            className={cn("flex size-9 items-center justify-center border", viewMode === "list" && "border-[#222] bg-[#222] text-white")}
+            className={cn(
+              "flex size-9 items-center justify-center border",
+              viewMode === "list" && "border-[#222] bg-[#222] text-white",
+            )}
             onClick={() => setViewMode("list")}
             aria-label="List view"
             type="button"
@@ -7950,16 +10128,24 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
           </button>
         </div>
       </div>
-      <p className="mt-6 text-xs text-[#777]">Showing {filteredCollections.length} of {collections.length} collections</p>
+      <p className="mt-6 text-xs text-[#777]">
+        Showing {filteredCollections.length} of {collections.length} collections
+      </p>
 
       {collectionsQuery.isLoading ? (
         <p className="mt-10 py-8 text-sm text-[#666]">Loading collections...</p>
       ) : !filteredCollections.length ? (
         <div className="mt-10 flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
           <Images className="size-10 text-[#999]" />
-          <p className="mt-5 font-bold">{collections.length ? "No matching collections" : "No collections yet"}</p>
+          <p className="mt-5 font-bold">
+            {collections.length
+              ? "No matching collections"
+              : "No collections yet"}
+          </p>
           <p className="mt-2 text-sm leading-6 text-[#666]">
-            {collections.length ? "Try another search or filter." : "Create your first collection to get started."}
+            {collections.length
+              ? "Try another search or filter."
+              : "Create your first collection to get started."}
           </p>
           <Button
             className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
@@ -7971,17 +10157,20 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       ) : viewMode === "grid" ? (
         <div className="mt-10 grid gap-x-10 gap-y-12 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filteredCollections.map((collection) => (
-            <article
-              key={collection._id}
-              className="group relative text-left"
-            >
+            <article key={collection._id} className="group relative text-left">
               <button
                 className="absolute left-3 top-3 z-10 flex size-10 items-center justify-center rounded-full bg-white/92 text-[#666] shadow-sm transition hover:text-[#00a997]"
                 onClick={() => toggleCollectionStar(collection)}
                 type="button"
                 aria-label="Star collection"
               >
-                <Star className={cn("size-4", collection.settings?.starred === true && "fill-[#00a997] text-[#00a997]")} />
+                <Star
+                  className={cn(
+                    "size-4",
+                    collection.settings?.starred === true &&
+                      "fill-[#00a997] text-[#00a997]",
+                  )}
+                />
               </button>
               <CollectionActionMenu
                 collection={collection}
@@ -7991,11 +10180,17 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 onShare={shareCollection}
                 onDuplicate={duplicate}
                 onDelete={removeCollection}
-                pending={duplicateCollection.isPending || deleteCollection.isPending}
+                pending={
+                  duplicateCollection.isPending || deleteCollection.isPending
+                }
               />
               <button
                 className="block w-full overflow-hidden bg-[#f2f2f2] text-left"
-                onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
+                onClick={() =>
+                  router.push(
+                    `/dashboard/${section}/collections/${collection._id}`,
+                  )
+                }
                 type="button"
               >
                 {collection.coverImage ? (
@@ -8014,7 +10209,11 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 <div className="flex items-start justify-between gap-3">
                   <button
                     className="min-w-0 flex-1 truncate text-left text-lg font-semibold leading-tight text-[#333]"
-                    onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)}
+                    onClick={() =>
+                      router.push(
+                        `/dashboard/${section}/collections/${collection._id}`,
+                      )
+                    }
                     type="button"
                   >
                     {collection.name}
@@ -8043,31 +10242,83 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       ) : (
         <div className="mt-10 divide-y border">
           {filteredCollections.map((collection) => (
-            <article key={collection._id} className="grid items-center gap-5 p-5 lg:grid-cols-[220px_1fr_auto]">
-              <button className="overflow-hidden bg-[#f2f2f2] text-left" onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)} type="button">
+            <article
+              key={collection._id}
+              className="grid items-center gap-5 p-5 lg:grid-cols-[220px_1fr_auto]"
+            >
+              <button
+                className="overflow-hidden bg-[#f2f2f2] text-left"
+                onClick={() =>
+                  router.push(
+                    `/dashboard/${section}/collections/${collection._id}`,
+                  )
+                }
+                type="button"
+              >
                 {collection.coverImage ? (
-                  <img src={imageSrc(collection.coverImage)} alt="" className="aspect-[1.35] w-full object-cover" />
+                  <img
+                    src={imageSrc(collection.coverImage)}
+                    alt=""
+                    className="aspect-[1.35] w-full object-cover"
+                  />
                 ) : (
-                  <span className="flex aspect-[1.35] items-center justify-center"><Images className="size-10 text-[#ccc]" /></span>
+                  <span className="flex aspect-[1.35] items-center justify-center">
+                    <Images className="size-10 text-[#ccc]" />
+                  </span>
                 )}
               </button>
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
-                  <button className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f5] text-[#666] hover:text-[#00a997]" onClick={() => toggleCollectionStar(collection)} type="button" aria-label="Star collection">
-                    <Star className={cn("size-4", collection.settings?.starred === true && "fill-[#00a997] text-[#00a997]")} />
+                  <button
+                    className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f5] text-[#666] hover:text-[#00a997]"
+                    onClick={() => toggleCollectionStar(collection)}
+                    type="button"
+                    aria-label="Star collection"
+                  >
+                    <Star
+                      className={cn(
+                        "size-4",
+                        collection.settings?.starred === true &&
+                          "fill-[#00a997] text-[#00a997]",
+                      )}
+                    />
                   </button>
-                  <button className="truncate text-left text-xl font-semibold" onClick={() => router.push(`/dashboard/${section}/collections/${collection._id}`)} type="button">
+                  <button
+                    className="truncate text-left text-xl font-semibold"
+                    onClick={() =>
+                      router.push(
+                        `/dashboard/${section}/collections/${collection._id}`,
+                      )
+                    }
+                    type="button"
+                  >
                     {collection.name}
                   </button>
                 </div>
                 <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[#777]">
                   <span>{collection.imageCount ?? 0} items</span>
-                  {collection.status && <><span>&bull;</span><span>{titleCase(collection.status)}</span></>}
-                  {collection.eventDate && <><span>&bull;</span><span>{formatDate(collection.eventDate)}</span></>}
+                  {collection.status && (
+                    <>
+                      <span>&bull;</span>
+                      <span>{titleCase(collection.status)}</span>
+                    </>
+                  )}
+                  {collection.eventDate && (
+                    <>
+                      <span>&bull;</span>
+                      <span>{formatDate(collection.eventDate)}</span>
+                    </>
+                  )}
                 </p>
               </div>
               <div className="flex items-center justify-end gap-3">
-                <button className="text-sm font-bold text-[#00a997]" onClick={() => openCollectionPreview(collection)} type="button">Preview</button>
+                <button
+                  className="text-sm font-bold text-[#00a997]"
+                  onClick={() => openCollectionPreview(collection)}
+                  type="button"
+                >
+                  Preview
+                </button>
                 <CollectionActionMenu
                   collection={collection}
                   onQuickEdit={setQuickEdit}
@@ -8075,7 +10326,9 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                   onShare={shareCollection}
                   onDuplicate={duplicate}
                   onDelete={removeCollection}
-                  pending={duplicateCollection.isPending || deleteCollection.isPending}
+                  pending={
+                    duplicateCollection.isPending || deleteCollection.isPending
+                  }
                 />
               </div>
             </article>
@@ -8110,7 +10363,10 @@ function CollectionActionMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className={cn("flex size-10 items-center justify-center rounded-full bg-white/95 text-[#555] shadow-sm transition hover:text-[#00a997]", className)}
+          className={cn(
+            "flex size-10 items-center justify-center rounded-full bg-white/95 text-[#555] shadow-sm transition hover:text-[#00a997]",
+            className,
+          )}
           aria-label="Collection actions"
         >
           <MoreHorizontal className="size-5" />
@@ -8133,14 +10389,21 @@ function CollectionActionMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem disabled={pending} onSelect={() => onDuplicate(collection)}>
+          <DropdownMenuItem
+            disabled={pending}
+            onSelect={() => onDuplicate(collection)}
+          >
             <Copy />
             Duplicate
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem variant="destructive" disabled={pending} onSelect={() => onDelete(collection)}>
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={pending}
+            onSelect={() => onDelete(collection)}
+          >
             <Trash2 />
             Delete
           </DropdownMenuItem>
@@ -8166,9 +10429,7 @@ function CollectionFilterSelect({
       <SelectTrigger className="h-9 rounded-full border-0 bg-[#f5f5f5] px-4 text-xs font-medium text-[#222]">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent align="start">
-        {children}
-      </SelectContent>
+      <SelectContent align="start">{children}</SelectContent>
     </Select>
   );
 }
@@ -8178,7 +10439,12 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
   const presetSettings = useDashboardSettings("preset").query;
   const { hydrateDashboardSettings, presetItems } = useDashboardStore();
   const { createCollection } = useCollections();
-  const [form, setForm] = useState({ name: "", eventDate: "", presetId: "", status: "draft" as "draft" | "published" });
+  const [form, setForm] = useState({
+    name: "",
+    eventDate: "",
+    presetId: "",
+    status: "draft" as "draft" | "published",
+  });
 
   useEffect(() => {
     const settings = presetSettings.data?.data ?? [];
@@ -8189,13 +10455,21 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
     const name = form.name.trim();
     if (!name) return;
     const preset = presetItems.find((item) => item.id === form.presetId);
-    const eventLabel = form.eventDate ? format(parseISO(form.eventDate), "PPP") : "";
+    const eventLabel = form.eventDate
+      ? format(parseISO(form.eventDate), "PPP")
+      : "";
     const design = {
       ...(preset?.design ?? collectionDefaultDesign),
-      coverSmallTitle: coverTextOrDefault(preset?.design.coverSmallTitle, preset?.name || "Your Studio"),
+      coverSmallTitle: coverTextOrDefault(
+        preset?.design.coverSmallTitle,
+        preset?.name || "Your Studio",
+      ),
       coverTitle: coverTextOrDefault(preset?.design.coverTitle, name),
       coverDate: coverTextOrDefault(preset?.design.coverDate, eventLabel),
-      coverButtonText: coverTextOrDefault(preset?.design.coverButtonText, "View Gallery"),
+      coverButtonText: coverTextOrDefault(
+        preset?.design.coverButtonText,
+        "View Gallery",
+      ),
     };
 
     createCollection.mutate(
@@ -8244,7 +10518,9 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
             <Input
               id="new-collection-name"
               value={form.name}
-              onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, name: event.target.value }))
+              }
               placeholder="e.g. Jessie & Ryan"
               className="mt-2 h-12 rounded-none bg-white px-5"
             />
@@ -8258,23 +10534,35 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
               type="date"
               value={form.eventDate}
               onChange={(event) =>
-                setForm((value) => ({ ...value, eventDate: event.target.value }))
+                setForm((value) => ({
+                  ...value,
+                  eventDate: event.target.value,
+                }))
               }
               className="mt-2 h-12 rounded-none bg-white px-5"
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="new-status" className="font-bold">Collection Status</FieldLabel>
+            <FieldLabel htmlFor="new-status" className="font-bold">
+              Collection Status
+            </FieldLabel>
             <select
               id="new-status"
               value={form.status}
-              onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as "draft" | "published" }))}
+              onChange={(event) =>
+                setForm((value) => ({
+                  ...value,
+                  status: event.target.value as "draft" | "published",
+                }))
+              }
               className="mt-2 h-12 w-full border bg-white px-3 text-sm outline-none"
             >
               <option value="draft">Draft</option>
               <option value="published">Published</option>
             </select>
-            <p className="mt-2 text-xs leading-5 text-[#777]">Published collections are listed on your unique homepage URL.</p>
+            <p className="mt-2 text-xs leading-5 text-[#777]">
+              Published collections are listed on your unique homepage URL.
+            </p>
           </Field>
           <Field>
             <FieldLabel htmlFor="new-preset" className="font-bold">
@@ -8296,8 +10584,17 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
               ))}
             </select>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <span className="text-[#777]">{presetItems.length ? `${presetItems.length} preset${presetItems.length === 1 ? "" : "s"} available` : "No presets created yet."}</span>
-              <Link href={`/dashboard/${section}/settings/presets`} className="font-bold text-[#00a997]">{presetItems.length ? "Manage presets" : "Create a preset"}</Link>
+              <span className="text-[#777]">
+                {presetItems.length
+                  ? `${presetItems.length} preset${presetItems.length === 1 ? "" : "s"} available`
+                  : "No presets created yet."}
+              </span>
+              <Link
+                href={`/dashboard/${section}/settings/presets`}
+                className="font-bold text-[#00a997]"
+              >
+                {presetItems.length ? "Manage presets" : "Create a preset"}
+              </Link>
             </div>
           </Field>
         </FieldGroup>
@@ -8333,21 +10630,37 @@ function CollectionDetailView({
   const coverImageAccess = usePlanFeatureAccess("coverImage");
   const presetSettings = useDashboardSettings("preset").query;
   const watermarkSettings = useDashboardSettings("watermark").query;
-  const brandingSettings = useDashboardSettings<BrandSettings>("branding").query;
+  const brandingSettings =
+    useDashboardSettings<BrandSettings>("branding").query;
   const emailTemplateSettings = useDashboardSettings("email-template").query;
-  const storeEmailTemplates = useDashboardStore((state) => state.emailTemplates);
+  const storeEmailTemplates = useDashboardStore(
+    (state) => state.emailTemplates,
+  );
   const storePresetItems = useDashboardStore((state) => state.presetItems);
-  const startCampaignBuilder = useDashboardStore((state) => state.startCampaignBuilder);
-  const storeWatermarkItems = useDashboardStore((state) => state.watermarkItems);
+  const startCampaignBuilder = useDashboardStore(
+    (state) => state.startCampaignBuilder,
+  );
+  const storeWatermarkItems = useDashboardStore(
+    (state) => state.watermarkItems,
+  );
   const { starImage } = useImageActions();
   const { collectionsQuery } = useCollections();
   const homepageQuery = useHomepageSettings().query;
   const { ordersQuery } = useStoreOrders();
-  const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages } = useCollectionDetail(collectionId);
+  const {
+    collectionQuery,
+    updateCollection,
+    addSet,
+    uploadImages,
+    deleteImage,
+    reorderImages,
+  } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
   const activityActions = useCollectionActivityActions(collectionId);
   const collections = collectionsQuery.data?.data ?? [];
-  const collection = collectionQuery.data?.data ?? collections.find((item) => item._id === collectionId);
+  const collection =
+    collectionQuery.data?.data ??
+    collections.find((item) => item._id === collectionId);
   const detail = collectionQuery.data?.data;
   const imagesLoading = collectionQuery.isLoading && !detail;
   const [loadedImages, setLoadedImages] = useState<CollectionImageRecord[]>([]);
@@ -8360,13 +10673,22 @@ function CollectionDetailView({
   }, [detail?.images, detail?.imagesPage?.hasMore]);
   const images = useMemo(() => loadedImages, [loadedImages]);
   const sets = useMemo(
-    () => detail?.sets?.length ? detail.sets : [{ id: "highlights", name: "Highlights" }],
+    () =>
+      detail?.sets?.length
+        ? detail.sets
+        : [{ id: "highlights", name: "Highlights" }],
     [detail?.sets],
   );
   const [activeImageId, setActiveImageId] = useState("");
-  const [activeTab, setActiveTab] = useState<"photos" | "design" | "settings" | "download">("photos");
-  const [activeDesignPanel, setActiveDesignPanel] = useState<"cover" | "typography" | "color" | "grid">("cover");
-  const [activityPage, setActivityPage] = useState<"download" | "favorite" | "orders" | "email">("favorite");
+  const [activeTab, setActiveTab] = useState<
+    "photos" | "design" | "settings" | "download"
+  >("photos");
+  const [activeDesignPanel, setActiveDesignPanel] = useState<
+    "cover" | "typography" | "color" | "grid"
+  >("cover");
+  const [activityPage, setActivityPage] = useState<
+    "download" | "favorite" | "orders" | "email"
+  >("favorite");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
   const [addSetOpen, setAddSetOpen] = useState(false);
@@ -8381,49 +10703,83 @@ function CollectionDetailView({
   const [editingSetName, setEditingSetName] = useState("");
   const [pageOrigin, setPageOrigin] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({ active: false, total: 0, uploaded: 0, currentName: "", currentPercent: 0 });
+  const [uploadProgress, setUploadProgress] = useState({
+    active: false,
+    total: 0,
+    uploaded: 0,
+    currentName: "",
+    currentPercent: 0,
+  });
   const [draggingUpload, setDraggingUpload] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
   const [form, setForm] = useState(() => collectionForm(collection));
-  const [collectionStatus, setCollectionStatus] = useState<"draft" | "published">(collection?.status === "published" ? "published" : "draft");
+  const [collectionStatus, setCollectionStatus] = useState<
+    "draft" | "published"
+  >(collection?.status === "published" ? "published" : "draft");
   const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));
   const emailTemplates = useMemo(
-    () => (emailTemplateSettings.data?.data?.map((setting) => setting.data as EmailTemplateItem) ?? storeEmailTemplates),
+    () =>
+      emailTemplateSettings.data?.data?.map(
+        (setting) => setting.data as EmailTemplateItem,
+      ) ?? storeEmailTemplates,
     [emailTemplateSettings.data?.data, storeEmailTemplates],
   );
   const presetItems = useMemo(
-    () => (presetSettings.data?.data?.map((setting) => setting.data as PresetItem) ?? storePresetItems),
+    () =>
+      presetSettings.data?.data?.map((setting) => setting.data as PresetItem) ??
+      storePresetItems,
     [presetSettings.data?.data, storePresetItems],
   );
   const watermarkItems = useMemo(
-    () => (watermarkSettings.data?.data?.map((setting) => setting.data as WatermarkItem) ?? storeWatermarkItems),
+    () =>
+      watermarkSettings.data?.data?.map(
+        (setting) => setting.data as WatermarkItem,
+      ) ?? storeWatermarkItems,
     [storeWatermarkItems, watermarkSettings.data?.data],
   );
-  const branding = (brandingSettings.data?.data?.[0]?.data as BrandSettings | undefined) ?? defaultBrandSettings;
+  const branding =
+    (brandingSettings.data?.data?.[0]?.data as BrandSettings | undefined) ??
+    defaultBrandSettings;
   const activeImage =
-    images.find((image) => image._id === activeImageId) ?? images.find((image) => (image.setId || "highlights") === activeSetId) ?? images[0];
+    images.find((image) => image._id === activeImageId) ??
+    images.find((image) => (image.setId || "highlights") === activeSetId) ??
+    images[0];
   const orderedImages = useMemo(() => {
     if (!orderedImageIds.length) return images;
     const rank = new Map(orderedImageIds.map((id, index) => [id, index]));
-    return [...images].sort((a, b) => (rank.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b._id) ?? Number.MAX_SAFE_INTEGER));
+    return [...images].sort(
+      (a, b) =>
+        (rank.get(a._id) ?? Number.MAX_SAFE_INTEGER) -
+        (rank.get(b._id) ?? Number.MAX_SAFE_INTEGER),
+    );
   }, [images, orderedImageIds]);
   const collectionOrders = useMemo(
-    () => (ordersQuery.data?.data ?? []).filter((order) => order.collectionId === collectionId),
+    () =>
+      (ordersQuery.data?.data ?? []).filter(
+        (order) => order.collectionId === collectionId,
+      ),
     [collectionId, ordersQuery.data?.data],
   );
   const activeSetImages = useMemo(
-    () => orderedImages.filter((image) => (image.setId || "highlights") === activeSetId),
+    () =>
+      orderedImages.filter(
+        (image) => (image.setId || "highlights") === activeSetId,
+      ),
     [activeSetId, orderedImages],
   );
   const imagePageSize = 24;
-  const totalImagePages = Math.max(1, Math.ceil(activeSetImages.length / imagePageSize));
+  const totalImagePages = Math.max(
+    1,
+    Math.ceil(activeSetImages.length / imagePageSize),
+  );
   const visibleSetImages = activeSetImages.slice(
     (imagePage - 1) * imagePageSize,
     imagePage * imagePageSize,
   );
-  const activeSet = form.sets.find((set) => set.id === activeSetId) ?? form.sets[0];
+  const activeSet =
+    form.sets.find((set) => set.id === activeSetId) ?? form.sets[0];
   const filteredShareTemplates = emailTemplates.filter((template) =>
     [template.name, template.subject, template.previewText]
       .join(" ")
@@ -8431,11 +10787,14 @@ function CollectionDetailView({
       .includes(shareTemplateSearch.toLowerCase()),
   );
   const selectedShareTemplate =
-    emailTemplates.find((template) => template.id === selectedShareTemplateId) ??
-    emailTemplates[0];
+    emailTemplates.find(
+      (template) => template.id === selectedShareTemplateId,
+    ) ?? emailTemplates[0];
   const uploadWatermarkId =
     activeSet?.watermarkId ||
-    (form.general.defaultWatermark === "No watermark" ? undefined : form.general.defaultWatermark);
+    (form.general.defaultWatermark === "No watermark"
+      ? undefined
+      : form.general.defaultWatermark);
   const activeWatermark = watermarkItems.find(
     (watermark) =>
       watermark.id === uploadWatermarkId ||
@@ -8451,14 +10810,21 @@ function CollectionDetailView({
     if (!collectionId || imagesLoadingMore || !imagesHasMore) return;
     setImagesLoadingMore(true);
     try {
-      const page = (await fetchCollectionImagesPage(collectionId, loadedImages.length, 60)).data;
+      const page = (
+        await fetchCollectionImagesPage(collectionId, loadedImages.length, 60)
+      ).data;
       setLoadedImages((current) => {
         const seen = new Set(current.map((image) => image._id));
-        return [...current, ...page.items.filter((image) => !seen.has(image._id))];
+        return [
+          ...current,
+          ...page.items.filter((image) => !seen.has(image._id)),
+        ];
       });
       setImagesHasMore(page.hasMore);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load images");
+      toast.error(
+        error instanceof Error ? error.message : "Could not load images",
+      );
     } finally {
       setImagesLoadingMore(false);
     }
@@ -8467,9 +10833,13 @@ function CollectionDetailView({
     if (!imagesHasMore) return;
     const target = imagesLoaderRef.current;
     if (!target) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) void loadMoreCollectionImages();
-    }, { rootMargin: "800px 0px" });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting))
+          void loadMoreCollectionImages();
+      },
+      { rootMargin: "800px 0px" },
+    );
     observer.observe(target);
     return () => observer.disconnect();
   }, [imagesHasMore, imagesLoadingMore, loadedImages.length]);
@@ -8484,7 +10854,9 @@ function CollectionDetailView({
     if (syncedCollectionFormKeyRef.current === nextFormKey) return;
     syncedCollectionFormKeyRef.current = nextFormKey;
     setForm(nextForm);
-    setCollectionStatus(collection.status === "published" ? "published" : "draft");
+    setCollectionStatus(
+      collection.status === "published" ? "published" : "draft",
+    );
   }, [collection, updateCollection.isPending]);
 
   useEffect(() => {
@@ -8494,7 +10866,11 @@ function CollectionDetailView({
   useEffect(() => {
     setOrderedImageIds((current) => {
       const imageIds = images.map((image) => image._id);
-      if (current.length === imageIds.length && current.every((id, index) => id === imageIds[index])) return current;
+      if (
+        current.length === imageIds.length &&
+        current.every((id, index) => id === imageIds[index])
+      )
+        return current;
       return imageIds;
     });
   }, [images]);
@@ -8502,14 +10878,22 @@ function CollectionDetailView({
   const presetName = (id?: string) =>
     presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
   const saveCollection = () => {
-    const selectedPreset = presetItems.find((preset) => preset.id === form.presetId);
+    const selectedPreset = presetItems.find(
+      (preset) => preset.id === form.presetId,
+    );
     const payload = {
       name: form.name.trim() || collection?.name,
       presetId: form.presetId || undefined,
       coverImage: form.coverImage || undefined,
       sets: syncSetsFromPhotoSets(form.sets, form.general.photoSets),
-      tags: form.general.collectionTags.split(",").map((tag) => tag.trim()).filter(Boolean),
-      watermarkId: form.general.defaultWatermark === "No watermark" ? undefined : form.general.defaultWatermark,
+      tags: form.general.collectionTags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+      watermarkId:
+        form.general.defaultWatermark === "No watermark"
+          ? undefined
+          : form.general.defaultWatermark,
       expiresAt: form.expiresAt || undefined,
       status: collectionStatus,
       design: form.design,
@@ -8531,7 +10915,9 @@ function CollectionDetailView({
         toast.success("Collection settings saved");
       },
       onError: (error) => {
-        toast.error(error instanceof Error ? error.message : "Collection save failed");
+        toast.error(
+          error instanceof Error ? error.message : "Collection save failed",
+        );
       },
     });
   };
@@ -8547,7 +10933,10 @@ function CollectionDetailView({
             sets: [...value.sets, nextSet],
             general: {
               ...value.general,
-              photoSets: [...value.sets.map((set) => set.name), nextSet.name].join(", "),
+              photoSets: [
+                ...value.sets.map((set) => set.name),
+                nextSet.name,
+              ].join(", "),
             },
           }));
           setActiveSetId(nextSet.id);
@@ -8598,35 +10987,69 @@ function CollectionDetailView({
     startCampaignBuilder(templateId, publicLink);
     setShareOpen(false);
   };
-  const isFileDrag = (event: DragEvent<HTMLElement>) => Array.from(event.dataTransfer.types).includes("Files");
-  const droppedImageFiles = (files: FileList) => Array.from(files).filter((file) => file.type.startsWith("image/"));
+  const isFileDrag = (event: DragEvent<HTMLElement>) =>
+    Array.from(event.dataTransfer.types).includes("Files");
+  const droppedImageFiles = (files: FileList) =>
+    Array.from(files).filter((file) => file.type.startsWith("image/"));
   const handleImageUpload = async (files: FileList | File[] | null) => {
-    if (!files?.length || uploadImages.isPending || uploadProgress.active) return;
+    if (!files?.length || uploadImages.isPending || uploadProgress.active)
+      return;
     const selectedFiles = Array.from(files);
-    setUploadProgress({ active: true, total: selectedFiles.length, uploaded: 0, currentName: selectedFiles[0]?.name ?? "", currentPercent: 0 });
+    setUploadProgress({
+      active: true,
+      total: selectedFiles.length,
+      uploaded: 0,
+      currentName: selectedFiles[0]?.name ?? "",
+      currentPercent: 0,
+    });
     try {
       for (const [index, file] of selectedFiles.entries()) {
-        setUploadProgress((current) => ({ ...current, currentName: file.name, currentPercent: 0 }));
+        setUploadProgress((current) => ({
+          ...current,
+          currentName: file.name,
+          currentPercent: 0,
+        }));
         const response = await uploadImages.mutateAsync({
           files: [file],
           setId: activeSetId,
           watermarkId: uploadWatermarkId,
-          onProgress: (percent) => setUploadProgress((current) => ({ ...current, currentPercent: percent })),
+          onProgress: (percent) =>
+            setUploadProgress((current) => ({
+              ...current,
+              currentPercent: percent,
+            })),
         });
-        const uploadedImages = Array.isArray(response?.data) ? response.data : [];
+        const uploadedImages = Array.isArray(response?.data)
+          ? response.data
+          : [];
         if (uploadedImages.length) {
           setLoadedImages((current) => {
             const seen = new Set(current.map((image) => image._id));
-            return [...current, ...uploadedImages.filter((image) => !seen.has(image._id))];
+            return [
+              ...current,
+              ...uploadedImages.filter((image) => !seen.has(image._id)),
+            ];
           });
         }
-        setUploadProgress((current) => ({ ...current, uploaded: index + 1, currentPercent: 100 }));
+        setUploadProgress((current) => ({
+          ...current,
+          uploaded: index + 1,
+          currentPercent: 100,
+        }));
       }
-      toast.success(`Upload finished: ${selectedFiles.length} image${selectedFiles.length === 1 ? "" : "s"}`);
+      toast.success(
+        `Upload finished: ${selectedFiles.length} image${selectedFiles.length === 1 ? "" : "s"}`,
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
-      setUploadProgress({ active: false, total: 0, uploaded: 0, currentName: "", currentPercent: 0 });
+      setUploadProgress({
+        active: false,
+        total: 0,
+        uploaded: 0,
+        currentName: "",
+        currentPercent: 0,
+      });
     }
   };
   const handleUploadDragOver = (event: DragEvent<HTMLElement>) => {
@@ -8635,7 +11058,8 @@ function CollectionDetailView({
     setDraggingUpload(true);
   };
   const handleUploadDragLeave = (event: DragEvent<HTMLElement>) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingUpload(false);
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+      setDraggingUpload(false);
   };
   const handleUploadDrop = (event: DragEvent<HTMLElement>) => {
     if (!isFileDrag(event)) return;
@@ -8649,15 +11073,24 @@ function CollectionDetailView({
     void handleImageUpload(imageFiles);
   };
   const uploading = uploadProgress.active || uploadImages.isPending;
-  const uploadsLeft = Math.max(0, uploadProgress.total - uploadProgress.uploaded);
+  const uploadsLeft = Math.max(
+    0,
+    uploadProgress.total - uploadProgress.uploaded,
+  );
   const uploadPercent = uploadProgress.total
-    ? Math.round(((uploadProgress.uploaded + uploadProgress.currentPercent / 100) / uploadProgress.total) * 100)
+    ? Math.round(
+        ((uploadProgress.uploaded + uploadProgress.currentPercent / 100) /
+          uploadProgress.total) *
+          100,
+      )
     : 0;
   const deletingImages = deleteImage.isPending || bulkDeleting;
   const toggleImageSelection = (imageId: string) => {
     if (deletingImages) return;
     setSelectedImageIds((ids) =>
-      ids.includes(imageId) ? ids.filter((id) => id !== imageId) : [...ids, imageId],
+      ids.includes(imageId)
+        ? ids.filter((id) => id !== imageId)
+        : [...ids, imageId],
     );
   };
   const clearSelection = () => {
@@ -8669,21 +11102,33 @@ function CollectionDetailView({
       setForm((value) => ({ ...value, coverImage: "" }));
     }
     deleteImage.mutate(image._id, {
-      onSuccess: () => setSelectedImageIds((ids) => ids.filter((id) => id !== image._id)),
+      onSuccess: () =>
+        setSelectedImageIds((ids) => ids.filter((id) => id !== image._id)),
     });
   };
   const deleteSelectedImages = async () => {
     if (!selectedImageIds.length || deletingImages) return;
     setBulkDeleting(true);
     try {
-      const selectedImages = images.filter((image) => selectedImageIds.includes(image._id));
+      const selectedImages = images.filter((image) =>
+        selectedImageIds.includes(image._id),
+      );
       if (selectedImages.some((image) => image.url === form.coverImage)) {
         setForm((value) => ({ ...value, coverImage: "" }));
       }
-      setLoadedImages((current) => current.filter((image) => !selectedImageIds.includes(image._id)));
-      const results = await Promise.allSettled(selectedImages.map((image) => deleteImage.mutateAsync(image._id)));
-      const failed = results.filter((result) => result.status === "rejected").length;
-      if (failed) toast.error(`${failed} image${failed === 1 ? "" : "s"} could not be deleted`);
+      setLoadedImages((current) =>
+        current.filter((image) => !selectedImageIds.includes(image._id)),
+      );
+      const results = await Promise.allSettled(
+        selectedImages.map((image) => deleteImage.mutateAsync(image._id)),
+      );
+      const failed = results.filter(
+        (result) => result.status === "rejected",
+      ).length;
+      if (failed)
+        toast.error(
+          `${failed} image${failed === 1 ? "" : "s"} could not be deleted`,
+        );
       setSelectedImageIds([]);
       await collectionQuery.refetch();
     } finally {
@@ -8700,7 +11145,12 @@ function CollectionDetailView({
     const removeSelected = (event: KeyboardEvent) => {
       if (!selectedImageIds.length || deletingImages) return;
       event.preventDefault();
-      if (window.confirm(`Delete ${selectedImageIds.length} selected image${selectedImageIds.length === 1 ? "" : "s"}?`)) void deleteSelectedImages();
+      if (
+        window.confirm(
+          `Delete ${selectedImageIds.length} selected image${selectedImageIds.length === 1 ? "" : "s"}?`,
+        )
+      )
+        void deleteSelectedImages();
     };
     const clearSelected = (event: KeyboardEvent) => {
       event.preventDefault();
@@ -8717,16 +11167,24 @@ function CollectionDetailView({
   }, [activeSetImages, activeTab, deletingImages, selectedImageIds]);
   const reorderSetImages = (nextSetImages: CollectionImageRecord[]) => {
     const nextSetIds = nextSetImages.map((image) => image._id);
-    if (nextSetIds.length === activeSetImages.length && nextSetIds.every((id, index) => id === activeSetImages[index]?._id)) {
+    if (
+      nextSetIds.length === activeSetImages.length &&
+      nextSetIds.every((id, index) => id === activeSetImages[index]?._id)
+    ) {
       return;
     }
     const activeSetIdSet = new Set(activeSetImages.map((image) => image._id));
     const nextAllIds = orderedImages.map((image) =>
-      activeSetIdSet.has(image._id) ? nextSetIds.shift() ?? image._id : image._id,
+      activeSetIdSet.has(image._id)
+        ? (nextSetIds.shift() ?? image._id)
+        : image._id,
     );
     setOrderedImageIds(nextAllIds);
     reorderImages.mutate(nextAllIds, {
-      onError: (error) => toast.error(error instanceof Error ? error.message : "Image reorder failed"),
+      onError: (error) =>
+        toast.error(
+          error instanceof Error ? error.message : "Image reorder failed",
+        ),
     });
   };
   if (!collection) {
@@ -8749,11 +11207,16 @@ function CollectionDetailView({
             {collection.name}
           </h1>
           <p className="mt-2 text-sm text-[#666]">
-            {formatDate(collection.eventDate)} &middot; {presetName(collection.presetId)} &middot; {images.length} images
+            {formatDate(collection.eventDate)} &middot;{" "}
+            {presetName(collection.presetId)} &middot; {images.length} images
           </p>
           <div className="mt-2 flex max-w-[720px] flex-wrap items-center gap-2">
             <p className="break-all text-xs text-[#00a997]">{publicLink}</p>
-            <Button variant="outline" className="h-8 rounded-none px-3 text-xs" onClick={copyPublicLink}>
+            <Button
+              variant="outline"
+              className="h-8 rounded-none px-3 text-xs"
+              onClick={copyPublicLink}
+            >
               <Copy data-icon="inline-start" />
               {linkCopied ? "Copied" : "Copy"}
             </Button>
@@ -8772,7 +11235,9 @@ function CollectionDetailView({
             variant="outline"
             className="h-10 rounded-none"
             onClick={() =>
-              router.push(`/dashboard/store-gallery/collections/${collectionId}/store`)
+              router.push(
+                `/dashboard/store-gallery/collections/${collectionId}/store`,
+              )
             }
           >
             <Store data-icon="inline-start" />
@@ -8781,7 +11246,9 @@ function CollectionDetailView({
           <Button
             variant="outline"
             className="h-10 rounded-none"
-            onClick={() => window.open(publicPath, "_blank", "noopener,noreferrer")}
+            onClick={() =>
+              window.open(publicPath, "_blank", "noopener,noreferrer")
+            }
           >
             <Eye data-icon="inline-start" />
             Preview
@@ -8794,8 +11261,17 @@ function CollectionDetailView({
             <Share2 data-icon="inline-start" />
             Share
           </Button>
-          <label className={cn("inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white", uploading && "pointer-events-none opacity-70")}>
-            {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          <label
+            className={cn(
+              "inline-flex h-10 w-fit cursor-pointer items-center gap-2 bg-[#22bda7] px-6 text-sm font-bold text-white",
+              uploading && "pointer-events-none opacity-70",
+            )}
+          >
+            {uploading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Upload className="size-4" />
+            )}
             {uploading ? `${uploadProgress.currentPercent}%` : "Add Media"}
             <input
               type="file"
@@ -8837,14 +11313,18 @@ function CollectionDetailView({
                 Search, select, then send. Button URL becomes gallery link.
               </p>
               {emailTemplateSettings.isLoading ? (
-                <p className="mt-4 text-sm font-semibold text-[#777]">Loading templates...</p>
+                <p className="mt-4 text-sm font-semibold text-[#777]">
+                  Loading templates...
+                </p>
               ) : emailTemplates.length ? (
                 <>
                   <div className="mt-4 flex h-10 items-center gap-2 border px-3">
                     <Search className="size-4 text-[#777]" />
                     <Input
                       value={shareTemplateSearch}
-                      onChange={(event) => setShareTemplateSearch(event.target.value)}
+                      onChange={(event) =>
+                        setShareTemplateSearch(event.target.value)
+                      }
                       placeholder="Find template"
                       className="h-9 rounded-none border-0 px-0 text-sm focus-visible:ring-0"
                     />
@@ -8855,11 +11335,14 @@ function CollectionDetailView({
                         key={template.id}
                         className={cn(
                           "block w-full border-b px-4 py-3 text-left text-sm last:border-b-0 hover:bg-[#f7fbfa]",
-                          selectedShareTemplate?.id === template.id && "bg-[#e3f6f1]",
+                          selectedShareTemplate?.id === template.id &&
+                            "bg-[#e3f6f1]",
                         )}
                         onClick={() => setSelectedShareTemplateId(template.id)}
                       >
-                        <span className="block truncate font-bold">{template.name || "Untitled Template"}</span>
+                        <span className="block truncate font-bold">
+                          {template.name || "Untitled Template"}
+                        </span>
                         <span className="mt-1 block truncate text-xs text-[#666]">
                           {template.subject || "No subject"}
                         </span>
@@ -8874,16 +11357,19 @@ function CollectionDetailView({
                   <Button
                     className="mt-4 h-10 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"
                     disabled={!selectedShareTemplate}
-                    onClick={() => selectedShareTemplate && shareByEmail(selectedShareTemplate.id)}
+                    onClick={() =>
+                      selectedShareTemplate &&
+                      shareByEmail(selectedShareTemplate.id)
+                    }
                   >
                     <Send className="size-4" />
                     Use Selected Template
                   </Button>
                 </>
               ) : (
-                  <p className="text-sm leading-6 text-[#666]">
-                    No templates yet. Create one in Settings.
-                  </p>
+                <p className="text-sm leading-6 text-[#666]">
+                  No templates yet. Create one in Settings.
+                </p>
               )}
             </section>
 
@@ -8895,8 +11381,14 @@ function CollectionDetailView({
                   </span>
                   <h3 className="font-bold">Direct Link</h3>
                 </div>
-                <p className="mt-4 break-all bg-white p-3 text-sm leading-6 text-[#666]">{publicLink}</p>
-                <Button variant="outline" className="mt-4 h-10 w-full rounded-none bg-white" onClick={copyPublicLink}>
+                <p className="mt-4 break-all bg-white p-3 text-sm leading-6 text-[#666]">
+                  {publicLink}
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-4 h-10 w-full rounded-none bg-white"
+                  onClick={copyPublicLink}
+                >
                   <Copy data-icon="inline-start" />
                   {linkCopied ? "Copied" : "Copy Link"}
                 </Button>
@@ -8910,7 +11402,11 @@ function CollectionDetailView({
                   <h3 className="font-bold">QR Code</h3>
                 </div>
                 <div className="mt-4 flex justify-center bg-white p-5">
-                  <img src={qrCodeUrl} alt={`QR code for ${collection.name}`} className="size-[220px]" />
+                  <img
+                    src={qrCodeUrl}
+                    alt={`QR code for ${collection.name}`}
+                    className="size-[220px]"
+                  />
                 </div>
                 <a
                   href={qrCodeUrl}
@@ -8933,13 +11429,19 @@ function CollectionDetailView({
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-bold">
-              Image {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of {uploadProgress.total || "selected"} / {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.
+              Image{" "}
+              {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)}{" "}
+              of {uploadProgress.total || "selected"} /{" "}
+              {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.
             </p>
             <p className="mt-1 truncate text-xs font-semibold text-[#3f8179]">
               {uploadProgress.currentName || "Processing files and watermark"}
             </p>
             <div className="mt-3 h-2 overflow-hidden bg-[#d3f2ee]">
-              <div className="h-full bg-[#22bda7] transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+              <div
+                className="h-full bg-[#22bda7] transition-all duration-300"
+                style={{ width: `${uploadPercent}%` }}
+              />
             </div>
           </div>
         </div>
@@ -8950,31 +11452,50 @@ function CollectionDetailView({
         </p>
       )}
 
-      <div className={cn("mt-6 grid min-h-0 flex-1 overflow-hidden border transition-[grid-template-columns] duration-300 ease-out", detailCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[250px_minmax(0,1fr)]")}>
-        <aside className="flex flex-col border-r bg-[#fafafa] transition-colors duration-300">
-          {!detailCollapsed && <div className="aspect-[1.45] bg-[#e8e8e8]">
-            {(form.coverImage || images[0]?.url) ? (
-              <img
-                src={imageSrc(form.coverImage || images[0]?.url || "")}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs font-bold uppercase tracking-wide text-[#888]">
-                Cover Image
-              </div>
+      <div
+        className={cn(
+          "mt-6 grid h-[calc(100vh-220px)] min-h-[520px] overflow-hidden border transition-[grid-template-columns] duration-300 ease-out",
+          detailCollapsed
+            ? "md:grid-cols-[76px_minmax(0,1fr)]"
+            : "md:grid-cols-[250px_minmax(0,1fr)]",
+        )}
+      >
+        <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-[#fafafa] transition-colors duration-300">
+          {!detailCollapsed && (
+            <div className="h-32 shrink-0 bg-[#e8e8e8]">
+              {form.coverImage || images[0]?.url ? (
+                <img
+                  src={imageSrc(form.coverImage || images[0]?.url || "")}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs font-bold uppercase tracking-wide text-[#888]">
+                  Cover Image
+                </div>
+              )}
+            </div>
+          )}
+          <div
+            className={cn(
+              "grid shrink-0 border-b bg-white",
+              detailCollapsed ? "grid-cols-1" : "grid-cols-4",
             )}
-          </div>}
-          <div className={cn("grid border-b bg-white", detailCollapsed ? "grid-cols-1" : "grid-cols-4")}>
-            {([
-              ["photos", Images],
-              ["design", Palette],
-              ["settings", Settings],
-              ["download", Download],
-            ] as const).map(([tab, Icon]) => (
+          >
+            {(
+              [
+                ["photos", Images],
+                ["design", Palette],
+                ["settings", Settings],
+                ["download", Download],
+              ] as const
+            ).map(([tab, Icon]) => (
               <button
                 key={String(tab)}
-                className={cn("flex h-14 items-center justify-center border-b-2 border-transparent", activeTab === tab && "border-[#22bda7] text-[#00a997]")}
+                className={cn(
+                  "flex h-14 items-center justify-center border-b-2 border-transparent",
+                  activeTab === tab && "border-[#22bda7] text-[#00a997]",
+                )}
                 onClick={() => setActiveTab(tab as typeof activeTab)}
                 aria-label={String(tab)}
               >
@@ -8985,23 +11506,33 @@ function CollectionDetailView({
           {activeTab === "photos" && !detailCollapsed && (
             <div className="min-h-0 overflow-y-auto p-4">
               <div className="mb-4 flex items-center justify-end">
-                <button className="inline-flex items-center gap-1 text-sm font-bold text-[#00a997]" onClick={() => setAddSetOpen(true)}>
+                <button
+                  className="inline-flex items-center gap-1 text-sm font-bold text-[#00a997]"
+                  onClick={() => setAddSetOpen(true)}
+                >
                   <PlusCircle className="size-4" />
                   Add Set
                 </button>
               </div>
               <div className="flex flex-col gap-1">
                 {form.sets.map((set) => {
-                  const count = images.filter((image) => (image.setId || "highlights") === set.id).length;
+                  const count = images.filter(
+                    (image) => (image.setId || "highlights") === set.id,
+                  ).length;
                   return (
                     <div
                       key={set.id}
-                      className={cn("group flex h-12 items-center justify-between gap-2 px-3 text-left text-sm", activeSetId === set.id && "bg-white font-bold")}
+                      className={cn(
+                        "group flex h-12 items-center justify-between gap-2 px-3 text-left text-sm",
+                        activeSetId === set.id && "bg-white font-bold",
+                      )}
                     >
                       {editingSetId === set.id ? (
                         <Input
                           value={editingSetName}
-                          onChange={(event) => setEditingSetName(event.target.value)}
+                          onChange={(event) =>
+                            setEditingSetName(event.target.value)
+                          }
                           onKeyDown={(event) => {
                             if (event.key === "Enter") renameSet();
                             if (event.key === "Escape") setEditingSetId("");
@@ -9025,7 +11556,9 @@ function CollectionDetailView({
                           {set.name}
                         </button>
                       )}
-                      <span className="ml-auto text-xs text-[#777]">{count}</span>
+                      <span className="ml-auto text-xs text-[#777]">
+                        {count}
+                      </span>
                       <button
                         className="hidden text-[#888] hover:text-red-600 group-hover:inline-flex disabled:text-[#ccc]"
                         disabled={form.sets.length <= 1}
@@ -9061,10 +11594,18 @@ function CollectionDetailView({
                     </Field>
                   </FieldGroup>
                   <DialogFooter>
-                    <Button variant="outline" className="rounded-none" onClick={() => setAddSetOpen(false)}>
+                    <Button
+                      variant="outline"
+                      className="rounded-none"
+                      onClick={() => setAddSetOpen(false)}
+                    >
                       Cancel
                     </Button>
-                    <Button className="rounded-none bg-[#22bda7] text-white" disabled={!newSetName.trim()} onClick={createSet}>
+                    <Button
+                      className="rounded-none bg-[#22bda7] text-white"
+                      disabled={!newSetName.trim()}
+                      onClick={createSet}
+                    >
                       Create
                     </Button>
                   </DialogFooter>
@@ -9074,16 +11615,23 @@ function CollectionDetailView({
           )}
           {activeTab === "design" && !detailCollapsed && (
             <div className="min-h-0 flex-1 overflow-y-auto bg-[#fafafa]">
-              <p className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-[#777]">Design</p>
-              {([
-                ["cover", PanelTop, "Cover"],
-                ["typography", Bold, "Typography"],
-                ["color", Palette, "Color"],
-                ["grid", LayoutGrid, "Grid"],
-              ] as const).map(([panel, Icon, label]) => (
+              <p className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-[#777]">
+                Design
+              </p>
+              {(
+                [
+                  ["cover", PanelTop, "Cover"],
+                  ["typography", Bold, "Typography"],
+                  ["color", Palette, "Color"],
+                  ["grid", LayoutGrid, "Grid"],
+                ] as const
+              ).map(([panel, Icon, label]) => (
                 <button
                   key={panel}
-                  className={cn("flex h-12 w-full items-center gap-4 px-5 text-left", activeDesignPanel === panel && "bg-white font-semibold")}
+                  className={cn(
+                    "flex h-12 w-full items-center gap-4 px-5 text-left",
+                    activeDesignPanel === panel && "bg-white font-semibold",
+                  )}
                   onClick={() => setActiveDesignPanel(panel)}
                   type="button"
                 >
@@ -9094,10 +11642,15 @@ function CollectionDetailView({
             </div>
           )}
           {activeTab === "download" && !detailCollapsed && (
-            <div className="min-h-0 flex-1 overflow-y-auto bg-[#fafafa] pb-4">
-              <p className="px-5 py-5 text-xs font-bold uppercase tracking-wide text-[#777]">Activities</p>
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#fafafa] py-4">
+              <p className="px-5 pb-4 pt-1 text-xs font-bold uppercase tracking-wide text-[#777]">
+                Activities
+              </p>
               <button
-                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "download" && "bg-white font-bold")}
+                className={cn(
+                  "flex h-14 w-full items-center gap-3 px-5 text-left",
+                  activityPage === "download" && "bg-white font-bold",
+                )}
                 onClick={() => setActivityPage("download")}
                 type="button"
               >
@@ -9105,7 +11658,10 @@ function CollectionDetailView({
                 Download Activity
               </button>
               <button
-                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "favorite" && "bg-white font-bold")}
+                className={cn(
+                  "flex h-14 w-full items-center gap-3 px-5 text-left",
+                  activityPage === "favorite" && "bg-white font-bold",
+                )}
                 onClick={() => setActivityPage("favorite")}
                 type="button"
               >
@@ -9113,7 +11669,10 @@ function CollectionDetailView({
                 Favorite Activity
               </button>
               <button
-                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "orders" && "bg-white font-bold")}
+                className={cn(
+                  "flex h-14 w-full items-center gap-3 px-5 text-left",
+                  activityPage === "orders" && "bg-white font-bold",
+                )}
                 onClick={() => setActivityPage("orders")}
                 type="button"
               >
@@ -9121,7 +11680,10 @@ function CollectionDetailView({
                 Store Orders
               </button>
               <button
-                className={cn("flex h-14 w-full items-center gap-3 px-5 text-left", activityPage === "email" && "bg-white font-bold")}
+                className={cn(
+                  "flex h-14 w-full items-center gap-3 px-5 text-left",
+                  activityPage === "email" && "bg-white font-bold",
+                )}
                 onClick={() => setActivityPage("email")}
                 type="button"
               >
@@ -9131,32 +11693,51 @@ function CollectionDetailView({
             </div>
           )}
           <button
-            className="mt-auto flex h-12 items-center justify-center border-t text-[#333]"
+            className="mt-auto flex h-12 shrink-0 items-center justify-center border-t text-[#333]"
             onClick={() => setDetailCollapsed((value) => !value)}
             aria-label="Toggle collection sidebar"
           >
-            <ChevronsLeft className={cn("size-5", detailCollapsed && "rotate-180")} />
+            <ChevronsLeft
+              className={cn("size-5", detailCollapsed && "rotate-180")}
+            />
           </button>
         </aside>
 
         <div className="min-w-0 overflow-y-auto p-5 md:p-6">
-          {activeTab === "photos" && (
-            imagesLoading ? (
+          {activeTab === "photos" &&
+            (imagesLoading ? (
               <CollectionImagesSkeleton />
             ) : !activeSetImages.length && !imagesHasMore ? (
               <label
-                className={cn("flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center transition", draggingUpload && "border-[#22bda7] bg-[#f2fffd]", uploading && "pointer-events-none opacity-75")}
+                className={cn(
+                  "flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center transition",
+                  draggingUpload && "border-[#22bda7] bg-[#f2fffd]",
+                  uploading && "pointer-events-none opacity-75",
+                )}
                 onDragOver={handleUploadDragOver}
                 onDragEnter={handleUploadDragOver}
                 onDragLeave={handleUploadDragLeave}
                 onDrop={handleUploadDrop}
               >
-                {uploading ? <Loader2 className="size-10 animate-spin text-[#22bda7]" /> : <Upload className="size-10 text-[#bbb]" />}
-                <p className="mt-5 font-bold">{uploading ? `Image ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} / ${uploadProgress.currentPercent}%` : "Drag photos and videos here to upload"}</p>
-                <p className="mt-3 text-sm text-[#00a997]">{uploading ? `${uploadsLeft} left` : "or Browse files"}</p>
+                {uploading ? (
+                  <Loader2 className="size-10 animate-spin text-[#22bda7]" />
+                ) : (
+                  <Upload className="size-10 text-[#bbb]" />
+                )}
+                <p className="mt-5 font-bold">
+                  {uploading
+                    ? `Image ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} / ${uploadProgress.currentPercent}%`
+                    : "Drag photos and videos here to upload"}
+                </p>
+                <p className="mt-3 text-sm text-[#00a997]">
+                  {uploading ? `${uploadsLeft} left` : "or Browse files"}
+                </p>
                 {uploading && (
                   <div className="mt-5 h-2 w-full max-w-sm overflow-hidden bg-[#d3f2ee]">
-                    <div className="h-full bg-[#22bda7] transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+                    <div
+                      className="h-full bg-[#22bda7] transition-all duration-300"
+                      style={{ width: `${uploadPercent}%` }}
+                    />
                   </div>
                 )}
                 <input
@@ -9173,7 +11754,11 @@ function CollectionDetailView({
               </label>
             ) : (
               <div
-                className={cn("relative min-h-[420px] transition", draggingUpload && "outline outline-2 outline-[#22bda7] outline-offset-4")}
+                className={cn(
+                  "relative min-h-[420px] transition",
+                  draggingUpload &&
+                    "outline outline-2 outline-[#22bda7] outline-offset-4",
+                )}
                 onDragOver={handleUploadDragOver}
                 onDragEnter={handleUploadDragOver}
                 onDragLeave={handleUploadDragLeave}
@@ -9191,22 +11776,44 @@ function CollectionDetailView({
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {selectedImageIds.length > 0 && (
                       <>
-                        <span className="text-xs font-bold text-[#777]">{selectedImageIds.length} selected</span>
-                        <Button variant="outline" className="h-9 rounded-none" disabled={deletingImages} onClick={clearSelection}>
+                        <span className="text-xs font-bold text-[#777]">
+                          {selectedImageIds.length} selected
+                        </span>
+                        <Button
+                          variant="outline"
+                          className="h-9 rounded-none"
+                          disabled={deletingImages}
+                          onClick={clearSelection}
+                        >
                           Clear
                         </Button>
-                        <Button className="h-9 rounded-none bg-red-600 text-white hover:bg-red-700" disabled={deletingImages} onClick={() => void deleteSelectedImages()}>
-                          {deletingImages ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                        <Button
+                          className="h-9 rounded-none bg-red-600 text-white hover:bg-red-700"
+                          disabled={deletingImages}
+                          onClick={() => void deleteSelectedImages()}
+                        >
+                          {deletingImages ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
                           Delete Selected
                         </Button>
                       </>
                     )}
-                    <Button variant="outline" className="h-9 rounded-none" disabled={deletingImages} onClick={() => setMetadataOpen(true)}>
+                    <Button
+                      variant="outline"
+                      className="h-9 rounded-none"
+                      disabled={deletingImages}
+                      onClick={() => setMetadataOpen(true)}
+                    >
                       Show Metadata
                     </Button>
                   </div>
                 </div>
-                <p className="mb-3 text-xs text-[#999]">⌘/Ctrl + A selects all · Delete removes selected · Esc clears</p>
+                <p className="mb-3 text-xs text-[#999]">
+                  ⌘/Ctrl + A selects all · Delete removes selected · Esc clears
+                </p>
                 {deletingImages && (
                   <div className="mb-4 flex items-center gap-3 border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                     <Loader2 className="size-4 animate-spin" />
@@ -9215,33 +11822,52 @@ function CollectionDetailView({
                 )}
                 {uploading && (
                   <div className="mb-2 grid grid-cols-3 gap-2 md:grid-cols-5 xl:grid-cols-6">
-                    {Array.from({ length: Math.min(uploadsLeft || 1, 6) }).map((_, index) => (
-                      <div key={`uploading-${index}`} className="relative flex aspect-square animate-in fade-in zoom-in-95 items-center justify-center overflow-hidden bg-[#eef9f7] duration-300">
-                        <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-[#d3f2ee]">
-                          <div className="h-full w-1/2 animate-pulse bg-[#22bda7]" />
+                    {Array.from({ length: Math.min(uploadsLeft || 1, 6) }).map(
+                      (_, index) => (
+                        <div
+                          key={`uploading-${index}`}
+                          className="relative flex aspect-square animate-in fade-in zoom-in-95 items-center justify-center overflow-hidden bg-[#eef9f7] duration-300"
+                        >
+                          <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-[#d3f2ee]">
+                            <div className="h-full w-1/2 animate-pulse bg-[#22bda7]" />
+                          </div>
+                          <Loader2 className="size-6 animate-spin text-[#22bda7]" />
                         </div>
-                        <Loader2 className="size-6 animate-spin text-[#22bda7]" />
-                      </div>
-                    ))}
+                      ),
+                    )}
                   </div>
                 )}
                 <ReactSortable
-                  list={activeSetImages.map((image) => ({ ...image, id: image._id }))}
-                  setList={(nextImages) => reorderSetImages(nextImages as CollectionImageRecord[])}
+                  list={activeSetImages.map((image) => ({
+                    ...image,
+                    id: image._id,
+                  }))}
+                  setList={(nextImages) =>
+                    reorderSetImages(nextImages as CollectionImageRecord[])
+                  }
                   animation={180}
                   delayOnTouchOnly
                   ghostClass="sortable-image-ghost"
                   chosenClass="sortable-image-chosen"
                   dragClass="sortable-image-drag"
-                  className={cn("grid gap-2", form.design.gridStyle === "Horizontal" ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-3 md:grid-cols-5 xl:grid-cols-6", form.design.thumbnailSize === "Large" && "md:grid-cols-4 xl:grid-cols-5")}
+                  className={cn(
+                    "grid gap-2",
+                    form.design.gridStyle === "Horizontal"
+                      ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
+                      : "grid-cols-3 md:grid-cols-5 xl:grid-cols-6",
+                    form.design.thumbnailSize === "Large" &&
+                      "md:grid-cols-4 xl:grid-cols-5",
+                  )}
                 >
                   {activeSetImages.map((image) => (
                     <div
                       key={image._id}
                       className={cn(
                         "group relative animate-in fade-in zoom-in-95 text-left transition-all duration-300 ease-out",
-                        activeImage?._id === image._id && "outline outline-2 outline-[#22bda7]",
-                        selectedImageIds.includes(image._id) && "outline outline-2 outline-red-500",
+                        activeImage?._id === image._id &&
+                          "outline outline-2 outline-[#22bda7]",
+                        selectedImageIds.includes(image._id) &&
+                          "outline outline-2 outline-red-500",
                         deletingImages && "pointer-events-none opacity-55",
                       )}
                     >
@@ -9256,7 +11882,9 @@ function CollectionDetailView({
                           placeholder={image.blurDataUrl}
                           className={cn(
                             "w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105",
-                            form.design.gridStyle === "Horizontal" ? "aspect-[1.45]" : "aspect-square",
+                            form.design.gridStyle === "Horizontal"
+                              ? "aspect-[1.45]"
+                              : "aspect-square",
                           )}
                         />
                         {!image.watermarked && activeWatermark && (
@@ -9266,13 +11894,21 @@ function CollectionDetailView({
                       <button
                         className={cn(
                           "absolute left-2 top-2 flex size-8 items-center justify-center border bg-white/95 shadow-sm transition-all duration-200 hover:scale-105",
-                          selectedImageIds.includes(image._id) ? "border-red-500 text-red-600" : "border-white text-[#777]",
+                          selectedImageIds.includes(image._id)
+                            ? "border-red-500 text-red-600"
+                            : "border-white text-[#777]",
                         )}
                         disabled={deletingImages}
                         onClick={() => toggleImageSelection(image._id)}
                         aria-label="Select image"
                       >
-                        <Check className={cn("size-4", !selectedImageIds.includes(image._id) && "opacity-0")} />
+                        <Check
+                          className={cn(
+                            "size-4",
+                            !selectedImageIds.includes(image._id) &&
+                              "opacity-0",
+                          )}
+                        />
                       </button>
                       <button
                         className="absolute right-2 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-red-600 group-hover:flex"
@@ -9280,7 +11916,11 @@ function CollectionDetailView({
                         onClick={() => deleteSingleImage(image)}
                         aria-label="Delete image"
                       >
-                        {deletingImages ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                        {deletingImages ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-4" />
+                        )}
                       </button>
                       <button
                         className="absolute right-12 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#00a997] group-hover:flex"
@@ -9305,19 +11945,42 @@ function CollectionDetailView({
                         }
                         aria-label="Star image"
                       >
-                        <Star className={cn("size-4", image.metadata?.starred === true && "fill-[#00a997] text-[#00a997]")} />
+                        <Star
+                          className={cn(
+                            "size-4",
+                            image.metadata?.starred === true &&
+                              "fill-[#00a997] text-[#00a997]",
+                          )}
+                        />
                       </button>
                       <button
-                        className={cn("absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block", coverImageAccess.locked && "cursor-not-allowed opacity-60")}
+                        className={cn(
+                          "absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block",
+                          coverImageAccess.locked &&
+                            "cursor-not-allowed opacity-60",
+                        )}
                         disabled={deletingImages || coverImageAccess.locked}
-                        title={coverImageAccess.locked ? "Cover image is not included in your current plan" : "Make collection cover"}
+                        title={
+                          coverImageAccess.locked
+                            ? "Cover image is not included in your current plan"
+                            : "Make collection cover"
+                        }
                         onClick={() => {
-                          setForm((value) => ({ ...value, coverImage: image.url }));
+                          setForm((value) => ({
+                            ...value,
+                            coverImage: image.url,
+                          }));
                           updateCollection.mutate(
                             { coverImage: image.url },
                             {
-                              onSuccess: () => toast.success("Cover photo updated"),
-                              onError: (error) => toast.error(error instanceof Error ? error.message : "Cover update failed"),
+                              onSuccess: () =>
+                                toast.success("Cover photo updated"),
+                              onError: (error) =>
+                                toast.error(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Cover update failed",
+                                ),
                             },
                           );
                         }}
@@ -9328,8 +11991,13 @@ function CollectionDetailView({
                   ))}
                 </ReactSortable>
                 {imagesHasMore && (
-                  <div ref={imagesLoaderRef} className="flex h-20 items-center justify-center text-sm text-[#777]">
-                    {imagesLoadingMore && <Loader2 className="size-5 animate-spin" />}
+                  <div
+                    ref={imagesLoaderRef}
+                    className="flex h-20 items-center justify-center text-sm text-[#777]"
+                  >
+                    {imagesLoadingMore && (
+                      <Loader2 className="size-5 animate-spin" />
+                    )}
                   </div>
                 )}
                 {false && totalImagePages > 1 && (
@@ -9338,7 +12006,9 @@ function CollectionDetailView({
                       variant="outline"
                       className="h-9 rounded-none"
                       disabled={imagePage <= 1}
-                      onClick={() => setImagePage((page) => Math.max(1, page - 1))}
+                      onClick={() =>
+                        setImagePage((page) => Math.max(1, page - 1))
+                      }
                     >
                       <ArrowLeft data-icon="inline-start" />
                       Prev
@@ -9350,7 +12020,11 @@ function CollectionDetailView({
                       variant="outline"
                       className="h-9 rounded-none"
                       disabled={imagePage >= totalImagePages}
-                      onClick={() => setImagePage((page) => Math.min(totalImagePages, page + 1))}
+                      onClick={() =>
+                        setImagePage((page) =>
+                          Math.min(totalImagePages, page + 1),
+                        )
+                      }
                     >
                       Next
                       <ArrowRight data-icon="inline-end" />
@@ -9362,7 +12036,8 @@ function CollectionDetailView({
                     <DialogHeader>
                       <DialogTitle>Image Metadata</DialogTitle>
                       <DialogDescription>
-                        View stored camera and file metadata for the selected image.
+                        View stored camera and file metadata for the selected
+                        image.
                       </DialogDescription>
                     </DialogHeader>
                     <MetadataPanel image={activeImage} />
@@ -9379,9 +12054,12 @@ function CollectionDetailView({
                     {activeImage && (
                       <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between gap-4 text-sm text-[#666]">
-                          <span className="truncate">{activeImage.originalName ?? "Image"}</span>
+                          <span className="truncate">
+                            {activeImage.originalName ?? "Image"}
+                          </span>
                           <span>
-                            {formatMetaValue(activeImage.metadata?.width)} x {formatMetaValue(activeImage.metadata?.height)}
+                            {formatMetaValue(activeImage.metadata?.width)} x{" "}
+                            {formatMetaValue(activeImage.metadata?.height)}
                           </span>
                         </div>
                         <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
@@ -9396,8 +12074,7 @@ function CollectionDetailView({
                   </DialogContent>
                 </Dialog>
               </div>
-            )
-          )}
+            ))}
 
           {activeTab === "design" && (
             <div className="grid min-h-full gap-8 xl:grid-cols-[minmax(440px,700px)_minmax(520px,1fr)]">
@@ -9406,18 +12083,34 @@ function CollectionDetailView({
                   <select
                     value={form.presetId}
                     onChange={(event) => {
-                      const preset = presetItems.find((item) => item.id === event.target.value);
-                      const eventLabel = collection?.eventDate ? formatDate(collection.eventDate) : "";
+                      const preset = presetItems.find(
+                        (item) => item.id === event.target.value,
+                      );
+                      const eventLabel = collection?.eventDate
+                        ? formatDate(collection.eventDate)
+                        : "";
                       setForm((value) => ({
                         ...value,
                         presetId: event.target.value,
                         design: preset
                           ? {
                               ...preset.design,
-                              coverSmallTitle: coverTextOrDefault(preset.design.coverSmallTitle, preset.name),
-                              coverTitle: coverTextOrDefault(preset.design.coverTitle, value.name || collection?.name || ""),
-                              coverDate: coverTextOrDefault(preset.design.coverDate, eventLabel),
-                              coverButtonText: coverTextOrDefault(preset.design.coverButtonText, "View Gallery"),
+                              coverSmallTitle: coverTextOrDefault(
+                                preset.design.coverSmallTitle,
+                                preset.name,
+                              ),
+                              coverTitle: coverTextOrDefault(
+                                preset.design.coverTitle,
+                                value.name || collection?.name || "",
+                              ),
+                              coverDate: coverTextOrDefault(
+                                preset.design.coverDate,
+                                eventLabel,
+                              ),
+                              coverButtonText: coverTextOrDefault(
+                                preset.design.coverButtonText,
+                                "View Gallery",
+                              ),
                             }
                           : value.design,
                         general: preset?.general ?? value.general,
@@ -9429,25 +12122,42 @@ function CollectionDetailView({
                   >
                     <option value="">Custom design</option>
                     {presetItems.map((preset) => (
-                      <option key={preset.id} value={preset.id}>{preset.name}</option>
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <PresetDesignPanel
                   design={form.design}
                   activePanel={activeDesignPanel}
-                  onChange={(value) => setForm((current) => ({ ...current, presetId: "", design: { ...current.design, ...value } }))}
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      presetId: "",
+                      design: { ...current.design, ...value },
+                    }))
+                  }
                 />
               </div>
               <CollectionDesignLivePreview
                 design={form.design}
                 collectionName={form.name || collection.name}
-                eventDate={collection.eventDate ? formatDate(collection.eventDate) : form.design.coverDate}
+                eventDate={
+                  collection.eventDate
+                    ? formatDate(collection.eventDate)
+                    : form.design.coverDate
+                }
                 coverImage={form.coverImage || images[0]?.url}
                 images={images}
                 sets={form.sets}
                 favoriteEnabled={form.favorite.favoritePhotos !== false}
-                storeEnabled={Boolean(form.presetId ? presetItems.find((preset) => preset.id === form.presetId)?.store?.storeStatus : collection.settings?.store?.storeStatus)}
+                storeEnabled={Boolean(
+                  form.presetId
+                    ? presetItems.find((preset) => preset.id === form.presetId)
+                        ?.store?.storeStatus
+                    : collection.settings?.store?.storeStatus,
+                )}
                 branding={branding}
               />
             </div>
@@ -9459,24 +12169,52 @@ function CollectionDetailView({
               <FieldGroup className="mt-8 gap-7">
                 <Field>
                   <FieldLabel className="font-bold">Collection Name</FieldLabel>
-                  <Input value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} className="h-12 rounded-none bg-white" />
+                  <Input
+                    value={form.name}
+                    onChange={(event) =>
+                      setForm((value) => ({
+                        ...value,
+                        name: event.target.value,
+                      }))
+                    }
+                    className="h-12 rounded-none bg-white"
+                  />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="collection-status" className="font-bold">Collection Status</FieldLabel>
+                  <FieldLabel htmlFor="collection-status" className="font-bold">
+                    Collection Status
+                  </FieldLabel>
                   <select
                     id="collection-status"
                     value={collectionStatus}
-                    onChange={(event) => setCollectionStatus(event.target.value as "draft" | "published")}
+                    onChange={(event) =>
+                      setCollectionStatus(
+                        event.target.value as "draft" | "published",
+                      )
+                    }
                     className="h-12 w-full border bg-white px-3 text-sm outline-none"
                   >
                     <option value="draft">Draft</option>
                     <option value="published">Published</option>
                   </select>
-                  <p className="text-xs leading-5 text-[#777]">Only Published collections are visible on your public homepage and public gallery URL.</p>
+                  <p className="text-xs leading-5 text-[#777]">
+                    Only Published collections are visible on your public
+                    homepage and public gallery URL.
+                  </p>
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold">Expire Date</FieldLabel>
-                  <Input type="date" value={form.expiresAt} onChange={(event) => setForm((value) => ({ ...value, expiresAt: event.target.value }))} className="h-12 rounded-none bg-white" />
+                  <Input
+                    type="date"
+                    value={form.expiresAt}
+                    onChange={(event) =>
+                      setForm((value) => ({
+                        ...value,
+                        expiresAt: event.target.value,
+                      }))
+                    }
+                    className="h-12 rounded-none bg-white"
+                  />
                 </Field>
               </FieldGroup>
               <div className="mt-12">
@@ -9491,7 +12229,10 @@ function CollectionDetailView({
                         general: nextGeneral,
                         sets:
                           general.photoSets !== undefined
-                            ? syncSetsFromPhotoSets(value.sets, nextGeneral.photoSets)
+                            ? syncSetsFromPhotoSets(
+                                value.sets,
+                                nextGeneral.photoSets,
+                              )
                             : value.sets,
                       };
                     })
@@ -9502,7 +12243,12 @@ function CollectionDetailView({
                 <h2 className="mb-8 text-2xl font-medium">Download</h2>
                 <PresetDownloadPanel
                   download={form.download}
-                  onChange={(download) => setForm((value) => ({ ...value, download: { ...value.download, ...download } }))}
+                  onChange={(download) =>
+                    setForm((value) => ({
+                      ...value,
+                      download: { ...value.download, ...download },
+                    }))
+                  }
                 />
               </div>
               <div className="mt-14 border-t pt-12">
@@ -9511,10 +12257,19 @@ function CollectionDetailView({
                   hidePager
                   onBack={() => undefined}
                   onNext={() => undefined}
-                  onChange={(favorite) => setForm((value) => ({ ...value, favorite: { ...value.favorite, ...favorite } }))}
+                  onChange={(favorite) =>
+                    setForm((value) => ({
+                      ...value,
+                      favorite: { ...value.favorite, ...favorite },
+                    }))
+                  }
                 />
               </div>
-              <Button className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white" disabled={updateCollection.isPending} onClick={saveCollection}>
+              <Button
+                className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white"
+                disabled={updateCollection.isPending}
+                onClick={saveCollection}
+              >
                 {updateCollection.isPending ? "Saving..." : "Save Settings"}
               </Button>
             </div>
@@ -9532,7 +12287,11 @@ function CollectionDetailView({
               activityPage={activityPage}
               emailTemplates={emailTemplates}
               favoriteSettings={form.favorite}
-              accessSettings={(collection.settings?.access as CollectionAccessSettings | undefined) ?? {}}
+              accessSettings={
+                (collection.settings?.access as
+                  | CollectionAccessSettings
+                  | undefined) ?? {}
+              }
               saveFavoriteSettings={async (favorite) => {
                 const nextFavorite = { ...form.favorite, ...favorite };
                 setForm((value) => ({ ...value, favorite: nextFavorite }));
@@ -9557,15 +12316,25 @@ function CollectionDetailView({
                 });
                 await collectionQuery.refetch();
               }}
-              deleteFavoriteInfo={activityActions.deleteFavoriteInfo.mutateAsync}
-              deleteFavoriteImageInfo={activityActions.deleteFavoriteImageInfo.mutateAsync}
+              deleteFavoriteInfo={
+                activityActions.deleteFavoriteInfo.mutateAsync
+              }
+              deleteFavoriteImageInfo={
+                activityActions.deleteFavoriteImageInfo.mutateAsync
+              }
               copyFavoriteListToSet={(payload) => {
-                if (!activityActions.copyFavoriteListToSet) throw new Error("Copy to set is not available");
-                return activityActions.copyFavoriteListToSet.mutateAsync(payload);
+                if (!activityActions.copyFavoriteListToSet)
+                  throw new Error("Copy to set is not available");
+                return activityActions.copyFavoriteListToSet.mutateAsync(
+                  payload,
+                );
               }}
               copyFavoriteListToCollection={(payload) => {
-                if (!activityActions.copyFavoriteListToCollection) throw new Error("Copy to collection is not available");
-                return activityActions.copyFavoriteListToCollection.mutateAsync(payload);
+                if (!activityActions.copyFavoriteListToCollection)
+                  throw new Error("Copy to collection is not available");
+                return activityActions.copyFavoriteListToCollection.mutateAsync(
+                  payload,
+                );
               }}
             />
           )}
@@ -9612,7 +12381,10 @@ function CollectionDetailSkeleton() {
           </div>
           <div className="grid grid-cols-3 gap-2 md:grid-cols-5 xl:grid-cols-6">
             {Array.from({ length: 24 }).map((_, index) => (
-              <Skeleton key={index} className="aspect-square rounded-none bg-[#eeeeec]" />
+              <Skeleton
+                key={index}
+                className="aspect-square rounded-none bg-[#eeeeec]"
+              />
             ))}
           </div>
         </section>
@@ -9651,23 +12423,48 @@ function CollectionActivityPanel({
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
   accessSettings: CollectionAccessSettings;
-  saveFavoriteSettings: (favorite: Partial<PresetFavoriteSettings>) => Promise<void>;
+  saveFavoriteSettings: (
+    favorite: Partial<PresetFavoriteSettings>,
+  ) => Promise<void>;
   saveAccessSettings: (access: CollectionAccessSettings) => Promise<void>;
   deleteFavoriteInfo: (favoriteUserId: string) => Promise<unknown>;
-  deleteFavoriteImageInfo: (payload: { favoriteUserId: string; imageId: string }) => Promise<unknown>;
-  copyFavoriteListToSet: (payload: { favoriteUserId: string; name?: string }) => Promise<unknown>;
-  copyFavoriteListToCollection: (payload: { favoriteUserId: string; name?: string }) => Promise<unknown>;
+  deleteFavoriteImageInfo: (payload: {
+    favoriteUserId: string;
+    imageId: string;
+  }) => Promise<unknown>;
+  copyFavoriteListToSet: (payload: {
+    favoriteUserId: string;
+    name?: string;
+  }) => Promise<unknown>;
+  copyFavoriteListToCollection: (payload: {
+    favoriteUserId: string;
+    name?: string;
+  }) => Promise<unknown>;
 }) {
-  const [editingList, setEditingList] = useState<CollectionFavoriteActivityRecord | null>(null);
-  const [mailList, setMailList] = useState<CollectionFavoriteActivityRecord | null>(null);
+  const [editingList, setEditingList] =
+    useState<CollectionFavoriteActivityRecord | null>(null);
+  const [mailList, setMailList] =
+    useState<CollectionFavoriteActivityRecord | null>(null);
   const [selectedMailTemplateId, setSelectedMailTemplateId] = useState("");
-  const [exportJob, setExportJob] = useState<{ title: string; percent: number; list?: CollectionFavoriteActivityRecord } | null>(null);
+  const [exportJob, setExportJob] = useState<{
+    title: string;
+    percent: number;
+    list?: CollectionFavoriteActivityRecord;
+  } | null>(null);
   const [copyingListId, setCopyingListId] = useState("");
-  const [favoriteLimitDraft, setFavoriteLimitDraft] = useState(favoriteSettings.maxFavorites);
-  const [favoriteDescriptionDraft, setFavoriteDescriptionDraft] = useState(favoriteSettings.description);
-  const [allowedEmailDraft, setAllowedEmailDraft] = useState((accessSettings.allowedEmails ?? []).join("\n"));
+  const [favoriteLimitDraft, setFavoriteLimitDraft] = useState(
+    favoriteSettings.maxFavorites,
+  );
+  const [favoriteDescriptionDraft, setFavoriteDescriptionDraft] = useState(
+    favoriteSettings.description,
+  );
+  const [allowedEmailDraft, setAllowedEmailDraft] = useState(
+    (accessSettings.allowedEmails ?? []).join("\n"),
+  );
   const [emailEntryDraft, setEmailEntryDraft] = useState("");
-  const [accessFilter, setAccessFilter] = useState<"all" | "allowed" | "requests">("all");
+  const [accessFilter, setAccessFilter] = useState<
+    "all" | "allowed" | "requests"
+  >("all");
   const accessRequests = accessSettings.requests ?? [];
   const downloadFavoritesCsv = (list?: CollectionFavoriteActivityRecord) => {
     const rows = (list ? [list] : favoriteLists).map((item) => ({
@@ -9699,7 +12496,7 @@ function CollectionActivityPanel({
     let percent = 8;
     const timer = window.setInterval(() => {
       percent = Math.min(100, percent + 14);
-      setExportJob((job) => job ? { ...job, percent } : null);
+      setExportJob((job) => (job ? { ...job, percent } : null));
       if (percent >= 100) {
         window.clearInterval(timer);
         window.setTimeout(() => {
@@ -9732,18 +12529,25 @@ function CollectionActivityPanel({
     window.location.href = `${window.location.pathname}/download`;
   };
   const copyFilenames = async (list: CollectionFavoriteActivityRecord) => {
-    const lines = (list.images?.length ? list.images : list.filenames.map((name) => ({ name, imageId: "", url: "" })))
-      .map((image) => `${collectionName} - ${image.name || image.imageId}`);
+    const lines = (
+      list.images?.length
+        ? list.images
+        : list.filenames.map((name) => ({ name, imageId: "", url: "" }))
+    ).map((image) => `${collectionName} - ${image.name || image.imageId}`);
     await navigator.clipboard.writeText(lines.join("\n"));
     toast.success("Filenames copied");
   };
   const openMailSender = (list: CollectionFavoriteActivityRecord) => {
     setMailList(list);
-    setSelectedMailTemplateId((current) => current || emailTemplates[0]?.id || "");
+    setSelectedMailTemplateId(
+      (current) => current || emailTemplates[0]?.id || "",
+    );
   };
   const sendAsDownload = async () => {
     if (!mailList) return;
-    const template = emailTemplates.find((item) => item.id === selectedMailTemplateId) ?? emailTemplates[0];
+    const template =
+      emailTemplates.find((item) => item.id === selectedMailTemplateId) ??
+      emailTemplates[0];
     if (!template) return;
     const body = [
       template.message,
@@ -9751,7 +12555,9 @@ function CollectionActivityPanel({
       `${template.buttonText || "Open Gallery"}: ${publicLink}`,
       "",
       template.footerText,
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
     const html = [
       `<h1>${template.title || collectionName}</h1>`,
       `<p>${template.message || ""}</p>`,
@@ -9785,9 +12591,22 @@ function CollectionActivityPanel({
   useEffect(() => {
     setAllowedEmailDraft((accessSettings.allowedEmails ?? []).join("\n"));
   }, [accessSettings.allowedEmails]);
-  const parseAccessEmails = (value: string) => [...new Set(value.split(/[\s,;]+/).map((item) => item.trim().toLowerCase()).filter((item) => item.includes("@")))];
-  const saveAllowedEmails = async (emails = parseAccessEmails(allowedEmailDraft)) => {
-    await saveAccessSettings({ ...accessSettings, allowedEmails: emails, requests: accessRequests });
+  const parseAccessEmails = (value: string) => [
+    ...new Set(
+      value
+        .split(/[\s,;]+/)
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => item.includes("@")),
+    ),
+  ];
+  const saveAllowedEmails = async (
+    emails = parseAccessEmails(allowedEmailDraft),
+  ) => {
+    await saveAccessSettings({
+      ...accessSettings,
+      allowedEmails: emails,
+      requests: accessRequests,
+    });
     setAllowedEmailDraft(emails.join("\n"));
     toast.success("Email access saved");
   };
@@ -9797,35 +12616,66 @@ function CollectionActivityPanel({
       toast.error("Enter at least one valid email");
       return;
     }
-    await saveAllowedEmails([...new Set([...parseAccessEmails(allowedEmailDraft), ...added])]);
+    await saveAllowedEmails([
+      ...new Set([...parseAccessEmails(allowedEmailDraft), ...added]),
+    ]);
     setEmailEntryDraft("");
   };
   const importAccessFile = async (file?: File) => {
     if (!file) return;
     const text = await file.text();
-    const emails = [...new Set([...parseAccessEmails(allowedEmailDraft), ...parseAccessEmails(text)])];
+    const emails = [
+      ...new Set([
+        ...parseAccessEmails(allowedEmailDraft),
+        ...parseAccessEmails(text),
+      ]),
+    ];
     await saveAllowedEmails(emails);
   };
-  const updateAccessRequest = async (request: CollectionAccessRequest, status: "approved" | "declined") => {
+  const updateAccessRequest = async (
+    request: CollectionAccessRequest,
+    status: "approved" | "declined",
+  ) => {
     const email = request.email.trim().toLowerCase();
-    const allowed = status === "approved" ? [...new Set([...parseAccessEmails(allowedEmailDraft), email])] : parseAccessEmails(allowedEmailDraft).filter((item) => item !== email);
-    const requests = accessRequests.map((item) => (item.email === request.email ? { ...item, status, updatedAt: new Date().toISOString() } : item));
-    await saveAccessSettings({ ...accessSettings, allowedEmails: allowed, requests });
+    const allowed =
+      status === "approved"
+        ? [...new Set([...parseAccessEmails(allowedEmailDraft), email])]
+        : parseAccessEmails(allowedEmailDraft).filter((item) => item !== email);
+    const requests = accessRequests.map((item) =>
+      item.email === request.email
+        ? { ...item, status, updatedAt: new Date().toISOString() }
+        : item,
+    );
+    await saveAccessSettings({
+      ...accessSettings,
+      allowedEmails: allowed,
+      requests,
+    });
     setAllowedEmailDraft(allowed.join("\n"));
-    toast.success(status === "approved" ? "Access approved" : "Access declined");
+    toast.success(
+      status === "approved" ? "Access approved" : "Access declined",
+    );
   };
   const removeAllowedEmail = async (email: string) => {
-    await saveAllowedEmails(parseAccessEmails(allowedEmailDraft).filter((item) => item !== email));
+    await saveAllowedEmails(
+      parseAccessEmails(allowedEmailDraft).filter((item) => item !== email),
+    );
   };
   const accessRows = useMemo(() => {
-    const rows = new Map<string, { email: string; request?: CollectionAccessRequest }>();
-    parseAccessEmails(allowedEmailDraft).forEach((email) => rows.set(email, { email }));
+    const rows = new Map<
+      string,
+      { email: string; request?: CollectionAccessRequest }
+    >();
+    parseAccessEmails(allowedEmailDraft).forEach((email) =>
+      rows.set(email, { email }),
+    );
     accessRequests.forEach((request) => {
       const email = request.email.trim().toLowerCase();
       rows.set(email, { email, request });
     });
     return [...rows.values()].filter((row) => {
-      if (accessFilter === "allowed") return parseAccessEmails(allowedEmailDraft).includes(row.email);
+      if (accessFilter === "allowed")
+        return parseAccessEmails(allowedEmailDraft).includes(row.email);
       if (accessFilter === "requests") return Boolean(row.request);
       return true;
     });
@@ -9842,7 +12692,8 @@ function CollectionActivityPanel({
     }
   };
   const copyToSet = async (list: CollectionFavoriteActivityRecord) => {
-    const name = window.prompt("New set name", `${list.name} - ${list.email}`) || "";
+    const name =
+      window.prompt("New set name", `${list.name} - ${list.email}`) || "";
     if (!name.trim()) return;
     setCopyingListId(list.id);
     try {
@@ -9855,7 +12706,11 @@ function CollectionActivityPanel({
     }
   };
   const copyToCollection = async (list: CollectionFavoriteActivityRecord) => {
-    const name = window.prompt("New collection name", `${collectionName} - ${list.name}`) || "";
+    const name =
+      window.prompt(
+        "New collection name",
+        `${collectionName} - ${list.name}`,
+      ) || "";
     if (!name.trim()) return;
     setCopyingListId(list.id);
     try {
@@ -9872,14 +12727,25 @@ function CollectionActivityPanel({
     setEditingList(null);
     toast.success("Favorite info deleted");
   };
-  const deleteFavoriteImage = async (list: CollectionFavoriteActivityRecord, imageId: string) => {
+  const deleteFavoriteImage = async (
+    list: CollectionFavoriteActivityRecord,
+    imageId: string,
+  ) => {
     await deleteFavoriteImageInfo({ favoriteUserId: list.id, imageId });
-    setEditingList((current) => current ? {
-      ...current,
-      images: current.images?.filter((image) => image.imageId !== imageId),
-      filenames: current.filenames.filter((_, index) => current.images?.[index]?.imageId !== imageId),
-      photos: Math.max(0, current.photos - 1),
-    } : current);
+    setEditingList((current) =>
+      current
+        ? {
+            ...current,
+            images: current.images?.filter(
+              (image) => image.imageId !== imageId,
+            ),
+            filenames: current.filenames.filter(
+              (_, index) => current.images?.[index]?.imageId !== imageId,
+            ),
+            photos: Math.max(0, current.photos - 1),
+          }
+        : current,
+    );
     toast.success("Photo removed");
   };
 
@@ -9897,7 +12763,9 @@ function CollectionActivityPanel({
     return (
       <section className="flex min-h-[70dvh] items-center justify-center bg-[#f7fbfa] p-6">
         <div className="w-full max-w-[620px] border bg-white p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
-          <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#00a997]">Preparing export</p>
+          <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#00a997]">
+            Preparing export
+          </p>
           <h2 className="mt-4 text-3xl font-medium">{collectionName}</h2>
           <p className="mt-2 text-sm text-[#666]">{exportJob.title}</p>
           <div className="mx-auto mt-10 flex size-40 items-center justify-center rounded-full border border-[#d9f4ef] bg-[#eefdfa]">
@@ -9906,7 +12774,10 @@ function CollectionActivityPanel({
             </div>
           </div>
           <div className="mt-10 h-3 overflow-hidden bg-[#e4f4f1]">
-            <div className="h-full bg-[#22bda7] transition-all duration-300" style={{ width: `${exportJob.percent}%` }} />
+            <div
+              className="h-full bg-[#22bda7] transition-all duration-300"
+              style={{ width: `${exportJob.percent}%` }}
+            />
           </div>
           <p className="mt-4 text-sm font-semibold text-[#667]">
             CSV will download when ready.
@@ -9918,18 +12789,29 @@ function CollectionActivityPanel({
 
   return (
     <>
-    <section className="min-w-0">
+      <section className="min-w-0">
         {activityPage === "email" ? (
           <div className="max-h-[calc(100dvh-220px)] min-h-[560px] overflow-y-auto pr-1">
             <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 py-3 backdrop-blur">
               <div>
                 <h2 className="text-2xl font-medium">Email Access</h2>
-                <p className="mt-2 text-sm text-[#666]">Only listed or approved emails can open this collection when Email Registration is on.</p>
+                <p className="mt-2 text-sm text-[#666]">
+                  Only listed or approved emails can open this collection when
+                  Email Registration is on.
+                </p>
               </div>
               <label className="inline-flex h-9 cursor-pointer items-center gap-2 border bg-white px-3 text-sm font-bold">
                 <FileUp className="size-4" />
                 Upload CSV/TXT
-                <input type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(event) => { void importAccessFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                <input
+                  type="file"
+                  accept=".csv,.txt,text/csv,text/plain"
+                  className="hidden"
+                  onChange={(event) => {
+                    void importAccessFile(event.target.files?.[0]);
+                    event.currentTarget.value = "";
+                  }}
+                />
               </label>
             </div>
             <section className="mt-5 border bg-white">
@@ -9940,14 +12822,19 @@ function CollectionActivityPanel({
                     <Textarea
                       id="access-emails"
                       value={emailEntryDraft}
-                      onChange={(event) => setEmailEntryDraft(event.target.value)}
+                      onChange={(event) =>
+                        setEmailEntryDraft(event.target.value)
+                      }
                       className="min-h-24 rounded-none"
                       placeholder="client@example.com, family@example.com"
                     />
                   </Field>
                 </FieldGroup>
                 <div className="mt-3 flex justify-end">
-                  <Button className="h-10 rounded-none bg-[#22bda7] text-white" onClick={() => void addAllowedEmails()}>
+                  <Button
+                    className="h-10 rounded-none bg-[#22bda7] text-white"
+                    onClick={() => void addAllowedEmails()}
+                  >
                     Add emails
                   </Button>
                 </div>
@@ -9980,22 +12867,55 @@ function CollectionActivityPanel({
                 </TableHeader>
                 <TableBody>
                   {accessRows.map(({ email, request }) => {
-                    const isAllowed = parseAccessEmails(allowedEmailDraft).includes(email);
+                    const isAllowed =
+                      parseAccessEmails(allowedEmailDraft).includes(email);
                     return (
                       <TableRow key={email}>
-                        <TableCell className="px-5 font-semibold">{email}</TableCell>
-                        <TableCell className="capitalize">{request?.status || (isAllowed ? "allowed" : "pending")}</TableCell>
-                        <TableCell className="max-w-80 whitespace-normal text-[#666]">{request?.reason || "â€”"}</TableCell>
+                        <TableCell className="px-5 font-semibold">
+                          {email}
+                        </TableCell>
+                        <TableCell className="capitalize">
+                          {request?.status ||
+                            (isAllowed ? "allowed" : "pending")}
+                        </TableCell>
+                        <TableCell className="max-w-80 whitespace-normal text-[#666]">
+                          {request?.reason || "â€”"}
+                        </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
                             {request && request.status !== "approved" && (
-                              <Button size="sm" variant="outline" className="rounded-none" onClick={() => void updateAccessRequest(request, "approved")}>Approve</Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-none"
+                                onClick={() =>
+                                  void updateAccessRequest(request, "approved")
+                                }
+                              >
+                                Approve
+                              </Button>
                             )}
                             {request && request.status !== "declined" && (
-                              <Button size="sm" variant="outline" className="rounded-none text-red-600" onClick={() => void updateAccessRequest(request, "declined")}>Decline</Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-none text-red-600"
+                                onClick={() =>
+                                  void updateAccessRequest(request, "declined")
+                                }
+                              >
+                                Decline
+                              </Button>
                             )}
                             {isAllowed && (
-                              <Button size="sm" variant="ghost" className="rounded-none text-red-600" onClick={() => void removeAllowedEmail(email)}>Remove</Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="rounded-none text-red-600"
+                                onClick={() => void removeAllowedEmail(email)}
+                              >
+                                Remove
+                              </Button>
                             )}
                           </div>
                         </TableCell>
@@ -10004,7 +12924,12 @@ function CollectionActivityPanel({
                   })}
                   {!accessRows.length && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-28 text-center text-[#777]">No emails in this view.</TableCell>
+                      <TableCell
+                        colSpan={4}
+                        className="h-28 text-center text-[#777]"
+                      >
+                        No emails in this view.
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -10015,7 +12940,12 @@ function CollectionActivityPanel({
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-2xl font-medium">Download Activity</h2>
-              <Button variant="outline" className="h-9 rounded-none" disabled={!downloads.length} onClick={downloadActivityCsv}>
+              <Button
+                variant="outline"
+                className="h-9 rounded-none"
+                disabled={!downloads.length}
+                onClick={downloadActivityCsv}
+              >
                 <Download data-icon="inline-start" />
                 Download all CSV
               </Button>
@@ -10035,15 +12965,28 @@ function CollectionActivityPanel({
                   {downloads.map((item) => (
                     <tr key={item._id} className="border-b">
                       <td className="px-1 py-5 font-semibold">{item.email}</td>
-                      <td className="px-1 py-5">{item.imageName || item.imageId || "Collection download"}</td>
-                      <td className="px-1 py-5 capitalize">{item.downloadType}</td>
+                      <td className="px-1 py-5">
+                        {item.imageName ||
+                          item.imageId ||
+                          "Collection download"}
+                      </td>
+                      <td className="px-1 py-5 capitalize">
+                        {item.downloadType}
+                      </td>
                       <td className="px-1 py-5">{item.count}</td>
-                      <td className="px-1 py-5">{formatActivityDate(item.updatedAt)}</td>
+                      <td className="px-1 py-5">
+                        {formatActivityDate(item.updatedAt)}
+                      </td>
                     </tr>
                   ))}
                   {!downloads.length && (
                     <tr>
-                      <td className="px-1 py-10 text-center text-[#777]" colSpan={5}>No downloads yet.</td>
+                      <td
+                        className="px-1 py-10 text-center text-[#777]"
+                        colSpan={5}
+                      >
+                        No downloads yet.
+                      </td>
                     </tr>
                   )}
                 </tbody>
@@ -10054,7 +12997,10 @@ function CollectionActivityPanel({
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-2xl font-medium">Store Orders</h2>
-              <p className="text-sm text-[#666]">{orders.length} order{orders.length === 1 ? "" : "s"} for this collection</p>
+              <p className="text-sm text-[#666]">
+                {orders.length} order{orders.length === 1 ? "" : "s"} for this
+                collection
+              </p>
             </div>
             <div className="mt-7 overflow-x-auto">
               <table className="w-full min-w-[820px] text-left text-sm">
@@ -10071,17 +13017,28 @@ function CollectionActivityPanel({
                 <tbody>
                   {orders.map((order) => (
                     <tr key={order._id} className="border-b">
-                      <td className="px-1 py-5 font-semibold">{order.orderNumber}</td>
-                      <td className="px-1 py-5">{order.customer?.name || order.customer?.email || "-"}</td>
+                      <td className="px-1 py-5 font-semibold">
+                        {order.orderNumber}
+                      </td>
+                      <td className="px-1 py-5">
+                        {order.customer?.name || order.customer?.email || "-"}
+                      </td>
                       <td className="px-1 py-5">{order.items?.length ?? 0}</td>
                       <td className="px-1 py-5">{money(order.total, "EUR")}</td>
                       <td className="px-1 py-5 capitalize">{order.status}</td>
-                      <td className="px-1 py-5">{formatActivityDate(order.createdAt)}</td>
+                      <td className="px-1 py-5">
+                        {formatActivityDate(order.createdAt)}
+                      </td>
                     </tr>
                   ))}
                   {!orders.length && (
                     <tr>
-                      <td className="px-1 py-10 text-center text-[#777]" colSpan={6}>No store orders yet.</td>
+                      <td
+                        className="px-1 py-10 text-center text-[#777]"
+                        colSpan={6}
+                      >
+                        No store orders yet.
+                      </td>
                     </tr>
                   )}
                 </tbody>
@@ -10093,20 +13050,36 @@ function CollectionActivityPanel({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-2xl font-medium">Favorite Activity</h2>
               <div className="flex flex-wrap items-center justify-end gap-3">
-                <button className="inline-flex h-9 items-center gap-2 border bg-white px-3 text-sm font-bold text-[#111] disabled:opacity-50" type="button" onClick={() => openDownloadPage()} disabled={!collectionImages.length}>
+                <button
+                  className="inline-flex h-9 items-center gap-2 border bg-white px-3 text-sm font-bold text-[#111] disabled:opacity-50"
+                  type="button"
+                  onClick={() => openDownloadPage()}
+                  disabled={!collectionImages.length}
+                >
                   <Download className="size-4" />
                   Download all
                 </button>
-                <button className="inline-flex h-9 items-center gap-2 border bg-white px-3 text-sm font-bold text-[#00a997] disabled:opacity-50" type="button" onClick={() => exportFavoriteList()} disabled={!favoriteLists.length}>
+                <button
+                  className="inline-flex h-9 items-center gap-2 border bg-white px-3 text-sm font-bold text-[#00a997] disabled:opacity-50"
+                  type="button"
+                  onClick={() => exportFavoriteList()}
+                  disabled={!favoriteLists.length}
+                >
                   <FileUp className="size-4" />
                   Export CSV
                 </button>
-                <button className="inline-flex h-9 items-center gap-2 text-sm font-bold text-[#777]" type="button">
+                <button
+                  className="inline-flex h-9 items-center gap-2 text-sm font-bold text-[#777]"
+                  type="button"
+                >
                   <ListFilter className="size-4" />
                   Sort by email
                 </button>
                 <span className="h-5 w-px bg-[#ddd]" />
-                <button className="inline-flex items-center gap-2 text-sm font-bold text-[#00a997]" type="button">
+                <button
+                  className="inline-flex items-center gap-2 text-sm font-bold text-[#00a997]"
+                  type="button"
+                >
                   <PlusCircle className="size-4" />
                   New Favorite List
                 </button>
@@ -10137,56 +13110,106 @@ function CollectionActivityPanel({
                         </span>
                       </td>
                       <td className="px-1 py-5">{item.photos}</td>
-                      <td className="px-1 py-5">{formatActivityDate(item.createdAt)}</td>
-                      <td className="px-1 py-5">{formatActivityDate(item.updatedAt)}</td>
+                      <td className="px-1 py-5">
+                        {formatActivityDate(item.createdAt)}
+                      </td>
+                      <td className="px-1 py-5">
+                        {formatActivityDate(item.updatedAt)}
+                      </td>
                       <td className="px-1 py-5 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="outline" className="h-8 rounded-none px-2 text-xs" onClick={() => setEditingList(item)}>
+                          <Button
+                            variant="outline"
+                            className="h-8 rounded-none px-2 text-xs"
+                            onClick={() => setEditingList(item)}
+                          >
                             Edit List
                           </Button>
-                          <Button variant="outline" className="h-8 rounded-none px-2 text-xs" onClick={() => openDownloadPage()}>
+                          <Button
+                            variant="outline"
+                            className="h-8 rounded-none px-2 text-xs"
+                            onClick={() => openDownloadPage()}
+                          >
                             Download all
                           </Button>
-                          <Button variant="outline" className="h-8 rounded-none px-2 text-xs" onClick={() => openMailSender(item)}>
+                          <Button
+                            variant="outline"
+                            className="h-8 rounded-none px-2 text-xs"
+                            onClick={() => openMailSender(item)}
+                          >
                             Send
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 rounded-none px-2" aria-label="Favorite list actions">
+                              <Button
+                                variant="ghost"
+                                className="h-8 rounded-none px-2"
+                                aria-label="Favorite list actions"
+                              >
                                 <MoreHorizontal className="size-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-60 rounded-none p-3 shadow-[0_18px_35px_rgba(0,0,0,0.12)]">
-                            <DropdownMenuGroup>
-                              <DropdownMenuItem onClick={() => void copyFilenames(item)}>
-                                <Copy className="size-4" /> Copy filenames
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => void copyToSet(item)} disabled={copyingListId === item.id}>
-                                <Images className="size-4" /> Copy to new set
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => void copyToCollection(item)} disabled={copyingListId === item.id}>
-                                <Package className="size-4" /> Copy to new collection
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setEditingList(item)}>
-                                <Wrench className="size-4" /> Edit List
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => window.open(publicLink, "_blank", "noopener,noreferrer")}>
-                                <Eye className="size-4" /> View in Gallery
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openDownloadPage()}>
-                                <Download className="size-4" /> Download all
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => exportFavoriteList(item)}>
-                                <FileUp className="size-4" /> Export CSV
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openMailSender(item)}>
-                                <Mail className="size-4" /> Send as download
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => void deleteFavoriteList(item)}>
-                                <Trash2 className="size-4" /> Delete info
-                              </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                          </DropdownMenuContent>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-60 rounded-none p-3 shadow-[0_18px_35px_rgba(0,0,0,0.12)]"
+                            >
+                              <DropdownMenuGroup>
+                                <DropdownMenuItem
+                                  onClick={() => void copyFilenames(item)}
+                                >
+                                  <Copy className="size-4" /> Copy filenames
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => void copyToSet(item)}
+                                  disabled={copyingListId === item.id}
+                                >
+                                  <Images className="size-4" /> Copy to new set
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => void copyToCollection(item)}
+                                  disabled={copyingListId === item.id}
+                                >
+                                  <Package className="size-4" /> Copy to new
+                                  collection
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setEditingList(item)}
+                                >
+                                  <Wrench className="size-4" /> Edit List
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    window.open(
+                                      publicLink,
+                                      "_blank",
+                                      "noopener,noreferrer",
+                                    )
+                                  }
+                                >
+                                  <Eye className="size-4" /> View in Gallery
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openDownloadPage()}
+                                >
+                                  <Download className="size-4" /> Download all
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => exportFavoriteList(item)}
+                                >
+                                  <FileUp className="size-4" /> Export CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openMailSender(item)}
+                                >
+                                  <Mail className="size-4" /> Send as download
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => void deleteFavoriteList(item)}
+                                >
+                                  <Trash2 className="size-4" /> Delete info
+                                </DropdownMenuItem>
+                              </DropdownMenuGroup>
+                            </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
                       </td>
@@ -10194,7 +13217,12 @@ function CollectionActivityPanel({
                   ))}
                   {!favoriteLists.length && (
                     <tr>
-                      <td className="px-1 py-10 text-center text-[#777]" colSpan={6}>No favorites yet.</td>
+                      <td
+                        className="px-1 py-10 text-center text-[#777]"
+                        colSpan={6}
+                      >
+                        No favorites yet.
+                      </td>
                     </tr>
                   )}
                 </tbody>
@@ -10202,116 +13230,178 @@ function CollectionActivityPanel({
             </div>
           </>
         )}
-    </section>
-    <Dialog open={Boolean(editingList)} onOpenChange={(open) => !open && setEditingList(null)}>
-      <DialogContent className="rounded-none sm:max-w-[620px]">
-        <DialogHeader>
-          <DialogTitle>Edit Favorite List</DialogTitle>
-          <DialogDescription>
-            Remove favorite files or delete this visitor info.
-          </DialogDescription>
-        </DialogHeader>
-        {editingList && (
-          <div className="grid gap-5">
-            <div className="grid gap-1 text-sm">
-              <span className="font-bold">{editingList.email}</span>
-              <span className="text-[#777]">{editingList.photos} photos in {editingList.name}</span>
+      </section>
+      <Dialog
+        open={Boolean(editingList)}
+        onOpenChange={(open) => !open && setEditingList(null)}
+      >
+        <DialogContent className="rounded-none sm:max-w-[620px]">
+          <DialogHeader>
+            <DialogTitle>Edit Favorite List</DialogTitle>
+            <DialogDescription>
+              Remove favorite files or delete this visitor info.
+            </DialogDescription>
+          </DialogHeader>
+          {editingList && (
+            <div className="grid gap-5">
+              <div className="grid gap-1 text-sm">
+                <span className="font-bold">{editingList.email}</span>
+                <span className="text-[#777]">
+                  {editingList.photos} photos in {editingList.name}
+                </span>
+              </div>
+              <div className="grid gap-4 border bg-[#fafafa] p-4">
+                <Field>
+                  <FieldLabel>Max Favorites</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={favoriteLimitDraft}
+                    onChange={(event) =>
+                      setFavoriteLimitDraft(event.target.value)
+                    }
+                    placeholder="Unlimited"
+                    className="h-11 rounded-none bg-white"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>Description</FieldLabel>
+                  <Textarea
+                    value={favoriteDescriptionDraft}
+                    onChange={(event) =>
+                      setFavoriteDescriptionDraft(event.target.value)
+                    }
+                    className="min-h-24 rounded-none bg-white"
+                    placeholder="Shown on public gallery favorite area."
+                  />
+                </Field>
+                <Button
+                  className="h-10 w-fit rounded-none bg-[#22bda7] text-white"
+                  onClick={() => void saveFavoriteListRules()}
+                >
+                  Save Favorite Rules
+                </Button>
+              </div>
+              <div className="max-h-[320px] overflow-y-auto border">
+                {(editingList.images?.length
+                  ? editingList.images
+                  : editingList.filenames.map((name) => ({
+                      imageId: name,
+                      name,
+                      url: "",
+                    }))
+                ).map((image) => (
+                  <div
+                    key={image.imageId || image.name}
+                    className="flex items-center justify-between gap-4 border-b px-4 py-3 last:border-b-0"
+                  >
+                    <span className="min-w-0 truncate text-sm">
+                      {collectionName} - {image.name}
+                    </span>
+                    {image.imageId.match(/^[a-f\d]{24}$/i) && (
+                      <Button
+                        variant="outline"
+                        className="h-8 rounded-none px-3 text-xs"
+                        onClick={() =>
+                          void deleteFavoriteImage(editingList, image.imageId)
+                        }
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {!editingList.filenames.length && (
+                  <p className="px-4 py-8 text-center text-sm text-[#777]">
+                    No favorite files.
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  className="rounded-none"
+                  onClick={() => setEditingList(null)}
+                >
+                  Close
+                </Button>
+                <Button
+                  className="rounded-none bg-red-600 text-white hover:bg-red-700"
+                  onClick={() => void deleteFavoriteList(editingList)}
+                >
+                  Delete info
+                </Button>
+              </DialogFooter>
             </div>
-            <div className="grid gap-4 border bg-[#fafafa] p-4">
-              <Field>
-                <FieldLabel>Max Favorites</FieldLabel>
-                <Input
-                  type="number"
-                  min="0"
-                  value={favoriteLimitDraft}
-                  onChange={(event) => setFavoriteLimitDraft(event.target.value)}
-                  placeholder="Unlimited"
-                  className="h-11 rounded-none bg-white"
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Description</FieldLabel>
-                <Textarea
-                  value={favoriteDescriptionDraft}
-                  onChange={(event) => setFavoriteDescriptionDraft(event.target.value)}
-                  className="min-h-24 rounded-none bg-white"
-                  placeholder="Shown on public gallery favorite area."
-                />
-              </Field>
-              <Button className="h-10 w-fit rounded-none bg-[#22bda7] text-white" onClick={() => void saveFavoriteListRules()}>
-                Save Favorite Rules
-              </Button>
-            </div>
-            <div className="max-h-[320px] overflow-y-auto border">
-              {(editingList.images?.length ? editingList.images : editingList.filenames.map((name) => ({ imageId: name, name, url: "" }))).map((image) => (
-                <div key={image.imageId || image.name} className="flex items-center justify-between gap-4 border-b px-4 py-3 last:border-b-0">
-                  <span className="min-w-0 truncate text-sm">{collectionName} - {image.name}</span>
-                  {image.imageId.match(/^[a-f\d]{24}$/i) && (
-                    <Button variant="outline" className="h-8 rounded-none px-3 text-xs" onClick={() => void deleteFavoriteImage(editingList, image.imageId)}>
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              ))}
-              {!editingList.filenames.length && (
-                <p className="px-4 py-8 text-center text-sm text-[#777]">No favorite files.</p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" className="rounded-none" onClick={() => setEditingList(null)}>
-                Close
-              </Button>
-              <Button className="rounded-none bg-red-600 text-white hover:bg-red-700" onClick={() => void deleteFavoriteList(editingList)}>
-                Delete info
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-    <Dialog open={Boolean(mailList)} onOpenChange={(open) => !open && setMailList(null)}>
-      <DialogContent className="rounded-none sm:max-w-[620px]">
-        <DialogHeader>
-          <DialogTitle>Send as download</DialogTitle>
-          <DialogDescription>
-            Choose a saved template. Button URL becomes this collection link.
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup>
-          <Field>
-            <FieldLabel>To</FieldLabel>
-            <Input value={mailList?.email ?? ""} readOnly className="h-11 rounded-none bg-white" />
-          </Field>
-          <Field>
-            <FieldLabel>Email Template</FieldLabel>
-            <select
-              value={selectedMailTemplateId}
-              onChange={(event) => setSelectedMailTemplateId(event.target.value)}
-              className="h-11 rounded-none border bg-white px-3 text-sm"
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(mailList)}
+        onOpenChange={(open) => !open && setMailList(null)}
+      >
+        <DialogContent className="rounded-none sm:max-w-[620px]">
+          <DialogHeader>
+            <DialogTitle>Send as download</DialogTitle>
+            <DialogDescription>
+              Choose a saved template. Button URL becomes this collection link.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field>
+              <FieldLabel>To</FieldLabel>
+              <Input
+                value={mailList?.email ?? ""}
+                readOnly
+                className="h-11 rounded-none bg-white"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Email Template</FieldLabel>
+              <select
+                value={selectedMailTemplateId}
+                onChange={(event) =>
+                  setSelectedMailTemplateId(event.target.value)
+                }
+                className="h-11 rounded-none border bg-white px-3 text-sm"
+              >
+                {emailTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name || template.subject || "Untitled Template"}
+                  </option>
+                ))}
+                {!emailTemplates.length && (
+                  <option value="">No templates</option>
+                )}
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel>Button URL</FieldLabel>
+              <Input
+                value={publicLink}
+                readOnly
+                className="h-11 rounded-none bg-white"
+              />
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setMailList(null)}
             >
-              {emailTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name || template.subject || "Untitled Template"}
-                </option>
-              ))}
-              {!emailTemplates.length && <option value="">No templates</option>}
-            </select>
-          </Field>
-          <Field>
-            <FieldLabel>Button URL</FieldLabel>
-            <Input value={publicLink} readOnly className="h-11 rounded-none bg-white" />
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" className="rounded-none" onClick={() => setMailList(null)}>
-            Cancel
-          </Button>
-          <Button className="rounded-none bg-[#22bda7] text-white" disabled={!emailTemplates.length} onClick={() => void sendAsDownload()}>
-            Use Template
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#22bda7] text-white"
+              disabled={!emailTemplates.length}
+              onClick={() => void sendAsDownload()}
+            >
+              Use Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -10325,7 +13415,10 @@ function CollectionImagesSkeleton() {
       </div>
       <div className="grid grid-cols-3 gap-2 md:grid-cols-5 xl:grid-cols-6">
         {Array.from({ length: 24 }).map((_, index) => (
-          <Skeleton key={index} className="aspect-square rounded-none bg-[#eeeeec]" />
+          <Skeleton
+            key={index}
+            className="aspect-square rounded-none bg-[#eeeeec]"
+          />
         ))}
       </div>
     </div>
@@ -10355,14 +13448,20 @@ function DashboardImageWithSkeleton({
           className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
         />
       )}
-      {!placeholder && !loaded && <Skeleton className="absolute inset-0 h-full w-full rounded-none bg-[#eeeeec]" />}
+      {!placeholder && !loaded && (
+        <Skeleton className="absolute inset-0 h-full w-full rounded-none bg-[#eeeeec]" />
+      )}
       <img
         src={src}
         alt={alt}
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
-        className={cn(className, "transition-[opacity,transform] duration-500 ease-out", loaded ? "scale-100 opacity-100" : "scale-[1.015] opacity-0")}
+        className={cn(
+          className,
+          "transition-[opacity,transform] duration-500 ease-out",
+          loaded ? "scale-100 opacity-100" : "scale-[1.015] opacity-0",
+        )}
       />
     </span>
   );
@@ -10447,20 +13546,38 @@ type CollectionFormState = {
 };
 
 function coverTextOrDefault(value: string | undefined, fallback: string) {
-  return value && !["Avery Studio", "Sarah & Daniel", "June 14, 2026", "View Gallery"].includes(value)
+  return value &&
+    ![
+      "Avery Studio",
+      "Sarah & Daniel",
+      "June 14, 2026",
+      "View Gallery",
+    ].includes(value)
     ? value
     : fallback;
 }
 
 function collectionForm(collection?: CollectionRecord): CollectionFormState {
-  const savedDesign = (collection?.design ?? {}) as Partial<PresetDesignSettings>;
-  const eventLabel = collection?.eventDate ? formatDate(collection.eventDate) : "";
+  const savedDesign = (collection?.design ??
+    {}) as Partial<PresetDesignSettings>;
+  const eventLabel = collection?.eventDate
+    ? formatDate(collection.eventDate)
+    : "";
   const design = {
     ...collectionDefaultDesign,
     ...savedDesign,
-    coverTitle: coverTextOrDefault(savedDesign.coverTitle, collection?.name ?? collectionDefaultDesign.coverTitle),
-    coverDate: coverTextOrDefault(savedDesign.coverDate, eventLabel || collectionDefaultDesign.coverDate),
-    coverButtonText: coverTextOrDefault(savedDesign.coverButtonText, "View Gallery"),
+    coverTitle: coverTextOrDefault(
+      savedDesign.coverTitle,
+      collection?.name ?? collectionDefaultDesign.coverTitle,
+    ),
+    coverDate: coverTextOrDefault(
+      savedDesign.coverDate,
+      eventLabel || collectionDefaultDesign.coverDate,
+    ),
+    coverButtonText: coverTextOrDefault(
+      savedDesign.coverButtonText,
+      "View Gallery",
+    ),
   } as PresetDesignSettings;
 
   return {
@@ -10468,21 +13585,31 @@ function collectionForm(collection?: CollectionRecord): CollectionFormState {
     presetId: collection?.presetId ?? "",
     coverImage: collection?.coverImage ?? "",
     expiresAt: collection?.expiresAt ? collection.expiresAt.slice(0, 10) : "",
-    sets: collection?.sets?.length ? collection.sets : [{ id: "highlights", name: "Highlights" }],
+    sets: collection?.sets?.length
+      ? collection.sets
+      : [{ id: "highlights", name: "Highlights" }],
     design,
     general: {
       ...collectionDefaultGeneral,
-      collectionTags: collection?.tags?.join(", ") ?? collectionDefaultGeneral.collectionTags,
-      defaultWatermark: collection?.watermarkId ?? collectionDefaultGeneral.defaultWatermark,
-      ...((collection?.settings?.general as Partial<PresetGeneralSettings> | undefined) ?? {}),
+      collectionTags:
+        collection?.tags?.join(", ") ?? collectionDefaultGeneral.collectionTags,
+      defaultWatermark:
+        collection?.watermarkId ?? collectionDefaultGeneral.defaultWatermark,
+      ...((collection?.settings?.general as
+        | Partial<PresetGeneralSettings>
+        | undefined) ?? {}),
     },
     download: {
       ...collectionDefaultDownload,
-      ...((collection?.settings?.download as Partial<PresetDownloadSettings> | undefined) ?? {}),
+      ...((collection?.settings?.download as
+        | Partial<PresetDownloadSettings>
+        | undefined) ?? {}),
     },
     favorite: {
       ...collectionDefaultFavorite,
-      ...((collection?.settings?.favorite as Partial<PresetFavoriteSettings> | undefined) ?? {}),
+      ...((collection?.settings?.favorite as
+        | Partial<PresetFavoriteSettings>
+        | undefined) ?? {}),
     },
   };
 }
@@ -10503,8 +13630,9 @@ function syncSetsFromPhotoSets(
 
   return safeNames.map((name, index) => {
     const existing =
-      currentSets.find((set) => set.name.toLowerCase() === name.toLowerCase()) ??
-      currentSets[index];
+      currentSets.find(
+        (set) => set.name.toLowerCase() === name.toLowerCase(),
+      ) ?? currentSets[index];
 
     return {
       id: existing?.id ?? `set-${Date.now()}-${index}`,
@@ -10628,7 +13756,9 @@ function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
                   key={key}
                   className={cn(
                     "rounded-full px-3 py-2 text-sm",
-                    value ? "bg-[#f1f5f4] text-[#333]" : "bg-[#f5f5f5] text-[#777]",
+                    value
+                      ? "bg-[#f1f5f4] text-[#333]"
+                      : "bg-[#f5f5f5] text-[#777]",
                   )}
                   title={value || label}
                 >
@@ -10652,7 +13782,9 @@ function formatMetaValue(value: unknown) {
 }
 
 function titleCase(value: string) {
-  return value.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return value
+    .replaceAll("-", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function formatDate(value?: string) {
@@ -10666,9 +13798,18 @@ function formatDate(value?: string) {
 
 function parseDisplayDate(value?: string) {
   if (!value) return undefined;
-  const formats = ["PPP", "MMMM do, yyyy", "MMMM d, yyyy", "MMM d, yyyy", "yyyy-MM-dd"];
+  const formats = [
+    "PPP",
+    "MMMM do, yyyy",
+    "MMMM d, yyyy",
+    "MMM d, yyyy",
+    "yyyy-MM-dd",
+  ];
   for (const pattern of formats) {
-    const date = pattern === "yyyy-MM-dd" ? parseISO(value) : parse(value, pattern, new Date());
+    const date =
+      pattern === "yyyy-MM-dd"
+        ? parseISO(value)
+        : parse(value, pattern, new Date());
     if (isValid(date)) return date;
   }
   return undefined;
@@ -10692,17 +13833,21 @@ function publicCollectionPath(collection: CollectionRecord) {
 }
 
 function safeCsvName(value: string) {
-  return value
-    .replace(/[^a-z0-9-_]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "collection";
+  return (
+    value
+      .replace(/[^a-z0-9-_]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "collection"
+  );
 }
 
 function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
   const headers = rows[0] ? Object.keys(rows[0]) : ["email"];
   const csv = [
     headers.join(","),
-    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(",")),
+    ...rows.map((row) =>
+      headers.map((header) => csvCell(row[header])).join(","),
+    ),
   ].join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -10748,14 +13893,23 @@ function GetStartedPanel({
         {active.cta}
       </Button>
 
-      <div className={cn("mt-8 w-full max-w-[686px] p-4 sm:p-8 md:mt-8 md:p-12", active.bg)}>
+      <div
+        className={cn(
+          "mt-8 w-full max-w-[686px] p-4 sm:p-8 md:mt-8 md:p-12",
+          active.bg,
+        )}
+      >
         <GalleryPreview active={active} />
       </div>
     </div>
   );
 }
 
-function GalleryPreview({ active }: { active: (typeof dashboardCopy)[DashboardSection] }) {
+function GalleryPreview({
+  active,
+}: {
+  active: (typeof dashboardCopy)[DashboardSection];
+}) {
   return (
     <div className="relative mx-auto aspect-[1.18] max-w-[555px]">
       <div className="absolute left-0 top-10 h-[78%] w-[82%] bg-white/45 shadow-sm" />
@@ -10767,7 +13921,11 @@ function GalleryPreview({ active }: { active: (typeof dashboardCopy)[DashboardSe
           <span className="size-1 rounded-full bg-[#d8d8d8]" />
         </div>
         <div className="relative h-[190px] sm:h-[270px] md:h-[280px]">
-          <img src={active.image} alt={active.hero} className="h-full w-full object-cover" />
+          <img
+            src={active.image}
+            alt={active.hero}
+            className="h-full w-full object-cover"
+          />
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/10 text-white">
             <p className="text-xl font-bold tracking-wide">{active.hero}</p>
             <span className="mt-3 h-7 w-24 border border-white/85" />
@@ -10775,7 +13933,9 @@ function GalleryPreview({ active }: { active: (typeof dashboardCopy)[DashboardSe
         </div>
         <div className="p-3 text-left">
           <p className="text-[9px] font-bold">{active.hero}</p>
-          <p className="text-[7px] tracking-wide text-[#777]">AVERY WOODWARD PHOTOGRAPHY</p>
+          <p className="text-[7px] tracking-wide text-[#777]">
+            AVERY WOODWARD PHOTOGRAPHY
+          </p>
           <div className="mt-3 grid grid-cols-4 gap-2">
             {[
               "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=300&q=80",
@@ -10783,7 +13943,12 @@ function GalleryPreview({ active }: { active: (typeof dashboardCopy)[DashboardSe
               "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=300&q=80",
               active.image,
             ].map((src) => (
-              <img key={src} src={src} alt="" className="aspect-square w-full object-cover" />
+              <img
+                key={src}
+                src={src}
+                alt=""
+                className="aspect-square w-full object-cover"
+              />
             ))}
           </div>
         </div>
@@ -10838,7 +14003,7 @@ function CollectionWizard() {
                     variant="outline"
                     className={cn(
                       "h-12 justify-between rounded-none bg-white px-5 text-left font-normal",
-                      !eventDate && "text-[#777]"
+                      !eventDate && "text-[#777]",
                     )}
                   >
                     {selectedEventDate
@@ -10847,7 +14012,10 @@ function CollectionWizard() {
                     <CalendarIcon data-icon="inline-end" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto rounded-none p-0" align="start">
+                <PopoverContent
+                  className="w-auto rounded-none p-0"
+                  align="start"
+                >
                   <Calendar
                     mode="single"
                     selected={selectedEventDate}
@@ -10881,19 +14049,32 @@ function CollectionWizard() {
             onClick={addSamplePhotos}
           >
             <Upload className="size-9 text-[#22bda7]" />
-            <span className="mt-5 text-base font-semibold">Upload sample photos</span>
-            <span className="mt-2 text-sm text-[#777]">Click to add photos for now</span>
+            <span className="mt-5 text-base font-semibold">
+              Upload sample photos
+            </span>
+            <span className="mt-2 text-sm text-[#777]">
+              Click to add photos for now
+            </span>
           </button>
           {photos.length > 0 && (
             <div className="mt-6 grid grid-cols-3 gap-3">
               {photos.map((photo) => (
-                <img key={photo} src={photo} alt="" className="aspect-square w-full object-cover" />
+                <img
+                  key={photo}
+                  src={photo}
+                  alt=""
+                  className="aspect-square w-full object-cover"
+                />
               ))}
             </div>
           )}
         </div>
         <div className="mt-6 flex gap-3">
-          <Button variant="outline" className="h-10 rounded-none px-8" onClick={() => setWizardStep(1)}>
+          <Button
+            variant="outline"
+            className="h-10 rounded-none px-8"
+            onClick={() => setWizardStep(1)}
+          >
             Back
           </Button>
           <Button
@@ -10911,12 +14092,16 @@ function CollectionWizard() {
   }
 
   const designs = coverOptions.map(([name, image]) => ({ name, image }));
-  const coverImage = designs.find((design) => design.name === coverDesign)?.image ?? designs[0].image;
+  const coverImage =
+    designs.find((design) => design.name === coverDesign)?.image ??
+    designs[0].image;
 
   return (
     <div className="mx-auto max-w-[686px]">
       <p className="text-sm text-[#777]">Step 3 of 3</p>
-      <h1 className="mt-4 text-[28px] font-medium">Choose a cover photo design</h1>
+      <h1 className="mt-4 text-[28px] font-medium">
+        Choose a cover photo design
+      </h1>
       <div className="mt-8 bg-[#fafafa] p-5 sm:p-8">
         <div className="relative h-[240px] bg-[#ddd] sm:h-[322px]">
           <CoverPreview
@@ -10924,7 +14109,9 @@ function CollectionWizard() {
               ...collectionDefaultDesign,
               cover: coverDesign,
               coverTitle: collectionName || "My Sample Collection",
-              coverDate: eventDate ? format(parseISO(eventDate), "PPP") : "June 14, 2026",
+              coverDate: eventDate
+                ? format(parseISO(eventDate), "PPP")
+                : "June 14, 2026",
             }}
             image={coverImage}
             className="min-h-0"
@@ -10937,19 +14124,35 @@ function CollectionWizard() {
               className="text-center"
               onClick={() => setCoverDesign(design.name)}
             >
-              <span className={cn("relative block border p-1", coverDesign === design.name && "border-[#22bda7] ring-2 ring-[#22bda7]")}>
-                <img src={design.image} alt={design.name} className="aspect-[1.6] w-full object-cover" />
+              <span
+                className={cn(
+                  "relative block border p-1",
+                  coverDesign === design.name &&
+                    "border-[#22bda7] ring-2 ring-[#22bda7]",
+                )}
+              >
+                <img
+                  src={design.image}
+                  alt={design.name}
+                  className="aspect-[1.6] w-full object-cover"
+                />
                 {coverDesign === design.name && (
                   <Check className="absolute right-2 top-2 size-4 bg-[#22bda7] text-white" />
                 )}
               </span>
-              <span className="mt-3 block text-sm text-[#555]">{design.name}</span>
+              <span className="mt-3 block text-sm text-[#555]">
+                {design.name}
+              </span>
             </button>
           ))}
         </div>
       </div>
       <div className="mt-6 flex gap-3">
-        <Button variant="outline" className="h-10 rounded-none px-8" onClick={() => setWizardStep(2)}>
+        <Button
+          variant="outline"
+          className="h-10 rounded-none px-8"
+          onClick={() => setWizardStep(2)}
+        >
           Back
         </Button>
         <Button
