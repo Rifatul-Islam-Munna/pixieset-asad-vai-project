@@ -144,8 +144,8 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
             <p className="mt-5 text-base leading-7 text-[#666] md:mt-6 md:text-lg">{t.testimonials.subtitle}</p>
           </div>
           <div className="mt-16 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {t.testimonials.items.map((item) => (
-              <Card key={item.name} className="rounded-none border-0 py-0 shadow-none">
+            {t.testimonials.items.map((item, index) => (
+              <Card key={`${item.name}-${index}`} className="rounded-none border-0 py-0 shadow-none">
                 <CardHeader className="px-10 pt-10">
                   <div className="flex items-center gap-4">
                     <Avatar className="size-14"><AvatarImage src={item.image} alt={item.name} /><AvatarFallback>{item.name.slice(0, 2)}</AvatarFallback></Avatar>
@@ -163,8 +163,8 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         <h2 className="text-3xl font-semibold leading-[1.16] tracking-normal text-[#202020] md:text-[40px]">{t.cta.title}</h2>
         <p className="mt-7 text-lg text-[#666]">{t.cta.subtitle}</p>
         <Button asChild className="mt-9 h-11 min-w-40 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"><a href="/register">{t.cta.button}</a></Button>
-        <div className="mx-auto mt-14 grid max-w-[1000px] gap-5 md:grid-cols-3">
-          {t.cta.images.slice(0, 3).map((item, index) => <img key={item} src={item} alt={`${t.cta.title} ${index + 1}`} className="h-72 w-full object-cover shadow-[0_20px_45px_rgba(0,0,0,0.16)]" />)}
+        <div className="mx-auto mt-14 grid max-w-[1200px] gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {t.cta.images.filter(Boolean).map((item, index) => <img key={`${item}-${index}`} src={item} alt={`${t.cta.title} ${index + 1}`} className="h-72 w-full object-cover shadow-[0_20px_45px_rgba(0,0,0,0.16)]" />)}
         </div>
       </section>
 
@@ -178,9 +178,9 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
             <p className="mt-10 max-w-[470px] text-sm leading-6 text-white/80">{t.footer.description}</p>
             <p className="mt-auto pt-16 text-xs font-semibold text-white/80">{t.footer.copyright}</p>
           </div>
-          <div className="grid gap-10 sm:grid-cols-3">
-            {relevantFooterColumns(lang).map((column) => (
-              <div key={column.title}>
+          <div className="grid gap-10 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+            {t.footer.columns.map((column, columnIndex) => (
+              <div key={`${column.title}-${columnIndex}`}>
                 <h3 className="text-sm font-bold text-white">{column.title}</h3>
                 <ul className="mt-5 flex flex-col gap-5 text-sm text-white/80">
                   {column.links.map((link) => {

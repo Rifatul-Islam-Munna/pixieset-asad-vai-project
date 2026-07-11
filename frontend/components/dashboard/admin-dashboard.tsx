@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Check, DollarSign, Edit3, ExternalLink, FileImage, HardDrive, Images, Loader2, LogOut, Mail, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { BarChart3, Check, DollarSign, Edit3, ExternalLink, FileImage, FileText, HardDrive, Images, Loader2, LogOut, Mail, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { mergeHomeCms, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
+import { mergeHomeCms, type FooterLink, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 type UserForm = {
@@ -55,7 +55,7 @@ type PlanForm = {
   active: boolean;
 };
 
-type AdminTab = "overview" | "users" | "collections" | "plans" | "free-plan" | "stripe" | "cms";
+type AdminTab = "overview" | "users" | "collections" | "plans" | "free-plan" | "stripe" | "cms" | "terms" | "privacy";
 
 const emptyForm: UserForm = {
   name: "",
@@ -114,6 +114,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const users = initialData.users;
   const collections = initialData.collections;
   const plans = initialData.plans ?? [];
+  const pageTitle = tab === "cms" ? "Homepage Editor" : tab === "terms" ? "Terms of Service" : tab === "privacy" ? "Privacy Policy" : tab === "overview" ? "Admin Dashboard" : tab.replace("-", " ").replace(/^./, (letter) => letter.toUpperCase());
 
   const filteredUsers = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -428,7 +429,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
                 <ShieldCheck className="size-4 text-[#0aa997]" />
                 Control Panel
               </p>
-              <h1 className="mt-3 text-2xl font-medium md:text-3xl">Admin Dashboard</h1>
+              <h1 className="mt-3 text-2xl font-medium md:text-3xl">{pageTitle}</h1>
             </div>
             <div className="flex w-full flex-wrap items-center justify-end gap-3 lg:w-auto">
               <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto lg:gap-3">
@@ -450,7 +451,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={tab === "overview" ? "Dashboard overview" : tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "free-plan" ? "Free plan limits" : tab === "stripe" ? "Stripe settings" : tab === "cms" ? "Home CMS" : "Search collections"}
+                placeholder={tab === "overview" ? "Dashboard overview" : tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "free-plan" ? "Free plan limits" : tab === "stripe" ? "Stripe settings" : tab === "cms" ? "Homepage editor" : tab === "terms" ? "Terms editor" : tab === "privacy" ? "Privacy editor" : "Search collections"}
                 className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
               />
             </div>
@@ -505,6 +506,17 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               setLang={setHomeCmsLang}
               onUpload={uploadCmsFile}
               onHeroUpload={uploadCmsMedia}
+              onSave={() => saveHomeCms(false)}
+              saveState={cmsSaveState}
+              busy={pending}
+            />
+          ) : tab === "terms" || tab === "privacy" ? (
+            <LegalCmsPanel
+              type={tab}
+              form={homeCms}
+              lang={homeCmsLang}
+              setForm={setHomeCms}
+              setLang={setHomeCmsLang}
               onSave={() => saveHomeCms(false)}
               saveState={cmsSaveState}
               busy={pending}
@@ -634,7 +646,9 @@ function AdminNav({ tab, setTab }: { tab: AdminTab; setTab: (tab: AdminTab) => v
     { id: "plans", label: "Plans", icon: Package },
     { id: "free-plan", label: "Free Plan", icon: HardDrive },
     { id: "stripe", label: "Stripe", icon: ShieldCheck },
-    { id: "cms", label: "Home CMS", icon: FileImage },
+    { id: "cms", label: "Homepage Editor", icon: FileImage },
+    { id: "terms", label: "Terms of Service", icon: FileText },
+    { id: "privacy", label: "Privacy Policy", icon: ShieldCheck },
   ];
 
   return (
@@ -1012,6 +1026,33 @@ function StripeSettingsPanel({ form, setForm }: {
   );
 }
 
+function LegalCmsPanel({ type, form, lang, setForm, setLang, onSave, saveState, busy }: {
+  type: "terms" | "privacy";
+  form: HomeCmsData;
+  lang: HomeLanguage;
+  setForm: (value: HomeCmsData) => void;
+  setLang: (value: HomeLanguage) => void;
+  onSave: () => void;
+  saveState: "saved" | "unsaved" | "saving" | "error";
+  busy: boolean;
+}) {
+  const page = form.legal[lang][type];
+  const update = (value: Partial<typeof page>) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], [type]: { ...page, ...value } } } });
+  const previewHref = `${type === "terms" ? "/terms-of-service" : "/privacy-policy"}?lang=${lang}`;
+  return <div className="mt-6 overflow-hidden border border-[#dfe5e2] bg-white shadow-[0_18px_55px_rgba(18,38,32,.07)]"><header className="border-b bg-[#f7faf8] px-5 py-6 md:px-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-[#079c8a]">Public legal page</p><h2 className="mt-2 text-3xl font-semibold">{type === "terms" ? "Terms of Service" : "Privacy Policy"}</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#68726e]">Edit title and fully formatted page content.</p></div><div className="flex gap-2"><a href={previewHref} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 border bg-white px-4 text-sm font-bold">Preview <ExternalLink className="size-4" /></a><Button onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#111] px-5 text-white">Save now</Button></div></div></header><div className="grid md:grid-cols-[210px_1fr]"><aside className="border-b bg-[#fbfbfa] p-5 md:border-b-0 md:border-r"><p className="text-xs font-bold uppercase tracking-[.16em] text-[#888]">Language</p><div className="mt-4 grid gap-2">{(["en", "gr"] as HomeLanguage[]).map((value) => <button key={value} onClick={() => setLang(value)} className={cn("flex h-11 items-center justify-between px-4 text-left text-sm font-bold", lang === value ? "bg-[#111] text-white" : "border bg-white text-[#555]")}>{value === "en" ? "English" : "Greek"}<span>{value.toUpperCase()}</span></button>)}</div><div className={cn("mt-6 px-3 py-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>{saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved · Live"}</div></aside><section className="p-5 md:p-8"><label className="grid gap-2"><span className="text-sm font-bold">Page title</span><Input value={page.title} onChange={(event) => update({ title: event.target.value })} className="h-13 rounded-none border-[#ccd5d1] px-4 text-lg shadow-none" /></label><div className="mt-7 grid gap-2"><span className="text-sm font-bold">Page content</span><RichTextEditor key={`${type}-${lang}`} value={page.content} onChange={(content) => update({ content })} /></div></section></div></div>;
+}
+
+function RichTextEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const initialHtml = /<\/?[a-z][\s\S]*>/i.test(value) ? value : value.split(/\n{2,}/).map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`).join("");
+  const command = (name: string, commandValue?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(name, false, commandValue);
+    onChange(editorRef.current?.innerHTML ?? "");
+  };
+  return <div className="border border-[#ccd5d1] bg-white"><div className="flex flex-wrap gap-1 border-b bg-[#f7f7f4] p-2">{[["bold", "Bold"], ["italic", "Italic"], ["underline", "Underline"], ["insertUnorderedList", "Bullets"], ["insertOrderedList", "Numbers"], ["formatBlock", "Heading", "h2"], ["formatBlock", "Paragraph", "p"]].map(([name, label, commandValue]) => <button key={`${name}-${label}`} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => command(name, commandValue)} className="border bg-white px-3 py-2 text-xs font-bold hover:bg-[#e9efec]">{label}</button>)}<button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const url = window.prompt("Link URL"); if (url) command("createLink", url); }} className="border bg-white px-3 py-2 text-xs font-bold hover:bg-[#e9efec]">Link</button><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => command("removeFormat")} className="border bg-white px-3 py-2 text-xs font-bold hover:bg-[#e9efec]">Clear format</button></div><div ref={editorRef} contentEditable suppressContentEditableWarning dangerouslySetInnerHTML={{ __html: initialHtml }} onInput={(event) => onChange(event.currentTarget.innerHTML)} className="min-h-[520px] p-5 text-base leading-8 outline-none [&_a]:text-[#087f70] [&_a]:underline [&_h2]:mb-4 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:font-bold [&_li]:ml-6 [&_ol]:list-decimal [&_p]:my-4 [&_ul]:list-disc" /></div>;
+}
+
 function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, onSave, saveState, busy }: {
   form: HomeCmsData;
   lang: HomeLanguage;
@@ -1066,6 +1107,19 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
     patchObject("testimonials", { items });
   };
 
+  const patchFooterColumn = (index: number, value: Partial<HomeContent["footer"]["columns"][number]>) => {
+    const columns = [...content.footer.columns];
+    columns[index] = { ...columns[index], ...value };
+    patchObject("footer", { columns });
+  };
+
+  const patchFooterLink = (columnIndex: number, linkIndex: number, value: Partial<{ label: string; url: string }>) => {
+    const column = content.footer.columns[columnIndex];
+    const links = column.links.map((link) => typeof link === "string" ? { label: link, url: "" } : link);
+    links[linkIndex] = { ...links[linkIndex], ...value };
+    patchFooterColumn(columnIndex, { links });
+  };
+
   const patchCtaImage = (index: number, value: string) => {
     const images = [...content.cta.images];
     images[index] = value;
@@ -1080,24 +1134,28 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
 
   return (
     <div className="mt-6 grid gap-5 scroll-smooth">
-      <div className="sticky top-3 z-30 border border-[#dfe5e2] bg-white/95 p-3 shadow-[0_14px_40px_rgba(18,38,32,0.10)] backdrop-blur sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <nav className="flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="CMS sections">
-            {[['cms-start','Setup'],['cms-brand','Brand'],['cms-seo','SEO'],['cms-nav','Navigation'],['cms-hero','Hero'],['cms-gallery','Gallery'],['cms-workflow','Workflow'],['cms-testimonials','Reviews'],['cms-footer','Footer']].map(([id, label]) => (
-              <a key={id} href={`#${id}`} className="whitespace-nowrap border border-transparent px-3 py-2 text-xs font-bold text-[#5f6965] transition hover:border-[#b9cac4] hover:bg-[#f2f7f5] hover:text-[#087f70]">{label}</a>
-            ))}
-          </nav>
+      <div className="border border-[#dfe5e2] bg-[#12201c] p-5 text-white shadow-[0_18px_50px_rgba(18,38,32,0.14)] sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div><p className="text-xs font-bold uppercase tracking-[.22em] text-[#5ce0cd]">Visual content manager</p><h2 className="mt-2 text-3xl font-semibold">Homepage Editor</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Choose a section below, edit its text or images, then preview the live homepage. Every field is grouped by where visitors see it.</p></div>
           <div className="flex items-center gap-2">
             <span className={cn("inline-flex h-9 items-center gap-2 px-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>
               {saveState === "saving" ? <Loader2 className="size-3.5 animate-spin" /> : saveState === "saved" ? <Check className="size-3.5" /> : null}
               {saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Autosave pending" : saveState === "error" ? "Save failed" : "Saved · Live"}
             </span>
-            <Button type="button" onClick={onSave} disabled={busy} className="h-9 rounded-none bg-[#111] px-4 text-white">Save now</Button>
-            <Button asChild type="button" variant="outline" className="h-9 rounded-none">
+            <Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#22bda7] px-5 text-white hover:bg-[#19a995]">Save now</Button>
+            <Button asChild type="button" variant="outline" className="h-10 rounded-none border-white/25 bg-white/10 text-white hover:bg-white hover:text-[#111]">
               <a href={`/?lang=${lang}`} target="_blank" rel="noreferrer">Preview <ExternalLink className="size-3.5" /></a>
             </Button>
           </div>
         </div>
+        <nav className="mt-7 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" aria-label="CMS sections">
+          {[
+            ['cms-start','Setup','Language & hero media'],['cms-brand','Brand','Logo & colours'],['cms-seo','SEO','Search & social'],['cms-nav','Navigation','Menu labels'],['cms-hero','Hero','Main headline'],
+            ['cms-gallery','Gallery','Gallery showcase'],['cms-workflow','Workflow','Feature section'],['cms-testimonials','Reviews','Customer quotes'],['cms-cta','CTA','Closing call to action'],['cms-footer','Footer','Links & footer copy'],
+          ].map(([id, label, description], index) => (
+            <a key={id} href={`#${id}`} className="group border border-white/12 bg-white/5 px-4 py-3 transition hover:border-[#5ce0cd] hover:bg-white/10"><span className="text-[10px] font-bold text-[#5ce0cd]">{String(index + 1).padStart(2, '0')}</span><span className="mt-1 block text-sm font-bold">{label}</span><span className="mt-1 block text-xs text-white/50">{description}</span></a>
+          ))}
+        </nav>
       </div>
 
       <div id="cms-start" className="scroll-mt-24 bg-white p-4 shadow-[0_12px_35px_rgba(0,0,0,0.04)] sm:p-5">
@@ -1335,27 +1393,50 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
                   <CmsInput label="Site" value={item.site} onChange={(site) => patchTestimonial(index, { site })} />
                   <CmsImageInput label="Image" value={item.image} onChange={(image) => patchTestimonial(index, { image })} onUpload={onUpload} busy={busy} wide />
                   <CmsTextarea label="Quote" value={item.quote} onChange={(quote) => patchTestimonial(index, { quote })} wide />
+                  <Button type="button" variant="outline" className="w-fit rounded-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => patchObject("testimonials", { items: content.testimonials.items.filter((_, itemIndex) => itemIndex !== index) })}><Trash2 className="size-4" /> Remove testimonial</Button>
                 </div>
               ))}
+              <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("testimonials", { items: [...content.testimonials.items, { name: "", site: "", image: "", quote: "" }] })}><PlusCircle className="size-4" /> Add testimonial</Button>
             </CmsRepeater>
           </div>
         </CmsSection></div>
 
-        <div id="cms-footer" className="scroll-mt-24"><CmsSection title="CTA and footer">
+        <div id="cms-cta" className="scroll-mt-24"><CmsSection title="Call to action">
           <div className="grid gap-4 md:grid-cols-2">
             <CmsInput label="CTA heading" value={content.cta.title} onChange={(title) => patchObject("cta", { title })} />
             <CmsInput label="CTA subtitle" value={content.cta.subtitle} onChange={(subtitle) => patchObject("cta", { subtitle })} />
             <CmsInput label="CTA button" value={content.cta.button} onChange={(button) => patchObject("cta", { button })} />
-            <CmsInput label="Footer copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
-            <CmsTextarea label="Footer description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} wide />
-            <CmsInput label="Terms page title" value={form.legal[lang].terms.title} onChange={(title) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], terms: { ...form.legal[lang].terms, title } } } })} />
-            <CmsInput label="Privacy page title" value={form.legal[lang].privacy.title} onChange={(title) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], privacy: { ...form.legal[lang].privacy, title } } } })} />
-            <CmsTextarea label="Terms page full content" value={form.legal[lang].terms.content} onChange={(value) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], terms: { ...form.legal[lang].terms, content: value } } } })} wide />
-            <CmsTextarea label="Privacy page full content" value={form.legal[lang].privacy.content} onChange={(value) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], privacy: { ...form.legal[lang].privacy, content: value } } } })} wide />
             <CmsRepeater title="CTA images">
               {content.cta.images.map((image, index) => (
-                <CmsImageInput key={`${image}-${index}`} label={`Image ${index + 1}`} value={image} onChange={(value) => patchCtaImage(index, value)} onUpload={onUpload} busy={busy} />
+                <div key={index} className="grid gap-3 border p-3 md:grid-cols-[1fr_auto]">
+                  <CmsImageInput label={`Image ${index + 1}`} value={image} onChange={(value) => patchCtaImage(index, value)} onUpload={onUpload} busy={busy} />
+                  <Button type="button" variant="outline" className="self-end rounded-none border-red-200 text-red-600" onClick={() => patchObject("cta", { images: content.cta.images.filter((_, imageIndex) => imageIndex !== index) })}><Trash2 className="size-4" /> Remove</Button>
+                </div>
               ))}
+              <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("cta", { images: [...content.cta.images, ""] })}><PlusCircle className="size-4" /> Add CTA image</Button>
+            </CmsRepeater>
+          </div>
+        </CmsSection></div>
+
+        <div id="cms-footer" className="scroll-mt-24"><CmsSection title="Footer">
+          <div className="grid gap-4 md:grid-cols-2">
+            <CmsTextarea label="Footer description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} wide />
+            <CmsInput label="Footer copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
+            <CmsRepeater title="Footer columns">
+              {content.footer.columns.map((column, columnIndex) => (
+                <div key={columnIndex} className="grid gap-4 border p-4">
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1"><CmsInput label="Column title" value={column.title} onChange={(title) => patchFooterColumn(columnIndex, { title })} /></div>
+                    <Button type="button" variant="outline" className="rounded-none border-red-200 text-red-600" onClick={() => patchObject("footer", { columns: content.footer.columns.filter((_, index) => index !== columnIndex) })}><Trash2 className="size-4" /> Remove</Button>
+                  </div>
+                  {column.links.map((link: FooterLink, linkIndex) => {
+                    const item = typeof link === "string" ? { label: link, url: "" } : link;
+                    return <div key={linkIndex} className="grid gap-3 bg-[#f2f2ef] p-3 md:grid-cols-[1fr_1fr_auto]"><CmsInput label="Link label" value={item.label} onChange={(label) => patchFooterLink(columnIndex, linkIndex, { label })} /><CmsInput label="Link URL" value={item.url} onChange={(url) => patchFooterLink(columnIndex, linkIndex, { url })} /><Button type="button" variant="outline" className="self-end rounded-none border-red-200 text-red-600" onClick={() => patchFooterColumn(columnIndex, { links: column.links.filter((_, index) => index !== linkIndex) })}><Trash2 className="size-4" /></Button></div>;
+                  })}
+                  <Button type="button" variant="outline" className="w-fit rounded-none" onClick={() => patchFooterColumn(columnIndex, { links: [...column.links, { label: "", url: "" }] })}><PlusCircle className="size-4" /> Add link</Button>
+                </div>
+              ))}
+              <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("footer", { columns: [...content.footer.columns, { title: "", links: [] }] })}><PlusCircle className="size-4" /> Add column</Button>
             </CmsRepeater>
           </div>
         </CmsSection></div>

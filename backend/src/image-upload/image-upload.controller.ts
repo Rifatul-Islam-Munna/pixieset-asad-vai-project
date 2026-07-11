@@ -57,7 +57,7 @@ const storage = diskStorage({
 
 const uploadOptions = {
   storage,
-  limits: { fileSize: 1024 * 1024 * 20 },
+  limits: { fileSize: 150 * 1024 * 1024 },
   fileFilter: (_req: any, file: Express.Multer.File, cb: any) => {
     if (!allowedMimeTypes.includes(file.mimetype)) {
       return cb(new BadRequestException('Only PDF, image, video, and font files are allowed'), false);

@@ -34,7 +34,7 @@ const uploadOptions = {
       cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname)}`);
     },
   }),
-  limits: { fileSize: 1024 * 1024 * 30 },
+  limits: { fileSize: 150 * 1024 * 1024 },
 };
 
 @Controller('public/mobile-gallery/apps')

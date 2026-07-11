@@ -36,7 +36,7 @@ const uploadOptions = {
       cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
     },
   }),
-  limits: { fileSize: 1024 * 1024 * 30 },
+  limits: { fileSize: 150 * 1024 * 1024 },
 };
 
 @Controller('public/collections')
