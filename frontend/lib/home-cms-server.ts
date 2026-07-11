@@ -1,17 +1,17 @@
 import { mergeHomeCms, type HomeCmsData } from "@/lib/home-cms";
-
-const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+import { apiBaseUrl } from "@/lib/api-base-url";
 
 export async function getHomeCms() {
   try {
-    const response = await fetch(`${baseUrl}/home-cms`, {
+    const response = await fetch(`${apiBaseUrl()}/home-cms`, {
       cache: "no-store",
       next: { revalidate: 0 },
     });
     if (!response.ok) throw new Error(`Home CMS request failed (${response.status})`);
     const payload = await response.json();
     return mergeHomeCms(payload?.data as Partial<HomeCmsData>);
-  } catch {
+  } catch (error) {
+    console.error("Home CMS fetch failed", error);
     return mergeHomeCms();
   }
 }

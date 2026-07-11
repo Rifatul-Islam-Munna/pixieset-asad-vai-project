@@ -4,8 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { mergeHomeCms, type HomeCmsData } from "@/lib/home-cms";
-
-const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+import { apiBaseUrl } from "@/lib/api-base-url";
 
 export type AdminUser = {
   _id: string;
@@ -109,7 +108,7 @@ export type AdminDashboardData = {
 
 async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = (await cookies()).get("access_token")?.value;
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -246,7 +245,7 @@ export async function updateHomeCms(payload: HomeCmsData) {
 }
 
 export async function uploadHomeCmsFile(formData: FormData) {
-  const response = await fetch(`${baseUrl}/image-upload/upload-image`, {
+  const response = await fetch(`${apiBaseUrl()}/image-upload/upload-image`, {
     method: "POST",
     body: formData,
     cache: "no-store",

@@ -11,8 +11,19 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
+  extendDefaultRuntimeCaching: true,
+  runtimeCaching: [
+    {
+      urlPattern: ({ request, sameOrigin }) =>
+        sameOrigin &&
+        (request.mode === "navigate" || request.headers.get("RSC") === "1"),
+      handler: "NetworkOnly",
+      options: { cacheName: "cms-live-pages" },
+    },
+  ],
   workboxOptions: {
     disableDevLogs: true,
+    cleanupOutdatedCaches: true,
   },
 });
 
@@ -31,6 +42,26 @@ const nextConfig: NextConfig = {
   },
   images: {
     unoptimized: true,
+  },
+  async headers() {
+    return [
+      {
+        source: "/",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+        ],
+      },
+      {
+        source: "/(login|register)",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+        ],
+      },
+    ];
   },
   
 };
