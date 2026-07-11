@@ -19,6 +19,29 @@ jobs:
           ref: developmentbranch
           fetch-depth: 0
 
+      - name: Make collection detail mutation patch precise
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/fix-collection-ui.py')
+          text = path.read_text()
+          old = '''text = replace_once(
+              text,
+              "  const { collectionsQuery } = useCollections();",
+              "  const { collectionsQuery, duplicateCollection, deleteCollection } = useCollections();",
+              "collection detail mutations",
+          )'''
+          new = '''text = replace_once(
+              text,
+              "  const { starImage } = useImageActions();\n  const { collectionsQuery } = useCollections();\n  const homepageQuery = useHomepageSettings().query;",
+              "  const { starImage } = useImageActions();\n  const { collectionsQuery, duplicateCollection, deleteCollection } = useCollections();\n  const homepageQuery = useHomepageSettings().query;",
+              "collection detail mutations",
+          )'''
+          if old not in text:
+              raise SystemExit('Could not find mutation replacement block')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Apply collection UI fixes
         run: python .github/fix-collection-ui.py
 
@@ -32,6 +55,9 @@ jobs:
         run: |
           rm -f .github/fix-collection-ui.py
           rm -f .github/workflows/fix-collection-ui.yml
+          rm -f .github/fix-collection-ui-trigger.txt
+          rm -f .github/fix-collection-ui-trigger-2.txt
+          rm -f .github/fix-collection-ui-trigger-base.txt
 
       - name: Commit changes
         run: |
