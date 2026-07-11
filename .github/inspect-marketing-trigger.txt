@@ -1,1 +1,1 @@
-inspect current marketing implementation
+inspect current marketing implementation after PR
