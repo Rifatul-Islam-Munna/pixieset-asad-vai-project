@@ -56,8 +56,8 @@ function EmptyState({
 
 export function CollectionRegistrationActivity({
   mode,
-  registrations,
-  privatePhotos,
+  registrations = [],
+  privatePhotos = [],
   collectionName,
 }: {
   mode: "registration" | "contacts" | "private";
@@ -65,7 +65,7 @@ export function CollectionRegistrationActivity({
   privatePhotos: CollectionPrivatePhotoActivityRecord[];
   collectionName: string;
 }) {
-  const contacts = registrations.filter((item) => item.marketingOptIn);
+  const contacts = (Array.isArray(registrations) ? registrations : []).filter((item) => item.marketingOptIn);
   const rows = mode === "contacts" ? contacts : registrations;
 
   if (mode === "private") {
