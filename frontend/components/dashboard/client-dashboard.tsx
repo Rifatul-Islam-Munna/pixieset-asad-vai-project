@@ -10991,6 +10991,9 @@ function CollectionDetailView({
         setNewSetName("");
         setAddSetOpen(false);
       },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : "Set save failed");
+      },
     });
   };
   const deleteSet = (setId: string) => {
@@ -11043,6 +11046,12 @@ function CollectionDetailView({
     updateCollection.mutate(
       { sets: nextSets },
       {
+        onSuccess: (response) => {
+          if (response?.data) {
+            const nextForm = collectionForm(response.data);
+            syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
+          }
+        },
         onError: (error) =>
           toast.error(
             error instanceof Error ? error.message : "Set reorder failed",

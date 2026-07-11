@@ -172,12 +172,68 @@ export function useCollections() {
 
 export function useCollectionDetail(collectionId?: string) {
   const queryClient = useQueryClient();
+  type CollectionDetailRecord = CollectionRecord & {
+    images: CollectionImageRecord[];
+    imagesPage?: ImagesPage<CollectionImageRecord>;
+  };
+  const upsertCollectionInCaches = (collection: CollectionRecord) => {
+    queryClient.setQueryData<ListResponse<CollectionDetailRecord>>(
+      ["collections", collectionId],
+      (current) =>
+        current
+          ? { ...current, data: { ...current.data, ...collection } }
+          : current,
+    );
+    queryClient.setQueryData<ListResponse<CollectionRecord[]>>(
+      ["collections"],
+      (current) =>
+        current
+          ? {
+              ...current,
+              data: current.data.map((item) =>
+                item._id === collection._id ? { ...item, ...collection } : item,
+              ),
+            }
+          : current,
+    );
+  };
+  const appendSetInCaches = (set: CollectionSetRecord) => {
+    const addSetOnce = (sets: CollectionSetRecord[] = []) =>
+      sets.some((item) => item.id === set.id) ? sets : [...sets, set];
+    queryClient.setQueryData<ListResponse<CollectionDetailRecord>>(
+      ["collections", collectionId],
+      (current) =>
+        current
+          ? {
+              ...current,
+              data: {
+                ...current.data,
+                sets: addSetOnce(current.data.sets ?? []),
+              },
+            }
+          : current,
+    );
+    queryClient.setQueryData<ListResponse<CollectionRecord[]>>(
+      ["collections"],
+      (current) =>
+        current
+          ? {
+              ...current,
+              data: current.data.map((item) =>
+                item._id === collectionId
+                  ? { ...item, sets: addSetOnce(item.sets ?? []) }
+                  : item,
+              ),
+            }
+          : current,
+    );
+  };
   const collectionQuery = useQuery({
     enabled: Boolean(collectionId),
     queryKey: ["collections", collectionId],
     queryFn: () =>
       GetRequestNormal<
-        ListResponse<CollectionRecord & { images: CollectionImageRecord[]; imagesPage?: ImagesPage<CollectionImageRecord> }>
+        ListResponse<CollectionDetailRecord>
       >(`/collections/${collectionId}?limit=60&offset=0`),
   });
 
@@ -191,8 +247,10 @@ export function useCollectionDetail(collectionId?: string) {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      if (response?.data) upsertCollectionInCaches(response.data);
       queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
     },
   });
 
@@ -206,7 +264,8 @@ export function useCollectionDetail(collectionId?: string) {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      if (response?.data) appendSetInCaches(response.data);
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
     },
