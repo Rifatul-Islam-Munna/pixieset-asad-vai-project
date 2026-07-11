@@ -6,6 +6,7 @@ import { Edit3, Loader2, PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { updateHomeCms } from "@/actions/admin";
 import { CoverPreview } from "@/components/dashboard/cover-designs";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { AdminResourceShell } from "./admin-resource-shell";
 import type { CustomCoverTemplate, HomeCmsData } from "@/lib/home-cms";
 
@@ -13,29 +14,39 @@ export function AdminCoverTemplatesPage({ initialCms }: { initialCms: HomeCmsDat
   const [cms, setCms] = useState(initialCms);
   const [pendingId, setPendingId] = useState("");
   const [pending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  const openConfirm = (message: string, action: () => void) => {
+    setConfirmMessage(message);
+    setConfirmAction(() => action);
+    setConfirmOpen(true);
+  };
   const templates = cms.coverTemplates ?? [];
   const sorted = useMemo(() => [...templates].sort((a, b) => a.name.localeCompare(b.name)), [templates]);
 
   const remove = (template: CustomCoverTemplate) => {
-    if (!confirm(`Delete ${template.name}? This cannot be undone.`)) return;
-    setPendingId(template.id);
-    startTransition(async () => {
-      try {
-        const saved = await updateHomeCms({
-          ...cms,
-          coverTemplates: templates.filter((item) => item.id !== template.id),
-        });
-        setCms(saved);
-        toast.success("Cover template deleted");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not delete cover template");
-      } finally {
-        setPendingId("");
-      }
+    openConfirm(`Delete ${template.name}? This cannot be undone.`, () => {
+      setPendingId(template.id);
+      startTransition(async () => {
+        try {
+          const saved = await updateHomeCms({
+            ...cms,
+            coverTemplates: templates.filter((item) => item.id !== template.id),
+          });
+          setCms(saved);
+          toast.success("Cover template deleted");
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Could not delete cover template");
+        } finally {
+          setPendingId("");
+        }
+      });
     });
   };
 
   return (
+    <>
     <AdminResourceShell
       active="covers"
       title="Client gallery cover templates"
@@ -107,6 +118,19 @@ export function AdminCoverTemplatesPage({ initialCms }: { initialCms: HomeCmsDat
         </table>
       </div>
     </AdminResourceShell>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmAction?.()}>Continue</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

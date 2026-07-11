@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { mergeHomeCms, type FooterLink, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
@@ -112,6 +113,14 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const [freePlanForm, setFreePlanForm] = useState<AdminFreePlanSetting>(
     initialData.freePlan ?? { storageGb: 3, monthlyEmails: 1000 },
   );
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  const openConfirm = (message: string, action: () => void) => {
+    setConfirmMessage(message);
+    setConfirmAction(() => action);
+    setConfirmOpen(true);
+  };
   const [homeCms, setHomeCms] = useState<HomeCmsData>(mergeHomeCms(initialData.homeCms));
   const [homeCmsLang, setHomeCmsLang] = useState<HomeLanguage>(() => mergeHomeCms(initialData.homeCms).defaultLanguage);
   const [cmsSaveState, setCmsSaveState] = useState<"saved" | "unsaved" | "saving" | "error">("saved");
@@ -222,28 +231,30 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   };
 
   const removeUser = (id: string) => {
-    if (!confirm("Delete this user and all collections?")) return;
-    startTransition(async () => {
-      try {
-        await deleteAdminUser(id);
-        toast.success("User deleted");
-        router.refresh();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Delete failed");
-      }
+    openConfirm("Delete this user and all collections?", () => {
+      startTransition(async () => {
+        try {
+          await deleteAdminUser(id);
+          toast.success("User deleted");
+          router.refresh();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Delete failed");
+        }
+      });
     });
   };
 
   const removeCollection = (id: string) => {
-    if (!confirm("Delete this collection?")) return;
-    startTransition(async () => {
-      try {
-        await deleteAdminCollection(id);
-        toast.success("Collection deleted");
-        router.refresh();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Delete failed");
-      }
+    openConfirm("Delete this collection?", () => {
+      startTransition(async () => {
+        try {
+          await deleteAdminCollection(id);
+          toast.success("Collection deleted");
+          router.refresh();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Delete failed");
+        }
+      });
     });
   };
 
@@ -266,15 +277,16 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   };
 
   const removePlan = (id: string) => {
-    if (!confirm("Delete this plan?")) return;
-    startTransition(async () => {
-      try {
-        await deleteAdminPlan(id);
-        toast.success("Plan deleted");
-        router.refresh();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Delete failed");
-      }
+    openConfirm("Delete this plan?", () => {
+      startTransition(async () => {
+        try {
+          await deleteAdminPlan(id);
+          toast.success("Plan deleted");
+          router.refresh();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Delete failed");
+        }
+      });
     });
   };
 
@@ -662,6 +674,18 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
           </form>
         </div>
       )}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmAction?.()}>Continue</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

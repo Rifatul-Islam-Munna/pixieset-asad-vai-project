@@ -126,6 +126,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   useCollectionDetail,
   useCollectionActivity,
@@ -9687,6 +9688,8 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     eventDate: "",
     status: "draft" as "draft" | "published",
   });
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [publishConfirmCollection, setPublishConfirmCollection] = useState<CollectionRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -9829,10 +9832,20 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
-    if (
-      !window.confirm("This collection is Draft. Publish it and open Preview?")
-    )
-      return;
+    setPublishConfirmCollection(collection);
+    setPublishConfirmOpen(true);
+  };
+  const confirmPublishPreview = () => {
+    const collection = publishConfirmCollection;
+    if (!collection) return;
+    const siteSlug = homepage.data?.data?.slug;
+    const url = publicCollectionUrl(
+      siteSlug!,
+      collection.slug ?? collection._id,
+      window.location.origin,
+    );
+    setPublishConfirmOpen(false);
+    setPublishConfirmCollection(null);
     const previewTab = window.open("about:blank", "_blank");
     updateCollection.mutate(
       { collectionId: collection._id, payload: { status: "published" } },
@@ -10011,6 +10024,18 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmRemoveCollection}
       />
+      <AlertDialog open={publishConfirmOpen} onOpenChange={setPublishConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish collection?</AlertDialogTitle>
+            <AlertDialogDescription>This collection is a Draft. Publish it and open Preview?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPublishPreview}>Continue</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-8">
           <h1 className="text-[28px] font-medium leading-none tracking-normal">

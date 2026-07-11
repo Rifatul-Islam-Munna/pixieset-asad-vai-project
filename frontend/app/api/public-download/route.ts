@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   }
 
   const usedNames = new Set<string>();
-  const files = (await mapWithConcurrency(images, 6, async (image, index) => {
+  const files = (await mapWithConcurrency(images, 20, async (image, index) => {
     const targetUrl = resolveDownloadUrl(image.url ?? "");
     const parsed = parseHttpUrl(targetUrl);
     if (!parsed) return null;

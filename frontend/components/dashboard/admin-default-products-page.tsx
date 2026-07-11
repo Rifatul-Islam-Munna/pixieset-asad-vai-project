@@ -23,6 +23,7 @@ import {
   updateAdminDefaultStoreProduct,
   uploadHomeCmsFile,
 } from "@/actions/admin";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { AdminResourceShell } from "./admin-resource-shell";
 
 type ProductOption = { name: string; values: string[] };
@@ -93,6 +94,14 @@ export function AdminDefaultProductsPage({ initialProducts }: { initialProducts:
   const [draft, setDraft] = useState<AdminDefaultStoreProduct | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState("");
   const [pending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  const openConfirm = (message: string, action: () => void) => {
+    setConfirmMessage(message);
+    setConfirmAction(() => action);
+    setConfirmOpen(true);
+  };
   const visible = useMemo(
     () => products
       .filter((item) => ["Prints", "Wall Art"].includes(item.category) && (filter === "All" || item.category === filter))
@@ -138,18 +147,19 @@ export function AdminDefaultProductsPage({ initialProducts }: { initialProducts:
   };
 
   const removeProduct = (product: AdminDefaultStoreProduct) => {
-    if (!confirm(`Delete “${product.name}”? This removes the master default template.`)) return;
-    setPendingDeleteId(product._id);
-    startTransition(async () => {
-      try {
-        await deleteAdminDefaultStoreProduct(product._id);
-        setProducts((current) => current.filter((item) => item._id !== product._id));
-        toast.success("Default product deleted");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Delete failed");
-      } finally {
-        setPendingDeleteId("");
-      }
+    openConfirm(`Delete "${product.name}"? This removes the master default template.`, () => {
+      setPendingDeleteId(product._id);
+      startTransition(async () => {
+        try {
+          await deleteAdminDefaultStoreProduct(product._id);
+          setProducts((current) => current.filter((item) => item._id !== product._id));
+          toast.success("Default product deleted");
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Delete failed");
+        } finally {
+          setPendingDeleteId("");
+        }
+      });
     });
   };
 
@@ -251,6 +261,7 @@ export function AdminDefaultProductsPage({ initialProducts }: { initialProducts:
   };
 
   return (
+    <>
     <AdminResourceShell
       active="products"
       title="Default Prints & Wall Art"
@@ -328,6 +339,19 @@ export function AdminDefaultProductsPage({ initialProducts }: { initialProducts:
         </div>
       )}
     </AdminResourceShell>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmAction?.()}>Continue</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
