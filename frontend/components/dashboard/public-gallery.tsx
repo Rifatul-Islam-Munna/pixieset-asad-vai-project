@@ -49,6 +49,7 @@ type PublicCollection = {
   settings?: {
     general?: {
       emailRegistration?: boolean | string;
+      marketingSubscription?: boolean | string;
       galleryAssist?: boolean | string;
       slideshow?: boolean | string;
       slideshowSpeed?: "slow" | "regular" | "fast";
@@ -206,6 +207,9 @@ export function PublicGallery({
   const socialSharingEnabled = boolSetting(generalSettings.socialSharing ?? true);
   const galleryAssistEnabled = boolSetting(generalSettings.galleryAssist);
   const emailRegistrationEnabled = boolSetting(generalSettings.emailRegistration);
+  const marketingSubscriptionEnabled = boolSetting(
+    generalSettings.marketingSubscription ?? true,
+  );
   const marketing = collection?.marketing ?? {};
   const marketingOptIn = marketing.optIn ?? {};
   const marketingPopup = marketing.popup ?? {};
@@ -241,7 +245,9 @@ export function PublicGallery({
   const [visitorEmailSaved, setVisitorEmailSaved] = useState(false);
   const [visitorMarketingOptIn, setVisitorMarketingOptIn] = useState(true);
   const [downloadMarketingOptIn, setDownloadMarketingOptIn] = useState(true);
-  const [popupOpen, setPopupOpen] = useState(() => Boolean(marketingPopup.enabled));
+  const [popupOpen, setPopupOpen] = useState(() =>
+    Boolean(marketingSubscriptionEnabled && marketingPopup.enabled),
+  );
   const [popupEmail, setPopupEmail] = useState("");
   const [privateImageIds, setPrivateImageIds] = useState<Set<string>>(() => new Set());
   const [privateImageBusy, setPrivateImageBusy] = useState("");
@@ -589,7 +595,11 @@ export function PublicGallery({
     try {
       await recordEmailRegistration(
         email,
-        Boolean(marketingOptIn.emailRegistration && visitorMarketingOptIn),
+        Boolean(
+          marketingSubscriptionEnabled &&
+            marketingOptIn.emailRegistration &&
+            visitorMarketingOptIn,
+        ),
         "email-registration",
       );
       const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
@@ -812,10 +822,13 @@ export function PublicGallery({
   }, [slideshowAutoLoop, slideshowDelay, slideshowIndex, visibleImages.length]);
 
   useEffect(() => {
-    if (!collection || !marketingPopup.enabled) return;
+    if (!collection || !marketingSubscriptionEnabled || !marketingPopup.enabled) {
+      setPopupOpen(false);
+      return;
+    }
     const key = `gallery-marketing-popup:${collection._id}`;
     if (!window.sessionStorage.getItem(key)) setPopupOpen(true);
-  }, [collection?._id, marketingPopup.enabled]);
+  }, [collection?._id, marketingPopup.enabled, marketingSubscriptionEnabled]);
 
   const closeMarketingPopup = () => {
     if (collection?._id) window.sessionStorage.setItem(`gallery-marketing-popup:${collection._id}`, "1");
@@ -840,7 +853,7 @@ export function PublicGallery({
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
       <ScreenCaptureGuard />
-      {popupOpen && marketingPopup.enabled && (
+      {popupOpen && marketingSubscriptionEnabled && marketingPopup.enabled && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
           <div className="relative w-full max-w-[450px] bg-white p-8 text-[#111] shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-10">
             <button className="absolute right-4 top-4" onClick={closeMarketingPopup} aria-label="Close marketing signup" type="button">
@@ -887,7 +900,7 @@ export function PublicGallery({
             className="mt-6 h-11 rounded-none"
             autoFocus
           />
-          {marketingOptIn.emailRegistration && (
+          {marketingSubscriptionEnabled && marketingOptIn.emailRegistration && (
             <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
               <input
                 type="checkbox"

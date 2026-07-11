@@ -2110,19 +2110,24 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
 
   if (marketingPage === "contacts") {
     return (
-      <div>
-        <PageHeader action="Upload Contacts" title="Contacts" />
-        <div className="mt-12 grid gap-5 md:grid-cols-[360px_1fr]">
-          <div className="border bg-[#fafafa] p-8">
-            <FileUp className="size-9 text-[#22bda7]" />
-            <h2 className="mt-5 text-lg font-bold">Upload contact list</h2>
-            <p className="mt-3 text-sm leading-6 text-[#555]">
-              Import a CSV list to start sending campaigns.
+      <div className="mx-auto w-full max-w-[1240px]">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-7">
+          <div>
+            <PageHeader title="Marketing Contacts" />
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#666]">
+              Review everyone who subscribed from an email registration form,
+              gallery pop-up, download, favorite sign-in, or checkout.
             </p>
-            <Input type="file" className="mt-6 h-12 rounded-none bg-white" />
           </div>
-          <MarketingContactsGrid />
+          <Link
+            href="/dashboard/client-gallery/marketing/settings"
+            className="inline-flex h-10 items-center gap-2 border bg-white px-4 text-sm font-bold text-[#222] hover:border-[#22bda7] hover:text-[#009b8c]"
+          >
+            <Settings className="size-4" />
+            Subscription settings
+          </Link>
         </div>
+        <MarketingContactsGrid />
       </div>
     );
   }
@@ -2188,9 +2193,18 @@ function MarketingSettingsPanel({
   ]);
 
   const updateOptIn = (key: keyof MarketingSettings["optIn"], value: boolean) =>
-    setForm((current) => ({ ...current, optIn: { ...current.optIn, [key]: value } }));
-  const updatePopup = (key: keyof MarketingSettings["popup"], value: string | boolean) =>
-    setForm((current) => ({ ...current, popup: { ...current.popup, [key]: value } }));
+    setForm((current) => ({
+      ...current,
+      optIn: { ...current.optIn, [key]: value },
+    }));
+  const updatePopup = (
+    key: keyof MarketingSettings["popup"],
+    value: string | boolean,
+  ) =>
+    setForm((current) => ({
+      ...current,
+      popup: { ...current.popup, [key]: value },
+    }));
   const save = () => {
     saveSetting.mutate(
       { localId: "gallery-marketing", name: "Gallery Marketing", data: form },
@@ -2200,61 +2214,184 @@ function MarketingSettingsPanel({
       },
     );
   };
+  const activeSources = Object.values(form.optIn).filter(Boolean).length;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <PageHeader title="Marketing Settings" />
+    <div className="mx-auto w-full max-w-[1240px]">
+      <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7">
+        <div>
+          <PageHeader title="Marketing Settings" />
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#666]">
+            Control where visitors can subscribe and customise the subscription
+            form shown inside your public collections.
+          </p>
+        </div>
         <Button
-          className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+          className="h-11 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
           disabled={saveSetting.isPending}
           onClick={save}
         >
-          {saveSetting.isPending ? "Saving..." : "Save Settings"}
+          {saveSetting.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Save className="size-4" />
+          )}
+          {saveSetting.isPending ? "Saving..." : "Save Changes"}
         </Button>
       </div>
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,520px)_minmax(360px,530px)]">
-        <div className="space-y-12">
-          <section>
-            <h2 className="text-sm font-bold">Gallery Marketing Opt-in</h2>
-            <div className="mt-5 grid gap-3">
-              <MarketingCheck label="Email registration" checked={form.optIn.emailRegistration} onChange={(value) => updateOptIn("emailRegistration", value)} />
-              <MarketingCheck label="Store checkout" checked={form.optIn.storeCheckout} onChange={(value) => updateOptIn("storeCheckout", value)} />
-              <MarketingCheck label="Photo and video download" checked={form.optIn.download} onChange={(value) => updateOptIn("download", value)} />
-              <MarketingCheck label="Favorite sign-in" checked={form.optIn.favoriteSignIn} onChange={(value) => updateOptIn("favoriteSignIn", value)} />
+
+      <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_440px]">
+        <div className="space-y-7">
+          <section className="overflow-hidden border bg-white">
+            <div className="border-b bg-[#f4fbf9] px-6 py-5">
+              <div className="flex items-start justify-between gap-5">
+                <div className="flex gap-4">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-[#009b8c] shadow-sm">
+                    <MailCheck className="size-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-bold">Email registration subscription</h2>
+                    <p className="mt-2 text-sm leading-6 text-[#5d6b68]">
+                      Show an optional “Subscribe to updates and special offers”
+                      checkbox inside the collection email-registration modal.
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={form.optIn.emailRegistration}
+                  onCheckedChange={(value) =>
+                    updateOptIn("emailRegistration", value)
+                  }
+                />
+              </div>
             </div>
-            <p className="mt-4 text-sm leading-6 text-[#666]">
-              Show a marketing opt-in checkbox in galleries that have the setting enabled.
-            </p>
+            <div className="px-6 py-5 text-sm leading-6 text-[#666]">
+              This appears only when both <strong>Email Registration</strong> and
+              <strong> Marketing Subscription</strong> are enabled in that
+              collection’s Privacy settings.
+            </div>
           </section>
 
-          <section className="space-y-6">
-            <SettingSwitch
-              label="Gallery Pop-up Form"
-              checked={form.popup.enabled}
-              onCheckedChange={(value) => updatePopup("enabled", value)}
-              text="Show a pop-up in client galleries that lets visitors subscribe to marketing emails."
-            />
-            <Field>
-              <FieldLabel className="font-bold">Title</FieldLabel>
-              <Input value={form.popup.title} onChange={(event) => updatePopup("title", event.target.value)} className="h-12 rounded-none bg-white" />
-            </Field>
-            <Field>
-              <FieldLabel className="font-bold">Body</FieldLabel>
-              <Textarea value={form.popup.body} maxLength={200} onChange={(event) => updatePopup("body", event.target.value)} className="min-h-40 rounded-none bg-white p-4" />
-              <p className="text-xs text-[#777]">{form.popup.body.length} / 200</p>
-            </Field>
-            <Field>
-              <FieldLabel className="font-bold">Button</FieldLabel>
-              <Input value={form.popup.button} onChange={(event) => updatePopup("button", event.target.value)} className="h-12 rounded-none bg-white" />
-            </Field>
-            <Field>
-              <FieldLabel className="font-bold">Image</FieldLabel>
-              <Input value={form.popup.imageUrl} onChange={(event) => updatePopup("imageUrl", event.target.value)} placeholder="https://..." className="h-12 rounded-none bg-white" />
-            </Field>
+          <section className="border bg-white p-6">
+            <div className="flex flex-wrap items-start justify-between gap-5">
+              <div className="flex gap-4">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#f4eeee] text-[#444]">
+                  <Megaphone className="size-5" />
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold">Gallery subscription pop-up</h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-[#666]">
+                    Invite collection visitors to subscribe with a clean pop-up
+                    form. Each collection can enable or disable marketing
+                    subscription independently.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={form.popup.enabled}
+                onCheckedChange={(value) => updatePopup("enabled", value)}
+              />
+            </div>
+
+            <div className="mt-7 grid gap-5 border-t pt-7 sm:grid-cols-2">
+              <Field className="sm:col-span-2">
+                <FieldLabel className="font-bold">Headline</FieldLabel>
+                <Input
+                  value={form.popup.title}
+                  onChange={(event) => updatePopup("title", event.target.value)}
+                  className="h-12 rounded-none bg-white"
+                />
+              </Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel className="font-bold">Message</FieldLabel>
+                <Textarea
+                  value={form.popup.body}
+                  maxLength={200}
+                  onChange={(event) => updatePopup("body", event.target.value)}
+                  className="min-h-32 rounded-none bg-white p-4"
+                />
+                <p className="text-right text-xs text-[#888]">
+                  {form.popup.body.length} / 200
+                </p>
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold">Button label</FieldLabel>
+                <Input
+                  value={form.popup.button}
+                  onChange={(event) => updatePopup("button", event.target.value)}
+                  className="h-12 rounded-none bg-white"
+                />
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold">Image URL</FieldLabel>
+                <Input
+                  value={form.popup.imageUrl}
+                  onChange={(event) => updatePopup("imageUrl", event.target.value)}
+                  placeholder="https://..."
+                  className="h-12 rounded-none bg-white"
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="border bg-white p-6">
+            <div className="flex items-center justify-between gap-5">
+              <div>
+                <h2 className="text-lg font-bold">Other subscription points</h2>
+                <p className="mt-2 text-sm leading-6 text-[#666]">
+                  Choose which visitor actions may include an optional marketing
+                  subscription checkbox.
+                </p>
+              </div>
+              <span className="rounded-full bg-[#eef8f6] px-3 py-1 text-xs font-bold text-[#008f80]">
+                {activeSources} active
+              </span>
+            </div>
+            <div className="mt-6 divide-y border">
+              {([
+                ["storeCheckout", ShoppingCart, "Store checkout", "Let customers subscribe during checkout."],
+                ["download", Download, "Photo and video download", "Offer subscription when an email is collected for downloads."],
+                ["favoriteSignIn", Heart, "Favorite sign-in", "Offer subscription when visitors identify themselves for favorites."],
+              ] as const).map(([key, Icon, label, text]) => (
+                <label
+                  key={key}
+                  className="flex cursor-pointer items-center gap-4 px-4 py-4 hover:bg-[#fafafa]"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center bg-[#f4f4f4] text-[#555]">
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold">{label}</span>
+                    <span className="mt-1 block text-xs leading-5 text-[#777]">
+                      {text}
+                    </span>
+                  </span>
+                  <Switch
+                    checked={form.optIn[key]}
+                    onCheckedChange={(value) => updateOptIn(key, value)}
+                  />
+                </label>
+              ))}
+            </div>
           </section>
         </div>
-        <MarketingPopupPreview settings={form} />
+
+        <div className="xl:sticky xl:top-6 xl:self-start">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">
+              Live preview
+            </p>
+            <span className="text-xs text-[#999]">Public collection</span>
+          </div>
+          <MarketingPopupPreview settings={form} />
+          <Link
+            href="/dashboard/client-gallery/marketing/contacts"
+            className="mt-4 flex items-center justify-between border bg-white px-5 py-4 text-sm font-bold hover:border-[#22bda7]"
+          >
+            View subscribed contacts
+            <ArrowRight className="size-4 text-[#00a997]" />
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -13049,6 +13186,37 @@ function CollectionDetailView({
                       }
                       text="Require visitors to enter email before viewing photos."
                     />
+                    <div className="border bg-[#fafafa] p-5">
+                      <div className="flex items-start justify-between gap-5">
+                        <div>
+                          <p className="font-bold">Marketing Subscription</p>
+                          <p className="mt-2 max-w-xl text-sm leading-6 text-[#666]">
+                            Show the optional subscription checkbox in Email
+                            Registration and allow the marketing subscription
+                            pop-up for this collection.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={form.general.marketingSubscription !== false}
+                          onCheckedChange={(value) =>
+                            setForm((current) => ({
+                              ...current,
+                              general: {
+                                ...current.general,
+                                marketingSubscription: value,
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                      <Link
+                        href="/dashboard/client-gallery/marketing/settings"
+                        className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#00a997]"
+                      >
+                        Configure subscription form and opt-in locations
+                        <ArrowRight className="size-4" />
+                      </Link>
+                    </div>
                     <SettingSwitch
                       label="Gallery Assist"
                       checked={form.general.galleryAssist}

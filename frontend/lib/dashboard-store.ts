@@ -53,6 +53,7 @@ export type PresetGeneralSettings = {
   photoSets: string;
   defaultWatermark: string;
   emailRegistration: boolean;
+  marketingSubscription: boolean;
   galleryAssist: boolean;
   slideshow: boolean;
   slideshowSpeed: "slow" | "regular" | "fast";
@@ -245,6 +246,7 @@ const emptyPresetGeneral: PresetGeneralSettings = {
   photoSets: "",
   defaultWatermark: "No watermark",
   emailRegistration: false,
+  marketingSubscription: true,
   galleryAssist: false,
   slideshow: true,
   slideshowSpeed: "regular",
