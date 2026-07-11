@@ -41,6 +41,8 @@ export type PublicStoreImage = {
   url: string;
   thumbnailUrl?: string;
   blurDataUrl?: string;
+  mediaType?: "image" | "video";
+  mimetype?: string;
   originalName?: string;
   metadata?: Record<string, unknown>;
 };

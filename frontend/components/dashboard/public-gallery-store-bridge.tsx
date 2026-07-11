@@ -32,6 +32,10 @@ function productCategory(product: PublicStoreProduct) {
   return product.type === "digital-download" ? "Digital Downloads" : product.category || "Other";
 }
 
+function isVideo(image?: GalleryImage) {
+  return image?.mediaType === "video" || String(image?.mimetype || "").startsWith("video/");
+}
+
 export function PublicGalleryStoreBridge({
   name,
   galary,
@@ -164,6 +168,7 @@ export function PublicGalleryStoreBridge({
             url: trigger.dataset.buyPhotoUrl || "",
             thumbnailUrl: trigger.dataset.buyPhotoThumbnail || undefined,
             originalName: trigger.dataset.buyPhotoName || undefined,
+            mediaType: trigger.dataset.buyPhotoMediaType as "image" | "video" | undefined,
           },
         ]);
       }
@@ -194,7 +199,7 @@ export function PublicGalleryStoreBridge({
         'button[aria-label="Back to gallery"], button[aria-label="Close image"], button[aria-label="Close slideshow"]',
       );
       const lightbox = closeButton?.closest<HTMLElement>("div.fixed.inset-0");
-      const preview = lightbox?.querySelector<HTMLImageElement>("img");
+      const preview = lightbox?.querySelector<HTMLImageElement | HTMLVideoElement>("img,video");
       const image = preview ? matchImage(preview.currentSrc || preview.src) : undefined;
       setActiveImageId(image?._id ?? "");
       if (!lightbox) setBuyOpen(false);
@@ -266,7 +271,7 @@ export function PublicGalleryStoreBridge({
       {buyOpen && selectedImage && (
         <BuyPhotoDialog
           image={selectedImage}
-          products={storeData?.products ?? []}
+          products={isVideo(selectedImage) ? (storeData?.products ?? []).filter((product) => product.type === "digital-download") : storeData?.products ?? []}
           currency={storeData?.store?.currency ?? "EUR"}
           onOpenStore={() => {
             setBuyOpen(false);
@@ -379,7 +384,7 @@ function BuyPhotoDialog({
   onPickProduct: (product: PublicStoreProduct) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState("Prints");
+  const [tab, setTab] = useState(products.every((product) => product.type === "digital-download") ? "Digital Downloads" : "Prints");
   const activeProducts = products
     .filter((product) => product.active !== false && productCategory(product) === tab)
     .sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
@@ -394,11 +399,15 @@ function BuyPhotoDialog({
       <div className="mx-auto grid h-full max-h-[930px] w-full max-w-[1200px] overflow-hidden bg-white shadow-2xl lg:grid-cols-[400px_1fr]">
         <div className="relative hidden items-center justify-center overflow-hidden bg-[#a95a54] p-10 lg:flex">
           <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/20" />
-          <img
-            src={publicImageSrc(image.url)}
-            alt={image.originalName || "Selected photo"}
-            className="relative z-10 max-h-[72%] w-full object-contain shadow-xl"
-          />
+          {isVideo(image) ? (
+            <video src={publicImageSrc(image.url)} className="relative z-10 max-h-[72%] w-full object-contain shadow-xl" preload="metadata" muted />
+          ) : (
+            <img
+              src={publicImageSrc(image.url)}
+              alt={image.originalName || "Selected photo"}
+              className="relative z-10 max-h-[72%] w-full object-contain shadow-xl"
+            />
+          )}
         </div>
 
         <div className="min-h-0 overflow-y-auto bg-white">

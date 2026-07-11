@@ -98,6 +98,10 @@ export class StorePricingService {
         : Math.max(1, Math.min(99, Number(raw.quantity ?? 1)));
       const unitPrice = Number(variant?.price ?? product.price ?? 0);
       const isDigital = product.type === 'digital-download';
+      const isVideo = image?.mediaType === 'video' || String(image?.mimetype || '').startsWith('video/');
+      if (isVideo && !isDigital) {
+        throw new BadRequestException(`${product.name}: videos can only be ordered as digital downloads`);
+      }
       const extraShipping = isDigital
         ? 0
         : Number(variant?.extraShipping ?? product.extraShipping ?? 0) * quantity;
@@ -111,7 +115,7 @@ export class StorePricingService {
         variantId: variant?.id || raw.variantId,
         variantLabel: variant?.label || raw.variantLabel || '',
         options: variant?.options || raw.options || {},
-        crop: product.allowCrop === false ? undefined : this.crop(raw.crop),
+        crop: product.allowCrop === false || isVideo ? undefined : this.crop(raw.crop),
         quantity,
         unitPrice,
         extraShipping,

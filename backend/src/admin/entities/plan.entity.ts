@@ -15,6 +15,12 @@ export class Plan {
   monthlyEmails: number;
 
   @Prop({ default: 0, min: 0 })
+  videoMinutes: number;
+
+  @Prop({ default: 'hd', enum: ['hd', '4k'] })
+  videoQuality: 'hd' | '4k';
+
+  @Prop({ default: 0, min: 0 })
   priceMonthly: number;
 
   @Prop({ default: false })

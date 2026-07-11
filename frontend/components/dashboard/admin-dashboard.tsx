@@ -50,6 +50,8 @@ type PlanForm = {
   name: string;
   storageGb: string;
   monthlyEmails: string;
+  videoMinutes: string;
+  videoQuality: "hd" | "4k";
   priceMonthly: string;
   yearlyEnabled: boolean;
   priceYearly: string;
@@ -73,6 +75,8 @@ const emptyPlanForm: PlanForm = {
   name: "",
   storageGb: "",
   monthlyEmails: "",
+  videoMinutes: "",
+  videoQuality: "hd",
   priceMonthly: "",
   yearlyEnabled: false,
   priceYearly: "",
@@ -176,6 +180,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       name: planForm.name,
       storageGb: Number(planForm.storageGb || 0),
       monthlyEmails: Number(planForm.monthlyEmails || 0),
+      videoMinutes: Number(planForm.videoMinutes || 0),
+      videoQuality: planForm.videoQuality,
       priceMonthly: Number(planForm.priceMonthly || 0),
       yearlyEnabled: planForm.yearlyEnabled,
       priceYearly: planForm.yearlyEnabled ? Number(planForm.priceYearly || 0) : 0,
@@ -248,6 +254,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       name: plan.name,
       storageGb: String(plan.storageGb ?? 0),
       monthlyEmails: String(plan.monthlyEmails ?? 0),
+      videoMinutes: String(plan.videoMinutes ?? 0),
+      videoQuality: plan.videoQuality === "4k" ? "4k" : "hd",
       priceMonthly: String(plan.priceMonthly ?? 0),
       yearlyEnabled: Boolean(plan.yearlyEnabled),
       priceYearly: String(plan.priceYearly ?? 0),
@@ -599,6 +607,14 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <InputField label="Plan name" value={planForm.name} onChange={(value) => setPlanForm({ ...planForm, name: value })} required />
               <InputField label="Storage limit GB" value={planForm.storageGb} onChange={(value) => setPlanForm({ ...planForm, storageGb: value })} required type="number" />
               <InputField label="Emails / month" value={planForm.monthlyEmails} onChange={(value) => setPlanForm({ ...planForm, monthlyEmails: value })} required type="number" />
+              <InputField label="Total video minutes" value={planForm.videoMinutes} onChange={(value) => setPlanForm({ ...planForm, videoMinutes: value })} required type="number" />
+              <label className="grid gap-1 text-xs font-bold uppercase tracking-[0.14em] text-[#777]">
+                Video quality
+                <select value={planForm.videoQuality} onChange={(event) => setPlanForm({ ...planForm, videoQuality: event.target.value as "hd" | "4k" })} className="h-11 border px-3 text-sm font-normal normal-case tracking-normal text-[#111] outline-none">
+                  <option value="hd">HD only</option>
+                  <option value="4k">HD + 4K</option>
+                </select>
+              </label>
               <InputField label="Monthly price EUR" value={planForm.priceMonthly} onChange={(value) => setPlanForm({ ...planForm, priceMonthly: value })} required type="number" />
               <label className="flex h-11 items-center justify-between border px-3 text-sm">
                 <span className="font-semibold">Enable yearly billing</span>
@@ -1611,7 +1627,10 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
                 <p className="mt-1 text-xs text-[#777]">Storage + monthly email allowance</p>
               </td>
               <td className="px-4 py-4">{plan.storageGb} GB</td>
-              <td className="px-4 py-4">{plan.monthlyEmails} emails / month</td>
+              <td className="px-4 py-4">
+                <p>{plan.monthlyEmails} emails / month</p>
+                <p className="mt-1 text-xs text-[#777]">{Number(plan.videoMinutes ?? 0)} video min · {plan.videoQuality === "4k" ? "HD + 4K" : "HD"}</p>
+              </td>
               <td className="px-4 py-4">
                 <p>€{Number(plan.priceMonthly ?? 0).toLocaleString()} / month</p>
                 {plan.yearlyEnabled && <p className="mt-1 text-xs text-[#777]">€{Number(plan.priceYearly ?? 0).toLocaleString()} / year</p>}

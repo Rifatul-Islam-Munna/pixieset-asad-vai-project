@@ -14,7 +14,7 @@ type ResolvedCoverText = Required<MobileGalleryCoverText>;
 export function MobileGalleryCover({ app, design, images }: { app: MobileGalleryApp; design: MobileGalleryDesign; images: MobileGalleryImage[] }) {
   const themeName = (design.theme || "lark") as MobileGalleryThemeName;
   const coverStyle = design.coverStyle || "none";
-  const cover = app.coverImage || images[0]?.url;
+  const cover = app.coverImage || images.find((image) => image.mediaType !== "video" && !String(image.mimetype || "").startsWith("video/"))?.url;
   const focal = design.focal || { x: 50, y: 50 };
   const text = getMobileGalleryCoverDefaults(app, themeName, coverStyle, design.coverText);
   const customFamily = customFontFamily(app, text);

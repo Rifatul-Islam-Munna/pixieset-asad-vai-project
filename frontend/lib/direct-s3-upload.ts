@@ -1,5 +1,6 @@
 export type DirectUploadTicket = { objectKey: string; uploadUrl: string; expiresInSeconds: number };
-export type CompletedDirectUpload = { objectKey: string; name: string; type: string; size: number };
+export type DirectUploadMetadata = { name: string; type: string; size: number; durationSeconds?: number; width?: number; height?: number };
+export type CompletedDirectUpload = DirectUploadMetadata & { objectKey: string };
 
 export async function uploadFilesDirectlyToS3(files: File[], tickets: DirectUploadTicket[], onProgress?: (percent: number) => void, concurrency = 3) {
   if (files.length !== tickets.length) throw new Error("Upload authorization mismatch");
@@ -13,7 +14,7 @@ export async function uploadFilesDirectlyToS3(files: File[], tickets: DirectUplo
       const index = nextIndex++;
       await putFile(files[index], tickets[index].uploadUrl, (bytes) => { loaded[index] = bytes; report(); });
       loaded[index] = files[index].size;
-      completed[index] = { objectKey: tickets[index].objectKey, name: files[index].name, type: files[index].type, size: files[index].size };
+      completed[index] = { objectKey: tickets[index].objectKey, ...(await fileUploadMetadata(files[index])) };
       report();
     }
   };
@@ -35,7 +36,33 @@ function putFile(file: File, uploadUrl: string, onProgress: (bytes: number) => v
   });
 }
 
-export const directUploadMetadata = (files: File[]) => files.map((file) => ({ name: file.name, type: file.type, size: file.size }));
+export const directUploadMetadata = (files: File[]) => Promise.all(files.map(fileUploadMetadata));
+
+async function fileUploadMetadata(file: File): Promise<DirectUploadMetadata> {
+  const base = { name: file.name, type: file.type, size: file.size };
+  if (!file.type.startsWith("video/")) return base;
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    const cleanup = () => URL.revokeObjectURL(url);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const metadata = {
+        ...base,
+        durationSeconds: Number.isFinite(video.duration) ? Math.ceil(video.duration) : 0,
+        width: video.videoWidth || 0,
+        height: video.videoHeight || 0,
+      };
+      cleanup();
+      resolve(metadata);
+    };
+    video.onerror = () => {
+      cleanup();
+      resolve(base);
+    };
+    video.src = url;
+  });
+}
 export function batches<T>(items: T[], size: number) {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size));

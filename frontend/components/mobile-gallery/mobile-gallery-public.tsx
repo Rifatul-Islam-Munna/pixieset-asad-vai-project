@@ -349,12 +349,21 @@ export function MobileGalleryPublic({
       className="group relative block w-full overflow-hidden bg-black/5"
       onClick={() => selecting ? toggleSelected(image._id) : setActiveImage(image)}
     >
-      <img
-        src={image.thumbnailUrl || image.url}
-        alt={image.originalName || "Gallery photo"}
-        className={`w-full object-cover transition duration-500 group-hover:scale-[1.02] ${design.layout === "horizontal" ? "aspect-[4/3]" : design.gridStyle === "grid" ? "aspect-[3/4]" : "h-auto"}`}
-        loading="lazy"
-      />
+      {isVideo(image) ? (
+        <span className={`relative block w-full bg-black ${design.layout === "horizontal" ? "aspect-[4/3]" : design.gridStyle === "grid" ? "aspect-[3/4]" : "aspect-video"}`}>
+          <video src={image.url} className="h-full w-full object-cover opacity-80" preload="metadata" muted />
+          <span className="absolute inset-0 flex items-center justify-center text-white">
+            <span className="rounded-full bg-black/45 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em]">Play</span>
+          </span>
+        </span>
+      ) : (
+        <img
+          src={image.thumbnailUrl || image.url}
+          alt={image.originalName || "Gallery photo"}
+          className={`w-full object-cover transition duration-500 group-hover:scale-[1.02] ${design.layout === "horizontal" ? "aspect-[4/3]" : design.gridStyle === "grid" ? "aspect-[3/4]" : "h-auto"}`}
+          loading="lazy"
+        />
+      )}
       {selecting ? (
         <span className={`absolute right-2 top-2 flex size-8 items-center justify-center rounded-full border-2 shadow-sm ${selectedIds.includes(image._id) ? "border-[#18bfa6] bg-[#18bfa6] text-white" : "border-white bg-black/25 text-transparent"}`}>
           <Check className="size-4" />
@@ -385,7 +394,7 @@ export function MobileGalleryPublic({
         {(tab === "home" || tab === "favorites") && (
           <>
             <div className="mb-4 flex min-h-10 flex-wrap items-center justify-between gap-3 px-2 text-xs uppercase tracking-[0.12em] opacity-70">
-              <span>{tab === "favorites" ? `${favoriteImages.length} favorites` : `${images.length} photos`}</span>
+              <span>{tab === "favorites" ? `${favoriteImages.length} favorites` : `${images.length} items`}</span>
               <div className="flex flex-wrap items-center justify-end gap-3">
                 {selecting ? (
                   <>
@@ -414,7 +423,7 @@ export function MobileGalleryPublic({
               )
             ) : (
               <div className="flex min-h-72 items-center justify-center px-5 text-center text-sm opacity-60">
-                {tab === "favorites" ? "Tap the heart on a photo to add it here." : "No photos have been added yet."}
+                {tab === "favorites" ? "Tap the heart on an item to add it here." : "No media has been added yet."}
               </div>
             )}
 
@@ -483,7 +492,11 @@ export function MobileGalleryPublic({
       {activeImage && (
         <div className={`${embedded ? "absolute" : "fixed"} inset-0 z-50 flex items-center justify-center bg-black/90 p-4`}>
           <button type="button" onClick={() => setActiveImage(null)} className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white"><X className="size-6" /></button>
-          <img src={activeImage.url} alt={activeImage.originalName || "Photo"} className="max-h-[82vh] max-w-full object-contain" />
+          {isVideo(activeImage) ? (
+            <video src={activeImage.url} className="max-h-[82vh] max-w-full object-contain" controls autoPlay />
+          ) : (
+            <img src={activeImage.url} alt={activeImage.originalName || "Photo"} className="max-h-[82vh] max-w-full object-contain" />
+          )}
           <div className="absolute bottom-6 flex gap-3">
             <button type="button" onClick={() => toggleFavorite(activeImage._id)} className="rounded-full bg-white p-3 text-black"><Heart className={`size-5 ${favorites.includes(activeImage._id) ? "fill-red-500 text-red-500" : ""}`} /></button>
             <button type="button" onClick={() => downloadImage(activeImage)} className="rounded-full bg-white p-3 text-black"><Download className="size-5" /></button>
@@ -522,4 +535,8 @@ export function MobileGalleryPublic({
       {notice && <div className={`${embedded ? "absolute" : "fixed"} bottom-20 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-black px-4 py-2 text-xs text-white shadow-xl`}>{notice}</div>}
     </main>
   );
+}
+
+function isVideo(image: MobileGalleryImage) {
+  return image.mediaType === "video" || String(image.mimetype || "").startsWith("video/");
 }

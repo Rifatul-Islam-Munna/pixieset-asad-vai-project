@@ -41,6 +41,11 @@ export type CollectionImageRecord = {
   thumbnailUrl?: string;
   blurDataUrl?: string;
   originalName?: string;
+  mimetype?: string;
+  mediaType?: "image" | "video";
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
   watermarked?: boolean;
   metadata?: Record<string, any>;
   order?: number;
@@ -221,7 +226,8 @@ export function useCollectionDetail(collectionId?: string) {
     }) => {
       if (!collectionId) throw new Error("Collection is required");
       const selected = Array.from(files);
-      const [authorization, authorizationError] = await PostRequestAxios<{ data: DirectUploadTicket[] }>(`/collections/${collectionId}/images/direct-upload`, { files: directUploadMetadata(selected) });
+      const metadata = await directUploadMetadata(selected);
+      const [authorization, authorizationError] = await PostRequestAxios<{ data: DirectUploadTicket[] }>(`/collections/${collectionId}/images/direct-upload`, { files: metadata });
       if (authorizationError || !authorization) throw new Error(authorizationError?.message || "Could not authorize upload");
       const completed = await uploadFilesDirectlyToS3(selected, authorization.data, onProgress, 3);
       const uploaded: CollectionImageRecord[] = [];

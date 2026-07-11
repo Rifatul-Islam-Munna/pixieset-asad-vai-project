@@ -35,6 +35,8 @@ export type AdminPlan = {
   name: string;
   storageGb: number;
   monthlyEmails: number;
+  videoMinutes?: number;
+  videoQuality?: "hd" | "4k";
   priceMonthly?: number;
   yearlyEnabled?: boolean;
   priceYearly?: number;

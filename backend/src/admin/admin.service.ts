@@ -128,6 +128,8 @@ export class AdminService implements OnModuleInit {
       otpNumber: '000000',
       storageLimitGb: freePlan.storageGb,
       monthlyEmailLimit: freePlan.monthlyEmails,
+      videoUploadLimitMinutes: 0,
+      videoUploadQuality: 'hd',
       planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
     });
     if (planId) await this.assignPlanToUser(user._id.toString(), planId);
@@ -201,6 +203,8 @@ export class AdminService implements OnModuleInit {
       name: dto.name.trim(),
       storageGb: Number(dto.storageGb ?? 0),
       monthlyEmails: Number(dto.monthlyEmails ?? 0),
+      videoMinutes: Number(dto.videoMinutes ?? 0),
+      videoQuality: dto.videoQuality === '4k' ? '4k' : 'hd',
       priceMonthly: Number(dto.priceMonthly ?? 0),
       yearlyEnabled: Boolean(dto.yearlyEnabled),
       priceYearly: Number(dto.priceYearly ?? 0),
@@ -221,6 +225,8 @@ export class AdminService implements OnModuleInit {
     if (dto.name !== undefined) plan.name = dto.name.trim();
     if (dto.storageGb !== undefined) plan.storageGb = Number(dto.storageGb);
     if (dto.monthlyEmails !== undefined) plan.monthlyEmails = Number(dto.monthlyEmails);
+    if (dto.videoMinutes !== undefined) plan.videoMinutes = Number(dto.videoMinutes);
+    if (dto.videoQuality !== undefined) plan.videoQuality = dto.videoQuality === '4k' ? '4k' : 'hd';
     if (dto.priceMonthly !== undefined) plan.priceMonthly = Number(dto.priceMonthly);
     if (dto.yearlyEnabled !== undefined) plan.yearlyEnabled = Boolean(dto.yearlyEnabled);
     if (dto.priceYearly !== undefined) plan.priceYearly = Number(dto.priceYearly);
@@ -258,6 +264,8 @@ export class AdminService implements OnModuleInit {
         $set: {
           storageLimitGb: settings.storageGb,
           monthlyEmailLimit: settings.monthlyEmails,
+          videoUploadLimitMinutes: 0,
+          videoUploadQuality: 'hd',
           'planFeatures.marketingEmails': settings.monthlyEmails > 0,
         },
       },
@@ -385,6 +393,8 @@ export class AdminService implements OnModuleInit {
           planName: plan.name,
           storageLimitGb: plan.storageGb,
           monthlyEmailLimit: plan.monthlyEmails,
+          videoUploadLimitMinutes: plan.videoMinutes ?? 0,
+          videoUploadQuality: plan.videoQuality ?? 'hd',
           planFeatures: plan.features ?? {},
           monthlyEmailsUsed: 0,
           monthlyUsageKey: this.currentMonthKey(),
@@ -415,6 +425,8 @@ export class AdminService implements OnModuleInit {
           planName: 'Free',
           storageLimitGb: freePlan.storageGb,
           monthlyEmailLimit: freePlan.monthlyEmails,
+          videoUploadLimitMinutes: 0,
+          videoUploadQuality: 'hd',
           planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
           monthlyEmailsUsed: 0,
           monthlyUsageKey: this.currentMonthKey(),
@@ -430,11 +442,13 @@ export class AdminService implements OnModuleInit {
   }
 
   async userCapabilities(userId: string) {
-    const user = await this.userModel.findById(userId).select('planName planFeatures storageLimitGb monthlyEmailLimit').lean();
+    const user = await this.userModel.findById(userId).select('planName planFeatures storageLimitGb monthlyEmailLimit videoUploadLimitMinutes videoUploadQuality').lean();
     return {
       planName: user?.planName ?? 'Free',
       storageLimitGb: user?.storageLimitGb ?? 0,
       monthlyEmailLimit: user?.monthlyEmailLimit ?? 0,
+      videoUploadLimitMinutes: user?.videoUploadLimitMinutes ?? 0,
+      videoUploadQuality: user?.videoUploadQuality ?? 'hd',
       features: user?.planFeatures ?? {},
     };
   }

@@ -20,6 +20,8 @@ type PublicImage = {
   thumbnailUrl?: string;
   blurDataUrl?: string;
   originalName?: string;
+  mimetype?: string;
+  mediaType?: "image" | "video";
   faceScore?: number;
 };
 
@@ -194,7 +196,7 @@ export function PublicGallery({
     [collection?.sets],
   );
   const showSetTabs = gallerySets.length > 0;
-  const coverPhoto = imageSrc(collection?.coverImage || images[0]?.url);
+  const coverPhoto = imageSrc(collection?.coverImage || images.find((image) => !isVideo(image))?.url || "");
   const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
@@ -214,6 +216,11 @@ export function PublicGallery({
   const [shareNotice, setShareNotice] = useState("");
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [downloadEmail, setDownloadEmail] = useState("");
+  const [downloadEmailDraft, setDownloadEmailDraft] = useState("");
+  const [downloadEmailOpen, setDownloadEmailOpen] = useState(false);
+  const [pendingDownload, setPendingDownload] = useState<
+    { type: "single"; photo: PublicImage; index: number } | { type: "all" } | null
+  >(null);
   const [accessEmail, setAccessEmail] = useState("");
   const [accessReason, setAccessReason] = useState("");
   const [accessBusy, setAccessBusy] = useState(false);
@@ -271,17 +278,38 @@ export function PublicGallery({
       setShareNotice("Downloads unlocked");
     }
   };
-  const ensureDownloadEmail = () => {
-    const saved = downloadEmail || window.localStorage.getItem("pixieset-download-email") || "";
-    const email = window.prompt("Enter your email to download", saved);
-    if (!email?.trim() || !email.includes("@")) {
+  const savedDownloadEmail = () => downloadEmail || window.localStorage.getItem("pixieset-download-email") || "";
+  const openDownloadEmail = (pending: typeof pendingDownload) => {
+    setDownloadEmailDraft(savedDownloadEmail());
+    setPendingDownload(pending);
+    setDownloadEmailOpen(true);
+  };
+  const persistDownloadEmail = (value: string) => {
+    const email = value.trim().toLowerCase();
+    if (!email.includes("@")) return "";
+    setDownloadEmail(email);
+    window.localStorage.setItem("pixieset-download-email", email);
+    return email;
+  };
+  const submitDownloadEmail = () => {
+    const email = persistDownloadEmail(downloadEmailDraft);
+    if (!email) {
       setShareNotice("Email is required before download");
+      return;
+    }
+    const pending = pendingDownload;
+    setDownloadEmailOpen(false);
+    setPendingDownload(null);
+    if (pending?.type === "single") void downloadPhoto(pending.photo, pending.index, email);
+    if (pending?.type === "all") void downloadAllImages(email);
+  };
+  const ensureDownloadEmail = (pending: typeof pendingDownload, emailOverride = "") => {
+    const existing = emailOverride || savedDownloadEmail();
+    if (!existing.trim() || !existing.includes("@")) {
+      openDownloadEmail(pending);
       return "";
     }
-    const clean = email.trim().toLowerCase();
-    setDownloadEmail(clean);
-    window.localStorage.setItem("pixieset-download-email", clean);
-    return clean;
+    return persistDownloadEmail(existing);
   };
   const recordDownloadActivity = async (
     email: string,
@@ -299,9 +327,9 @@ export function PublicGallery({
       throw new Error(payload?.message ?? "Download activity failed");
     }
   };
-  const downloadPhoto = async (photo: PublicImage, index = 0) => {
+  const downloadPhoto = async (photo: PublicImage, index = 0, emailOverride = "") => {
     if (!canDownload) return;
-    const email = ensureDownloadEmail();
+    const email = ensureDownloadEmail({ type: "single", photo, index }, emailOverride);
     if (!email) return;
     try {
       await recordDownloadActivity(
@@ -326,8 +354,10 @@ export function PublicGallery({
     link.remove();
     onDownload();
   };
-  const downloadAllImages = async () => {
+  const downloadAllImages = async (emailOverride = "") => {
     if (!canDownload || zipDownloading) return;
+    const email = ensureDownloadEmail({ type: "all" }, emailOverride);
+    if (!email) return;
     let allImages = galleryImages;
     if (collection && imagesHasMore) {
       setZipStage("Loading remaining gallery photos");
@@ -361,9 +391,6 @@ export function PublicGallery({
       : allImages.length;
     const downloadable = allImages.slice(0, remaining || allImages.length);
     if (!downloadable.length) return;
-    const email = ensureDownloadEmail();
-    if (!email) return;
-
     setZipDownloading(true);
     setZipStage("Collecting gallery photos");
     try {
@@ -888,6 +915,39 @@ export function PublicGallery({
           </div>
         </div>
       )}
+      {downloadEmailOpen && (
+        <div className="fixed inset-0 z-[72] flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-[390px] bg-white p-6 text-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#777]">Download access</p>
+                <h2 className="mt-2 text-2xl font-semibold">Enter your email</h2>
+              </div>
+              <button onClick={() => { setDownloadEmailOpen(false); setPendingDownload(null); }} aria-label="Close email dialog">
+                <X className="size-5" />
+              </button>
+            </div>
+            <input
+              value={downloadEmailDraft}
+              onChange={(event) => setDownloadEmailDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitDownloadEmail();
+              }}
+              placeholder="you@example.com"
+              className="mt-6 h-12 w-full border bg-white px-4 text-sm text-black outline-none"
+              autoFocus
+            />
+            <button
+              className="mt-5 h-11 w-full bg-[#202326] text-sm font-bold text-white disabled:opacity-50"
+              onClick={submitDownloadEmail}
+              disabled={!downloadEmailDraft.includes("@")}
+              type="button"
+            >
+              Continue download
+            </button>
+          </div>
+        </div>
+      )}
       {pinDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="w-full max-w-[380px] bg-white p-6 text-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
@@ -932,7 +992,7 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
-              <button className="polished-icon-button" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={activeImage.originalName} type="button" aria-label="Buy this photo" title="Buy this photo">
+              <button className="polished-icon-button" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={activeImage.originalName} data-buy-photo-media-type={activeImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
                 <ShoppingBag className="size-5" />
               </button>
             )}
@@ -952,11 +1012,15 @@ export function PublicGallery({
               </button>
             )}
           </div>
-          <img
-            src={imageSrc(activeImage.url)}
-            alt={activeImage.originalName ?? ""}
-            className="max-h-full max-w-full object-contain"
-          />
+          {isVideo(activeImage) ? (
+            <video src={imageSrc(activeImage.url)} className="max-h-full max-w-full object-contain" controls autoPlay />
+          ) : (
+            <img
+              src={imageSrc(activeImage.url)}
+              alt={activeImage.originalName ?? ""}
+              className="max-h-full max-w-full object-contain"
+            />
+          )}
         </div>
       )}
 
@@ -976,7 +1040,7 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
-              <button className="polished-icon-button" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={slideshowImage.originalName} type="button" aria-label="Buy this photo" title="Buy this photo">
+              <button className="polished-icon-button" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={slideshowImage.originalName} data-buy-photo-media-type={slideshowImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
                 <ShoppingBag className="size-5" />
               </button>
             )}
@@ -996,12 +1060,16 @@ export function PublicGallery({
               </button>
             )}
           </div>
-          <img
-            key={slideshowImage._id}
-            src={imageSrc(slideshowImage.url)}
-            alt={slideshowImage.originalName ?? ""}
-            className="max-h-full max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
-          />
+          {isVideo(slideshowImage) ? (
+            <video key={slideshowImage._id} src={imageSrc(slideshowImage.url)} className="max-h-full max-w-full object-contain" controls autoPlay />
+          ) : (
+            <img
+              key={slideshowImage._id}
+              src={imageSrc(slideshowImage.url)}
+              alt={slideshowImage.originalName ?? ""}
+              className="max-h-full max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
+            />
+          )}
         </div>
       )}
 
@@ -1075,6 +1143,10 @@ function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
 }
 
+function isVideo(image: PublicImage) {
+  return image.mediaType === "video" || String(image.mimetype || "").startsWith("video/");
+}
+
 function imageSetId(image: PublicImage) {
   return image.setId || "highlights";
 }
@@ -1119,12 +1191,21 @@ function GalleryTile({
       style={{ marginBottom: `${spacing}px` }}
     >
       <button className="block w-full" onClick={() => onPreview(photo)}>
-        <GalleryImage
-          src={imageSrc(displayImageUrl(photo))}
-          fallbackSrc={imageSrc(photo.url)}
-          alt={photo.originalName ?? ""}
-          className="block h-auto w-full"
-        />
+        {isVideo(photo) ? (
+          <span className="relative block aspect-video w-full bg-black">
+            <video src={imageSrc(photo.url)} className="h-full w-full object-cover opacity-80" preload="metadata" muted />
+            <span className="absolute inset-0 flex items-center justify-center text-white">
+              <Play className="size-10 fill-current" />
+            </span>
+          </span>
+        ) : (
+          <GalleryImage
+            src={imageSrc(displayImageUrl(photo))}
+            fallbackSrc={imageSrc(photo.url)}
+            alt={photo.originalName ?? ""}
+            className="block h-auto w-full"
+          />
+        )}
       </button>
       <div className="absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         {canFavorite && isPersistedImageId(photo._id) && (

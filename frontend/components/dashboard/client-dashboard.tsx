@@ -2699,6 +2699,7 @@ type FavoriteImageRecord = {
   collectionId: string;
   url: string;
   thumbnailUrl?: string;
+  mediaType?: "image" | "video";
   originalName?: string;
   collectionName?: string;
   galleryUrl?: string;
@@ -9680,6 +9681,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
   const [quickEdit, setQuickEdit] = useState<CollectionRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CollectionRecord | null>(null);
   const [quickForm, setQuickForm] = useState({
     name: "",
     eventDate: "",
@@ -9904,10 +9906,15 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     });
   };
   const removeCollection = (collection: CollectionRecord) => {
-    if (!window.confirm(`Delete "${collection.name}"? This cannot be undone.`))
-      return;
-    deleteCollection.mutate(collection._id, {
-      onSuccess: () => toast.success("Collection deleted"),
+    setDeleteTarget(collection);
+  };
+  const confirmRemoveCollection = () => {
+    if (!deleteTarget) return;
+    deleteCollection.mutate(deleteTarget._id, {
+      onSuccess: () => {
+        toast.success("Collection deleted");
+        setDeleteTarget(null);
+      },
       onError: (error) => toast.error(error.message),
     });
   };
@@ -9996,6 +10003,14 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete collection"
+        description={deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
+        pending={deleteCollection.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmRemoveCollection}
+      />
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-8">
           <h1 className="text-[28px] font-medium leading-none tracking-normal">
@@ -10718,6 +10733,7 @@ function CollectionDetailView({
   const [draggingUpload, setDraggingUpload] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
   const [form, setForm] = useState(() => collectionForm(collection));
   const [collectionStatus, setCollectionStatus] = useState<
@@ -10994,8 +11010,8 @@ function CollectionDetailView({
   };
   const isFileDrag = (event: DragEvent<HTMLElement>) =>
     Array.from(event.dataTransfer.types).includes("Files");
-  const droppedImageFiles = (files: FileList) =>
-    Array.from(files).filter((file) => file.type.startsWith("image/"));
+  const droppedMediaFiles = (files: FileList) =>
+    Array.from(files).filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"));
   const handleImageUpload = async (files: FileList | File[] | null) => {
     if (!files?.length || uploadImages.isPending || uploadProgress.active)
       return;
@@ -11043,7 +11059,7 @@ function CollectionDetailView({
         }));
       }
       toast.success(
-        `Upload finished: ${selectedFiles.length} image${selectedFiles.length === 1 ? "" : "s"}`,
+        `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
@@ -11070,12 +11086,12 @@ function CollectionDetailView({
     if (!isFileDrag(event)) return;
     event.preventDefault();
     setDraggingUpload(false);
-    const imageFiles = droppedImageFiles(event.dataTransfer.files);
-    if (!imageFiles.length) {
-      toast.error("Drop image files only");
+    const mediaFiles = droppedMediaFiles(event.dataTransfer.files);
+    if (!mediaFiles.length) {
+      toast.error("Drop image or video files only");
       return;
     }
-    void handleImageUpload(imageFiles);
+    void handleImageUpload(mediaFiles);
   };
   const uploading = uploadProgress.active || uploadImages.isPending;
   const uploadsLeft = Math.max(
@@ -11150,12 +11166,7 @@ function CollectionDetailView({
     const removeSelected = (event: KeyboardEvent) => {
       if (!selectedImageIds.length || deletingImages) return;
       event.preventDefault();
-      if (
-        window.confirm(
-          `Delete ${selectedImageIds.length} selected image${selectedImageIds.length === 1 ? "" : "s"}?`,
-        )
-      )
-        void deleteSelectedImages();
+      setBulkDeleteConfirmOpen(true);
     };
     const clearSelected = (event: KeyboardEvent) => {
       event.preventDefault();
@@ -11280,7 +11291,7 @@ function CollectionDetailView({
             {uploading ? `${uploadProgress.currentPercent}%` : "Add Media"}
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               disabled={uploading}
               className="hidden"
@@ -11468,9 +11479,9 @@ function CollectionDetailView({
         <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-[#fafafa] transition-colors duration-300">
           {!detailCollapsed && (
             <div className="h-32 shrink-0 bg-[#e8e8e8]">
-              {form.coverImage || images[0]?.url ? (
+              {form.coverImage || images.find((image) => image.mediaType !== "video")?.url ? (
                 <img
-                  src={imageSrc(form.coverImage || images[0]?.url || "")}
+                  src={imageSrc(form.coverImage || images.find((image) => image.mediaType !== "video")?.url || "")}
                   alt=""
                   className="h-full w-full object-cover"
                 />
@@ -11747,7 +11758,7 @@ function CollectionDetailView({
                 )}
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   multiple
                   disabled={uploading}
                   className="hidden"
@@ -11771,7 +11782,7 @@ function CollectionDetailView({
               >
                 {draggingUpload && (
                   <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border border-dashed border-[#22bda7] bg-white/80 text-sm font-bold text-[#00a997]">
-                    Drop images to upload
+                    Drop media to upload
                   </div>
                 )}
                 <div className="mb-4 flex items-center justify-between gap-4">
@@ -11795,7 +11806,7 @@ function CollectionDetailView({
                         <Button
                           className="h-9 rounded-none bg-red-600 text-white hover:bg-red-700"
                           disabled={deletingImages}
-                          onClick={() => void deleteSelectedImages()}
+                          onClick={() => setBulkDeleteConfirmOpen(true)}
                         >
                           {deletingImages ? (
                             <Loader2 className="size-4 animate-spin" />
@@ -11881,17 +11892,29 @@ function CollectionDetailView({
                         disabled={deletingImages}
                         onClick={() => setActiveImageId(image._id)}
                       >
-                        <DashboardImageWithSkeleton
-                          src={imageSrc(image.thumbnailUrl || image.url)}
-                          alt={image.originalName ?? ""}
-                          placeholder={image.blurDataUrl}
-                          className={cn(
-                            "w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105",
-                            form.design.gridStyle === "Horizontal"
-                              ? "aspect-[1.45]"
-                              : "aspect-square",
-                          )}
-                        />
+                        {image.mediaType === "video" ? (
+                          <video
+                            src={imageSrc(image.url)}
+                            className={cn(
+                              "w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105",
+                              form.design.gridStyle === "Horizontal" ? "aspect-[1.45]" : "aspect-square",
+                            )}
+                            preload="metadata"
+                            muted
+                          />
+                        ) : (
+                          <DashboardImageWithSkeleton
+                            src={imageSrc(image.thumbnailUrl || image.url)}
+                            alt={image.originalName ?? ""}
+                            placeholder={image.blurDataUrl}
+                            className={cn(
+                              "w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105",
+                              form.design.gridStyle === "Horizontal"
+                                ? "aspect-[1.45]"
+                                : "aspect-square",
+                            )}
+                          />
+                        )}
                         {!image.watermarked && activeWatermark && (
                           <WatermarkOverlay watermark={activeWatermark} />
                         )}
@@ -11964,8 +11987,11 @@ function CollectionDetailView({
                           coverImageAccess.locked &&
                             "cursor-not-allowed opacity-60",
                         )}
-                        disabled={deletingImages || coverImageAccess.locked}
+                        disabled={deletingImages || coverImageAccess.locked || image.mediaType === "video"}
                         title={
+                          image.mediaType === "video"
+                            ? "Videos cannot be collection covers"
+                            :
                           coverImageAccess.locked
                             ? "Cover image is not included in your current plan"
                             : "Make collection cover"
@@ -12036,6 +12062,17 @@ function CollectionDetailView({
                     </Button>
                   </div>
                 )}
+                <DeleteConfirmDialog
+                  open={bulkDeleteConfirmOpen}
+                  title="Delete selected media"
+                  description={`Delete ${selectedImageIds.length} selected item${selectedImageIds.length === 1 ? "" : "s"}? This cannot be undone.`}
+                  pending={deletingImages}
+                  onCancel={() => setBulkDeleteConfirmOpen(false)}
+                  onConfirm={() => {
+                    setBulkDeleteConfirmOpen(false);
+                    void deleteSelectedImages();
+                  }}
+                />
                 <Dialog open={metadataOpen} onOpenChange={setMetadataOpen}>
                   <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
                     <DialogHeader>
@@ -12153,7 +12190,7 @@ function CollectionDetailView({
                     ? formatDate(collection.eventDate)
                     : form.design.coverDate
                 }
-                coverImage={form.coverImage || images[0]?.url}
+                coverImage={form.coverImage || images.find((image) => image.mediaType !== "video")?.url}
                 images={images}
                 sets={form.sets}
                 favoriteEnabled={form.favorite.favoritePhotos !== false}

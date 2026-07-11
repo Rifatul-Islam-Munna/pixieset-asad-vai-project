@@ -14,6 +14,11 @@ export type MobileGalleryImage = {
   url: string;
   thumbnailUrl?: string;
   originalName?: string;
+  mimetype?: string;
+  mediaType?: "image" | "video";
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
   order?: number;
 };
 
@@ -156,7 +161,8 @@ export function useMobileGalleryApp(appId?: string) {
       if (!appId) throw new Error("App is required");
       const files = "files" in input ? input.files : input;
       const selected = Array.from(files);
-      const [authorization, authorizationError] = await PostRequestAxios<Data<DirectUploadTicket[]>>(`/mobile-gallery/apps/${appId}/images/direct-upload`, { files: directUploadMetadata(selected) });
+      const metadata = await directUploadMetadata(selected);
+      const [authorization, authorizationError] = await PostRequestAxios<Data<DirectUploadTicket[]>>(`/mobile-gallery/apps/${appId}/images/direct-upload`, { files: metadata });
       if (authorizationError || !authorization) throw new Error(authorizationError?.message || "Could not authorize upload");
       const completed = await uploadFilesDirectlyToS3(selected, authorization.data, "files" in input ? input.onProgress : undefined, 3);
       const uploaded: MobileGalleryImage[] = [];

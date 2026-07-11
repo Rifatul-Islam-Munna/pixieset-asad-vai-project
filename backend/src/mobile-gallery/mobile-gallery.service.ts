@@ -29,6 +29,16 @@ const defaultSettings = {
   },
 };
 
+type DirectUploadFile = {
+  objectKey: string;
+  name: string;
+  type: string;
+  size: number;
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
+};
+
 @Injectable()
 export class MobileGalleryService {
   constructor(
@@ -159,6 +169,7 @@ export class MobileGalleryService {
         originalName: file.originalname,
         filename: file.filename,
         mimetype: file.mimetype,
+        mediaType: 'image',
         sizeBytes: file.size ?? 0,
         order: start + index + 1,
       });
@@ -178,19 +189,21 @@ export class MobileGalleryService {
     return uploaded;
   }
 
-  async createDirectUploads(userId: string, appId: string, files: Array<{ name: string; type: string; size: number }>) {
+  async createDirectUploads(userId: string, appId: string, files: Array<{ name: string; type: string; size: number; durationSeconds?: number; width?: number; height?: number }>) {
     if (!Array.isArray(files) || !files.length || files.length > 100) throw new BadRequestException('1 to 100 files are required');
     const app = await this.appModel.exists({ _id: appId, userId });
     if (!app) throw new NotFoundException('Mobile gallery app not found');
     await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + Math.max(0, Number(file.size)), 0));
+    await this.ensureVideoPlanAvailable(userId, files);
     return Promise.all(files.map((file) => this.minioService.createDirectUpload(userId, file)));
   }
 
-  async completeDirectUploads(userId: string, appId: string, files: Array<{ objectKey: string; name: string; type: string; size: number }>) {
+  async completeDirectUploads(userId: string, appId: string, files: DirectUploadFile[]) {
     if (!Array.isArray(files) || !files.length || files.length > 10) throw new BadRequestException('1 to 10 completed files are required');
-    const verified: Array<{ objectKey: string; size: number; type: string; url: string; name: string }> = [];
-    for (const file of files) verified.push(await this.minioService.verifyDirectUpload(userId, file));
+    const verified: Array<DirectUploadFile & { url: string }> = [];
+    for (const file of files) verified.push({ ...file, ...(await this.minioService.verifyDirectUpload(userId, file)) });
     await this.ensureStorageAvailable(userId, verified.reduce((sum, file) => sum + file.size, 0));
+    await this.ensureVideoPlanAvailable(userId, verified);
     const app = await this.appModel.findOne({ _id: appId, userId }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
     const last = await this.imageModel.findOne({ appId, userId }).sort({ order: -1 }).lean();
@@ -205,15 +218,23 @@ export class MobileGalleryService {
         originalName: file.name,
         filename: file.objectKey,
         mimetype: file.type,
+        mediaType: this.mediaType(file.type),
         sizeBytes: file.size,
+        durationSeconds: this.safeSeconds(file.durationSeconds),
+        width: this.safeDimension(file.width),
+        height: this.safeDimension(file.height),
         order: start + index + 1,
       });
       await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: file.size } });
       uploaded.push(image.toObject());
     }
+    const firstImageUrl = uploaded.find((item) => item.mediaType !== 'video')?.url;
     await this.appModel.updateOne(
       { _id: appId, userId },
-      { $inc: { imageCount: uploaded.length }, ...(app.coverImage ? {} : { $set: { coverImage: uploaded[0]?.url } }) },
+      {
+        $inc: { imageCount: uploaded.length },
+        ...(app.coverImage || !firstImageUrl ? {} : { $set: { coverImage: firstImageUrl } }),
+      },
     );
     return uploaded;
   }
@@ -324,6 +345,56 @@ export class MobileGalleryService {
     if (used + incomingBytes > limitBytes) {
       throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');
     }
+  }
+
+  private async ensureVideoPlanAvailable(userId: string, files: Array<{ type?: string; durationSeconds?: number; width?: number; height?: number }>) {
+    const incomingVideos = files.filter((file) => this.mediaType(file.type) === 'video');
+    if (!incomingVideos.length) return;
+    const user = await this.userModel.findById(userId).select('videoUploadLimitMinutes videoUploadQuality planExpiresAt').lean();
+    if (user?.planExpiresAt && user.planExpiresAt <= new Date()) throw new BadRequestException('Plan expired. Purchase a plan to continue uploading videos.');
+    const limitSeconds = Math.max(0, Number(user?.videoUploadLimitMinutes ?? 0)) * 60;
+    const incomingSeconds = incomingVideos.reduce((sum, file) => sum + this.safeSeconds(file.durationSeconds), 0);
+    if (incomingSeconds <= 0) throw new BadRequestException('Video duration metadata is required.');
+    const [mobile, collections] = await Promise.all([
+      this.imageModel.aggregate([{ $match: { userId, mediaType: 'video' } }, { $group: { _id: null, total: { $sum: '$durationSeconds' } } }]),
+      this.collectionImageModel.aggregate([{ $match: { userId, mediaType: 'video' } }, { $group: { _id: null, total: { $sum: '$durationSeconds' } } }]),
+    ]);
+    const usedSeconds = Number(mobile[0]?.total ?? 0) + Number(collections[0]?.total ?? 0);
+    if (limitSeconds <= 0 || usedSeconds + incomingSeconds > limitSeconds) {
+      throw new BadRequestException('Video minute limit exceeded. Upgrade plan to upload more video.');
+    }
+    const allowedQuality = user?.videoUploadQuality === '4k' ? '4k' : 'hd';
+    for (const file of incomingVideos) {
+      const quality = this.videoQuality(file.width, file.height);
+      if (quality === 'unknown') throw new BadRequestException('Video resolution metadata is required.');
+      if (quality === 'over-4k') throw new BadRequestException('Videos larger than 4K are not supported.');
+      if (allowedQuality === 'hd' && quality !== 'hd') throw new BadRequestException('Your plan only allows HD video uploads.');
+    }
+  }
+
+  private mediaType(type?: string) {
+    return String(type || '').toLowerCase().startsWith('video/') ? 'video' : 'image';
+  }
+
+  private safeSeconds(value: unknown) {
+    const seconds = Number(value);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 0;
+  }
+
+  private safeDimension(value: unknown) {
+    const dimension = Number(value);
+    return Number.isFinite(dimension) && dimension > 0 ? Math.round(dimension) : 0;
+  }
+
+  private videoQuality(width?: number, height?: number): 'hd' | '4k' | 'over-4k' | 'unknown' {
+    const w = this.safeDimension(width);
+    const h = this.safeDimension(height);
+    if (!w || !h) return 'unknown';
+    const long = Math.max(w, h);
+    const short = Math.min(w, h);
+    if (long <= 1920 && short <= 1080) return 'hd';
+    if (long <= 3840 && short <= 2160) return '4k';
+    return 'over-4k';
   }
 
   private async decrementStorageUsedBytes(userId: string, bytes: number) {

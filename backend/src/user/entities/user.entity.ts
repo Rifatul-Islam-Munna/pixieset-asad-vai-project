@@ -81,6 +81,12 @@ export class User {
   monthlyEmailLimit: number;
 
   @Prop({ default: 0 })
+  videoUploadLimitMinutes: number;
+
+  @Prop({ default: 'hd', enum: ['hd', '4k'] })
+  videoUploadQuality: 'hd' | '4k';
+
+  @Prop({ default: 0 })
   storageUsedBytes: number;
 
   @Prop({ default: 0 })

@@ -27,6 +27,8 @@ function safePlan(plan: Partial<AdminPlan> | null | undefined, index: number): A
     name: String(plan?.name ?? "Untitled plan"),
     storageGb: Number(plan?.storageGb ?? 0),
     monthlyEmails: Number(plan?.monthlyEmails ?? 0),
+    videoMinutes: Number(plan?.videoMinutes ?? 0),
+    videoQuality: plan?.videoQuality === "4k" ? "4k" : "hd",
     priceMonthly: Number(plan?.priceMonthly ?? 0),
     yearlyEnabled: Boolean(plan?.yearlyEnabled),
     priceYearly: Number(plan?.priceYearly ?? 0),
@@ -139,6 +141,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                   <div className="mt-6 grid gap-3 border-t pt-5 text-sm">
                     <div className="flex justify-between gap-4"><span>Photo storage</span><b>{Number(plan.storageGb ?? 0).toLocaleString()} GB</b></div>
                     <div className="flex justify-between gap-4"><span>Monthly emails</span><b>{Number(plan.monthlyEmails ?? 0).toLocaleString()}</b></div>
+                    <div className="flex justify-between gap-4"><span>Video uploads</span><b>{Number(plan.videoMinutes ?? 0).toLocaleString()} min · {plan.videoQuality === "4k" ? "4K" : "HD"}</b></div>
                   </div>
                   <div className="mt-5 grid gap-3 border-t pt-5">
                     {Object.entries(featureLabels).map(([key, label]) => (
@@ -197,6 +200,11 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
               <LabelCell label="Monthly emails" />
               {filtered.map((plan) => (
                 <ValueCell key={`${plan._id}-emails`} recommended={plan._id === recommendedId} primary={`${Number(plan.monthlyEmails ?? 0).toLocaleString()}`} secondary="emails / month" />
+              ))}
+
+              <LabelCell label="Video uploads" />
+              {filtered.map((plan) => (
+                <ValueCell key={`${plan._id}-video`} recommended={plan._id === recommendedId} primary={`${Number(plan.videoMinutes ?? 0).toLocaleString()} min`} secondary={plan.videoQuality === "4k" ? "HD + 4K" : "HD only"} />
               ))}
 
               {Object.entries(featureLabels).map(([key, label]) => (

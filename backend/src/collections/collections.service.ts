@@ -36,6 +36,16 @@ type WatermarkData = {
   applyDownloads?: boolean;
 };
 
+type DirectUploadFile = {
+  objectKey: string;
+  name: string;
+  type: string;
+  size: number;
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
+};
+
 @Injectable()
 export class CollectionsService {
   constructor(
@@ -753,6 +763,7 @@ export class CollectionsService {
 
   async uploadImages(userId: string, collectionId: string, files: Express.Multer.File[], setId?: string, uploadWatermarkId?: string) {
     if (!files?.length) throw new BadRequestException('Files are required');
+    this.assertImageFiles(files);
     await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + (file.size ?? 0), 0));
 
     const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
@@ -796,28 +807,72 @@ export class CollectionsService {
     return uploaded;
   }
 
-  async createDirectUploads(userId: string, collectionId: string, files: Array<{ name: string; type: string; size: number }>) {
+  async createDirectUploads(userId: string, collectionId: string, files: Array<{ name: string; type: string; size: number; durationSeconds?: number; width?: number; height?: number }>) {
     if (!Array.isArray(files) || !files.length || files.length > 100) throw new BadRequestException('1 to 100 files are required');
     const collection = await this.collectionModel.exists({ _id: collectionId, userId });
     if (!collection) throw new NotFoundException('Collection not found');
     await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + Math.max(0, Number(file.size)), 0));
+    await this.ensureVideoPlanAvailable(userId, files);
     return Promise.all(files.map((file) => this.minioService.createDirectUpload(userId, file)));
   }
 
   async completeDirectUploads(
     userId: string,
     collectionId: string,
-    files: Array<{ objectKey: string; name: string; type: string; size: number }>,
+    files: DirectUploadFile[],
     setId?: string,
     watermarkId?: string,
   ) {
     if (!Array.isArray(files) || !files.length || files.length > 10) throw new BadRequestException('1 to 10 completed files are required');
+    const verified: Array<DirectUploadFile & { url: string }> = [];
+    for (const file of files) verified.push({ ...file, ...(await this.minioService.verifyDirectUpload(userId, file)) });
+    await this.ensureStorageAvailable(userId, verified.reduce((sum, file) => sum + file.size, 0));
+    await this.ensureVideoPlanAvailable(userId, verified);
+    const savedVideos: any[] = [];
+    if (verified.some((file) => this.mediaType(file.type) === 'video')) {
+      const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+      if (!collection) throw new NotFoundException('Collection not found');
+      const resolvedSetId = setId || collection.sets?.[0]?.id || 'highlights';
+      const lastImage = await this.imageModel.findOne({ collectionId, userId }).sort({ order: -1, createdAt: -1 }).select('order').lean();
+      const startOrder = Math.max(0, Number(lastImage?.order ?? 0));
+      for (const [index, file] of verified.entries()) {
+        if (this.mediaType(file.type) === 'image') continue;
+        const image = await this.imageModel.create({
+          userId,
+          collectionId,
+          setId: resolvedSetId,
+          url: file.url,
+          thumbnailUrl: '',
+          blurDataUrl: '',
+          originalName: file.name,
+          filename: file.objectKey,
+          mimetype: file.type,
+          mediaType: 'video',
+          sizeBytes: file.size,
+          durationSeconds: this.safeSeconds(file.durationSeconds),
+          width: this.safeDimension(file.width),
+          height: this.safeDimension(file.height),
+          watermarked: false,
+          order: startOrder + index + 1,
+          metadata: { videoQuality: this.videoQuality(file.width, file.height) },
+        });
+        await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: file.size } });
+        savedVideos.push(image.toObject());
+      }
+      await this.collectionModel.updateOne(
+        { _id: collectionId, userId },
+        { $inc: { imageCount: savedVideos.length } },
+      );
+      const imageFiles = verified.filter((file) => this.mediaType(file.type) === 'image');
+      if (!imageFiles.length) return savedVideos;
+    }
     const localFiles: Express.Multer.File[] = [];
     try {
-      for (const file of files) localFiles.push(await this.minioService.downloadDirectUpload(userId, file));
-      return await this.uploadImages(userId, collectionId, localFiles, setId, watermarkId);
+      for (const file of verified.filter((item) => this.mediaType(item.type) === 'image')) localFiles.push(await this.minioService.downloadDirectUpload(userId, file));
+      const savedImages = await this.uploadImages(userId, collectionId, localFiles, setId, watermarkId);
+      return [...savedVideos, ...savedImages];
     } finally {
-      await Promise.all(files.map((file) => this.minioService.deleteDirectUpload(userId, file.objectKey).catch(() => null)));
+      await Promise.all(verified.filter((item) => this.mediaType(item.type) === 'image').map((file) => this.minioService.deleteDirectUpload(userId, file.objectKey).catch(() => null)));
       await Promise.all(localFiles.map((file) => this.safeUnlink(file.path)));
     }
   }
@@ -923,6 +978,7 @@ export class CollectionsService {
       originalName: file.originalname,
       filename: uploadFile.filename,
       mimetype: uploadFile.mimetype,
+      mediaType: 'image',
       sizeBytes: uploadFile.size ?? file.size ?? 0,
       watermarked,
       order,
@@ -939,6 +995,11 @@ export class CollectionsService {
   private imageProcessingConcurrency() {
     const configured = Number(this.configService.get<string>('IMAGE_UPLOAD_PROCESSING_CONCURRENCY') ?? 2);
     return Math.max(1, Math.min(4, Number.isFinite(configured) ? Math.floor(configured) : 2));
+  }
+
+  private assertImageFiles(files: Express.Multer.File[]) {
+    const invalid = files.find((file) => !String(file.mimetype || '').toLowerCase().startsWith('image/'));
+    if (invalid) throw new BadRequestException(`${invalid.originalname || 'File'} is not supported by this upload endpoint`);
   }
 
   private async mapWithConcurrency<T, R>(
@@ -1039,7 +1100,7 @@ export class CollectionsService {
 
   private async ensureCollectionPreviews(collectionId: string) {
     const images = await this.imageModel
-      .find({ collectionId, thumbnailUrl: { $in: [null, ''] } })
+      .find({ collectionId, mediaType: { $ne: 'video' }, thumbnailUrl: { $in: [null, ''] } })
       .limit(30)
       .lean()
       .catch(() => []);
@@ -1373,6 +1434,66 @@ export class CollectionsService {
     if (used + incomingBytes > limitBytes) {
       throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');
     }
+  }
+
+  private async ensureVideoPlanAvailable(userId: string, files: Array<{ type?: string; durationSeconds?: number; width?: number; height?: number }>) {
+    const incomingVideos = files.filter((file) => this.mediaType(file.type) === 'video');
+    if (!incomingVideos.length) return;
+    const user = await this.userModel.findById(userId).select('videoUploadLimitMinutes videoUploadQuality planExpiresAt').lean();
+    if (user?.planExpiresAt && user.planExpiresAt <= new Date()) {
+      throw new BadRequestException('Plan expired. Purchase a plan to continue uploading videos.');
+    }
+    const limitSeconds = Math.max(0, Number(user?.videoUploadLimitMinutes ?? 0)) * 60;
+    const incomingSeconds = incomingVideos.reduce((sum, file) => sum + this.safeSeconds(file.durationSeconds), 0);
+    if (incomingSeconds <= 0) throw new BadRequestException('Video duration metadata is required.');
+    const current = await Promise.all([
+      this.imageModel.aggregate([
+        { $match: { userId, mediaType: 'video' } },
+        { $group: { _id: null, total: { $sum: '$durationSeconds' } } },
+      ]),
+      this.mobileGalleryImageModel.aggregate([
+        { $match: { userId, mediaType: 'video' } },
+        { $group: { _id: null, total: { $sum: '$durationSeconds' } } },
+      ]),
+    ]);
+    const usedSeconds = Number(current[0][0]?.total ?? 0) + Number(current[1][0]?.total ?? 0);
+    if (limitSeconds <= 0 || usedSeconds + incomingSeconds > limitSeconds) {
+      throw new BadRequestException('Video minute limit exceeded. Upgrade plan to upload more video.');
+    }
+    const allowedQuality = user?.videoUploadQuality === '4k' ? '4k' : 'hd';
+    for (const file of incomingVideos) {
+      const quality = this.videoQuality(file.width, file.height);
+      if (quality === 'unknown') throw new BadRequestException('Video resolution metadata is required.');
+      if (quality === 'over-4k') throw new BadRequestException('Videos larger than 4K are not supported.');
+      if (allowedQuality === 'hd' && quality !== 'hd') {
+        throw new BadRequestException('Your plan only allows HD video uploads.');
+      }
+    }
+  }
+
+  private mediaType(type?: string) {
+    return String(type || '').toLowerCase().startsWith('video/') ? 'video' : 'image';
+  }
+
+  private safeSeconds(value: unknown) {
+    const seconds = Number(value);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 0;
+  }
+
+  private safeDimension(value: unknown) {
+    const dimension = Number(value);
+    return Number.isFinite(dimension) && dimension > 0 ? Math.round(dimension) : 0;
+  }
+
+  private videoQuality(width?: number, height?: number): 'hd' | '4k' | 'over-4k' | 'unknown' {
+    const w = this.safeDimension(width);
+    const h = this.safeDimension(height);
+    if (!w || !h) return 'unknown';
+    const long = Math.max(w, h);
+    const short = Math.min(w, h);
+    if (long <= 1920 && short <= 1080) return 'hd';
+    if (long <= 3840 && short <= 2160) return '4k';
+    return 'over-4k';
   }
 
   private async decrementStorageUsedBytes(userId: string, bytes: number) {

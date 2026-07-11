@@ -55,20 +55,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "No images to download" }, { status: 400 });
   }
 
-  const files: { name: string; data: Uint8Array }[] = [];
-  for (const [index, image] of images.entries()) {
+  const usedNames = new Set<string>();
+  const files = (await mapWithConcurrency(images, 6, async (image, index) => {
     const targetUrl = resolveDownloadUrl(image.url ?? "");
     const parsed = parseHttpUrl(targetUrl);
-    if (!parsed) continue;
+    if (!parsed) return null;
 
     const response = await fetch(parsed, { cache: "no-store" }).catch(() => null);
-    if (!response?.ok) continue;
+    if (!response?.ok) return null;
 
     const contentType = response.headers.get("content-type") || "application/octet-stream";
     const extension = extensionFromContentType(contentType) || extensionFromPath(new URL(parsed).pathname);
-    const filename = safeZipEntryName(String(image.name || `photo-${index + 1}`), extension, files.map((file) => file.name));
-    files.push({ name: filename, data: new Uint8Array(await response.arrayBuffer()) });
-  }
+    const filename = safeZipEntryName(String(image.name || `photo-${index + 1}`), extension, usedNames);
+    usedNames.add(filename);
+    return { name: filename, data: new Uint8Array(await response.arrayBuffer()) };
+  })).filter((file): file is { name: string; data: Uint8Array } => Boolean(file));
 
   if (!files.length) {
     return NextResponse.json({ message: "Image download failed" }, { status: 502 });
@@ -106,15 +107,15 @@ function safeFilename(value: string, extension: string) {
   return `${clean}${extension || ".jpg"}`;
 }
 
-function safeZipEntryName(value: string, extension: string, existing: string[]) {
+function safeZipEntryName(value: string, extension: string, existing: Set<string>) {
   const base = safeFilename(value, extension);
-  if (!existing.includes(base)) return base;
+  if (!existing.has(base)) return base;
 
   const stem = base.replace(/\.[a-z0-9]{2,5}$/i, "");
   const ext = extensionFromPath(base);
   let count = 2;
   let next = `${stem}-${count}${ext}`;
-  while (existing.includes(next)) {
+  while (existing.has(next)) {
     count += 1;
     next = `${stem}-${count}${ext}`;
   }
@@ -125,6 +126,9 @@ function extensionFromContentType(contentType: string) {
   if (contentType.includes("png")) return ".png";
   if (contentType.includes("webp")) return ".webp";
   if (contentType.includes("gif")) return ".gif";
+  if (contentType.includes("mp4")) return ".mp4";
+  if (contentType.includes("quicktime")) return ".mov";
+  if (contentType.includes("webm")) return ".webm";
   if (contentType.includes("jpeg") || contentType.includes("jpg")) return ".jpg";
   return "";
 }
@@ -139,5 +143,17 @@ async function createZip(files: { name: string; data: Uint8Array }[]) {
   for (const file of files) {
     zip.file(file.name, file.data);
   }
-  return zip.generateAsync({ type: "uint8array" });
+  return zip.generateAsync({ type: "uint8array", compression: "STORE" });
+}
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T, index: number) => Promise<R>) {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await mapper(items[index], index);
+    }
+  }));
+  return results;
 }

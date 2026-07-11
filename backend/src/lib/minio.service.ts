@@ -19,6 +19,8 @@ import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 
 const DEFAULT_BUCKET_NAME = 'gallerista.app';
+const IMAGE_MAX_BYTES = 150 * 1024 * 1024;
+const VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 
 @Injectable()
 export class MinioService implements OnModuleInit {
@@ -134,9 +136,13 @@ export class MinioService implements OnModuleInit {
   async createDirectUpload(userId: string, input: { name: string; type: string; size: number }) {
     if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
     const size = Math.max(0, Number(input.size));
-    if (!size || size > 150 * 1024 * 1024) throw new HttpException('Each file must be 150 MB or smaller', HttpStatus.BAD_REQUEST);
     const type = String(input.type || '').toLowerCase();
-    if (!type.startsWith('image/')) throw new HttpException('Only image files are allowed', HttpStatus.BAD_REQUEST);
+    const isVideo = type.startsWith('video/');
+    const isImage = type.startsWith('image/');
+    if (!isImage && !isVideo) throw new HttpException('Only image and video files are allowed', HttpStatus.BAD_REQUEST);
+    if (!size || size > (isVideo ? VIDEO_MAX_BYTES : IMAGE_MAX_BYTES)) {
+      throw new HttpException(isVideo ? 'Each video must be 2 GB or smaller' : 'Each image must be 150 MB or smaller', HttpStatus.BAD_REQUEST);
+    }
     const extension = extname(String(input.name || '')).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 12);
     const objectKey = `direct/${userId}/${randomUUID()}${extension}`;
     const uploadUrl = await getSignedUrl(this.s3, new PutObjectCommand({
@@ -153,12 +159,14 @@ export class MinioService implements OnModuleInit {
     const head = await this.s3.send(new HeadObjectCommand({ Bucket: this.bucketName, Key: objectKey }));
     const actualSize = Math.max(0, Number(head.ContentLength ?? 0));
     const expectedSize = Math.max(0, Number(input.size ?? 0));
-    if (!actualSize || actualSize > 150 * 1024 * 1024 || actualSize !== expectedSize) {
+    const contentType = String(head.ContentType || input.type || '').toLowerCase();
+    const isVideo = contentType.startsWith('video/');
+    const isImage = contentType.startsWith('image/');
+    if (!isImage && !isVideo) throw new HttpException('Only image and video files are allowed', HttpStatus.BAD_REQUEST);
+    if (!actualSize || actualSize > (isVideo ? VIDEO_MAX_BYTES : IMAGE_MAX_BYTES) || actualSize !== expectedSize) {
       throw new HttpException('Uploaded file size does not match', HttpStatus.BAD_REQUEST);
     }
-    const contentType = String(head.ContentType || input.type || '').toLowerCase();
-    if (!contentType.startsWith('image/')) throw new HttpException('Only image files are allowed', HttpStatus.BAD_REQUEST);
-    return { objectKey, size: actualSize, type: contentType, url: this.publicUrl(objectKey), name: String(input.name || 'image') };
+    return { objectKey, size: actualSize, type: contentType, url: this.publicUrl(objectKey), name: String(input.name || (isVideo ? 'video' : 'image')) };
   }
 
   async downloadDirectUpload(userId: string, input: { objectKey: string; name: string; type: string; size: number }) {

@@ -26,8 +26,20 @@ export class MobileGalleryImage {
   @Prop()
   mimetype?: string;
 
+  @Prop({ default: 'image', enum: ['image', 'video'], index: true })
+  mediaType: 'image' | 'video';
+
   @Prop({ default: 0 })
   sizeBytes: number;
+
+  @Prop({ default: 0 })
+  durationSeconds?: number;
+
+  @Prop({ default: 0 })
+  width?: number;
+
+  @Prop({ default: 0 })
+  height?: number;
 
   @Prop({ default: 0 })
   order: number;

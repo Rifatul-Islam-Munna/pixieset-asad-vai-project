@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class AdminCreatePlanDto {
   @IsString()
@@ -12,6 +12,15 @@ export class AdminCreatePlanDto {
   @IsNumber()
   @Min(0)
   monthlyEmails: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  videoMinutes?: number;
+
+  @IsOptional()
+  @IsIn(['hd', '4k'])
+  videoQuality?: 'hd' | '4k';
 
   @IsOptional()
   @IsNumber()
@@ -50,6 +59,15 @@ export class AdminUpdatePlanDto {
   @IsNumber()
   @Min(0)
   monthlyEmails?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  videoMinutes?: number;
+
+  @IsOptional()
+  @IsIn(['hd', '4k'])
+  videoQuality?: 'hd' | '4k';
 
   @IsOptional()
   @IsNumber()

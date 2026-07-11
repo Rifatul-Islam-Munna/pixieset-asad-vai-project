@@ -16,6 +16,8 @@ export type PlanCapabilities = {
   planName: string;
   storageLimitGb: number;
   monthlyEmailLimit: number;
+  videoUploadLimitMinutes?: number;
+  videoUploadQuality?: "hd" | "4k";
   features: Partial<Record<PlanFeatureKey, boolean>>;
 };
 

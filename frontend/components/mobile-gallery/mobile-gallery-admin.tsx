@@ -241,7 +241,7 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
     : 0;
   const dropClass = draggingUpload ? " border-[#18bfa6] bg-[#f2fffd]" : "";
   function isFileDrag(event: DragEvent<HTMLElement>) { return Array.from(event.dataTransfer.types).includes("Files"); }
-  function imageFiles(files: FileList) { return Array.from(files).filter((file) => file.type.startsWith("image/")); }
+  function mediaFiles(files: FileList) { return Array.from(files).filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/")); }
   async function upload(files?: FileList | File[] | null) {
     if (!files?.length || uploading) return;
     const selectedFiles = Array.from(files);
@@ -262,7 +262,7 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
         }
         setUploadProgress((current) => ({ ...current, uploaded: index + 1, currentPercent: 100 }));
       }
-      toast.success(`Upload finished: ${selectedFiles.length} photo${selectedFiles.length === 1 ? "" : "s"}`);
+      toast.success(`Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
@@ -275,8 +275,8 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
     if (!isFileDrag(event)) return;
     event.preventDefault();
     setDraggingUpload(false);
-    const files = imageFiles(event.dataTransfer.files);
-    if (!files.length) { toast.error("Drop image files only"); return; }
+    const files = mediaFiles(event.dataTransfer.files);
+    if (!files.length) { toast.error("Drop image or video files only"); return; }
     void upload(files);
   }
   async function loadMoreImages() {
@@ -307,8 +307,8 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
   }, [images.length, imagesHasMore, imagesLoadingMore]);
   return (
     <section className={`relative pt-6${dropClass}`} onDragEnter={onDragOver} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
-      {draggingUpload && <div className="pointer-events-none absolute inset-0 z-20 flex min-h-72 items-center justify-center border border-dashed border-[#18bfa6] bg-white/80 text-sm font-semibold text-[#18bfa6]">Drop images to upload</div>}
-      <div className="flex flex-wrap items-center justify-between gap-4"><p className="text-sm font-semibold">{images.length} photos</p><div className="flex items-center gap-5 text-sm"><span className="flex items-center gap-2 text-[#888]"><GripVertical className="size-4" /> Drag to sort</span><label className={`relative flex cursor-pointer items-center gap-2 font-semibold text-[#18bfa6] ${uploading ? "pointer-events-none opacity-60" : ""}`}>{uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />} {uploading ? `${uploadProgress.currentPercent}%` : "Add Photos"}<input type="file" accept="image/*" multiple className="absolute inset-0 cursor-pointer opacity-0" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label></div></div>
+      {draggingUpload && <div className="pointer-events-none absolute inset-0 z-20 flex min-h-72 items-center justify-center border border-dashed border-[#18bfa6] bg-white/80 text-sm font-semibold text-[#18bfa6]">Drop media to upload</div>}
+      <div className="flex flex-wrap items-center justify-between gap-4"><p className="text-sm font-semibold">{images.length} items</p><div className="flex items-center gap-5 text-sm"><span className="flex items-center gap-2 text-[#888]"><GripVertical className="size-4" /> Drag to sort</span><label className={`relative flex cursor-pointer items-center gap-2 font-semibold text-[#18bfa6] ${uploading ? "pointer-events-none opacity-60" : ""}`}>{uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />} {uploading ? `${uploadProgress.currentPercent}%` : "Add Media"}<input type="file" accept="image/*,video/*" multiple className="absolute inset-0 cursor-pointer opacity-0" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label></div></div>
       {uploading && (
         <div className="mt-5 border border-[#bdeee8] bg-[#f2fffd] px-4 py-3 text-sm text-[#096f64]">
           <div className="flex items-center gap-3">
@@ -324,10 +324,10 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
         </div>
       )}
       <ReactSortable list={images.map((image: MobileGalleryImage) => ({ ...image, id: image._id }))} setList={(next: Array<MobileGalleryImage & { id: string }>) => { const normalized = next.map(({ id: _idAlias, ...image }) => image); setImages(normalized); if (normalized.length) reorderImages.mutate(normalized.map((image) => image._id)); }} animation={180} className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
-        {images.map((image: MobileGalleryImage) => <article key={image._id} className="group relative cursor-grab border bg-white p-1 shadow-sm active:cursor-grabbing"><img src={image.thumbnailUrl || image.url} alt="" className="aspect-square w-full object-cover" /><div className="absolute inset-x-2 bottom-2 flex justify-between opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"><button onClick={() => updateApp.mutate({ coverImage: image.url })} className="bg-white/95 px-2 py-1 text-[10px] font-semibold">Set Cover</button><button onClick={() => deleteImage.mutate(image._id)} className="bg-white/95 p-1 text-red-500"><Trash2 className="size-4" /></button></div>{app.coverImage === image.url && <span className="absolute left-2 top-2 bg-[#18bfa6] px-2 py-1 text-[9px] font-semibold uppercase text-white">Cover</span>}</article>)}
+        {images.map((image: MobileGalleryImage) => <article key={image._id} className="group relative cursor-grab border bg-white p-1 shadow-sm active:cursor-grabbing">{image.mediaType === "video" ? <video src={image.url} className="aspect-square w-full object-cover" preload="metadata" muted /> : <img src={image.thumbnailUrl || image.url} alt="" className="aspect-square w-full object-cover" />}<div className="absolute inset-x-2 bottom-2 flex justify-between opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">{image.mediaType !== "video" && <button onClick={() => updateApp.mutate({ coverImage: image.url })} className="bg-white/95 px-2 py-1 text-[10px] font-semibold">Set Cover</button>}<button onClick={() => deleteImage.mutate(image._id)} className="ml-auto bg-white/95 p-1 text-red-500"><Trash2 className="size-4" /></button></div>{image.mediaType === "video" && <span className="absolute right-2 top-2 bg-black/75 px-2 py-1 text-[9px] font-semibold uppercase text-white">Video</span>}{app.coverImage === image.url && <span className="absolute left-2 top-2 bg-[#18bfa6] px-2 py-1 text-[9px] font-semibold uppercase text-white">Cover</span>}</article>)}
       </ReactSortable>
       {imagesHasMore && <div ref={loaderRef} className="flex h-20 items-center justify-center text-sm text-[#777]">{imagesLoadingMore ? "Loading photos..." : ""}</div>}
-      {!images.length && <label className={`mt-8 flex min-h-72 cursor-pointer flex-col items-center justify-center border border-dashed px-5 text-center text-[#888]${dropClass}`}><Upload className="size-8" /><span className="mt-3 text-sm">{uploading ? `Image ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} · ${uploadProgress.currentPercent}%` : "Drop photos here or browse"}</span><input type="file" accept="image/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label>}
+      {!images.length && <label className={`mt-8 flex min-h-72 cursor-pointer flex-col items-center justify-center border border-dashed px-5 text-center text-[#888]${dropClass}`}><Upload className="size-8" /><span className="mt-3 text-sm">{uploading ? `File ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} · ${uploadProgress.currentPercent}%` : "Drop photos or videos here or browse"}</span><input type="file" accept="image/*,video/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label>}
     </section>
   );
 }
