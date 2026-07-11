@@ -1,1 +1,1 @@
-inspect marketing implementation
+inspect marketing implementation after PR opened
