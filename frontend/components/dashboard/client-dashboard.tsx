@@ -11356,6 +11356,29 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
   );
 }
 
+function uniqueCollectionSets(
+  sets?: Array<{
+    id: string;
+    name: string;
+    watermarkId?: string;
+    createdAt?: string;
+  }>,
+) {
+  const seen = new Set<string>();
+  const unique = (sets ?? []).filter((set) => {
+    const id = String(set?.id ?? "").trim();
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  return unique.length ? unique : [{ id: "highlights", name: "Highlights" }];
+}
+
+function collectionFormWithUniqueSets(collection?: CollectionRecord) {
+  const next = collectionForm(collection);
+  return { ...next, sets: uniqueCollectionSets(next.sets) };
+}
+
 function CollectionDetailView({
   section,
   collectionId,
@@ -11381,7 +11404,7 @@ function CollectionDetailView({
     (state) => state.watermarkItems,
   );
   const { starImage } = useImageActions();
-  const { collectionsQuery } = useCollections();
+  const { collectionsQuery, duplicateCollection, deleteCollection } = useCollections();
   const homepageQuery = useHomepageSettings().query;
   const { ordersQuery } = useStoreOrders();
   const {
@@ -11410,10 +11433,7 @@ function CollectionDetailView({
   }, [detail?.images, detail?.imagesPage?.hasMore]);
   const images = useMemo(() => loadedImages, [loadedImages]);
   const sets = useMemo(
-    () =>
-      detail?.sets?.length
-        ? detail.sets
-        : [{ id: "highlights", name: "Highlights" }],
+    () => uniqueCollectionSets(detail?.sets),
     [detail?.sets],
   );
   const [activeImageId, setActiveImageId] = useState("");
@@ -11435,6 +11455,7 @@ function CollectionDetailView({
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [deleteCollectionConfirmOpen, setDeleteCollectionConfirmOpen] = useState(false);
   const [shareTemplateSearch, setShareTemplateSearch] = useState("");
   const [selectedShareTemplateId, setSelectedShareTemplateId] = useState("");
   const [imagePage, setImagePage] = useState(1);
@@ -11455,7 +11476,7 @@ function CollectionDetailView({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
-  const [form, setForm] = useState(() => collectionForm(collection));
+  const [form, setForm] = useState(() => collectionFormWithUniqueSets(collection));
   const [collectionStatus, setCollectionStatus] = useState<
     "draft" | "published"
   >(collection?.status === "published" ? "published" : "draft");
@@ -11604,7 +11625,7 @@ function CollectionDetailView({
 
   useEffect(() => {
     if (!collection || updateCollection.isPending) return;
-    const nextForm = collectionForm(collection);
+    const nextForm = collectionFormWithUniqueSets(collection);
     const nextFormKey = collectionFormKey(nextForm);
     if (syncedCollectionFormKeyRef.current === nextFormKey) return;
     syncedCollectionFormKeyRef.current = nextFormKey;
@@ -11638,7 +11659,7 @@ function CollectionDetailView({
       slug: form.slug.trim() || undefined,
       presetId: form.presetId || undefined,
       coverImage: form.coverImage || undefined,
-      sets: syncSetsFromPhotoSets(form.sets, form.general.photoSets),
+      sets: syncSetsFromPhotoSets(uniqueCollectionSets(form.sets), form.general.photoSets),
       tags: form.general.collectionTags
         .split(",")
         .map((tag) => tag.trim())
@@ -11661,7 +11682,7 @@ function CollectionDetailView({
     updateCollection.mutate(payload, {
       onSuccess: (response) => {
         if (response?.data) {
-          const nextForm = collectionForm(response.data);
+          const nextForm = collectionFormWithUniqueSets(response.data);
           syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
           setForm(nextForm);
         }
@@ -11683,7 +11704,7 @@ function CollectionDetailView({
         if (nextSet) {
           setForm((value) => ({
             ...value,
-            sets: [...value.sets, nextSet],
+            sets: uniqueCollectionSets([...value.sets, nextSet]),
             general: {
               ...value.general,
               photoSets: [
@@ -11754,7 +11775,7 @@ function CollectionDetailView({
       {
         onSuccess: (response) => {
           if (response?.data) {
-            const nextForm = collectionForm(response.data);
+            const nextForm = collectionFormWithUniqueSets(response.data);
             syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
           }
         },
@@ -11969,6 +11990,48 @@ function CollectionDetailView({
         ),
     });
   };
+  const changeCollectionStatus = (nextStatus: "draft" | "published") => {
+    if (!collection || nextStatus === collectionStatus || updateCollection.isPending)
+      return;
+    setCollectionStatus(nextStatus);
+    updateCollection.mutate(
+      { status: nextStatus },
+      {
+        onSuccess: () =>
+          toast.success(nextStatus === "published" ? "Collection published" : "Collection hidden"),
+        onError: (error) => {
+          setCollectionStatus(collection.status === "published" ? "published" : "draft");
+          toast.error(error instanceof Error ? error.message : "Status update failed");
+        },
+      },
+    );
+  };
+  const duplicateCurrentCollection = () => {
+    if (!collection || duplicateCollection.isPending) return;
+    duplicateCollection.mutate(collection._id, {
+      onSuccess: (response) => {
+        toast.success("Collection duplicated");
+        const duplicatedId = response?.data?.collection?._id;
+        if (duplicatedId)
+          router.push(`/dashboard/${section}/collections/${duplicatedId}`);
+      },
+      onError: (error) =>
+        toast.error(error instanceof Error ? error.message : "Duplicate failed"),
+    });
+  };
+  const deleteCurrentCollection = () => {
+    if (!collection || deleteCollection.isPending) return;
+    deleteCollection.mutate(collection._id, {
+      onSuccess: () => {
+        setDeleteCollectionConfirmOpen(false);
+        toast.success("Collection deleted");
+        router.push(`/dashboard/${section}`);
+      },
+      onError: (error) =>
+        toast.error(error instanceof Error ? error.message : "Delete failed"),
+    });
+  };
+
   if (!collection) {
     return <CollectionDetailSkeleton />;
   }
@@ -11990,24 +12053,95 @@ function CollectionDetailView({
               <h1 className="truncate text-[18px] font-medium leading-none text-[#111]">
                 {collection.name}
               </h1>
-              <span className="inline-flex h-8 items-center gap-2 rounded-full bg-[#e8f7f3] px-4 text-[10px] font-bold uppercase tracking-[0.12em] text-[#009786]">
-                {collectionStatus}
-                <ChevronDown className="size-3" />
-              </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-2 rounded-full bg-[#e8f7f3] px-4 text-[10px] font-bold uppercase tracking-[0.12em] text-[#009786]"
+                  >
+                    {collectionStatus === "published" ? "Published" : "Hidden"}
+                    <ChevronDown className="size-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-52 rounded-none p-2">
+                  <DropdownMenuItem
+                    className="h-11 rounded-none"
+                    onSelect={() => changeCollectionStatus("published")}
+                  >
+                    <span className="flex-1">Published</span>
+                    {collectionStatus === "published" && <Check className="size-4" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="h-11 rounded-none"
+                    onSelect={() => changeCollectionStatus("draft")}
+                  >
+                    <span className="flex-1">Hidden</span>
+                    {collectionStatus === "draft" && <Check className="size-4" />}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <p className="mt-2 text-sm text-[#777]">{formatDate(collection.eventDate)}</p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-8 text-sm">
-          <button
-            className="inline-flex items-center gap-2 font-medium text-[#222] disabled:opacity-50"
-            onClick={saveCollection}
-            disabled={updateCollection.isPending}
-            type="button"
-          >
-            {updateCollection.isPending ? "Saving..." : "More"}
-            <ChevronDown className="size-4" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex items-center gap-2 font-medium text-[#222]" type="button">
+                More
+                <ChevronDown className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60 rounded-none p-2">
+              <DropdownMenuItem className="h-11 rounded-none" onSelect={() => void copyPublicLink().then(() => toast.success("Direct link copied"))}>
+                <Link2 className="size-4" />
+                Get direct link
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                onSelect={() => {
+                  setActiveTab("download");
+                  setActivityPage("email");
+                }}
+              >
+                <RefreshCw className="size-4" />
+                View email history
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                onSelect={() => router.push(`/dashboard/${section}/settings/presets`)}
+              >
+                <Settings className="size-4" />
+                Manage presets
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                onSelect={() => {
+                  toast.info("Choose the destination from the Collections page");
+                  router.push(`/dashboard/${section}`);
+                }}
+              >
+                <ArrowRight className="size-4" />
+                Move to
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                disabled={duplicateCollection.isPending}
+                onSelect={duplicateCurrentCollection}
+              >
+                <Copy className="size-4" />
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="h-11 rounded-none text-red-600 focus:text-red-600"
+                onSelect={() => setDeleteCollectionConfirmOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                Delete collection
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             className="font-medium text-[#222]"
             onClick={() => window.open(publicLink, "_blank", "noopener,noreferrer")}
@@ -12015,16 +12149,30 @@ function CollectionDetailView({
           >
             Preview
           </button>
-          <button
-            className="inline-flex h-10 items-center bg-[#22bda7] font-bold text-white hover:bg-[#19a995]"
-            onClick={() => setShareOpen(true)}
-            type="button"
-          >
-            <span className="px-7">Share</span>
-            <span className="flex h-6 items-center border-l border-white/30 px-4">
-              <ChevronDown className="size-4" />
-            </span>
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex h-10 items-center bg-[#22bda7] font-bold text-white hover:bg-[#19a995]" type="button">
+                <span className="px-7">Share</span>
+                <span className="flex h-6 items-center border-l border-white/30 px-4">
+                  <ChevronDown className="size-4" />
+                </span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 rounded-none p-2">
+              <DropdownMenuItem className="h-11 rounded-none" onSelect={() => setShareOpen(true)}>
+                <Mail className="size-4" />
+                Share by email
+              </DropdownMenuItem>
+              <DropdownMenuItem className="h-11 rounded-none" onSelect={() => void copyPublicLink().then(() => toast.success("Direct link copied"))}>
+                <Link2 className="size-4" />
+                Get direct link
+              </DropdownMenuItem>
+              <DropdownMenuItem className="h-11 rounded-none" onSelect={() => setShareOpen(true)}>
+                <QrCode className="size-4" />
+                Get QR code
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -12161,6 +12309,15 @@ function CollectionDetailView({
           </div>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={deleteCollectionConfirmOpen}
+        title="Delete collection"
+        description={`Delete "${collection.name}" and all of its media? This action cannot be undone.`}
+        pending={deleteCollection.isPending}
+        onCancel={() => setDeleteCollectionConfirmOpen(false)}
+        onConfirm={deleteCurrentCollection}
+      />
 
       {uploading && (
         <div className="mt-4 flex items-center gap-4 border border-[#bdeee8] bg-[#f2fffd] px-4 py-3 text-sm text-[#096f64]">

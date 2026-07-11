@@ -1,4 +1,0 @@
-  File "/home/runner/work/pixieset-asad-vai-project/pixieset-asad-vai-project/.github/fix-collection-ui.py", line 49
-    "  const { starImage } = useImageActions();
-    ^
-SyntaxError: unterminated string literal (detected at line 49)

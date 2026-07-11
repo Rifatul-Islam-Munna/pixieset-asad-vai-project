@@ -213,6 +213,8 @@ export function PublicGallery({
   const marketing = collection?.marketing ?? {};
   const marketingOptIn = marketing.optIn ?? {};
   const marketingPopup = marketing.popup ?? {};
+  const marketingEmailRegistrationEnabled = marketingOptIn.emailRegistration !== false;
+  const marketingPopupEnabled = marketingPopup.enabled !== false;
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images = collection
     ? loadedImages
@@ -227,12 +229,16 @@ export function PublicGallery({
   const galleryImages = coverImage
     ? [coverImage, ...images.filter((image) => imageSrc(image.url) !== imageSrc(coverImage.url))]
     : images;
-  const gallerySets = useMemo(
-    () => collection?.sets?.length
-      ? collection.sets
-      : [{ id: "highlights", name: "Highlights" }],
-    [collection?.sets],
-  );
+  const gallerySets = useMemo(() => {
+    const seen = new Set<string>();
+    const unique = (collection?.sets ?? []).filter((set) => {
+      const id = String(set?.id ?? "").trim();
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return unique.length ? unique : [{ id: "highlights", name: "Highlights" }];
+  }, [collection?.sets]);
   const showSetTabs = gallerySets.length > 0;
   const coverPhoto = imageSrc(collection?.coverImage || images.find((image) => !isVideo(image))?.url || "");
   const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
@@ -246,7 +252,7 @@ export function PublicGallery({
   const [visitorMarketingOptIn, setVisitorMarketingOptIn] = useState(true);
   const [downloadMarketingOptIn, setDownloadMarketingOptIn] = useState(true);
   const [popupOpen, setPopupOpen] = useState(() =>
-    Boolean(marketingSubscriptionEnabled && marketingPopup.enabled),
+    Boolean(marketingSubscriptionEnabled && marketingPopupEnabled),
   );
   const [popupEmail, setPopupEmail] = useState("");
   const [privateImageIds, setPrivateImageIds] = useState<Set<string>>(() => new Set());
@@ -822,18 +828,17 @@ export function PublicGallery({
   }, [slideshowAutoLoop, slideshowDelay, slideshowIndex, visibleImages.length]);
 
   useEffect(() => {
-    if (!collection || !marketingSubscriptionEnabled || !marketingPopup.enabled) {
-      setPopupOpen(false);
-      return;
-    }
-    const key = `gallery-marketing-popup:${collection._id}`;
-    if (!window.sessionStorage.getItem(key)) setPopupOpen(true);
-  }, [collection?._id, marketingPopup.enabled, marketingSubscriptionEnabled]);
+    setPopupOpen(
+      Boolean(
+        collection &&
+          marketingSubscriptionEnabled &&
+          marketingPopupEnabled &&
+          !emailAccessLocked,
+      ),
+    );
+  }, [collection?._id, emailAccessLocked, marketingPopupEnabled, marketingSubscriptionEnabled]);
 
-  const closeMarketingPopup = () => {
-    if (collection?._id) window.sessionStorage.setItem(`gallery-marketing-popup:${collection._id}`, "1");
-    setPopupOpen(false);
-  };
+  const closeMarketingPopup = () => setPopupOpen(false);
 
   const submitMarketingPopup = async () => {
     const email = popupEmail.trim().toLowerCase();
@@ -853,7 +858,7 @@ export function PublicGallery({
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
       <ScreenCaptureGuard />
-      {popupOpen && marketingSubscriptionEnabled && marketingPopup.enabled && (
+      {popupOpen && marketingSubscriptionEnabled && marketingPopupEnabled && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
           <div className="relative w-full max-w-[450px] bg-white p-8 text-[#111] shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-10">
             <button className="absolute right-4 top-4" onClick={closeMarketingPopup} aria-label="Close marketing signup" type="button">
@@ -900,7 +905,7 @@ export function PublicGallery({
             className="mt-6 h-11 rounded-none"
             autoFocus
           />
-          {marketingSubscriptionEnabled && marketingOptIn.emailRegistration && (
+          {marketingSubscriptionEnabled && marketingEmailRegistrationEnabled && (
             <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
               <input
                 type="checkbox"
