@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Globe2,
@@ -94,34 +94,16 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
   }
 
   const socialItems = [
-    ["instagram", "IG"],
-    ["facebook", "FB"],
-    ["youtube", "YT"],
-    ["linkedin", "IN"],
+    ["instagram", "Instagram"],
+    ["facebook", "Facebook"],
+    ["youtube", "YouTube"],
+    ["linkedin", "LinkedIn"],
   ] as const;
 
   return (
     <main className="min-h-screen bg-white text-[#111]">
       <header className="mx-auto max-w-[1380px] px-5 pb-10 pt-8 sm:px-10 sm:pt-12">
-        <div className="flex items-start justify-between gap-6">
-          <div className="flex min-h-10 items-center gap-3">
-            {socialItems.map(([key, label]) => {
-              const href = data.socialLinks?.[key];
-              if (!href) return null;
-              return (
-                <a
-                  key={key}
-                  href={normalizeUrl(href)}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={key}
-                  className="flex size-7 items-center justify-center rounded-full border text-[9px] font-black tracking-wide text-[#555] transition hover:border-black hover:text-black"
-                >
-                  {label}
-                </a>
-              );
-            })}
-          </div>
+        <div className="flex justify-end">
           <label className="flex items-center gap-2 border-b border-transparent pb-2 focus-within:border-[#111]">
             <Search className="size-5 text-[#555]" />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search collections" className="w-0 bg-transparent text-sm outline-none transition-all focus:w-44" />
@@ -137,6 +119,25 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
             {data.email && <a href={`mailto:${data.email}`} className="inline-flex items-center gap-2 hover:underline"><Mail className="size-4" />{data.email}</a>}
             {data.phone && <a href={`tel:${data.phone}`} className="inline-flex items-center gap-2 hover:underline"><Phone className="size-4" />{data.phone}</a>}
             {data.address && <span className="inline-flex items-center gap-2"><MapPin className="size-4" />{data.address}</span>}
+          </div>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            {socialItems.map(([key, label]) => {
+              const href = data.socialLinks?.[key];
+              if (!href) return null;
+              return (
+                <a
+                  key={key}
+                  href={normalizeUrl(href)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={label}
+                  className="inline-flex size-9 items-center justify-center rounded-full border border-[#ddd] text-[#333] transition hover:border-black hover:bg-black hover:text-white"
+                  title={label}
+                >
+                  <SocialIcon network={key} />
+                </a>
+              );
+            })}
           </div>
         </div>
       </header>
@@ -175,6 +176,35 @@ function normalizeUrl(value: string) {
 
 function stripProtocol(value: string) {
   return value.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+}
+
+function SocialIcon({ network }: { network: "instagram" | "facebook" | "youtube" | "linkedin" }) {
+  const icons: Record<typeof network, ReactNode> = {
+    instagram: (
+      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <rect x="3" y="3" width="18" height="18" rx="5" />
+        <circle cx="12" cy="12" r="4" />
+        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+    facebook: (
+      <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden="true">
+        <path d="M14 8.5V7c0-.8.2-1.2 1.2-1.2H17V3h-2.7C11.6 3 10 4.7 10 7.2v1.3H8v3h2V21h4v-9.5h2.7l.3-3H14Z" />
+      </svg>
+    ),
+    youtube: (
+      <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden="true">
+        <path d="M21.6 7.2a2.7 2.7 0 0 0-1.9-1.9C18 4.8 12 4.8 12 4.8s-6 0-7.7.5a2.7 2.7 0 0 0-1.9 1.9C2 8.9 2 12 2 12s0 3.1.4 4.8a2.7 2.7 0 0 0 1.9 1.9c1.7.5 7.7.5 7.7.5s6 0 7.7-.5a2.7 2.7 0 0 0 1.9-1.9c.4-1.7.4-4.8.4-4.8s0-3.1-.4-4.8ZM10 15.2V8.8l5.5 3.2-5.5 3.2Z" />
+      </svg>
+    ),
+    linkedin: (
+      <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden="true">
+        <path d="M6.7 8.8H3.4V21h3.3V8.8ZM5.1 3a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8ZM21 14.1c0-3.3-1.8-5.4-4.5-5.4a3.9 3.9 0 0 0-3.3 1.8V8.8H10V21h3.3v-6.1c0-1.8.9-3.1 2.3-3.1s2.1 1 2.1 3V21H21v-6.9Z" />
+      </svg>
+    ),
+  };
+
+  return icons[network];
 }
 
 function imageSrc(value: string) {
