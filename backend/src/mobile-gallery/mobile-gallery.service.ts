@@ -188,14 +188,14 @@ export class MobileGalleryService {
 
   async completeDirectUploads(userId: string, appId: string, files: Array<{ objectKey: string; name: string; type: string; size: number }>) {
     if (!Array.isArray(files) || !files.length || files.length > 10) throw new BadRequestException('1 to 10 completed files are required');
-    const verified = [];
+    const verified: Array<{ objectKey: string; size: number; type: string; url: string; name: string }> = [];
     for (const file of files) verified.push(await this.minioService.verifyDirectUpload(userId, file));
     await this.ensureStorageAvailable(userId, verified.reduce((sum, file) => sum + file.size, 0));
     const app = await this.appModel.findOne({ _id: appId, userId }).lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
     const last = await this.imageModel.findOne({ appId, userId }).sort({ order: -1 }).lean();
     const start = Number(last?.order ?? 0);
-    const uploaded = [];
+    const uploaded: any[] = [];
     for (const [index, file] of verified.entries()) {
       const image = await this.imageModel.create({
         userId,
