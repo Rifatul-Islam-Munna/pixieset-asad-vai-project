@@ -1,19 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
-import { Activity, ExternalLink, Loader2, Settings } from "lucide-react";
+import { Activity, Loader2, Settings } from "lucide-react";
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { useStorePriceSheets } from "@/api-hooks/use-store";
-import { useHomepageSettings } from "@/api-hooks/use-homepage";
-import { publicCollectionUrl } from "@/lib/public-site-url";
 import { CollectionStoreSettingsPanel } from "./collection-store-settings-panel";
 import { StoreActivityList } from "./store-activity-list";
 
 export function CollectionStoreManager({ collectionId }: { collectionId: string }) {
   const admin = useCollectionStoreAdmin(collectionId);
   const { priceSheetsQuery } = useStorePriceSheets();
-  const homepageSlug = useHomepageSettings().query.data?.data?.slug ?? "";
   const [tab, setTab] = useState<"settings" | "activity">("settings");
   const preparing = useRef(false);
 
@@ -39,11 +35,6 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
   }
   if (!admin.collection) return <div className="p-8">Collection not found.</div>;
 
-  const collectionSlug = admin.collection.slug || admin.collection._id;
-  const publicHref = homepageSlug
-    ? `${publicCollectionUrl(homepageSlug, collectionSlug)}/store`
-    : `/collection/${encodeURIComponent(admin.collection.name)}/${encodeURIComponent(collectionSlug)}/store`;
-
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f6f6f4] px-3 py-6 text-[#202020] sm:px-4 md:px-8">
       <div className="mx-auto max-w-[1280px]">
@@ -55,13 +46,6 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
               Enable collection store and activity. Product pricing is managed in Store Gallery Pricing.
             </p>
           </div>
-          <Link
-            href={publicHref}
-            target="_blank"
-            className="inline-flex h-11 items-center gap-2 border bg-white px-5 text-sm"
-          >
-            View public store <ExternalLink className="size-4" />
-          </Link>
         </header>
 
         <div className="mt-6 flex flex-wrap gap-2">
