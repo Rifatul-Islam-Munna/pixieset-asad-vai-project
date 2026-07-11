@@ -1,36 +1,34 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
+export type HomeLanguage = 'en' | 'gr';
 export type HomeCmsDocument = HydratedDocument<HomeCms>;
 
-@Schema({ timestamps: true, autoIndex: true })
+@Schema({ collection: 'homecms', timestamps: true, versionKey: false })
 export class HomeCms {
-  @Prop({ required: true, unique: true, default: 'home' })
+  @Prop({ type: String, required: true, unique: true, immutable: true, default: 'home' })
   key: string;
 
-  @Prop({ type: Object, default: {} })
-  content: Record<string, any>;
+  @Prop({ type: Object, required: true, default: () => ({ en: {}, gr: {} }) })
+  content: Record<HomeLanguage, Record<string, unknown>>;
 
-  @Prop({ type: Object, default: {} })
-  seo: Record<string, any>;
+  @Prop({ type: Object, required: true, default: () => ({}) })
+  seo: Record<string, unknown>;
 
-  @Prop({ type: Object, default: {} })
-  auth: Record<string, any>;
+  @Prop({ type: Object, required: true, default: () => ({}) })
+  auth: Record<string, unknown>;
 
-  @Prop({ type: Object, default: {} })
-  brand: Record<string, any>;
+  @Prop({ type: Object, required: true, default: () => ({}) })
+  brand: Record<string, unknown>;
 
-  @Prop({ type: [Object], default: [] })
-  coverTemplates: Record<string, any>[];
+  @Prop({ type: [Object], required: true, default: () => [] })
+  coverTemplates: Record<string, unknown>[];
 
-  @Prop({ type: Object, default: { heroMediaType: 'image', heroMediaUrl: '' } })
-  media: {
-    heroMediaType?: 'image' | 'video';
-    heroMediaUrl?: string;
-  };
+  @Prop({ type: Object, required: true, default: () => ({ heroMediaType: 'image', heroMediaUrl: '' }) })
+  media: { heroMediaType: 'image' | 'video'; heroMediaUrl: string };
 
-  @Prop({ default: 'en', enum: ['en', 'gr'] })
-  defaultLanguage: 'en' | 'gr';
+  @Prop({ type: String, required: true, enum: ['en', 'gr'], default: 'en' })
+  defaultLanguage: HomeLanguage;
 }
 
 export const HomeCmsSchema = SchemaFactory.createForClass(HomeCms);

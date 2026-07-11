@@ -18,7 +18,12 @@ export function useHomeCms(initialData: HomeCmsData) {
         if (!response.ok) throw new Error(payload?.message ?? `Request failed (${response.status})`);
         const cms = mergeHomeCms(payload?.data as Partial<HomeCmsData>);
         setData(cms);
-        console.log("[Home CMS] hero", cms.content[cms.defaultLanguage]?.hero);
+        console.log("[Home CMS] LIVE DATA", JSON.stringify({
+          defaultLanguage: cms.defaultLanguage,
+          renderedHero: cms.content[cms.defaultLanguage]?.hero,
+          enHero: cms.content.en.hero,
+          grHero: cms.content.gr.hero,
+        }, null, 2));
       })
       .catch((error) => console.error("[Home CMS] browser fetch failed", error));
   }, []);

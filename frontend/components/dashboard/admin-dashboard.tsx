@@ -105,7 +105,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     initialData.freePlan ?? { storageGb: 3, monthlyEmails: 1000 },
   );
   const [homeCms, setHomeCms] = useState<HomeCmsData>(mergeHomeCms(initialData.homeCms));
-  const [homeCmsLang, setHomeCmsLang] = useState<HomeLanguage>("en");
+  const [homeCmsLang, setHomeCmsLang] = useState<HomeLanguage>(() => mergeHomeCms(initialData.homeCms).defaultLanguage);
   const [cmsSaveState, setCmsSaveState] = useState<"saved" | "unsaved" | "saving" | "error">("saved");
   const lastSavedCms = useRef(JSON.stringify(mergeHomeCms(initialData.homeCms)));
   const currentCms = useRef(homeCms);
@@ -289,12 +289,23 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
 
   const saveHomeCms = (quiet = false) => {
     const snapshot = homeCms;
-    console.log("[Home CMS] saving", snapshot);
+    console.log("[Home CMS] OUTGOING PATCH", JSON.stringify({
+      defaultLanguage: snapshot.defaultLanguage,
+      editingLanguage: homeCmsLang,
+      enHero: snapshot.content.en.hero,
+      grHero: snapshot.content.gr.hero,
+      fullPayload: snapshot,
+    }, null, 2));
     setCmsSaveState("saving");
     startTransition(async () => {
       try {
         const data = await updateHomeCms(snapshot);
-        console.log("[Home CMS] saved response", data);
+        console.log("[Home CMS] SAVED RESPONSE", JSON.stringify({
+          defaultLanguage: data.defaultLanguage,
+          enHero: data.content.en.hero,
+          grHero: data.content.gr.hero,
+          fullResponse: data,
+        }, null, 2));
         lastSavedCms.current = JSON.stringify(data);
         setHomeCms((current) => JSON.stringify(current) === JSON.stringify(snapshot) ? data : current);
         setCmsSaveState(JSON.stringify(currentCms.current) === JSON.stringify(snapshot) ? "saved" : "unsaved");
@@ -1014,6 +1025,11 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
 }) {
   const content = form.content[lang];
 
+  const selectLanguage = (value: HomeLanguage) => {
+    setLang(value);
+    if (form.defaultLanguage !== value) setForm({ ...form, defaultLanguage: value });
+  };
+
   const setContent = (next: HomeContent) => {
     setForm({ ...form, content: { ...form.content, [lang]: next } });
   };
@@ -1098,8 +1114,8 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
             <p className="mt-2 text-sm leading-6 text-[#666]">Editing {lang === "en" ? "English" : "Greek / GR"} content · Press Enter inside any text field for a new line.</p>
           </div>
           <div className="grid w-full grid-cols-2 gap-1 bg-[#f4f4f1] p-1 sm:min-w-[260px] sm:w-auto">
-            <Button type="button" onClick={() => setLang("en")} className={cn("h-10 rounded-none shadow-none", lang === "en" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>English</Button>
-            <Button type="button" onClick={() => setLang("gr")} className={cn("h-10 rounded-none shadow-none", lang === "gr" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>Greek / GR</Button>
+            <Button type="button" onClick={() => selectLanguage("en")} className={cn("h-10 rounded-none shadow-none", lang === "en" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>English</Button>
+            <Button type="button" onClick={() => selectLanguage("gr")} className={cn("h-10 rounded-none shadow-none", lang === "gr" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>Greek / GR</Button>
           </div>
         </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-3">

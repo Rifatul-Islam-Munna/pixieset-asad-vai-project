@@ -18,6 +18,12 @@ export class HomeCmsService {
   }
 
   async updateHomeCms(dto: UpdateHomeCmsDto) {
+    console.log('[Home CMS] PATCH received', JSON.stringify({
+      defaultLanguage: dto.defaultLanguage,
+      enHero: dto.content?.en?.hero,
+      grHero: dto.content?.gr?.hero,
+      fullPayload: dto,
+    }, null, 2));
     const cms = await this.homeCmsModel.findOneAndUpdate(
       { key: 'home' },
       {
@@ -33,6 +39,13 @@ export class HomeCmsService {
       },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
-    return cms.toObject();
+    const saved = cms.toObject();
+    console.log('[Home CMS] Mongo saved', JSON.stringify({
+      id: saved._id,
+      defaultLanguage: saved.defaultLanguage,
+      enHero: saved.content?.en?.hero,
+      grHero: saved.content?.gr?.hero,
+    }, null, 2));
+    return saved;
   }
 }
