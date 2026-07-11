@@ -1,1 +1,1 @@
-retry collection UI fixes
+capture collection UI patch error
