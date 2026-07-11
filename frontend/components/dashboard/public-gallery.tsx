@@ -51,6 +51,8 @@ type PublicCollection = {
       emailRegistration?: boolean | string;
       galleryAssist?: boolean | string;
       slideshow?: boolean | string;
+      slideshowSpeed?: "slow" | "regular" | "fast";
+      slideshowAutoLoop?: boolean | string;
       socialSharing?: boolean | string;
       language?: string;
     };
@@ -131,6 +133,10 @@ const defaultDesign: PresetDesignSettings = {
 
 const defaultDownload: PresetDownloadSettings = {
   photoDownload: true,
+  galleryDownload: true,
+  singlePhotoDownload: true,
+  singlePhotoDownloadEmailTracking: true,
+  restrictedSinglePhotoDownloadSize: false,
   highResolution: true,
   highResolutionSize: "3600px",
   webSize: true,
@@ -194,6 +200,9 @@ export function PublicGallery({
   const slideshowEnabled = collection
     ? boolSetting(generalSettings.slideshow ?? true)
     : boolSetting(fallbackPresetGeneral.slideshow);
+  const slideshowSpeed = (generalSettings.slideshowSpeed ?? "regular") as "slow" | "regular" | "fast";
+  const slideshowDelay = slideshowSpeed === "slow" ? 5200 : slideshowSpeed === "fast" ? 1800 : 3200;
+  const slideshowAutoLoop = boolSetting(generalSettings.slideshowAutoLoop ?? true);
   const socialSharingEnabled = boolSetting(generalSettings.socialSharing ?? true);
   const galleryAssistEnabled = boolSetting(generalSettings.galleryAssist);
   const emailRegistrationEnabled = boolSetting(generalSettings.emailRegistration);
@@ -278,6 +287,10 @@ export function PublicGallery({
     ? "columns-1 sm:columns-2"
     : "columns-1 sm:columns-2 lg:columns-3";
   const downloadsEnabled = boolSetting(download.photoDownload);
+  const galleryDownloadEnabled = download.galleryDownload !== false;
+  const singlePhotoDownloadEnabled = download.singlePhotoDownload !== false;
+  const singlePhotoDownloadEmailTracking = download.singlePhotoDownloadEmailTracking !== false;
+  const restrictedSinglePhotoDownloadSize = Boolean(download.restrictedSinglePhotoDownloadSize);
   const preferences = collection?.preferences ?? {};
   const showFilenames = preferences.filenameDisplay !== "hide";
   const sharpeningLevel = preferences.sharpeningLevel ?? "optimal";
@@ -306,6 +319,8 @@ export function PublicGallery({
   const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
   const canDownload = downloadsEnabled && pinOk && limitOk;
+  const canDownloadAll = canDownload && galleryDownloadEnabled;
+  const canDownloadSingle = canDownload && singlePhotoDownloadEnabled;
   const onDownload = () => setDownloadCount((count) => count + 1);
   const unlockDownloads = () => {
     setEnteredPin(pinDraft.trim());
@@ -390,24 +405,30 @@ export function PublicGallery({
     }
   };
   const downloadPhoto = async (photo: PublicImage, index = 0, emailOverride = "") => {
-    if (!canDownload) return;
-    const email = ensureDownloadEmail({ type: "single", photo, index }, emailOverride);
-    if (!email) return;
-    try {
-      await recordDownloadActivity(
-        email,
-        [{
-          imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
-          imageName: photo.originalName || `photo-${index + 1}`,
-          imageUrl: imageSrc(photo.url),
-        }],
-        "single",
-      );
-    } catch (error) {
-      setShareNotice(error instanceof Error ? error.message : "Download activity failed");
-      return;
+    if (!canDownloadSingle) return;
+    let email = "";
+    if (singlePhotoDownloadEmailTracking) {
+      email = ensureDownloadEmail({ type: "single", photo, index }, emailOverride);
+      if (!email) return;
+      try {
+        await recordDownloadActivity(
+          email,
+          [{
+            imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
+            imageName: photo.originalName || `photo-${index + 1}`,
+            imageUrl: imageSrc(photo.url),
+          }],
+          "single",
+        );
+      } catch (error) {
+        setShareNotice(error instanceof Error ? error.message : "Download activity failed");
+        return;
+      }
     }
-    const url = `/api/public-download?url=${encodeURIComponent(imageSrc(photo.url))}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
+    const downloadSource = restrictedSinglePhotoDownloadSize
+      ? imageSrc(photo.thumbnailUrl || photo.url)
+      : imageSrc(photo.url);
+    const url = `/api/public-download?url=${encodeURIComponent(downloadSource)}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
     const link = document.createElement("a");
     link.href = url;
     link.download = "";
@@ -417,7 +438,7 @@ export function PublicGallery({
     onDownload();
   };
   const downloadAllImages = async (emailOverride = "") => {
-    if (!canDownload || zipDownloading) return;
+    if (!canDownloadAll || zipDownloading) return;
     const email = ensureDownloadEmail({ type: "all" }, emailOverride);
     if (!email) return;
     let allImages = galleryImages;
@@ -687,8 +708,16 @@ export function PublicGallery({
     setSlideshowIndex(0);
   };
   const closeSlideshow = () => setSlideshowIndex(null);
-  const showNextSlide = () => setSlideshowIndex((index) => !visibleImages.length || index === null ? 0 : (index + 1) % visibleImages.length);
-  const showPreviousSlide = () => setSlideshowIndex((index) => !visibleImages.length || index === null ? 0 : (index - 1 + visibleImages.length) % visibleImages.length);
+  const showNextSlide = () => setSlideshowIndex((index) => {
+    if (!visibleImages.length || index === null) return 0;
+    if (index >= visibleImages.length - 1) return slideshowAutoLoop ? 0 : index;
+    return index + 1;
+  });
+  const showPreviousSlide = () => setSlideshowIndex((index) => {
+    if (!visibleImages.length || index === null) return 0;
+    if (index <= 0) return slideshowAutoLoop ? visibleImages.length - 1 : 0;
+    return index - 1;
+  });
   const loadFaces = async (force = false) => {
     setFaceSheetOpen(true);
     if (((!force && faces.length) || faceBusy)) return;
@@ -777,9 +806,10 @@ export function PublicGallery({
 
   useEffect(() => {
     if (slideshowIndex === null || visibleImages.length <= 1) return;
-    const timer = window.setTimeout(showNextSlide, 3200);
+    if (!slideshowAutoLoop && slideshowIndex >= visibleImages.length - 1) return;
+    const timer = window.setTimeout(showNextSlide, slideshowDelay);
     return () => window.clearTimeout(timer);
-  }, [slideshowIndex, visibleImages.length]);
+  }, [slideshowAutoLoop, slideshowDelay, slideshowIndex, visibleImages.length]);
 
   useEffect(() => {
     if (!collection || !marketingPopup.enabled) return;
@@ -895,7 +925,7 @@ export function PublicGallery({
               <button className="flex items-center gap-2 text-sm" onClick={favoriteTools.openFavorites} type="button">
                 <Heart className="size-4" /> My Favorites
               </button>
-              {canDownload && (
+              {canDownloadAll && (
                 <button className="flex items-center gap-2 text-sm disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button">
                   {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} {zipDownloading ? "Preparing" : "Download All"}
                 </button>
@@ -911,7 +941,7 @@ export function PublicGallery({
               <button onClick={favoriteTools.openFavorites} type="button" aria-label="My Favorites" title="My Favorites">
                 <Heart className="size-5" />
               </button>
-              {canDownload && (
+              {canDownloadAll && (
                 <button onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" aria-label={zipDownloading ? "Preparing ZIP download" : "Download all photos"} title="Download all photos">
                   {zipDownloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
                 </button>
@@ -1000,7 +1030,7 @@ export function PublicGallery({
               <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
               <span className="hidden sm:inline md:sr-only">Favorite</span>
             </button>
-            {canDownload && (
+            {canDownloadAll && (
               <button className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
                 {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               </button>
@@ -1086,7 +1116,7 @@ export function PublicGallery({
                 photo={photo}
                 spacing={masonryGapPx}
                 canFavorite={favoritesEnabled}
-                canDownload={canDownload}
+                canDownload={canDownloadSingle}
                 canShare={socialSharingEnabled}
                 showFilename={showFilenames}
                 sharpeningLevel={sharpeningLevel}
@@ -1242,7 +1272,7 @@ export function PublicGallery({
                 <Share2 className="size-5" />
               </button>
             )}
-            {canDownload && (
+            {canDownloadSingle && (
               <button className="polished-icon-button" onClick={() => downloadPhoto(activeImage)} type="button" aria-label="Download" title="Download">
                 <Download className="size-5" />
               </button>
@@ -1290,7 +1320,7 @@ export function PublicGallery({
                 <Share2 className="size-5" />
               </button>
             )}
-            {canDownload && (
+            {canDownloadSingle && (
               <button className="polished-icon-button" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button" aria-label="Download" title="Download">
                 <Download className="size-5" />
               </button>

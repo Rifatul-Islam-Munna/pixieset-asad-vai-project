@@ -32,6 +32,10 @@ export type PresetDesignSettings = {
 
 export type PresetDownloadSettings = {
   photoDownload: boolean;
+  galleryDownload: boolean;
+  singlePhotoDownload: boolean;
+  singlePhotoDownloadEmailTracking: boolean;
+  restrictedSinglePhotoDownloadSize: boolean;
   highResolution: boolean;
   highResolutionSize: "Original" | "3600px";
   webSize: boolean;
@@ -51,6 +55,8 @@ export type PresetGeneralSettings = {
   emailRegistration: boolean;
   galleryAssist: boolean;
   slideshow: boolean;
+  slideshowSpeed: "slow" | "regular" | "fast";
+  slideshowAutoLoop: boolean;
   socialSharing: boolean;
   language: string;
 };
@@ -241,6 +247,8 @@ const emptyPresetGeneral: PresetGeneralSettings = {
   emailRegistration: false,
   galleryAssist: false,
   slideshow: true,
+  slideshowSpeed: "regular",
+  slideshowAutoLoop: true,
   socialSharing: true,
   language: "English",
 };
@@ -267,6 +275,10 @@ const emptyPresetDesign: PresetDesignSettings = {
 
 const emptyPresetDownload: PresetDownloadSettings = {
   photoDownload: true,
+  galleryDownload: true,
+  singlePhotoDownload: true,
+  singlePhotoDownloadEmailTracking: true,
+  restrictedSinglePhotoDownloadSize: false,
   highResolution: true,
   highResolutionSize: "3600px",
   webSize: true,
@@ -637,7 +649,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         activePresetId: preset.id,
         presetName: preset.name,
         presetCollectionId: preset.collectionId ?? "",
-        presetGeneral: preset.general,
+        presetGeneral: { ...emptyPresetGeneral, ...preset.general },
         presetDesign: { ...emptyPresetDesign, ...preset.design },
         presetDownload: { ...emptyPresetDownload, ...preset.download },
         presetFavorite: { ...emptyPresetFavorite, ...preset.favorite },
@@ -656,7 +668,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         activePresetId: nextPreset?.id ?? "",
         presetName: nextPreset?.name ?? "",
         presetCollectionId: nextPreset?.collectionId ?? "",
-        presetGeneral: nextPreset?.general ?? emptyPresetGeneral,
+        presetGeneral: nextPreset ? { ...emptyPresetGeneral, ...nextPreset.general } : emptyPresetGeneral,
         presetDesign: nextPreset ? { ...emptyPresetDesign, ...nextPreset.design } : emptyPresetDesign,
         presetDownload: nextPreset ? { ...emptyPresetDownload, ...nextPreset.download } : emptyPresetDownload,
         presetFavorite: nextPreset?.favorite ?? emptyPresetFavorite,
@@ -754,7 +766,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
             id: data.id ?? setting.localId,
             name: data.name ?? data.presetName ?? setting.name,
             collectionId: data.collectionId,
-            general: data.general ?? data.presetGeneral ?? emptyPresetGeneral,
+            general: { ...emptyPresetGeneral, ...(data.general ?? data.presetGeneral ?? {}) },
             design: { ...emptyPresetDesign, ...(data.design ?? data.presetDesign ?? {}) },
             download: { ...emptyPresetDownload, ...(data.download ?? data.presetDownload ?? {}) },
             favorite: { ...emptyPresetFavorite, ...(data.favorite ?? data.presetFavorite ?? {}) },

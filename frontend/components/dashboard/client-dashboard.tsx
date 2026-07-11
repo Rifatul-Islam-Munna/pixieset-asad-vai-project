@@ -1077,6 +1077,7 @@ function AccountPanel() {
     "idle" | "checking" | "available" | "unavailable"
   >("idle");
   const [usernameMessage, setUsernameMessage] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     if (query.data?.data) setForm(query.data.data);
@@ -1114,6 +1115,44 @@ function AccountPanel() {
 
   const field = (key: keyof AccountProfile, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
+  const uploadAvatar = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Profile image must be 10 MB or smaller");
+      return;
+    }
+
+    const previousAvatar = form.avatar || query.data?.data?.avatar || "";
+    const previewUrl = URL.createObjectURL(file);
+    setForm((current) => ({ ...current, avatar: previewUrl }));
+    setAvatarUploading(true);
+    try {
+      const url = await uploadDashboardAsset(file);
+      setForm((current) => ({ ...current, avatar: url }));
+      await update.mutateAsync({ avatar: url });
+      toast.success("Profile image uploaded");
+    } catch (error) {
+      setForm((current) => ({ ...current, avatar: previousAvatar }));
+      toast.error(error instanceof Error ? error.message : "Profile image upload failed");
+    } finally {
+      URL.revokeObjectURL(previewUrl);
+      setAvatarUploading(false);
+    }
+  };
+  const removeAvatar = () => {
+    setForm((current) => ({ ...current, avatar: "" }));
+    update.mutate(
+      { avatar: "" },
+      {
+        onSuccess: () => toast.success("Profile image removed"),
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
   const save = () =>
     update.mutate(form, {
       onSuccess: () => toast.success("Account saved"),
@@ -1173,19 +1212,49 @@ function AccountPanel() {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">
             Business details
           </p>
-          <div className="flex items-center gap-5">
-            <Avatar className="size-24 rounded-none bg-[#f1f1f1]">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <Avatar className="size-24 shrink-0 rounded-none bg-[#f1f1f1]">
               <AvatarImage src={form.avatar || ""} className="object-cover" />
               <AvatarFallback className="rounded-none text-2xl">
                 {form.businessName?.slice(0, 1) || "+"}
               </AvatarFallback>
             </Avatar>
-            <FieldInput
-              label="Profile image URL"
-              value={form.avatar || ""}
-              onChange={(value) => field("avatar", value)}
-              help="Square image shown on galleries and account pages."
-            />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold">Profile image</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <label className={cn(
+                  "inline-flex h-11 cursor-pointer items-center gap-2 bg-[#202326] px-5 text-sm font-bold text-white",
+                  avatarUploading && "pointer-events-none opacity-60",
+                )}>
+                  {avatarUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                  {avatarUploading ? "Uploading..." : "Upload image"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    className="hidden"
+                    disabled={avatarUploading}
+                    onChange={(event) => {
+                      void uploadAvatar(event.target.files?.[0]);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                {form.avatar && (
+                  <button
+                    type="button"
+                    className="inline-flex h-11 items-center gap-2 border px-4 text-sm font-bold text-red-600"
+                    disabled={avatarUploading || update.isPending}
+                    onClick={removeAvatar}
+                  >
+                    <Trash2 className="size-4" />
+                    Remove
+                  </button>
+                )}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#888]">
+                Upload a JPG, PNG, WEBP, or AVIF image up to 10 MB. Square images work best.
+              </p>
+            </div>
           </div>
           <FieldInput
             label="Business Name"
@@ -4682,6 +4751,68 @@ function SettingSwitch({
   );
 }
 
+function SlideshowAdditionalOptions({
+  speed,
+  autoLoop,
+  onChange,
+}: {
+  speed: "slow" | "regular" | "fast";
+  autoLoop: boolean;
+  onChange: (value: {
+    slideshowSpeed?: "slow" | "regular" | "fast";
+    slideshowAutoLoop?: boolean;
+  }) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="grid gap-4">
+      <button
+        type="button"
+        className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#00a997]"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
+        Additional options
+        <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="grid gap-6 border-l-2 border-[#e8e8e8] pl-5">
+          <div>
+            <p className="text-sm font-bold">Slideshow Speed</p>
+            <div className="mt-4 grid gap-4">
+              {(["slow", "regular", "fast"] as const).map((value) => (
+                <label key={value} className="flex cursor-pointer items-center gap-3 text-sm capitalize">
+                  <input
+                    type="radio"
+                    name="slideshow-speed"
+                    checked={speed === value}
+                    onChange={() => onChange({ slideshowSpeed: value })}
+                    className="size-5 accent-[#22bda7]"
+                  />
+                  {value}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-bold">Auto Loop</p>
+            <div className="mt-3 flex items-center gap-3">
+              <Switch
+                checked={autoLoop}
+                onCheckedChange={(value) => onChange({ slideshowAutoLoop: value })}
+              />
+              <span>{autoLoop ? "On" : "Off"}</span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-[#666]">
+              Restart the slideshow after the last image.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PresetGeneralPanel({
   general,
   onChange,
@@ -4694,6 +4825,8 @@ function PresetGeneralPanel({
     emailRegistration: boolean;
     galleryAssist: boolean;
     slideshow: boolean;
+    slideshowSpeed: "slow" | "regular" | "fast";
+    slideshowAutoLoop: boolean;
     socialSharing: boolean;
     language: string;
   };
@@ -4801,10 +4934,12 @@ function PresetGeneralPanel({
                 <span>{general[typedKey] ? "On" : "Off"}</span>
               </div>
               <p className="text-sm leading-6 text-[#666]">{text}</p>
-              {key === "slideshow" && (
-                <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
-                  Additional options <ChevronDown className="size-4" />
-                </button>
+              {key === "slideshow" && general.slideshow && (
+                <SlideshowAdditionalOptions
+                  speed={general.slideshowSpeed ?? "regular"}
+                  autoLoop={general.slideshowAutoLoop ?? true}
+                  onChange={onChange}
+                />
               )}
             </Field>
           );
@@ -5721,6 +5856,10 @@ function PresetDownloadPanel({
 }: {
   download: {
     photoDownload: boolean;
+    galleryDownload: boolean;
+    singlePhotoDownload: boolean;
+    singlePhotoDownloadEmailTracking: boolean;
+    restrictedSinglePhotoDownloadSize: boolean;
     highResolution: boolean;
     highResolutionSize: "Original" | "3600px";
     webSize: boolean;
@@ -5736,6 +5875,8 @@ function PresetDownloadPanel({
 }) {
   const pinAccess = usePlanFeatureAccess("pinSet");
   const limitAccess = usePlanFeatureAccess("downloadLimit");
+  const [downloadOptionsOpen, setDownloadOptionsOpen] = useState(true);
+  const singlePhotoDownload = download.singlePhotoDownload !== false;
   return (
     <div className="max-w-[620px]">
       <FieldGroup className="gap-12">
@@ -5748,9 +5889,52 @@ function PresetDownloadPanel({
             />
             <span>{download.photoDownload ? "On" : "Off"}</span>
           </div>
-          <button className="inline-flex items-center gap-2 text-sm font-semibold text-[#00a997]">
-            Additional options <ChevronDown className="size-4" />
+          <p className="text-sm leading-6 text-[#666]">
+            Allow visitors to download photos in your gallery.
+          </p>
+          <button
+            type="button"
+            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#00a997]"
+            onClick={() => setDownloadOptionsOpen((value) => !value)}
+            aria-expanded={downloadOptionsOpen}
+          >
+            Additional options
+            <ChevronDown className={cn("size-4 transition-transform", downloadOptionsOpen && "rotate-180")} />
           </button>
+          {downloadOptionsOpen && download.photoDownload && (
+            <div className="mt-2 grid gap-4 border-l-2 border-[#e8e8e8] pl-5">
+              <label className="flex cursor-pointer items-center gap-3 text-sm">
+                <Checkbox
+                  checked={download.galleryDownload !== false}
+                  onCheckedChange={(value) => onChange({ galleryDownload: Boolean(value) })}
+                />
+                Gallery Download
+              </label>
+              <label className="flex cursor-pointer items-center gap-3 text-sm">
+                <Checkbox
+                  checked={singlePhotoDownload}
+                  onCheckedChange={(value) => onChange({ singlePhotoDownload: Boolean(value) })}
+                />
+                Single Photo Download
+              </label>
+              <label className={cn("flex items-center gap-3 text-sm", !singlePhotoDownload && "opacity-45")}>
+                <Checkbox
+                  checked={download.singlePhotoDownloadEmailTracking !== false}
+                  disabled={!singlePhotoDownload}
+                  onCheckedChange={(value) => onChange({ singlePhotoDownloadEmailTracking: Boolean(value) })}
+                />
+                Single Photo Download Email Tracking
+              </label>
+              <label className={cn("flex items-center gap-3 text-sm", !singlePhotoDownload && "opacity-45")}>
+                <Checkbox
+                  checked={Boolean(download.restrictedSinglePhotoDownloadSize)}
+                  disabled={!singlePhotoDownload}
+                  onCheckedChange={(value) => onChange({ restrictedSinglePhotoDownloadSize: Boolean(value) })}
+                />
+                Restricted Single Photo Download Size
+              </label>
+            </div>
+          )}
         </Field>
 
         <Field>
@@ -12764,6 +12948,18 @@ function CollectionDetailView({
                       }
                       text="Allow visitors to view images as a slideshow."
                     />
+                    {form.general.slideshow && (
+                      <SlideshowAdditionalOptions
+                        speed={form.general.slideshowSpeed ?? "regular"}
+                        autoLoop={form.general.slideshowAutoLoop ?? true}
+                        onChange={(patch) =>
+                          setForm((current) => ({
+                            ...current,
+                            general: { ...current.general, ...patch },
+                          }))
+                        }
+                      />
+                    )}
                     <SettingSwitch
                       label="Social Sharing"
                       checked={form.general.socialSharing}
@@ -14150,12 +14346,18 @@ const collectionDefaultGeneral: PresetGeneralSettings = {
   emailRegistration: false,
   galleryAssist: false,
   slideshow: true,
+  slideshowSpeed: "regular",
+  slideshowAutoLoop: true,
   socialSharing: true,
   language: "English",
 };
 
 const collectionDefaultDownload: PresetDownloadSettings = {
   photoDownload: true,
+  galleryDownload: true,
+  singlePhotoDownload: true,
+  singlePhotoDownloadEmailTracking: true,
+  restrictedSinglePhotoDownloadSize: false,
   highResolution: true,
   highResolutionSize: "3600px",
   webSize: true,
