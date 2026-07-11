@@ -20,6 +20,28 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
+      - name: Make switcher patch precise
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/update-sidebar-marketing.py')
+          text = path.read_text()
+          old = '''text = replace_once(
+              text,
+              '<button className="flex items-center gap-2 text-sm font-bold outline-none">',
+              '<button className={cn("flex h-11 items-center rounded-md text-sm font-bold outline-none hover:bg-[#f5f7f7]", collapsed ? "w-11 justify-center" : "gap-3 px-2")} title={collapsed ? active.title : undefined}>',
+              "switcher button",
+          )'''
+          new = '''switcher_old = '<button className="flex items-center gap-2 text-sm font-bold outline-none">'
+          switcher_new = '<button className={cn("flex h-11 items-center rounded-md text-sm font-bold outline-none hover:bg-[#f5f7f7]", collapsed ? "w-11 justify-center" : "gap-3 px-2")} title={collapsed ? active.title : undefined}>'
+          if switcher_old not in text:
+              raise RuntimeError("switcher button: target not found")
+          text = text.replace(switcher_old, switcher_new, 1)'''
+          if old not in text:
+              raise SystemExit('Could not locate switcher patch block')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Apply dashboard UI patch
         id: apply
         continue-on-error: true
