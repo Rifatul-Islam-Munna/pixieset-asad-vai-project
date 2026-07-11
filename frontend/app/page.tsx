@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SiteNav } from "@/components/home/site-nav";
+import { HomeHero } from "@/components/home/home-hero";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getUser } from "@/actions/auth";
 import { UserType } from "@/@types/user";
@@ -36,28 +36,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
 
   return (
     <main className="min-h-screen bg-background text-foreground [&_a]:whitespace-pre-line [&_button]:whitespace-pre-line [&_h1]:whitespace-pre-line [&_h2]:whitespace-pre-line [&_h3]:whitespace-pre-line [&_p]:whitespace-pre-line [&_span]:whitespace-pre-line">
-      <section className="relative min-h-[720px] overflow-hidden text-white md:min-h-[820px]">
-        {cms.media.heroMediaType === "video" && cms.media.heroMediaUrl ? (
-          <video className="absolute inset-0 h-full w-full object-cover" src={cms.media.heroMediaUrl} autoPlay muted loop playsInline />
-        ) : (
-          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${cms.media.heroMediaUrl}')` }} />
-        )}
-        <div className="absolute inset-0 bg-black/55" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.68),rgba(0,0,0,0.18)_55%,rgba(0,0,0,0.5))]" />
-
-        <SiteNav brand={cms.brand} nav={t.nav} lang={lang} dashboardHref={dashboardHref} />
-
-        <div className="relative z-10 mx-auto flex min-h-[620px] w-full max-w-[1240px] items-center px-5 pt-6 md:min-h-[720px] md:px-7 lg:px-8">
-          <div className="max-w-[760px] pt-10 md:pt-16">
-            <p className="mb-5 text-xs font-bold tracking-wide sm:text-sm md:mb-7">{t.hero.eyebrow}</p>
-            <h1 className="max-w-[760px] text-4xl font-semibold leading-[1.18] tracking-normal sm:text-5xl md:text-[52px] md:leading-[1.28]">{lines(t.hero.title)}</h1>
-            <p className="mt-5 max-w-[760px] text-base font-semibold leading-7 text-white/90 sm:text-lg md:mt-6">{t.hero.subtitle}</p>
-            <Button asChild className="mt-8 h-11 min-w-40 rounded-none bg-[#22bda7] text-base font-bold text-white hover:bg-[#19a995]">
-              <a href="/register">{t.hero.cta}</a>
-            </Button>
-          </div>
-        </div>
-      </section>
+      <HomeHero initialCms={cms} requestedLanguage={params?.lang} dashboardHref={dashboardHref} />
 
       <section className="border-t bg-white px-5 py-14 text-center md:px-6 md:py-20">
         <div className="mx-auto max-w-[1240px]">

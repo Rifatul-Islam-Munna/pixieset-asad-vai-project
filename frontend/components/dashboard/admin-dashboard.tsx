@@ -289,16 +289,19 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
 
   const saveHomeCms = (quiet = false) => {
     const snapshot = homeCms;
+    console.log("[Home CMS] saving", snapshot);
     setCmsSaveState("saving");
     startTransition(async () => {
       try {
         const data = await updateHomeCms(snapshot);
+        console.log("[Home CMS] saved response", data);
         lastSavedCms.current = JSON.stringify(data);
         setHomeCms((current) => JSON.stringify(current) === JSON.stringify(snapshot) ? data : current);
         setCmsSaveState(JSON.stringify(currentCms.current) === JSON.stringify(snapshot) ? "saved" : "unsaved");
         if (!quiet) toast.success("Home CMS saved and live");
         router.refresh();
       } catch (error) {
+        console.error("[Home CMS] save failed", error);
         setCmsSaveState("error");
         toast.error(error instanceof Error ? error.message : "CMS save failed");
       }
