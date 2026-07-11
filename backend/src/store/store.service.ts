@@ -115,7 +115,7 @@ export class StoreService {
       {
         $set: {
           globalStatus: Boolean(dto.globalStatus),
-          currency: dto.currency ?? 'EUR',
+          currency: 'EUR',
           orderDelay: dto.orderDelay ?? '6 Hours',
           maintainMarkup: Boolean(dto.maintainMarkup),
           roundPricesUpTo: dto.roundPricesUpTo ?? '.00',
@@ -143,7 +143,7 @@ export class StoreService {
     const stripe = new Stripe(stripeConfig.secretKey);
     const intent = await stripe.paymentIntents.create({
       amount,
-      currency: (dto.currency ?? settings?.currency ?? 'EUR').toLowerCase(),
+      currency: 'eur',
       automatic_payment_methods: { enabled: true },
       metadata: {
         ownerUserId: userId,
@@ -376,7 +376,7 @@ export class StoreService {
     });
 
     const stripe = new Stripe(stripeConfig.secretKey);
-    const currency = (settings?.currency ?? 'EUR').toLowerCase();
+    const currency = 'eur';
     const stripeCoupon = discount > 0
       ? await stripe.coupons.create(
           {

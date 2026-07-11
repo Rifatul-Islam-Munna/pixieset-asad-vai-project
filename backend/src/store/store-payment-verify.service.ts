@@ -130,13 +130,12 @@ export class StorePaymentVerifyService {
   }
 
   async createOwnerIntent(userId: string, body: any) {
-    const settings = await this.settingModel.findOne({ userId }).lean();
     const order = body.orderId
       ? await this.orderModel.findOne({ _id: body.orderId, userId }).lean()
       : null;
     const amount = Number(order?.total ?? body.amount ?? 0);
     if (amount <= 0) throw new BadRequestException('Payment amount is invalid');
-    const currency = String(body.currency || settings?.currency || 'EUR');
+    const currency = 'EUR';
     return this.stripe.createOwnerIntent(userId, { amount, currency, orderId: body.orderId });
   }
 

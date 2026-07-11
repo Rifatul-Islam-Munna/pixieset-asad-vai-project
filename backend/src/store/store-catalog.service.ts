@@ -225,7 +225,7 @@ export class StoreCatalogService {
       showBuyPhotoButton: raw.showBuyPhotoButton ?? true,
       allowBulkBuy: raw.allowBulkBuy ?? true,
       minimumOrderAmount: Number(raw.minimumOrderAmount ?? 0),
-      currency: String(raw.currency || settings?.currency || 'EUR').toUpperCase(),
+      currency: 'EUR',
       requireProfessionalInfo: Boolean(raw.requireProfessionalInfo),
     };
     if (requireEnabled && !config.enabled) throw new NotFoundException('Store is not enabled for this collection');

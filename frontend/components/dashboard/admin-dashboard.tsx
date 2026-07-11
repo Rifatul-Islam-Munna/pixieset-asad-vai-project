@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Check, DollarSign, Edit3, ExternalLink, FileImage, FileText, HardDrive, Images, Loader2, LogOut, Mail, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { BarChart3, Check, Edit3, Euro, ExternalLink, FileImage, FileText, HardDrive, Images, Loader2, LogOut, Mail, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
@@ -599,7 +599,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               <InputField label="Plan name" value={planForm.name} onChange={(value) => setPlanForm({ ...planForm, name: value })} required />
               <InputField label="Storage limit GB" value={planForm.storageGb} onChange={(value) => setPlanForm({ ...planForm, storageGb: value })} required type="number" />
               <InputField label="Emails / month" value={planForm.monthlyEmails} onChange={(value) => setPlanForm({ ...planForm, monthlyEmails: value })} required type="number" />
-              <InputField label="Monthly price USD" value={planForm.priceMonthly} onChange={(value) => setPlanForm({ ...planForm, priceMonthly: value })} required type="number" />
+              <InputField label="Monthly price EUR" value={planForm.priceMonthly} onChange={(value) => setPlanForm({ ...planForm, priceMonthly: value })} required type="number" />
               <label className="flex h-11 items-center justify-between border px-3 text-sm">
                 <span className="font-semibold">Enable yearly billing</span>
                 <input
@@ -609,7 +609,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
                 />
               </label>
               {planForm.yearlyEnabled && (
-                <InputField label="Yearly price USD (total billed yearly)" value={planForm.priceYearly} onChange={(value) => setPlanForm({ ...planForm, priceYearly: value })} required type="number" />
+                <InputField label="Yearly price EUR (total billed yearly)" value={planForm.priceYearly} onChange={(value) => setPlanForm({ ...planForm, priceYearly: value })} required type="number" />
               )}
               <div className="grid gap-2 sm:grid-cols-2">
                 {planFeatures.map(([key, label]) => (
@@ -777,7 +777,7 @@ function AdminOverview({ data }: { data: AdminDashboardData }) {
         <MetricCard icon={Images} label="Collections" value={stats.collections} />
         <MetricCard icon={FileImage} label="Images" value={stats.images} />
         <MetricCard icon={ShoppingBag} label="Orders" value={stats.orders ?? 0} />
-        <MetricCard icon={DollarSign} label="Revenue" value={`$${Number(stats.revenue ?? 0).toLocaleString()}`} strong />
+        <MetricCard icon={Euro} label="Revenue" value={`€${Number(stats.revenue ?? 0).toLocaleString()}`} strong />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
@@ -795,7 +795,7 @@ function AdminOverview({ data }: { data: AdminDashboardData }) {
                 <CartesianGrid stroke="#eee" vertical={false} />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} />
-                <Tooltip formatter={(value, name) => name === "revenue" ? [`$${Number(value).toLocaleString()}`, "Revenue"] : [value, "Orders"]} />
+                <Tooltip formatter={(value, name) => name === "revenue" ? [`€${Number(value).toLocaleString()}`, "Revenue"] : [value, "Orders"]} />
                 <Bar dataKey="revenue" fill="#22bda7" radius={[4, 4, 0, 0]} />
                 <Line type="monotone" dataKey="orders" stroke="#111" strokeWidth={2} dot={false} />
               </ComposedChart>
@@ -1613,8 +1613,8 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
               <td className="px-4 py-4">{plan.storageGb} GB</td>
               <td className="px-4 py-4">{plan.monthlyEmails} emails / month</td>
               <td className="px-4 py-4">
-                <p>${Number(plan.priceMonthly ?? 0).toLocaleString()} / month</p>
-                {plan.yearlyEnabled && <p className="mt-1 text-xs text-[#777]">${Number(plan.priceYearly ?? 0).toLocaleString()} / year</p>}
+                <p>€{Number(plan.priceMonthly ?? 0).toLocaleString()} / month</p>
+                {plan.yearlyEnabled && <p className="mt-1 text-xs text-[#777]">€{Number(plan.priceYearly ?? 0).toLocaleString()} / year</p>}
               </td>
               <td className="px-4 py-4">{plan.active ? "Active" : "Inactive"}</td>
               <td className="px-4 py-4">

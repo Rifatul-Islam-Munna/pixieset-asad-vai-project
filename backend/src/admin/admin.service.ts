@@ -306,7 +306,7 @@ export class AdminService implements OnModuleInit {
       line_items: [{
         quantity: 1,
         price_data: {
-          currency: 'usd',
+          currency: 'eur',
           unit_amount: Math.round(amount * 100),
           product_data: {
             name: plan.name,

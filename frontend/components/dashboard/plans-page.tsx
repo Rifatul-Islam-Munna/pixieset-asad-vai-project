@@ -125,7 +125,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                     <div>
                       <h2 className="text-2xl font-medium">{plan.name}</h2>
                       <p className="mt-4 flex items-end gap-1">
-                        <span className="text-5xl font-medium">${formatMoney(price)}</span>
+                        <span className="text-5xl font-medium">€{formatMoney(price)}</span>
                         <span className="pb-2 text-sm">/mo</span>
                       </p>
                     </div>
@@ -134,7 +134,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                     </span>
                   </div>
                   <p className="mt-2 text-xs font-semibold text-[#777]">
-                    {billingInterval === "year" ? yearlyAvailable ? `$${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : "Billed monthly"}
+                    {billingInterval === "year" ? yearlyAvailable ? `€${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : "Billed monthly"}
                   </p>
                   <div className="mt-6 grid gap-3 border-t pt-5 text-sm">
                     <div className="flex justify-between gap-4"><span>Photo storage</span><b>{Number(plan.storageGb ?? 0).toLocaleString()} GB</b></div>
@@ -173,11 +173,11 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                     </div>
                     <h2 className="mt-3 text-xl font-medium">{plan.name}</h2>
                     <p className="mt-5 flex items-end gap-1">
-                      <span className="text-5xl font-medium tracking-normal">${formatMoney(price)}</span>
+                      <span className="text-5xl font-medium tracking-normal">€{formatMoney(price)}</span>
                       <span className="pb-2 text-sm">/mo</span>
                     </p>
                     <p className="mt-6 min-h-5 text-xs font-semibold text-[#aaa]">
-                      {billingInterval === "year" ? yearlyAvailable ? `$${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : price > 0 ? "Billed monthly" : "Billed Never"}
+                      {billingInterval === "year" ? yearlyAvailable ? `€${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : price > 0 ? "Billed monthly" : "Billed Never"}
                     </p>
                     <Button className="mt-9 h-11 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
                       {pending && pendingId === plan._id ? <Loader2 className="size-4 animate-spin" /> : price > 0 ? "Start Plan" : "Start Free"}

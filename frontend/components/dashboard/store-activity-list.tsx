@@ -49,7 +49,7 @@ export function StoreActivityList({
             <span>{row.metadata?.productName || row.metadata?.orderId || "-"}</span>
             <span>
               {row.metadata?.amount
-                ? `${row.metadata.currency || currency} ${Number(row.metadata.amount).toFixed(2)}`
+                ? formatEuro(row.metadata.amount, row.metadata.currency || currency)
                 : "-"}
             </span>
           </div>
@@ -70,4 +70,16 @@ export function StoreActivityList({
       </div>
     </section>
   );
+}
+
+function formatEuro(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currency === "EUR" ? currency : "EUR",
+      minimumFractionDigits: 2,
+    }).format(Number(value || 0));
+  } catch {
+    return `€${Number(value || 0).toFixed(2)}`;
+  }
 }

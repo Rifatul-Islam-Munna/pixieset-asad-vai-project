@@ -78,7 +78,7 @@ export function StoreProductAdminCard({
             </span>
           </div>
           <p className="mt-2 text-sm text-[#666]">
-            From {Number(draft.price || 0).toFixed(2)}
+            From €{Number(draft.price || 0).toFixed(2)}
           </p>
           <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#888]">
             {draft.description || "No product description"}

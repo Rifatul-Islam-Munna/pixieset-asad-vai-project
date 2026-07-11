@@ -274,7 +274,7 @@ export function AdminDefaultProductsPage({ initialProducts }: { initialProducts:
                 <td className="px-4 py-4"><div className="size-20 overflow-hidden bg-[#eee]">{product.images?.[0] ? <img src={product.images[0]} alt="" className="h-full w-full object-cover" /> : null}</div></td>
                 <td className="px-4 py-4"><b>{product.name}</b><p className="mt-1 text-xs text-[#777]">{product.slug}</p></td>
                 <td className="px-4 py-4">{product.category}</td>
-                <td className="px-4 py-4">${Number(product.price || 0).toFixed(2)}</td>
+                <td className="px-4 py-4">€{Number(product.price || 0).toFixed(2)}</td>
                 <td className="px-4 py-4"><p className="font-semibold">{product.variants?.length ?? 0} variants</p><p className="mt-1 max-w-64 truncate text-xs text-[#777]">{(product.variants ?? []).slice(0, 4).map((variant) => variant.label).join(" · ") || "No sizes added"}</p></td>
                 <td className="px-4 py-4">{product.options?.length ?? 0} groups</td>
                 <td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-bold ${product.active ? "bg-emerald-50 text-emerald-700" : "bg-[#f2f2f2] text-[#777]"}`}>{product.active ? "Active" : "Inactive"}</span></td>

@@ -1286,7 +1286,7 @@ function AccountPanel() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <b>${Number(purchase.amount).toFixed(2)}</b>
+                    <b>€{Number(purchase.amount).toFixed(2)}</b>
                     <p className="mt-1 text-xs text-[#888]">
                       {new Date(purchase.createdAt).toLocaleDateString()}
                     </p>
@@ -1703,7 +1703,7 @@ function StoragePlanPanel() {
                 <div className="flex justify-between">
                   <span>Price</span>
                   <b>
-                    ${monthlyEquivalent.toFixed(2)}{" "}
+                    €{monthlyEquivalent.toFixed(2)}{" "}
                     {billingInterval === "year" ? "/yearly" : "/month"}
                   </b>
                 </div>
@@ -1712,7 +1712,7 @@ function StoragePlanPanel() {
                     <span>Billed</span>
                     <b>
                       {yearlyAvailable
-                        ? `$${Number(plan.priceYearly).toFixed(2)} yearly`
+                        ? `€${Number(plan.priceYearly).toFixed(2)} yearly`
                         : "Unavailable"}
                     </b>
                   </div>
@@ -7441,9 +7441,6 @@ function StoreSettingsPanel() {
               className="mt-3 h-11 w-full border bg-white px-3 text-sm outline-none"
             >
               <option value="EUR">Euro (EUR)</option>
-              <option value="USD">United States (USD)</option>
-              <option value="BDT">Bangladesh (BDT)</option>
-              <option value="GBP">British Pound (GBP)</option>
             </select>
           </div>
           <div>
@@ -7835,7 +7832,15 @@ function StatusBadge({ value }: { value: string }) {
 }
 
 function money(value: number, currency = "EUR") {
-  return `${currency} ${Number(value || 0).toFixed(2)}`;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+    }).format(Number(value || 0));
+  } catch {
+    return `€${Number(value || 0).toFixed(2)}`;
+  }
 }
 
 function getPricingProductCount(
