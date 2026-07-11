@@ -5,12 +5,15 @@ import Link from "next/link";
 import { Activity, ExternalLink, Loader2, Settings } from "lucide-react";
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { useStorePriceSheets } from "@/api-hooks/use-store";
+import { useHomepageSettings } from "@/api-hooks/use-homepage";
+import { publicCollectionUrl } from "@/lib/public-site-url";
 import { CollectionStoreSettingsPanel } from "./collection-store-settings-panel";
 import { StoreActivityList } from "./store-activity-list";
 
 export function CollectionStoreManager({ collectionId }: { collectionId: string }) {
   const admin = useCollectionStoreAdmin(collectionId);
   const { priceSheetsQuery } = useStorePriceSheets();
+  const homepageSlug = useHomepageSettings().query.data?.data?.slug ?? "";
   const [tab, setTab] = useState<"settings" | "activity">("settings");
   const preparing = useRef(false);
 
@@ -36,9 +39,10 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
   }
   if (!admin.collection) return <div className="p-8">Collection not found.</div>;
 
-  const publicHref = `/collection/${encodeURIComponent(admin.collection.name)}/${encodeURIComponent(
-    admin.collection.slug || admin.collection._id,
-  )}/store`;
+  const collectionSlug = admin.collection.slug || admin.collection._id;
+  const publicHref = homepageSlug
+    ? `${publicCollectionUrl(homepageSlug, collectionSlug)}/store`
+    : `/collection/${encodeURIComponent(admin.collection.name)}/${encodeURIComponent(collectionSlug)}/store`;
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f6f6f4] px-3 py-6 text-[#202020] sm:px-4 md:px-8">

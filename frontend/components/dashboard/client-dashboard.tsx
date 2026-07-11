@@ -169,6 +169,8 @@ import { cn } from "@/lib/utils";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 import { PlanFeatureLock, PlanFeatureNotice } from "@/components/dashboard/plan-feature-lock";
 import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
+import { useHomepageSettings } from "@/api-hooks/use-homepage";
+import { publicCollectionUrl } from "@/lib/public-site-url";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
 export type DashboardPage =
@@ -8201,6 +8203,7 @@ function CollectionDetailView({
   const storeWatermarkItems = useDashboardStore((state) => state.watermarkItems);
   const { starImage } = useImageActions();
   const { collectionsQuery } = useCollections();
+  const homepageQuery = useHomepageSettings().query;
   const { ordersQuery } = useStoreOrders();
   const { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
@@ -8300,8 +8303,11 @@ function CollectionDetailView({
       watermark.id === uploadWatermarkId ||
       watermark.name === uploadWatermarkId,
   );
-  const publicPath = `/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collection?.slug ?? collectionId)}`;
-  const publicLink = `${pageOrigin}${publicPath}`;
+  const collectionSlug = collection?.slug ?? collectionId;
+  const homepageSlug = homepageQuery.data?.data?.slug;
+  const publicLink = homepageSlug
+    ? publicCollectionUrl(homepageSlug, collectionSlug, pageOrigin)
+    : `${pageOrigin}/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collectionSlug)}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicLink)}`;
   const loadMoreCollectionImages = async () => {
     if (!collectionId || imagesLoadingMore || !imagesHasMore) return;

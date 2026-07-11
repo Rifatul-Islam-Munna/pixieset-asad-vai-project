@@ -39,8 +39,8 @@ export class StorePricingService {
     private readonly shippingModel: Model<StoreShippingDocument>,
   ) {}
 
-  async price(identifier: string, body: any) {
-    const resolved = await this.catalog.resolve(identifier);
+  async price(identifier: string, body: any, siteSlug?: string) {
+    const resolved = await this.catalog.resolve(identifier, true, siteSlug);
     return this.priceResolved(resolved, body);
   }
 

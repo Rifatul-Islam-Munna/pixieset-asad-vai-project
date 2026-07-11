@@ -13,6 +13,7 @@ import { FaceSearchService } from 'src/face-search/face-search.service';
 import { MobileGalleryImage, MobileGalleryImageDocument } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
+import { Homepage, HomepageDocument } from 'src/homepage/entities/homepage.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { Collection, CollectionDocument } from './entities/collection.entity';
@@ -46,6 +47,7 @@ export class CollectionsService {
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(MobileGalleryImage.name) private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
+    @InjectModel(Homepage.name) private readonly homepageModel: Model<HomepageDocument>,
     private readonly minioService: MinioService,
     private readonly faceSearchService: FaceSearchService,
     private readonly configService: ConfigService,
@@ -98,8 +100,8 @@ export class CollectionsService {
     return { ...collection, images: imagesPage.items, imagesPage };
   }
 
-  async findPublic(identifier: string, email?: string, limit?: string, offset?: string) {
-    const collection = await this.findCollectionByIdentifier(identifier);
+  async findPublic(identifier: string, email?: string, limit?: string, offset?: string, siteSlug?: string) {
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
     if (collection.status !== 'published') throw new NotFoundException('Collection not found');
     const preset = collection.presetId
       ? await this.settingModel
@@ -120,7 +122,7 @@ export class CollectionsService {
     };
     const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
     const imagesPage = emailAccess.authorized
-      ? await this.findPublicImages(identifier, email, limit, offset)
+      ? await this.findPublicImages(identifier, email, limit, offset, siteSlug)
       : { items: [], total: 0, limit: this.pageLimit(limit), offset: this.pageOffset(offset), hasMore: false };
     if (emailAccess.authorized) void this.ensureCollectionPreviews(collection._id.toString());
     const branding = await this.settingModel
@@ -175,8 +177,8 @@ export class CollectionsService {
     return this.findImagesPage({ collectionId: id, userId }, limit, offset);
   }
 
-  async findPublicImages(identifier: string, email?: string, limit?: string, offset?: string) {
-    const collection = await this.findCollectionByIdentifier(identifier);
+  async findPublicImages(identifier: string, email?: string, limit?: string, offset?: string, siteSlug?: string) {
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
     if (collection.status !== 'published') throw new NotFoundException('Collection not found');
     const preset = collection.presetId
       ? await this.settingModel.findOne({ userId: collection.userId, type: DashboardSettingType.PRESET, localId: collection.presetId }).lean()
@@ -197,8 +199,8 @@ export class CollectionsService {
     return this.findImagesPage({ collectionId: collection._id.toString() }, limit, offset);
   }
 
-  async requestPublicAccess(identifier: string, body: { email?: string; reason?: string }) {
-    const collection = await this.findCollectionByIdentifier(identifier);
+  async requestPublicAccess(identifier: string, body: { email?: string; reason?: string }, siteSlug?: string) {
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
     if (collection.status !== 'published') throw new NotFoundException('Collection not found');
     const email = this.cleanEmail(body.email);
     if (!email) throw new BadRequestException('Email is required');
@@ -412,8 +414,9 @@ export class CollectionsService {
   async recordPublicDownloadActivity(
     identifier: string,
     body: { email?: string; items?: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>; downloadType?: 'single' | 'all' },
+    siteSlug?: string,
   ) {
-    const collection = await this.findCollectionByIdentifier(identifier);
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
     if (collection.status !== 'published') throw new NotFoundException('Collection not found');
     const email = String(body?.email ?? '').trim().toLowerCase();
     if (!email || !email.includes('@')) throw new BadRequestException('Email is required');
@@ -1260,11 +1263,15 @@ export class CollectionsService {
     return `${base}-${Date.now().toString(36)}-${this.randomSlugSuffix()}`;
   }
 
-  private async findCollectionByIdentifier(identifier: string) {
+  private async findCollectionByIdentifier(identifier: string, siteSlug?: string) {
     const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];
     if (identifier.match(/^[a-f\d]{24}$/i)) query.unshift({ _id: identifier });
+    const owner = siteSlug
+      ? await this.homepageModel.findOne({ slug: siteSlug.toLowerCase(), enabled: true }).select('userId').lean()
+      : null;
+    if (siteSlug && !owner) throw new NotFoundException('Collection not found');
     const collection = await this.collectionModel
-      .findOne({ $or: query })
+      .findOne({ $or: query, ...(owner ? { userId: owner.userId } : {}) })
       .sort({ createdAt: -1 })
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');

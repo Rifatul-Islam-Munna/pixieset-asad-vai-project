@@ -24,7 +24,15 @@ export class Homepage {
   @Prop({ required: true, unique: true, index: true })
   userId: string;
 
-  @Prop({ required: true, unique: true, index: true, trim: true, lowercase: true })
+  @Prop({
+    required: true,
+    unique: true,
+    index: true,
+    trim: true,
+    lowercase: true,
+    maxlength: 63,
+    match: /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/,
+  })
   slug: string;
 
   @Prop({ default: true })

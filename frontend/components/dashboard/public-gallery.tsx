@@ -289,7 +289,7 @@ export function PublicGallery({
     downloadType: "single" | "all",
   ) => {
     const identifier = collection?.slug ?? galary;
-    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(identifier)}/download-activity`, {
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(identifier)}/download-activity?siteSlug=${encodeURIComponent(name)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, items, downloadType }),
@@ -335,7 +335,7 @@ export function PublicGallery({
       let hasMore = imagesHasMore;
       const loaded: PublicImage[] = [];
       while (hasMore) {
-        const params = new URLSearchParams({ limit: "120", offset: String(offset) });
+        const params = new URLSearchParams({ limit: "120", offset: String(offset), siteSlug: name });
         const email = accessSettings?.email || visitorEmail || accessEmail;
         if (email) params.set("email", email);
         const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(collection.slug ?? galary)}/images?${params.toString()}`).catch(() => null);
@@ -444,6 +444,7 @@ export function PublicGallery({
     const params = new URLSearchParams({
       limit: "48",
       offset: String(loadedImages.length),
+      siteSlug: name,
     });
     const email = accessSettings?.email || visitorEmail || accessEmail;
     if (email) params.set("email", email);
@@ -475,7 +476,7 @@ export function PublicGallery({
     if (!email.includes("@") || accessBusy) return;
     setAccessBusy(true);
     setAccessNotice("");
-    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0`).catch(() => null);
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
     const payload = response ? await response.json().catch(() => null) : null;
     setAccessBusy(false);
     if (!response?.ok || !payload?.data) {
@@ -499,7 +500,7 @@ export function PublicGallery({
     const email = accessEmail.trim().toLowerCase();
     if (!email.includes("@") || accessBusy) return;
     setAccessBusy(true);
-    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}/access-request`, {
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}/access-request?siteSlug=${encodeURIComponent(name)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, reason: accessReason }),
@@ -653,7 +654,7 @@ export function PublicGallery({
       ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-black/5 px-4 sm:px-5 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
-        <p className="truncate text-sm uppercase tracking-[0.24em]">{studioName}</p>
+        <p className="truncate text-sm uppercase tracking-[0.24em]">{title}</p>
         <div className="hidden lg:block" />
         <div className="flex min-w-0 items-center justify-end gap-3 sm:gap-4" data-print-store-actions-host="true">
           <span data-public-store-cart-host="true" />

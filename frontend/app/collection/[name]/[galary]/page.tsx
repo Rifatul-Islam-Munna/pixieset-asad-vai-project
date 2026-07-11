@@ -7,8 +7,8 @@ import { JsonLdScript, absoluteUrl, collectSeoText, pageMetadata } from "@/lib/s
 
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
 
-async function getCollection(identifier: string) {
-  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}?limit=48&offset=0`, {
+async function getCollection(identifier: string, siteSlug: string) {
+  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}?limit=48&offset=0&siteSlug=${encodeURIComponent(siteSlug)}`, {
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
   }).catch(() => null);
@@ -28,7 +28,7 @@ export async function generateMetadata({
   params: Promise<{ name: string; galary: string }>;
 }): Promise<Metadata> {
   const { name, galary } = await params;
-  const [cms, collection] = await Promise.all([getHomeCms(), getCollection(galary)]);
+  const [cms, collection] = await Promise.all([getHomeCms(), getCollection(galary, name)]);
   const studio = decodeURIComponent(name);
   const title = `${collection?.name ?? decodeURIComponent(galary)} | ${studio}`;
   const description = collection?.eventDate
@@ -53,7 +53,7 @@ export default async function CollectionGalleryPage({
   params: Promise<{ name: string; galary: string }>;
 }) {
   const { name, galary } = await params;
-  const collection = await getCollection(galary);
+  const collection = await getCollection(galary, name);
   const studio = decodeURIComponent(name);
   const title = collection?.name ?? decodeURIComponent(galary);
   const image = imageSrc(collection?.coverImage || collection?.images?.[0]?.url);

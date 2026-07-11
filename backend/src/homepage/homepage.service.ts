@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -27,6 +27,10 @@ export class HomepageService {
   async getMine(userId: string) {
     const homepage = await this.getOrCreate(userId);
     return this.privatePayload(homepage);
+  }
+
+  async provisionForUser(userId: string) {
+    return this.getOrCreate(userId);
   }
 
   async updateMine(userId: string, dto: UpdateHomepageDto) {
@@ -127,7 +131,7 @@ export class HomepageService {
           eventDate: collection.eventDate,
           coverImage: collection.coverImage || fallback?.thumbnailUrl || fallback?.url || '',
           imageCount: collection.imageCount ?? 0,
-          url: `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? id)}`,
+          url: `/${encodeURIComponent(collection.slug ?? id)}`,
         };
       }),
     };
@@ -150,7 +154,7 @@ export class HomepageService {
     const brandingData = (branding?.data ?? {}) as Record<string, any>;
     homepage = await this.homepageModel.create({
       userId,
-      slug: await this.uniqueSlug(user.name, userId),
+      slug: await this.uniqueSlug(user.name),
       enabled: true,
       brandName: brandingData.brandText || user.name,
       logoUrl: brandingData.logoUrl || '',
@@ -173,15 +177,17 @@ export class HomepageService {
     return homepage;
   }
 
-  private async uniqueSlug(name: string, userId: string) {
+  private async uniqueSlug(name: string) {
     const base = this.slugify(name) || 'gallery';
-    const suffix = userId.slice(-6).toLowerCase();
-    let candidate = `${base}-${suffix}`;
-    let counter = 2;
-    while (await this.homepageModel.exists({ slug: candidate })) {
-      candidate = `${base}-${suffix}-${counter++}`;
+
+    // Random suffix keeps public hostnames unguessable from Mongo IDs and makes
+    // equal display names safe. The unique index remains the final authority.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const candidate = `${base}-${randomBytes(6).toString('hex')}`;
+      if (!(await this.homepageModel.exists({ slug: candidate }))) return candidate;
     }
-    return candidate;
+
+    return `${base}-${randomBytes(6).toString('hex')}`;
   }
 
   private slugify(value: string) {
@@ -190,7 +196,7 @@ export class HomepageService {
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 52);
+      .slice(0, 50);
   }
 
   private hashPassword(userId: string, password: string) {

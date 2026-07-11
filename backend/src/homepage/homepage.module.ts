@@ -20,5 +20,6 @@ import { HomepageService } from './homepage.service';
   ],
   controllers: [HomepageController, PublicHomepageController],
   providers: [HomepageService],
+  exports: [HomepageService],
 })
 export class HomepageModule {}

@@ -49,8 +49,9 @@ export class PublicCollectionsController {
     @Query('email') email?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.findPublic(identifier, email, limit, offset);
+    const data = await this.collectionsService.findPublic(identifier, email, limit, offset, siteSlug);
     return { data };
   }
 
@@ -60,8 +61,9 @@ export class PublicCollectionsController {
     @Query('email') email?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.findPublicImages(identifier, email, limit, offset);
+    const data = await this.collectionsService.findPublicImages(identifier, email, limit, offset, siteSlug);
     return { data };
   }
 
@@ -69,8 +71,9 @@ export class PublicCollectionsController {
   async requestAccess(
     @Param('identifier') identifier: string,
     @Body() body: { email?: string; reason?: string },
+    @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.requestPublicAccess(identifier, body);
+    const data = await this.collectionsService.requestPublicAccess(identifier, body, siteSlug);
     return { message: 'Access request sent', data };
   }
 
@@ -78,8 +81,9 @@ export class PublicCollectionsController {
   async recordDownloadActivity(
     @Param('identifier') identifier: string,
     @Body() body: { email?: string; items?: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>; downloadType?: 'single' | 'all' },
+    @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.recordPublicDownloadActivity(identifier, body);
+    const data = await this.collectionsService.recordPublicDownloadActivity(identifier, body, siteSlug);
     return { message: 'Download activity saved', data };
   }
 }

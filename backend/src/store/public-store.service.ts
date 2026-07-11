@@ -18,8 +18,8 @@ export class PublicStoreService {
     private readonly imageModel: Model<CollectionImageDocument>,
   ) {}
 
-  async getStore(identifier: string) {
-    const data = await this.catalog.getPublicStore(identifier);
+  async getStore(identifier: string, siteSlug?: string) {
+    const data = await this.catalog.getPublicStore(identifier, true, siteSlug);
     const images = await this.imageModel
       .find({ collectionId: String(data.collection._id) })
       .sort({ order: 1, createdAt: 1 })
@@ -34,30 +34,30 @@ export class PublicStoreService {
     };
   }
 
-  getProduct(identifier: string, slug: string) {
-    return this.catalog.getPublicProduct(identifier, slug);
+  getProduct(identifier: string, slug: string, siteSlug?: string) {
+    return this.catalog.getPublicProduct(identifier, slug, siteSlug);
   }
 
-  async getCartPrice(identifier: string, body: any) {
-    const priced = await this.pricing.price(identifier, body);
+  async getCartPrice(identifier: string, body: any, siteSlug?: string) {
+    const priced = await this.pricing.price(identifier, body, siteSlug);
     const { resolved: _privateOwnerConfiguration, ...publicTotals } = priced;
     return publicTotals;
   }
 
-  createCheckout(identifier: string, body: any) {
-    return this.orders.checkout(identifier, body);
+  createCheckout(identifier: string, body: any, siteSlug?: string) {
+    return this.orders.checkout(identifier, body, siteSlug);
   }
 
   getCheckoutResult(sessionId: string) {
     return this.payments.checkoutSession(sessionId);
   }
 
-  makePublicIntent(identifier: string, body: any) {
-    return this.payments.createPublicIntent(identifier, body);
+  makePublicIntent(identifier: string, body: any, siteSlug?: string) {
+    return this.payments.createPublicIntent(identifier, body, siteSlug);
   }
 
-  checkPublicIntent(identifier: string, intentId: string) {
-    return this.payments.verifyPublicIntent(identifier, intentId);
+  checkPublicIntent(identifier: string, intentId: string, siteSlug?: string) {
+    return this.payments.verifyPublicIntent(identifier, intentId, siteSlug);
   }
 
   makeOwnerIntent(userId: string, body: any) {
@@ -68,8 +68,8 @@ export class PublicStoreService {
     return this.payments.verifyOwnerIntent(userId, intentId);
   }
 
-  saveActivity(identifier: string, body: any) {
-    return this.catalog.recordPublicActivity(identifier, body);
+  saveActivity(identifier: string, body: any, siteSlug?: string) {
+    return this.catalog.recordPublicActivity(identifier, body, siteSlug);
   }
 
   getActivity(userId: string, collectionId: string) {

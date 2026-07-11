@@ -71,7 +71,14 @@ export function HomepageSettingsPanel() {
   }, [record]);
 
   const publicUrl = useMemo(
-    () => (record?.slug ? `${origin}/home/${record.slug}` : "Generating your unique URL..."),
+    () => {
+      if (!record?.slug) return "Generating your unique URL...";
+      const configuredRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim();
+      const rootDomain = configuredRoot?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+      if (!rootDomain) return `${origin}/home/${record.slug}`;
+      const protocol = configuredRoot?.startsWith("http://") || origin.startsWith("http://") ? "http" : "https";
+      return `${protocol}://${record.slug}.${rootDomain}`;
+    },
     [origin, record?.slug],
   );
 

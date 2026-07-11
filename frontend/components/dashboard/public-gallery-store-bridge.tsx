@@ -68,7 +68,7 @@ export function PublicGalleryStoreBridge({
   const selectedImage = images.find((image) => image._id === activeImageId);
   const cartKey = storeCartKey(collection?._id ?? galary);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const checkoutHref = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/checkout`;
+  const checkoutHref = `/${encodeURIComponent(galary)}/checkout`;
 
   useEffect(() => {
     try {
@@ -100,13 +100,13 @@ export function PublicGalleryStoreBridge({
   useEffect(() => {
     if (!enabled) return;
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-    fetch(`${baseUrl}/public/collections/${encodeURIComponent(galary)}/store`, {
+    fetch(`${baseUrl}/public/collections/${encodeURIComponent(galary)}/store?siteSlug=${encodeURIComponent(name)}`, {
       cache: "no-store",
     })
       .then((response) => (response.ok ? response.json() : null))
       .then((payload) => setStoreData(payload?.data ?? null))
       .catch(() => setStoreData(null));
-  }, [enabled, galary]);
+  }, [enabled, galary, name]);
 
   useEffect(() => {
     if (!enabled) return;

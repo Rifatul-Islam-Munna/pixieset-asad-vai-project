@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { PublicStoreService } from './public-store.service';
 
 @Controller('public/collections')
@@ -11,41 +11,42 @@ export class PublicPrintStoreController {
   }
 
   @Get(':identifier/store')
-  async storefront(@Param('identifier') identifier: string) {
-    return { data: await this.store.getStore(identifier) };
+  async storefront(@Param('identifier') identifier: string, @Query('siteSlug') siteSlug?: string) {
+    return { data: await this.store.getStore(identifier, siteSlug) };
   }
 
   @Get(':identifier/store/products/:slug')
-  async product(@Param('identifier') identifier: string, @Param('slug') slug: string) {
-    return { data: await this.store.getProduct(identifier, slug) };
+  async product(@Param('identifier') identifier: string, @Param('slug') slug: string, @Query('siteSlug') siteSlug?: string) {
+    return { data: await this.store.getProduct(identifier, slug, siteSlug) };
   }
 
   @Post(':identifier/store/cart/price')
-  async cartPrice(@Param('identifier') identifier: string, @Body() body: any) {
-    return { data: await this.store.getCartPrice(identifier, body) };
+  async cartPrice(@Param('identifier') identifier: string, @Body() body: any, @Query('siteSlug') siteSlug?: string) {
+    return { data: await this.store.getCartPrice(identifier, body, siteSlug) };
   }
 
   @Post(':identifier/store/checkout')
-  async checkout(@Param('identifier') identifier: string, @Body() body: any) {
-    return { message: 'Checkout created', data: await this.store.createCheckout(identifier, body) };
+  async checkout(@Param('identifier') identifier: string, @Body() body: any, @Query('siteSlug') siteSlug?: string) {
+    return { message: 'Checkout created', data: await this.store.createCheckout(identifier, body, siteSlug) };
   }
 
   @Post(':identifier/store/stripe-intent')
-  async createIntent(@Param('identifier') identifier: string, @Body() body: any) {
-    return { message: 'Payment intent created', data: await this.store.makePublicIntent(identifier, body) };
+  async createIntent(@Param('identifier') identifier: string, @Body() body: any, @Query('siteSlug') siteSlug?: string) {
+    return { message: 'Payment intent created', data: await this.store.makePublicIntent(identifier, body, siteSlug) };
   }
 
   @Post(':identifier/store/stripe-verify')
   async verifyIntent(
     @Param('identifier') identifier: string,
     @Body('paymentIntentId') paymentIntentId: string,
+    @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.store.checkPublicIntent(identifier, paymentIntentId);
+    const data = await this.store.checkPublicIntent(identifier, paymentIntentId, siteSlug);
     return { message: data.success ? 'Payment succeeded' : 'Payment not completed', data };
   }
 
   @Post(':identifier/store/activity')
-  async activity(@Param('identifier') identifier: string, @Body() body: any) {
-    return { data: await this.store.saveActivity(identifier, body) };
+  async activity(@Param('identifier') identifier: string, @Body() body: any, @Query('siteSlug') siteSlug?: string) {
+    return { data: await this.store.saveActivity(identifier, body, siteSlug) };
   }
 }

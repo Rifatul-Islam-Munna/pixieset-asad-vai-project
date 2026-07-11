@@ -45,7 +45,7 @@ export function PublicGalleryFavoritesPage({
   galary: string;
   collection: FavoritePageCollection;
 }) {
-  const galleryPath = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}`;
+  const galleryPath = `/${encodeURIComponent(galary)}`;
   const storageKey = `pixieset-public-favorites:${collection._id || collection.slug || galary}`;
   const images = useMemo(() => collection.images ?? [], [collection.images]);
   const [loaded, setLoaded] = useState(false);
@@ -121,7 +121,7 @@ export function PublicGalleryFavoritesPage({
   const recordDownload = async (downloadImages: FavoritePageImage[], type: "single" | "all") => {
     if (!email || !email.includes("@")) return;
     const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-    await fetch(`${apiBase}/public/collections/${encodeURIComponent(collection.slug || galary)}/download-activity`, {
+    await fetch(`${apiBase}/public/collections/${encodeURIComponent(collection.slug || galary)}/download-activity?siteSlug=${encodeURIComponent(name)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

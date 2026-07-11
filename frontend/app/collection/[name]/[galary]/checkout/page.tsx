@@ -2,8 +2,8 @@ import { PublicStoreCheckoutPage } from "@/components/dashboard/public-store-che
 
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
 
-async function getStore(identifier: string) {
-  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}/store`, {
+async function getStore(identifier: string, siteSlug: string) {
+  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}/store?siteSlug=${encodeURIComponent(siteSlug)}`, {
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
   }).catch(() => null);
@@ -17,13 +17,13 @@ export default async function CollectionCheckoutPage({
   params: Promise<{ name: string; galary: string }>;
 }) {
   const { name, galary } = await params;
-  const data = await getStore(galary);
+  const data = await getStore(galary, name);
 
   return (
     <PublicStoreCheckoutPage
       data={data}
       identifier={galary}
-      backHref={`/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}`}
+      backHref={`/${encodeURIComponent(galary)}`}
     />
   );
 }

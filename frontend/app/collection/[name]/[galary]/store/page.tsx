@@ -5,6 +5,6 @@ export default async function CollectionStorePage({
 }: {
   params: Promise<{ name: string; galary: string }>;
 }) {
-  const { name, galary } = await params;
-  redirect(`/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}`);
+  const { galary } = await params;
+  redirect(`/${encodeURIComponent(galary)}`);
 }

@@ -27,6 +27,7 @@ import {
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
 import { MobileGalleryImage, MobileGalleryImageSchema } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
+import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { MobileGalleryImage, MobileGalleryImageSchema } from 'src/mobile-gallery
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: User.name, schema: UserSchema },
       { name: MobileGalleryImage.name, schema: MobileGalleryImageSchema },
+      { name: Homepage.name, schema: HomepageSchema },
     ]),
     FaceSearchModule,
   ],

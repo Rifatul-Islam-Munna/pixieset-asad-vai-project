@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
+import { Homepage, HomepageDocument } from 'src/homepage/entities/homepage.entity';
 import { StoreActivity, StoreActivityDocument, StoreActivityType } from './entities/store-activity.entity';
 import { StoreCoupon, StoreCouponDocument } from './entities/store-coupon.entity';
 import { StorePriceSheet, StorePriceSheetDocument } from './entities/store-price-sheet.entity';
@@ -52,11 +53,13 @@ export class StoreCatalogService {
     private readonly settingModel: Model<StoreSettingDocument>,
     @InjectModel(StoreActivity.name)
     private readonly activityModel: Model<StoreActivityDocument>,
+    @InjectModel(Homepage.name)
+    private readonly homepageModel: Model<HomepageDocument>,
     private readonly defaultProducts: StoreDefaultProductService,
   ) {}
 
-  async getPublicStore(identifier: string, logView = true) {
-    const resolved = await this.resolve(identifier, false);
+  async getPublicStore(identifier: string, logView = true, siteSlug?: string) {
+    const resolved = await this.resolve(identifier, false, siteSlug);
     const products = resolved.config.enabled && resolved.sheet
       ? await this.productModel
           .find({
@@ -113,8 +116,8 @@ export class StoreCatalogService {
     };
   }
 
-  async getPublicProduct(identifier: string, slug: string) {
-    const resolved = await this.resolve(identifier);
+  async getPublicProduct(identifier: string, slug: string, siteSlug?: string) {
+    const resolved = await this.resolve(identifier, true, siteSlug);
     if (!resolved.sheet) throw new NotFoundException('The automatic store catalog is unavailable');
     const product = await this.productModel.findOne({
       userId: resolved.userId,
@@ -147,10 +150,14 @@ export class StoreCatalogService {
     };
   }
 
-  async resolve(identifier: string, requireEnabled = true): Promise<ResolvedCollectionStore> {
+  async resolve(identifier: string, requireEnabled = true, siteSlug?: string): Promise<ResolvedCollectionStore> {
     const query: Record<string, unknown>[] = [{ slug: identifier }, { name: identifier }];
     if (Types.ObjectId.isValid(identifier)) query.unshift({ _id: identifier });
-    const collection = await this.collectionModel.findOne({ $or: query }).lean();
+    const owner = siteSlug
+      ? await this.homepageModel.findOne({ slug: siteSlug.toLowerCase(), enabled: true }).select('userId').lean()
+      : null;
+    if (siteSlug && !owner) throw new NotFoundException('Collection not found');
+    const collection = await this.collectionModel.findOne({ $or: query, ...(owner ? { userId: owner.userId } : {}) }).lean();
     if (!collection) throw new NotFoundException('Collection not found');
     const userId = String(collection.userId);
     const settings = await this.settingModel.findOne({ userId }).lean();
@@ -242,8 +249,8 @@ export class StoreCatalogService {
     return this.activityModel.find({ userId, collectionId }).sort({ createdAt: -1 }).limit(500).lean();
   }
 
-  async recordPublicActivity(identifier: string, body: any) {
-    const resolved = await this.resolve(identifier);
+  async recordPublicActivity(identifier: string, body: any, siteSlug?: string) {
+    const resolved = await this.resolve(identifier, true, siteSlug);
     const allowed: StoreActivityType[] = ['store_view', 'product_view', 'add_to_cart', 'checkout_started'];
     const type = allowed.includes(body.type) ? body.type : 'store_view';
     const activity = await this.log(

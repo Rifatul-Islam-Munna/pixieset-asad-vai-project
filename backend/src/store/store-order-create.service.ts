@@ -19,8 +19,8 @@ export class StoreOrderCreateService {
     private readonly customerModel: Model<StoreCustomerDocument>,
   ) {}
 
-  async checkout(identifier: string, body: any) {
-    const priced = await this.pricing.price(identifier, body);
+  async checkout(identifier: string, body: any, siteSlug?: string) {
+    const priced = await this.pricing.price(identifier, body, siteSlug);
     const { resolved, customer } = priced;
     if (!customer.email || !customer.email.includes('@')) {
       throw new BadRequestException('A valid email is required');

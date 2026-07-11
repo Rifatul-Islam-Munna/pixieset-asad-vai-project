@@ -11,6 +11,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/update-user.dto';
 import { User, UserDocument, UserType } from './entities/user.entity';
 import { FreePlanSettingService } from 'src/admin/free-plan-setting.service';
+import { HomepageService } from 'src/homepage/homepage.service';
 
 @Injectable()
 export class UserService implements OnModuleInit {
@@ -21,6 +22,7 @@ export class UserService implements OnModuleInit {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly freePlanSettings: FreePlanSettingService,
+    private readonly homepageService: HomepageService,
   ) {}
 
   async onModuleInit() {
@@ -75,6 +77,8 @@ export class UserService implements OnModuleInit {
       monthlyEmailLimit: freePlan.monthlyEmails,
       planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
     });
+
+    await this.homepageService.provisionForUser(user._id.toString());
 
     const { password, ...safeUser } = user.toObject();
     const access_token = await this.signToken(safeUser);
@@ -145,6 +149,8 @@ export class UserService implements OnModuleInit {
         monthlyEmailLimit: freePlan.monthlyEmails,
         planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
       }));
+
+    if (!existing) await this.homepageService.provisionForUser(user._id.toString());
 
     if (existing) {
       existing.email = existing.email || email;

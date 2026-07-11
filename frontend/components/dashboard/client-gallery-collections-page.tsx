@@ -13,6 +13,8 @@ import {
   Star,
 } from "lucide-react";
 import { useCollections, type CollectionRecord } from "@/api-hooks/use-collections";
+import { useHomepageSettings } from "@/api-hooks/use-homepage";
+import { publicCollectionUrl } from "@/lib/public-site-url";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "grid" | "list";
@@ -27,6 +29,7 @@ const navigation = [
 
 export function ClientGalleryCollectionsPage() {
   const { collectionsQuery } = useCollections();
+  const homepageSlug = useHomepageSettings().query.data?.data?.slug ?? "";
   const collections = collectionsQuery.data?.data ?? [];
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -195,11 +198,11 @@ export function ClientGalleryCollectionsPage() {
             </div>
           ) : view === "grid" ? (
             <div className="mt-8 grid gap-x-7 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-              {visibleCollections.map((collection) => <CollectionCard key={collection._id} collection={collection} />)}
+              {visibleCollections.map((collection) => <CollectionCard key={collection._id} collection={collection} siteSlug={homepageSlug} />)}
             </div>
           ) : (
             <div className="mt-8 divide-y border">
-              {visibleCollections.map((collection) => <CollectionRow key={collection._id} collection={collection} />)}
+              {visibleCollections.map((collection) => <CollectionRow key={collection._id} collection={collection} siteSlug={homepageSlug} />)}
             </div>
           )}
         </div>
@@ -226,7 +229,7 @@ function Filter({ value, onChange, label, children }: {
   );
 }
 
-function CollectionCard({ collection }: { collection: CollectionRecord }) {
+function CollectionCard({ collection, siteSlug }: { collection: CollectionRecord; siteSlug: string }) {
   return (
     <article className="group">
       <Link href={`/dashboard/client-gallery/collections/${collection._id}`} className="block overflow-hidden bg-[#f2f2f2]">
@@ -235,7 +238,7 @@ function CollectionCard({ collection }: { collection: CollectionRecord }) {
       <div className="pt-3">
         <div className="flex items-start justify-between gap-3">
           <Link href={`/dashboard/client-gallery/collections/${collection._id}`} className="min-w-0 flex-1 truncate font-semibold">{collection.name}</Link>
-          <a href={publicPath(collection)} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[#00a997] opacity-0 group-hover:opacity-100">Preview</a>
+          <a href={publicPath(collection, siteSlug)} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[#00a997] opacity-0 group-hover:opacity-100">Preview</a>
         </div>
         <CollectionMeta collection={collection} />
       </div>
@@ -243,14 +246,14 @@ function CollectionCard({ collection }: { collection: CollectionRecord }) {
   );
 }
 
-function CollectionRow({ collection }: { collection: CollectionRecord }) {
+function CollectionRow({ collection, siteSlug }: { collection: CollectionRecord; siteSlug: string }) {
   return (
     <article className="grid items-center gap-4 p-4 sm:grid-cols-[110px_1fr_auto]">
       <Link href={`/dashboard/client-gallery/collections/${collection._id}`} className="overflow-hidden bg-[#eee]">
         {collection.coverImage ? <img src={imageSrc(collection.coverImage)} alt="" className="aspect-[1.4] w-full object-cover" /> : <span className="flex aspect-[1.4] items-center justify-center"><Images className="size-7 text-[#bbb]" /></span>}
       </Link>
       <div className="min-w-0"><Link href={`/dashboard/client-gallery/collections/${collection._id}`} className="font-semibold">{collection.name}</Link><CollectionMeta collection={collection} /></div>
-      <a href={publicPath(collection)} target="_blank" rel="noreferrer" className="text-sm font-semibold text-[#00a997]">Preview</a>
+      <a href={publicPath(collection, siteSlug)} target="_blank" rel="noreferrer" className="text-sm font-semibold text-[#00a997]">Preview</a>
     </article>
   );
 }
@@ -266,7 +269,8 @@ function CollectionMeta({ collection }: { collection: CollectionRecord }) {
   );
 }
 
-function publicPath(collection: CollectionRecord) {
+function publicPath(collection: CollectionRecord, siteSlug: string) {
+  if (siteSlug) return publicCollectionUrl(siteSlug, collection.slug ?? collection._id);
   return `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
 }
 

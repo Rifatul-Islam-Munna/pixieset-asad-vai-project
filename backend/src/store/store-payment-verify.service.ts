@@ -72,8 +72,8 @@ export class StorePaymentVerifyService {
     };
   }
 
-  async createPublicIntent(identifier: string, body: any) {
-    const resolved = await this.catalog.resolve(identifier);
+  async createPublicIntent(identifier: string, body: any, siteSlug?: string) {
+    const resolved = await this.catalog.resolve(identifier, true, siteSlug);
     const order = await this.orderModel.findOne({
       _id: body.orderId,
       userId: resolved.userId,
@@ -86,8 +86,8 @@ export class StorePaymentVerifyService {
     return result.response;
   }
 
-  async verifyPublicIntent(identifier: string, paymentIntentId: string) {
-    const resolved = await this.catalog.resolve(identifier);
+  async verifyPublicIntent(identifier: string, paymentIntentId: string, siteSlug?: string) {
+    const resolved = await this.catalog.resolve(identifier, true, siteSlug);
     const order = await this.orderModel.findOne({
       userId: resolved.userId,
       collectionId: resolved.collection._id.toString(),

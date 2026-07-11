@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { siteSlugQuery } from "@/lib/tenant-host";
 
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ identifier: string }> }) {
   const { identifier } = await params;
   const body = await request.json();
-  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}/store/activity`, {
+  const response = await fetch(`${baseUrl}/public/collections/${encodeURIComponent(identifier)}/store/activity${siteSlugQuery(request.headers.get("host"))}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
