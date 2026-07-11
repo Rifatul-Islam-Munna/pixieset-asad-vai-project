@@ -1,0 +1,37 @@
+name: Fix collection detail
+
+on:
+  pull_request:
+    branches:
+      - developmentbranch
+    paths:
+      - .github/fix-collection-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: developmentbranch
+          fetch-depth: 0
+
+      - name: Apply collection detail fixes
+        run: python .github/fix-collection-detail.py
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/components/dashboard/client-dashboard.tsx frontend/components/dashboard/collection-registration-activity.tsx
+          git commit -m "Fix collection detail activity and Pixieset layout"
+          git push origin HEAD:developmentbranch
