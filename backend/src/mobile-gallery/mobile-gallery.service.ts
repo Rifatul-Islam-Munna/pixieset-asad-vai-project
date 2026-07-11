@@ -178,6 +178,46 @@ export class MobileGalleryService {
     return uploaded;
   }
 
+  async createDirectUploads(userId: string, appId: string, files: Array<{ name: string; type: string; size: number }>) {
+    if (!Array.isArray(files) || !files.length || files.length > 100) throw new BadRequestException('1 to 100 files are required');
+    const app = await this.appModel.exists({ _id: appId, userId });
+    if (!app) throw new NotFoundException('Mobile gallery app not found');
+    await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + Math.max(0, Number(file.size)), 0));
+    return Promise.all(files.map((file) => this.minioService.createDirectUpload(userId, file)));
+  }
+
+  async completeDirectUploads(userId: string, appId: string, files: Array<{ objectKey: string; name: string; type: string; size: number }>) {
+    if (!Array.isArray(files) || !files.length || files.length > 10) throw new BadRequestException('1 to 10 completed files are required');
+    const verified = [];
+    for (const file of files) verified.push(await this.minioService.verifyDirectUpload(userId, file));
+    await this.ensureStorageAvailable(userId, verified.reduce((sum, file) => sum + file.size, 0));
+    const app = await this.appModel.findOne({ _id: appId, userId }).lean();
+    if (!app) throw new NotFoundException('Mobile gallery app not found');
+    const last = await this.imageModel.findOne({ appId, userId }).sort({ order: -1 }).lean();
+    const start = Number(last?.order ?? 0);
+    const uploaded = [];
+    for (const [index, file] of verified.entries()) {
+      const image = await this.imageModel.create({
+        userId,
+        appId,
+        url: file.url,
+        thumbnailUrl: file.url,
+        originalName: file.name,
+        filename: file.objectKey,
+        mimetype: file.type,
+        sizeBytes: file.size,
+        order: start + index + 1,
+      });
+      await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: file.size } });
+      uploaded.push(image.toObject());
+    }
+    await this.appModel.updateOne(
+      { _id: appId, userId },
+      { $inc: { imageCount: uploaded.length }, ...(app.coverImage ? {} : { $set: { coverImage: uploaded[0]?.url } }) },
+    );
+    return uploaded;
+  }
+
   async reorderImages(userId: string, appId: string, imageIds: string[]) {
     if (!Array.isArray(imageIds) || !imageIds.length) throw new BadRequestException('Image order is required');
     const app = await this.appModel.findOne({ _id: appId, userId }).lean();

@@ -1,14 +1,22 @@
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
   PutBucketCorsCommand,
   PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createReadStream } from 'fs';
+import { createReadStream, createWriteStream } from 'fs';
+import { randomUUID } from 'crypto';
+import { extname, join } from 'path';
+import { cwd } from 'process';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 
 const DEFAULT_BUCKET_NAME = 'gallerista.app';
 
@@ -91,7 +99,7 @@ export class MinioService implements OnModuleInit {
             CORSRules: [
               {
                 AllowedHeaders: ['*'],
-                AllowedMethods: ['GET', 'HEAD'],
+                AllowedMethods: ['GET', 'HEAD', 'PUT'],
                 AllowedOrigins: ['*'],
                 ExposeHeaders: ['ETag', 'Content-Length', 'Content-Type'],
                 MaxAgeSeconds: 86400,
@@ -121,6 +129,70 @@ export class MinioService implements OnModuleInit {
       this.logger.error(`Error uploading file: ${error instanceof Error ? error.message : String(error)}`);
       throw new HttpException('Failed to upload file', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  async createDirectUpload(userId: string, input: { name: string; type: string; size: number }) {
+    if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
+    const size = Math.max(0, Number(input.size));
+    if (!size || size > 150 * 1024 * 1024) throw new HttpException('Each file must be 150 MB or smaller', HttpStatus.BAD_REQUEST);
+    const type = String(input.type || '').toLowerCase();
+    if (!type.startsWith('image/')) throw new HttpException('Only image files are allowed', HttpStatus.BAD_REQUEST);
+    const extension = extname(String(input.name || '')).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 12);
+    const objectKey = `direct/${userId}/${randomUUID()}${extension}`;
+    const uploadUrl = await getSignedUrl(this.s3, new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: objectKey,
+      ContentType: type,
+    }), { expiresIn: 15 * 60 });
+    return { objectKey, uploadUrl, expiresInSeconds: 15 * 60 };
+  }
+
+  async verifyDirectUpload(userId: string, input: { objectKey: string; name: string; type: string; size: number }) {
+    if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
+    const objectKey = this.assertDirectObjectKey(userId, input.objectKey);
+    const head = await this.s3.send(new HeadObjectCommand({ Bucket: this.bucketName, Key: objectKey }));
+    const actualSize = Math.max(0, Number(head.ContentLength ?? 0));
+    const expectedSize = Math.max(0, Number(input.size ?? 0));
+    if (!actualSize || actualSize > 150 * 1024 * 1024 || actualSize !== expectedSize) {
+      throw new HttpException('Uploaded file size does not match', HttpStatus.BAD_REQUEST);
+    }
+    const contentType = String(head.ContentType || input.type || '').toLowerCase();
+    if (!contentType.startsWith('image/')) throw new HttpException('Only image files are allowed', HttpStatus.BAD_REQUEST);
+    return { objectKey, size: actualSize, type: contentType, url: this.publicUrl(objectKey), name: String(input.name || 'image') };
+  }
+
+  async downloadDirectUpload(userId: string, input: { objectKey: string; name: string; type: string; size: number }) {
+    const verified = await this.verifyDirectUpload(userId, input);
+    const response = await this.s3!.send(new GetObjectCommand({ Bucket: this.bucketName, Key: verified.objectKey }));
+    if (!response.Body) throw new HttpException('Uploaded file is unavailable', HttpStatus.BAD_REQUEST);
+    const path = join(cwd(), 'uploads', `direct-${randomUUID()}${extname(verified.name)}`);
+    await pipeline(response.Body as Readable, createWriteStream(path));
+    return {
+      fieldname: 'files',
+      originalname: verified.name,
+      encoding: '7bit',
+      mimetype: verified.type,
+      destination: join(cwd(), 'uploads'),
+      filename: `${randomUUID()}${extname(verified.name)}`,
+      path,
+      size: verified.size,
+    } as Express.Multer.File;
+  }
+
+  async deleteDirectUpload(userId: string, objectKey: string) {
+    return this.deleteService(this.assertDirectObjectKey(userId, objectKey));
+  }
+
+  private assertDirectObjectKey(userId: string, objectKey: string) {
+    const value = String(objectKey || '').trim();
+    if (!value.startsWith(`direct/${userId}/`) || value.includes('..')) {
+      throw new HttpException('Invalid direct upload key', HttpStatus.BAD_REQUEST);
+    }
+    return value;
+  }
+
+  private publicUrl(objectKey: string) {
+    return `${this.configService.get('MINIO_URL')}/${this.bucketName}/${objectKey}`;
   }
 
   private configBoolean(key: string, fallback: boolean) {

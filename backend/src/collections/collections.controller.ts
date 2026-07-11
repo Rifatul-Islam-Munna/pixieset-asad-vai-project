@@ -252,6 +252,24 @@ export class CollectionsController {
     return { message: 'Images uploaded', data };
   }
 
+  @Post(':id/images/direct-upload')
+  async createDirectUploads(
+    @Param('id') id: string,
+    @Body('files') files: Array<{ name: string; type: string; size: number }>,
+    @Req() req: ExpressRequest,
+  ) {
+    return { data: await this.collectionsService.createDirectUploads(req.user.id, id, files) };
+  }
+
+  @Post(':id/images/direct-upload/complete')
+  async completeDirectUploads(
+    @Param('id') id: string,
+    @Body() body: { files: Array<{ objectKey: string; name: string; type: string; size: number }>; setId?: string; watermarkId?: string },
+    @Req() req: ExpressRequest,
+  ) {
+    return { message: 'Images uploaded', data: await this.collectionsService.completeDirectUploads(req.user.id, id, body.files, body.setId, body.watermarkId) };
+  }
+
   @Patch(':id/images/reorder')
   async reorderImages(
     @Param('id') id: string,

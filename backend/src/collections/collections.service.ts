@@ -796,6 +796,32 @@ export class CollectionsService {
     return uploaded;
   }
 
+  async createDirectUploads(userId: string, collectionId: string, files: Array<{ name: string; type: string; size: number }>) {
+    if (!Array.isArray(files) || !files.length || files.length > 100) throw new BadRequestException('1 to 100 files are required');
+    const collection = await this.collectionModel.exists({ _id: collectionId, userId });
+    if (!collection) throw new NotFoundException('Collection not found');
+    await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + Math.max(0, Number(file.size)), 0));
+    return Promise.all(files.map((file) => this.minioService.createDirectUpload(userId, file)));
+  }
+
+  async completeDirectUploads(
+    userId: string,
+    collectionId: string,
+    files: Array<{ objectKey: string; name: string; type: string; size: number }>,
+    setId?: string,
+    watermarkId?: string,
+  ) {
+    if (!Array.isArray(files) || !files.length || files.length > 10) throw new BadRequestException('1 to 10 completed files are required');
+    const localFiles: Express.Multer.File[] = [];
+    try {
+      for (const file of files) localFiles.push(await this.minioService.downloadDirectUpload(userId, file));
+      return await this.uploadImages(userId, collectionId, localFiles, setId, watermarkId);
+    } finally {
+      await Promise.all(files.map((file) => this.minioService.deleteDirectUpload(userId, file.objectKey).catch(() => null)));
+      await Promise.all(localFiles.map((file) => this.safeUnlink(file.path)));
+    }
+  }
+
   private async indexFacesInBackground(images: Array<CollectionImage & { _id?: unknown }>) {
     for (const image of images) {
       await this.faceSearchService.indexImage(image).catch((error) => {

@@ -113,6 +113,24 @@ export class MobileGalleryController {
     return { message: 'Photos uploaded', data: await this.service.uploadImages(req.user.id, id, files) };
   }
 
+  @Post('apps/:id/images/direct-upload')
+  async createDirectUploads(
+    @Param('id') id: string,
+    @Body('files') files: Array<{ name: string; type: string; size: number }>,
+    @Req() req: ExpressRequest,
+  ) {
+    return { data: await this.service.createDirectUploads(req.user.id, id, files) };
+  }
+
+  @Post('apps/:id/images/direct-upload/complete')
+  async completeDirectUploads(
+    @Param('id') id: string,
+    @Body('files') files: Array<{ objectKey: string; name: string; type: string; size: number }>,
+    @Req() req: ExpressRequest,
+  ) {
+    return { message: 'Photos uploaded', data: await this.service.completeDirectUploads(req.user.id, id, files) };
+  }
+
   @Patch('apps/:id/images/reorder')
   async reorder(
     @Param('id') id: string,

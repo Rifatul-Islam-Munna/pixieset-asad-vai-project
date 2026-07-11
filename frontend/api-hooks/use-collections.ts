@@ -2,6 +2,7 @@
 
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
+import { batches, directUploadMetadata, uploadFilesDirectlyToS3, type DirectUploadTicket } from "@/lib/direct-s3-upload";
 
 function notifyStorageChanged() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("storage-usage-changed"));
@@ -219,14 +220,17 @@ export function useCollectionDetail(collectionId?: string) {
       onProgress?: (percent: number) => void;
     }) => {
       if (!collectionId) throw new Error("Collection is required");
-      const formData = new FormData();
-      if (setId) formData.append("setId", setId);
-      if (watermarkId) formData.append("watermarkId", watermarkId);
-      Array.from(files).forEach((file) => formData.append("files", file));
-      const data = await uploadFormDataWithProgress<
-        (ListResponse<CollectionImageRecord[]> & { message: string }) | { message?: string }
-      >(`/api/collections/${collectionId}/images`, formData, onProgress);
-      return data as ListResponse<CollectionImageRecord[]> & { message: string };
+      const selected = Array.from(files);
+      const [authorization, authorizationError] = await PostRequestAxios<{ data: DirectUploadTicket[] }>(`/collections/${collectionId}/images/direct-upload`, { files: directUploadMetadata(selected) });
+      if (authorizationError || !authorization) throw new Error(authorizationError?.message || "Could not authorize upload");
+      const completed = await uploadFilesDirectlyToS3(selected, authorization.data, onProgress, 3);
+      const uploaded: CollectionImageRecord[] = [];
+      for (const batch of batches(completed, 2)) {
+        const [result, error] = await PostRequestAxios<ListResponse<CollectionImageRecord[]> & { message: string }>(`/collections/${collectionId}/images/direct-upload/complete`, { files: batch, setId, watermarkId });
+        if (error || !result) throw new Error(error?.message || "Could not finalize upload");
+        uploaded.push(...(result.data ?? []));
+      }
+      return { data: uploaded, message: "Images uploaded" } as ListResponse<CollectionImageRecord[]> & { message: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
@@ -269,33 +273,6 @@ export function useCollectionDetail(collectionId?: string) {
   });
 
   return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages };
-}
-
-function uploadFormDataWithProgress<T>(
-  url: string,
-  formData: FormData,
-  onProgress?: (percent: number) => void,
-) {
-  return new Promise<T>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("POST", url);
-    request.responseType = "json";
-    request.upload.onprogress = (event) => {
-      if (!event.lengthComputable) return;
-      onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
-    };
-    request.onload = () => {
-      const data = request.response ?? {};
-      if (request.status < 200 || request.status >= 300) {
-        reject(new Error(data?.message ?? "Upload failed"));
-        return;
-      }
-      onProgress?.(100);
-      resolve(data as T);
-    };
-    request.onerror = () => reject(new Error("Upload failed"));
-    request.send(formData);
-  });
 }
 
 export function fetchCollectionImagesPage(collectionId: string, offset: number, limit = 60) {
