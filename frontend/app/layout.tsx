@@ -9,6 +9,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { getHomeCms } from "@/lib/home-cms-server";
 import { JsonLdScript, collectSeoText, defaultOrganizationJsonLd, parseJsonLd, siteMetadata } from "@/lib/seo";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 const geistSans = Geist({

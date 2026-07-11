@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, DollarSign, Edit3, FileImage, HardDrive, Images, Loader2, LogOut, Mail, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { BarChart3, Check, DollarSign, Edit3, ExternalLink, FileImage, HardDrive, Images, Loader2, LogOut, Mail, Menu, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
@@ -106,6 +106,10 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   );
   const [homeCms, setHomeCms] = useState<HomeCmsData>(mergeHomeCms(initialData.homeCms));
   const [homeCmsLang, setHomeCmsLang] = useState<HomeLanguage>("en");
+  const [cmsSaveState, setCmsSaveState] = useState<"saved" | "unsaved" | "saving" | "error">("saved");
+  const lastSavedCms = useRef(JSON.stringify(mergeHomeCms(initialData.homeCms)));
+  const currentCms = useRef(homeCms);
+  currentCms.current = homeCms;
 
   const users = initialData.users;
   const collections = initialData.collections;
@@ -283,18 +287,31 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     });
   };
 
-  const saveHomeCms = () => {
+  const saveHomeCms = (quiet = false) => {
+    const snapshot = homeCms;
+    setCmsSaveState("saving");
     startTransition(async () => {
       try {
-        const data = await updateHomeCms(homeCms);
-        setHomeCms(data);
-        toast.success("Home CMS saved");
+        const data = await updateHomeCms(snapshot);
+        lastSavedCms.current = JSON.stringify(data);
+        setHomeCms((current) => JSON.stringify(current) === JSON.stringify(snapshot) ? data : current);
+        setCmsSaveState(JSON.stringify(currentCms.current) === JSON.stringify(snapshot) ? "saved" : "unsaved");
+        if (!quiet) toast.success("Home CMS saved and live");
         router.refresh();
       } catch (error) {
+        setCmsSaveState("error");
         toast.error(error instanceof Error ? error.message : "CMS save failed");
       }
     });
   };
+
+  useEffect(() => {
+    const serialized = JSON.stringify(homeCms);
+    if (serialized === lastSavedCms.current) return;
+    setCmsSaveState("unsaved");
+    const timer = window.setTimeout(() => saveHomeCms(true), 900);
+    return () => window.clearTimeout(timer);
+  }, [homeCms]);
 
   const uploadCmsFile = async (file: File) => {
     const formData = new FormData();
@@ -440,11 +457,6 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
                 {pending ? <Loader2 className="size-4 animate-spin" /> : "Save Stripe"}
               </Button>
             )}
-            {tab === "cms" && (
-              <Button onClick={saveHomeCms} className="h-11 rounded-none bg-[#111] text-white" disabled={pending}>
-                {pending ? <Loader2 className="size-4 animate-spin" /> : "Save CMS"}
-              </Button>
-            )}
             {tab === "users" && (
               <Button onClick={openAddModal} className="h-11 rounded-none bg-[#111] text-white">
                 <PlusCircle className="size-4" />
@@ -479,6 +491,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               setLang={setHomeCmsLang}
               onUpload={uploadCmsFile}
               onHeroUpload={uploadCmsMedia}
+              onSave={() => saveHomeCms(false)}
+              saveState={cmsSaveState}
               busy={pending}
             />
           ) : (
@@ -984,13 +998,15 @@ function StripeSettingsPanel({ form, setForm }: {
   );
 }
 
-function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, busy }: {
+function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, onSave, saveState, busy }: {
   form: HomeCmsData;
   lang: HomeLanguage;
   setForm: (value: HomeCmsData) => void;
   setLang: (value: HomeLanguage) => void;
   onUpload: (file: File) => Promise<string>;
   onHeroUpload: (file: File) => void;
+  onSave: () => void;
+  saveState: "saved" | "unsaved" | "saving" | "error";
   busy: boolean;
 }) {
   const content = form.content[lang];
@@ -1050,17 +1066,37 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
   };
 
   return (
-    <div className="mt-6 grid gap-5">
-      <div className="bg-white p-4 shadow-[0_12px_35px_rgba(0,0,0,0.04)] sm:p-5">
+    <div className="mt-6 grid gap-5 scroll-smooth">
+      <div className="sticky top-3 z-30 border border-[#dfe5e2] bg-white/95 p-3 shadow-[0_14px_40px_rgba(18,38,32,0.10)] backdrop-blur sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <nav className="flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="CMS sections">
+            {[['cms-start','Setup'],['cms-brand','Brand'],['cms-seo','SEO'],['cms-nav','Navigation'],['cms-hero','Hero'],['cms-gallery','Gallery'],['cms-workflow','Workflow'],['cms-testimonials','Reviews'],['cms-footer','Footer']].map(([id, label]) => (
+              <a key={id} href={`#${id}`} className="whitespace-nowrap border border-transparent px-3 py-2 text-xs font-bold text-[#5f6965] transition hover:border-[#b9cac4] hover:bg-[#f2f7f5] hover:text-[#087f70]">{label}</a>
+            ))}
+          </nav>
+          <div className="flex items-center gap-2">
+            <span className={cn("inline-flex h-9 items-center gap-2 px-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>
+              {saveState === "saving" ? <Loader2 className="size-3.5 animate-spin" /> : saveState === "saved" ? <Check className="size-3.5" /> : null}
+              {saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Autosave pending" : saveState === "error" ? "Save failed" : "Saved · Live"}
+            </span>
+            <Button type="button" onClick={onSave} disabled={busy} className="h-9 rounded-none bg-[#111] px-4 text-white">Save now</Button>
+            <Button asChild type="button" variant="outline" className="h-9 rounded-none">
+              <a href={`/?lang=${lang}`} target="_blank" rel="noreferrer">Preview <ExternalLink className="size-3.5" /></a>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div id="cms-start" className="scroll-mt-24 bg-white p-4 shadow-[0_12px_35px_rgba(0,0,0,0.04)] sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">Home CMS</p>
             <h2 className="mt-2 text-2xl font-semibold">Page control</h2>
-            <p className="mt-2 text-sm leading-6 text-[#666]">Editing {lang === "en" ? "English" : "Green / GR"} content</p>
+            <p className="mt-2 text-sm leading-6 text-[#666]">Editing {lang === "en" ? "English" : "Greek / GR"} content · Press Enter inside any text field for a new line.</p>
           </div>
           <div className="grid w-full grid-cols-2 gap-1 bg-[#f4f4f1] p-1 sm:min-w-[260px] sm:w-auto">
             <Button type="button" onClick={() => setLang("en")} className={cn("h-10 rounded-none shadow-none", lang === "en" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>English</Button>
-            <Button type="button" onClick={() => setLang("gr")} className={cn("h-10 rounded-none shadow-none", lang === "gr" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>Green / GR</Button>
+            <Button type="button" onClick={() => setLang("gr")} className={cn("h-10 rounded-none shadow-none", lang === "gr" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>Greek / GR</Button>
           </div>
         </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -1109,7 +1145,7 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
       </div>
 
       <div className="grid gap-5">
-        <CmsSection title="Navbar brand" defaultOpen>
+        <div id="cms-brand" className="scroll-mt-24"><CmsSection title="Navbar brand" defaultOpen>
           <div className="grid gap-4 md:grid-cols-2">
             <CmsInput label="Brand text" value={form.brand.brandText} onChange={(brandText) => setForm({ ...form, brand: { ...form.brand, brandText } })} />
             <CmsImageInput label="Logo image" value={form.brand.logoUrl} onChange={(logoUrl) => setForm({ ...form, brand: { ...form.brand, logoUrl } })} onUpload={onUpload} busy={busy} />
@@ -1121,9 +1157,9 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
               </div>
             )}
           </div>
-        </CmsSection>
+        </CmsSection></div>
 
-        <CmsSection title="SEO and auth" defaultOpen>
+        <div id="cms-seo" className="scroll-mt-24"><CmsSection title="SEO and auth" defaultOpen>
           <div className="grid gap-5">
             <CmsRepeater title="Site SEO">
               <div className="grid gap-4 md:grid-cols-2">
@@ -1207,9 +1243,9 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
               </div>
             </CmsRepeater>
           </div>
-        </CmsSection>
+        </CmsSection></div>
 
-        <CmsSection eyebrow={lang.toUpperCase()} title="Navigation" defaultOpen>
+        <div id="cms-nav" className="scroll-mt-24"><CmsSection eyebrow={lang.toUpperCase()} title="Navigation" defaultOpen>
           <div className="grid gap-4 md:grid-cols-2">
             <CmsInput label="Brand" value={content.nav.brand} onChange={(brand) => patchObject("nav", { brand })} />
             <CmsInput label="Products" value={content.nav.products} onChange={(products) => patchObject("nav", { products })} />
@@ -1218,18 +1254,18 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
             <CmsInput label="Login" value={content.nav.login} onChange={(login) => patchObject("nav", { login })} />
             <CmsInput label="CTA" value={content.nav.cta} onChange={(cta) => patchObject("nav", { cta })} />
           </div>
-        </CmsSection>
+        </CmsSection></div>
 
-        <CmsSection title="Hero" defaultOpen>
+        <div id="cms-hero" className="scroll-mt-24"><CmsSection title="Hero" defaultOpen>
           <div className="grid gap-4">
             <CmsInput label="Eyebrow" value={content.hero.eyebrow} onChange={(eyebrow) => patchObject("hero", { eyebrow })} />
             <CmsTextarea label="Title" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
             <CmsTextarea label="Subtitle" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
             <CmsInput label="Button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
           </div>
-        </CmsSection>
+        </CmsSection></div>
 
-        <CmsSection title="Gallery section" defaultOpen>
+        <div id="cms-gallery" className="scroll-mt-24"><CmsSection title="Gallery section" defaultOpen>
           <div className="grid gap-4">
             <CmsTextarea label="Heading" value={content.gallery.title} onChange={(title) => patchObject("gallery", { title })} />
             <CmsTextarea label="Subtitle" value={content.gallery.subtitle} onChange={(subtitle) => patchObject("gallery", { subtitle })} />
@@ -1255,9 +1291,9 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
               ))}
             </CmsRepeater>
           </div>
-        </CmsSection>
+        </CmsSection></div>
 
-        <CmsSection title="Workflow section">
+        <div id="cms-workflow" className="scroll-mt-24"><CmsSection title="Workflow section">
           <div className="grid gap-4">
             <CmsInput label="Eyebrow" value={content.workflow.eyebrow} onChange={(eyebrow) => patchObject("workflow", { eyebrow })} />
             <CmsInput label="Heading" value={content.workflow.title} onChange={(title) => patchObject("workflow", { title })} />
@@ -1272,9 +1308,9 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
               ))}
             </CmsRepeater>
           </div>
-        </CmsSection>
+        </CmsSection></div>
 
-        <CmsSection title="Testimonials">
+        <div id="cms-testimonials" className="scroll-mt-24"><CmsSection title="Testimonials">
           <div className="grid gap-4">
             <CmsInput label="Eyebrow" value={content.testimonials.eyebrow} onChange={(eyebrow) => patchObject("testimonials", { eyebrow })} />
             <CmsInput label="Heading" value={content.testimonials.title} onChange={(title) => patchObject("testimonials", { title })} />
@@ -1290,9 +1326,9 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
               ))}
             </CmsRepeater>
           </div>
-        </CmsSection>
+        </CmsSection></div>
 
-        <CmsSection title="CTA and footer">
+        <div id="cms-footer" className="scroll-mt-24"><CmsSection title="CTA and footer">
           <div className="grid gap-4 md:grid-cols-2">
             <CmsInput label="CTA heading" value={content.cta.title} onChange={(title) => patchObject("cta", { title })} />
             <CmsInput label="CTA subtitle" value={content.cta.subtitle} onChange={(subtitle) => patchObject("cta", { subtitle })} />
@@ -1339,7 +1375,7 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, bu
               ))}
             </CmsRepeater>
           </div>
-        </CmsSection>
+        </CmsSection></div>
       </div>
     </div>
   );
@@ -1384,11 +1420,12 @@ function CmsInput({ label, value, onChange, wide, dark }: {
   return (
     <label className={cn("grid gap-2", wide && "md:col-span-2")}>
       <span className={cn("text-xs font-bold uppercase tracking-[0.14em]", dark ? "text-white/50" : "text-[#777]")}>{label}</span>
-      <Input
+      <Textarea
+        rows={1}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "h-11 rounded-none shadow-none focus-visible:ring-[#22bda7]",
+          "min-h-11 resize-y rounded-none py-3 shadow-none focus-visible:ring-[#22bda7]",
           dark ? "border-0 bg-white/8 text-white placeholder:text-white/40" : "border-[#ddd] bg-[#fbfbfa]",
         )}
       />

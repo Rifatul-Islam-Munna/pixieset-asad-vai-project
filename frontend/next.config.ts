@@ -6,8 +6,10 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  // CMS pages and metadata must always come from the server after an admin edit.
+  cacheStartUrl: false,
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
   workboxOptions: {
     disableDevLogs: true,

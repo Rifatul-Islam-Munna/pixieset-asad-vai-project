@@ -8,6 +8,9 @@ import { UserType } from "@/@types/user";
 import { type HomeLanguage } from "@/lib/home-cms";
 import { getHomeCms } from "@/lib/home-cms-server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function lines(text: string) {
   return text.split("\n").map((line, index) => (
     <span key={`${line}-${index}`}>
@@ -32,7 +35,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
   const defaultWorkflow = t.workflow.tabs[0]?.value ?? "wedding";
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="min-h-screen bg-background text-foreground [&_a]:whitespace-pre-line [&_button]:whitespace-pre-line [&_h1]:whitespace-pre-line [&_h2]:whitespace-pre-line [&_h3]:whitespace-pre-line [&_p]:whitespace-pre-line [&_span]:whitespace-pre-line">
       <section className="relative min-h-[720px] overflow-hidden text-white md:min-h-[820px]">
         {cms.media.heroMediaType === "video" && cms.media.heroMediaUrl ? (
           <video className="absolute inset-0 h-full w-full object-cover" src={cms.media.heroMediaUrl} autoPlay muted loop playsInline />

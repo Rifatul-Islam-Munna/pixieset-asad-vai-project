@@ -4,7 +4,11 @@ const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "htt
 
 export async function getHomeCms() {
   try {
-    const response = await fetch(`${baseUrl}/home-cms`, { cache: "no-store" });
+    const response = await fetch(`${baseUrl}/home-cms`, {
+      cache: "no-store",
+      next: { revalidate: 0 },
+    });
+    if (!response.ok) throw new Error(`Home CMS request failed (${response.status})`);
     const payload = await response.json();
     return mergeHomeCms(payload?.data as Partial<HomeCmsData>);
   } catch {
