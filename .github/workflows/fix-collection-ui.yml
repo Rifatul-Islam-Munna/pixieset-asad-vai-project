@@ -34,8 +34,12 @@ jobs:
           )'''
           new = '''text = replace_once(
               text,
-              "  const { starImage } = useImageActions();\n  const { collectionsQuery } = useCollections();\n  const homepageQuery = useHomepageSettings().query;",
-              "  const { starImage } = useImageActions();\n  const { collectionsQuery, duplicateCollection, deleteCollection } = useCollections();\n  const homepageQuery = useHomepageSettings().query;",
+              """  const { starImage } = useImageActions();
+            const { collectionsQuery } = useCollections();
+            const homepageQuery = useHomepageSettings().query;""",
+              """  const { starImage } = useImageActions();
+            const { collectionsQuery, duplicateCollection, deleteCollection } = useCollections();
+            const homepageQuery = useHomepageSettings().query;""",
               "collection detail mutations",
           )'''
           if old not in text:
