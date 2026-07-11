@@ -1,1 +1,1 @@
-Run the collection detail repair workflow.
+Run the collection detail repair workflow again.
