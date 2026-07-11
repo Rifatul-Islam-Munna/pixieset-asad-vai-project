@@ -35,6 +35,7 @@ import {
   Database,
   Download,
   Eye,
+  GripVertical,
   Heart,
   Images,
   Info,
@@ -11024,6 +11025,31 @@ function CollectionDetailView({
     setEditingSetId("");
     setEditingSetName("");
   };
+  const reorderSets = (nextSets: typeof form.sets) => {
+    if (
+      nextSets.length === form.sets.length &&
+      nextSets.every((set, index) => set.id === form.sets[index]?.id)
+    ) {
+      return;
+    }
+    setForm((value) => ({
+      ...value,
+      sets: nextSets,
+      general: {
+        ...value.general,
+        photoSets: nextSets.map((set) => set.name).join(", "),
+      },
+    }));
+    updateCollection.mutate(
+      { sets: nextSets },
+      {
+        onError: (error) =>
+          toast.error(
+            error instanceof Error ? error.message : "Set reorder failed",
+          ),
+      },
+    );
+  };
   const copyPublicLink = async () => {
     await navigator.clipboard.writeText(publicLink);
     setLinkCopied(true);
@@ -11288,7 +11314,7 @@ function CollectionDetailView({
             variant="outline"
             className="h-10 rounded-none"
             onClick={() =>
-              window.open(publicPath, "_blank", "noopener,noreferrer")
+              window.open(publicLink, "_blank", "noopener,noreferrer")
             }
           >
             <Eye data-icon="inline-start" />
@@ -11555,7 +11581,18 @@ function CollectionDetailView({
                   Add Set
                 </button>
               </div>
-              <div className="flex flex-col gap-1">
+              <ReactSortable
+                list={form.sets.map((set) => ({ ...set, id: set.id }))}
+                setList={(nextSets) =>
+                  reorderSets(nextSets as typeof form.sets)
+                }
+                animation={180}
+                delayOnTouchOnly
+                ghostClass="sortable-image-ghost"
+                chosenClass="sortable-image-chosen"
+                dragClass="sortable-image-drag"
+                className="flex flex-col gap-1"
+              >
                 {form.sets.map((set) => {
                   const count = images.filter(
                     (image) => (image.setId || "highlights") === set.id,
@@ -11564,10 +11601,17 @@ function CollectionDetailView({
                     <div
                       key={set.id}
                       className={cn(
-                        "group flex h-12 items-center justify-between gap-2 px-3 text-left text-sm",
+                        "group flex h-12 cursor-grab items-center justify-between gap-2 px-3 text-left text-sm active:cursor-grabbing",
                         activeSetId === set.id && "bg-white font-bold",
                       )}
                     >
+                      <button
+                        type="button"
+                        className="text-[#999]"
+                        aria-label="Drag set"
+                      >
+                        <GripVertical className="size-4" />
+                      </button>
                       {editingSetId === set.id ? (
                         <Input
                           value={editingSetName}
@@ -11611,7 +11655,7 @@ function CollectionDetailView({
                     </div>
                   );
                 })}
-              </div>
+              </ReactSortable>
               <Dialog open={addSetOpen} onOpenChange={setAddSetOpen}>
                 <DialogContent className="rounded-none sm:max-w-[420px]">
                   <DialogHeader>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Activity, Loader2, Settings } from "lucide-react";
+import Link from "next/link";
+import { Activity, ArrowLeft, Loader2, Settings } from "lucide-react";
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { useStorePriceSheets } from "@/api-hooks/use-store";
 import { CollectionStoreSettingsPanel } from "./collection-store-settings-panel";
@@ -40,6 +41,13 @@ export function CollectionStoreManager({ collectionId }: { collectionId: string 
       <div className="mx-auto max-w-[1280px]">
         <header className="flex flex-wrap items-end justify-between gap-5 border-b border-[#d9d9d5] pb-6">
           <div className="min-w-0">
+            <Link
+              href={`/dashboard/store-gallery/collections/${collectionId}`}
+              className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#666] hover:text-[#222]"
+            >
+              <ArrowLeft className="size-4" />
+              Back
+            </Link>
             <p className="text-[11px] uppercase tracking-[0.22em] text-[#777]">Collection Store</p>
             <h1 className="mt-2 break-words text-2xl sm:text-3xl">{admin.collection.name}</h1>
             <p className="mt-2 text-sm text-[#666]">
