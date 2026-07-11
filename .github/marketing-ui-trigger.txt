@@ -1,1 +1,1 @@
-apply marketing settings and contacts UI update
+apply marketing settings and contacts UI update after PR opened
