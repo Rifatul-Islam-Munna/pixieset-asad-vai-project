@@ -1,1 +1,1 @@
-retry tolerant compact sidebar and marketing settings update
+run wrapped compact sidebar and marketing settings update
