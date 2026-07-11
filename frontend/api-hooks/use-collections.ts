@@ -359,7 +359,58 @@ export function useCollectionDetail(collectionId?: string) {
     },
   });
 
-  return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages };
+  const updateImage = useMutation({
+    mutationFn: async ({
+      imageId,
+      payload,
+    }: {
+      imageId: string;
+      payload: { originalName?: string; setId?: string; watermarkId?: string };
+    }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<CollectionImageRecord> & { message: string }
+      >(`/collections/${collectionId}/images/${imageId}`, payload as any);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+    },
+  });
+
+  const copyMoveImage = useMutation({
+    mutationFn: async ({
+      imageId,
+      mode,
+      targetCollectionId,
+      targetSetId,
+    }: {
+      imageId: string;
+      mode: "copy" | "move";
+      targetCollectionId: string;
+      targetSetId?: string;
+    }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PostRequestAxios<
+        { data: unknown; message: string }
+      >(`/collections/${collectionId}/images/${imageId}/copy-move`, {
+        mode,
+        targetCollectionId,
+        targetSetId,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+      notifyStorageChanged();
+    },
+  });
+
+  return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages, updateImage, copyMoveImage };
 }
 
 export function fetchCollectionImagesPage(collectionId: string, offset: number, limit = 60) {

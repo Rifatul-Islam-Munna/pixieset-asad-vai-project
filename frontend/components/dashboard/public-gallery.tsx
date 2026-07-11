@@ -66,6 +66,7 @@ type PublicCollection = {
     filenameDisplay?: "show" | "hide";
     searchEngineVisibility?: "homepage" | "all" | "hidden";
     sharpeningLevel?: "optimal" | "low" | "high";
+    rawPhotoSupport?: boolean;
     termsOfService?: string;
     privacyPolicy?: string;
   };
@@ -270,6 +271,7 @@ export function PublicGallery({
   const [downloadEmail, setDownloadEmail] = useState("");
   const [downloadEmailDraft, setDownloadEmailDraft] = useState("");
   const [downloadEmailOpen, setDownloadEmailOpen] = useState(false);
+  const [quickShareDownload, setQuickShareDownload] = useState<string | null>(null);
   const [pendingDownload, setPendingDownload] = useState<
     { type: "single"; photo: PublicImage; index: number } | { type: "all" } | null
   >(null);
@@ -298,7 +300,12 @@ export function PublicGallery({
   const masonryColumns = design.thumbnailSize === "Large"
     ? "columns-1 sm:columns-2"
     : "columns-1 sm:columns-2 lg:columns-3";
-  const downloadsEnabled = boolSetting(download.photoDownload);
+  const downloadsEnabled =
+    quickShareDownload === "1"
+      ? true
+      : quickShareDownload === "0"
+        ? false
+        : boolSetting(download.photoDownload);
   const galleryDownloadEnabled = download.galleryDownload !== false;
   const singlePhotoDownloadEnabled = download.singlePhotoDownload !== false;
   const singlePhotoDownloadEmailTracking = download.singlePhotoDownloadEmailTracking !== false;
@@ -818,6 +825,10 @@ export function PublicGallery({
       document.head.appendChild(manifestLink);
     }
     manifestLink.href = manifestHref;
+  }, []);
+
+  useEffect(() => {
+    setQuickShareDownload(new URLSearchParams(window.location.search).get("download"));
   }, []);
 
   useEffect(() => {

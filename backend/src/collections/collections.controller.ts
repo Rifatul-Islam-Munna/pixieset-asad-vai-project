@@ -328,6 +328,28 @@ export class CollectionsController {
     return { message: 'Image deleted', data };
   }
 
+  @Patch(':id/images/:imageId')
+  async updateImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Body() dto: { originalName?: string; setId?: string; watermarkId?: string },
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.updateImage(req.user.id, id, imageId, dto);
+    return { message: 'Image updated', data };
+  }
+
+  @Post(':id/images/:imageId/copy-move')
+  async copyMoveImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Body() dto: { mode?: 'copy' | 'move'; targetCollectionId?: string; targetSetId?: string },
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.copyMoveImage(req.user.id, id, imageId, dto);
+    return { message: dto.mode === 'move' ? 'Image moved' : 'Image copied', data };
+  }
+
   @Patch(':id/images/:imageId/star')
   async starImage(
     @Param('id') id: string,

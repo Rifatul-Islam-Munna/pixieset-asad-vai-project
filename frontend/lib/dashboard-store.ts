@@ -60,6 +60,12 @@ export type PresetGeneralSettings = {
   slideshowAutoLoop: boolean;
   socialSharing: boolean;
   language: string;
+  filenameDisplay?: "show" | "hide";
+  searchEngineVisibility?: "homepage" | "all" | "hidden";
+  sharpeningLevel?: "optimal" | "low" | "high";
+  rawPhotoSupport?: boolean;
+  termsOfService?: string;
+  privacyPolicy?: string;
 };
 
 export type PresetFavoriteSettings = {

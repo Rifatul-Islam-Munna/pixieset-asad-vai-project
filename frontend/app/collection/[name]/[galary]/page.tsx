@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { PublicGallery } from "@/components/dashboard/public-gallery";
 import { PublicGalleryHashOpener } from "@/components/dashboard/public-gallery-hash-opener";
@@ -66,6 +67,7 @@ export default async function CollectionGalleryPage({
 }) {
   const { name, galary } = await params;
   const collection = await getCollection(galary, name);
+  if (!collection) notFound();
   const gaId = gaIdFrom(collection);
   const studio = decodeURIComponent(name);
   const title = collection?.name ?? decodeURIComponent(galary);

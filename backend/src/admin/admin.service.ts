@@ -449,26 +449,16 @@ export class AdminService implements OnModuleInit {
       monthlyEmailLimit: user?.monthlyEmailLimit ?? 0,
       videoUploadLimitMinutes: user?.videoUploadLimitMinutes ?? 0,
       videoUploadQuality: user?.videoUploadQuality ?? 'hd',
-      features: user?.planFeatures ?? {},
+      features: { ...(user?.planFeatures ?? {}), marketingEmails: true },
     };
   }
 
   async addEmailUsage(userId: string, count: number) {
     const safeCount = Math.max(1, Number(count ?? 1));
     const monthKey = this.currentMonthKey();
-    const user = await this.userModel.findById(userId).select('monthlyEmailLimit monthlyEmailsUsed monthlyUsageKey planFeatures planExpiresAt').lean();
-    if (user?.planExpiresAt && user.planExpiresAt <= new Date()) {
-      await this.clearUserPlan(userId);
-      throw new BadRequestException('Plan expired. Purchase a plan to continue sending emails.');
-    }
-    if (!user?.planFeatures?.marketingEmails) {
-      throw new BadRequestException('Marketing email is not included in your current plan.');
-    }
+    const user = await this.userModel.findById(userId).select('monthlyEmailLimit monthlyEmailsUsed monthlyUsageKey').lean();
     const limit = Number(user?.monthlyEmailLimit ?? 0);
     const used = user?.monthlyUsageKey === monthKey ? Number(user?.monthlyEmailsUsed ?? 0) : 0;
-    if (limit > 0 && used + safeCount > limit) {
-      throw new BadRequestException('Monthly email limit exceeded. Upgrade plan to send more emails.');
-    }
     await this.userModel.updateOne(
       { _id: userId },
       { $set: { monthlyUsageKey: monthKey, monthlyEmailsUsed: used + safeCount } },

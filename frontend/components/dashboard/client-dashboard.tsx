@@ -56,6 +56,7 @@ import {
   Package,
   Palette,
   PanelTop,
+  Pencil,
   PlusCircle,
   Lock,
   QrCode,
@@ -305,6 +306,12 @@ const sidebarItems = {
   { label: string; icon: typeof Images; page: DashboardPage }[]
 >;
 
+const marketingSidebarItems = [
+  { label: "Email", slug: "email-campaigns", icon: Mail },
+  { label: "Contacts", slug: "contacts", icon: Users },
+  { label: "Settings", slug: "settings", icon: MailCheck },
+] satisfies { label: string; slug: MarketingPage; icon: typeof Mail }[];
+
 const dashboardCopy = {
   "client-gallery": {
     title: "Client Gallery",
@@ -522,7 +529,7 @@ export function ClientDashboard({
         <aside
           className={cn(
             "fixed inset-y-0 left-0 z-40 hidden border-r border-[#e8e8e8] bg-white shadow-[4px_0_20px_rgba(0,0,0,0.025)] transition-[width] duration-200 md:flex md:flex-col",
-            collapsed ? "w-[72px]" : "w-[248px]",
+            collapsed ? "w-[84px]" : "w-[268px]",
           )}
         >
           <div className={cn("flex h-[72px] items-center border-b border-[#f1f1f1]", collapsed ? "justify-center px-2" : "justify-between px-4")}>
@@ -578,17 +585,7 @@ export function ClientDashboard({
               className={cn("flex items-center gap-4", collapsed && "hidden")}
             >
               {section === "client-gallery" && <DashboardNotifications />}
-              <Link
-                href="/dashboard/client-gallery/account"
-                aria-label="Account profile"
-              >
-                <Avatar className="size-7">
-                  <AvatarImage src={billingUser?.avatar || ""} />
-                  <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">
-                    {billingUser?.name?.slice(0, 1).toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
-              </Link>
+              <DashboardProfileMenu billingUser={billingUser} logoutPending={logoutPending} onLogout={logout} />
               <button
                 aria-label="Logout"
                 className="text-[#555] hover:text-red-600 disabled:opacity-50"
@@ -648,32 +645,24 @@ export function ClientDashboard({
                   />
                   {!collapsed && "Marketing"}
                 </Link>
-                {!collapsed && (
-                  <div className="ml-5 flex flex-col border-l border-[#e8e8e8] pl-3">
-                    {[
-                      {
-                        label: "Email Campaigns",
-                        slug: "email-campaigns",
-                        icon: Mail,
-                      },
-                      { label: "Contacts", slug: "contacts", icon: Users },
-                      { label: "Settings", slug: "settings", icon: MailCheck },
-                    ].map((item) => (
+                <div className={cn(collapsed ? "flex flex-col gap-2" : "ml-5 flex flex-col border-l border-[#e8e8e8] pl-3")}>
+                    {marketingSidebarItems.map((item) => (
                       <Link
                         key={item.slug}
                         href={`/dashboard/${section}/marketing/${item.slug}`}
                         className={cn(
-                          "flex h-11 items-center gap-3 rounded-md px-3 text-sm text-[#333] hover:bg-[#f7f7f7]",
+                          "flex h-11 items-center rounded-md text-sm text-[#333] hover:bg-[#f7f7f7]",
+                          collapsed ? "justify-center px-0" : "gap-3 px-3",
                           marketingPage === item.slug &&
                             "bg-[#f3f3f3] font-medium",
                         )}
+                        title={collapsed ? item.label : undefined}
                       >
                         <item.icon className="size-5" />
-                        {item.label}
+                        {!collapsed && item.label}
                       </Link>
                     ))}
                   </div>
-                )}
               </div>
             )}
 
@@ -729,21 +718,7 @@ export function ClientDashboard({
                   <DashboardNotifications />
                 </div>
               )}
-              {collapsed && (
-                <Link
-                  href="/dashboard/client-gallery/account"
-                  className="flex h-11 items-center justify-center"
-                  aria-label="Account profile"
-                  title="Account"
-                >
-                  <Avatar className="size-8">
-                    <AvatarImage src={billingUser?.avatar || ""} />
-                    <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">
-                      {billingUser?.name?.slice(0, 1).toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Link>
-              )}
+              {collapsed && <DashboardProfileMenu billingUser={billingUser} logoutPending={logoutPending} onLogout={logout} collapsed />}
               <button
                 className={cn(
                   "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold text-[#555] hover:bg-red-50 hover:text-red-600 disabled:opacity-50",
@@ -780,8 +755,8 @@ export function ClientDashboard({
           "min-h-screen transition-all",
           dashboardChromeOpen && !storeTopNavOpen
             ? collapsed
-              ? "md:pl-[72px]"
-              : "md:pl-[248px]"
+              ? "md:pl-[84px]"
+              : "md:pl-[268px]"
             : "",
         )}
       >
@@ -1015,11 +990,7 @@ export function ClientDashboard({
                 ? "min-h-[520px]"
                 : "contents"
             }
-            bypass={
-              section !== "store-gallery" &&
-              page !== "marketing" &&
-              !campaignBuilderOpen
-            }
+            bypass={section !== "store-gallery"}
           >
             {campaignBuilderOpen ? (
               <CampaignBuilder onClose={closeCampaignBuilder} />
@@ -2079,6 +2050,82 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
+function DashboardProfileMenu({
+  billingUser,
+  logoutPending,
+  onLogout,
+  collapsed = false,
+}: {
+  billingUser: BillingUser | null;
+  logoutPending: boolean;
+  onLogout: () => void;
+  collapsed?: boolean;
+}) {
+  const avatar = (
+    <Avatar className={collapsed ? "size-8" : "size-7"}>
+      <AvatarImage src={billingUser?.avatar || ""} />
+      <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">
+        {billingUser?.name?.slice(0, 1).toUpperCase() || "U"}
+      </AvatarFallback>
+    </Avatar>
+  );
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={cn("flex items-center justify-center rounded-md outline-none hover:bg-[#f5f7f7]", collapsed ? "h-11 w-full" : "size-9")}
+          aria-label="Account menu"
+          title={collapsed ? "Account" : undefined}
+        >
+          {avatar}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side={collapsed ? "right" : "bottom"}
+        align={collapsed ? "center" : "end"}
+        className="w-[260px] rounded-none border-0 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.12)]"
+      >
+        <div className="flex items-center gap-3 border-b px-5 py-4">
+          {avatar}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-[#222]">
+              {billingUser?.name || "Profile"}
+            </p>
+            <p className="truncate text-xs text-[#777]">
+              {billingUser?.planName || "Free"}
+            </p>
+          </div>
+        </div>
+        <DropdownMenuGroup className="p-2">
+          {[
+            { label: "Profile", href: "/dashboard/client-gallery/account", icon: CircleUserRound },
+            { label: "Billing", href: "/dashboard/client-gallery/storage", icon: CreditCard },
+            { label: "Advanced Settings", href: "/dashboard/client-gallery/settings/preferences", icon: Settings },
+            { label: "Account", href: "/dashboard/client-gallery/account", icon: Wrench },
+          ].map((item) => (
+            <DropdownMenuItem key={item.label} asChild className="rounded-none p-0">
+              <Link href={item.href} className="flex h-11 items-center gap-3 px-4 text-sm text-[#222]">
+                <item.icon className="size-4 text-[#555]" />
+                {item.label}
+              </Link>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator className="m-0" />
+        <DropdownMenuItem
+          className="h-12 rounded-none px-6 text-sm text-[#222]"
+          disabled={logoutPending}
+          onClick={onLogout}
+        >
+          <LogOut className="mr-3 size-4 text-[#555]" />
+          Log Out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function bytesToGb(value: number) {
   return Number(value ?? 0) / 1024 / 1024 / 1024;
 }
@@ -2769,7 +2816,7 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
         </p>
       )}
 
-      <div className="grid min-h-[calc(100vh-48px)] lg:grid-cols-[468px_1fr]">
+      <div className="grid min-h-[calc(100vh-48px)] lg:grid-cols-[468px_minmax(0,1fr)]">
         <aside className="border-r bg-white">
           <Tabs
             value={campaignTab}
@@ -2992,17 +3039,19 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
           </Tabs>
         </aside>
 
-        <CampaignPreview
-          buttonColor={campaignButtonColor}
-          buttonLink={campaignButtonLink}
-          buttonText={campaignButtonText}
-          footerText={campaignFooterText}
-          image={campaignImage}
-          message={campaignMessage}
-          previewText={campaignPreviewText}
-          subject={campaignSubject}
-          template={campaignTemplate}
-        />
+        <div className="bg-[#f3f3f3] lg:sticky lg:top-0 lg:h-[calc(100vh-48px)] lg:overflow-auto">
+          <CampaignPreview
+            buttonColor={campaignButtonColor}
+            buttonLink={campaignButtonLink}
+            buttonText={campaignButtonText}
+            footerText={campaignFooterText}
+            image={campaignImage}
+            message={campaignMessage}
+            previewText={campaignPreviewText}
+            subject={campaignSubject}
+            template={campaignTemplate}
+          />
+        </div>
       </div>
     </div>
   );
@@ -4086,24 +4135,28 @@ function IntegrationsPanel() {
   };
 
   return (
-    <div className="max-w-[720px]">
-      <div className="grid gap-8 bg-[#f4f4f3] p-8 md:grid-cols-[160px_1fr] md:p-10">
-        <div className="flex items-center justify-center">
-          <div className="text-center">
-            <div className="mx-auto grid h-16 w-16 place-items-end gap-1">
-              <span className="inline-block h-6 w-2 rounded-full bg-[#f9ab00]" />
-              <span className="inline-block h-10 w-2 rounded-full bg-[#e37400]" />
-              <span className="inline-block h-14 w-2 rounded-full bg-[#f9ab00]" />
+    <div className="max-w-[820px]">
+      <div className="border border-[#e7e7e7] bg-white shadow-[0_18px_60px_rgba(20,28,35,0.06)]">
+        <div className="flex flex-col gap-5 border-b bg-[#fbfbfa] px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <span className="flex size-12 items-center justify-center bg-[#fff4df]">
+              <span className="grid h-7 grid-cols-3 items-end gap-1">
+                <span className="h-3 w-1.5 rounded-full bg-[#f9ab00]" />
+                <span className="h-5 w-1.5 rounded-full bg-[#e37400]" />
+                <span className="h-7 w-1.5 rounded-full bg-[#f9ab00]" />
+              </span>
+            </span>
+            <div>
+              <h2 className="text-lg font-bold">Google Analytics</h2>
+              <p className="mt-1 text-sm text-[#666]">Public homepage and collection page tracking.</p>
             </div>
-            <p className="mt-3 text-sm font-bold text-[#666]">Google Analytics</p>
           </div>
+          <span className={cn("w-fit px-3 py-1 text-xs font-bold uppercase", form.enabled ? "bg-[#e7f8f4] text-[#008f81]" : "bg-[#eeeeee] text-[#777]")}>
+            {form.enabled ? "Enabled" : "Off"}
+          </span>
         </div>
-        <div>
-          <h2 className="text-base font-bold">Google Analytics</h2>
-          <p className="mt-4 max-w-md text-sm leading-6 text-[#444]">
-            Enable Google Analytics on your public homepage and collection pages.
-          </p>
-          <div className="mt-7 grid gap-5">
+        <div className="grid gap-8 px-6 py-7 md:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="grid gap-6">
             <SettingSwitch
               label="Google Analytics"
               checked={form.enabled}
@@ -4123,12 +4176,29 @@ function IntegrationsPanel() {
               </p>
             </Field>
             <Button
-              className="h-11 w-fit rounded-none bg-[#22bda7] px-8 text-white"
+              className="h-11 w-fit rounded-none bg-[#22bda7] px-8 text-white hover:bg-[#19a995]"
               disabled={saveSetting.isPending}
               onClick={save}
             >
               {saveSetting.isPending ? "Saving..." : "Save Google Analytics"}
             </Button>
+          </div>
+          <div className="border bg-[#f7f8f8] p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#777]">Scope</p>
+            <div className="mt-5 grid gap-4 text-sm">
+              <div className="flex items-center gap-3">
+                <Check className="size-4 text-[#00a997]" />
+                <span>Tenant homepage</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Check className="size-4 text-[#00a997]" />
+                <span>Public collections</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Check className="size-4 text-[#00a997]" />
+                <span>GA4 only</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -4622,7 +4692,7 @@ function EmailTemplatesPanel() {
           </FieldGroup>
         </section>
 
-        <div className="bg-[#f3f3f3]">
+        <div className="bg-[#f3f3f3] lg:sticky lg:top-0 lg:h-screen lg:overflow-auto">
           <CampaignPreview
             buttonColor={activeTemplate.buttonColor}
             buttonLink={activeTemplate.buttonLink}
@@ -11281,8 +11351,9 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
         settings: {
           general: generalSettings,
           download: preset?.download ?? collectionDefaultDownload,
-          favorite: preset?.favorite,
-          store: preset?.store,
+          favorite: preset?.favorite ?? collectionDefaultFavorite,
+          store: preset?.store ?? collectionDefaultStore,
+          preferences: savedPreferences,
         },
       },
       {
@@ -11436,8 +11507,11 @@ function uniqueCollectionSets(
   return unique.length ? unique : [{ id: "highlights", name: "Highlights" }];
 }
 
-function collectionFormWithUniqueSets(collection?: CollectionRecord) {
-  const next = collectionForm(collection);
+function collectionFormWithUniqueSets(
+  collection?: CollectionRecord,
+  globalPreferences?: Partial<PreferenceSettings>,
+) {
+  const next = collectionForm(collection, globalPreferences);
   return { ...next, sets: uniqueCollectionSets(next.sets) };
 }
 
@@ -11451,6 +11525,8 @@ function CollectionDetailView({
   const router = useRouter();
   const coverImageAccess = usePlanFeatureAccess("coverImage");
   const presetSettings = useDashboardSettings("preset").query;
+  const preferenceSettings =
+    useDashboardSettings<PreferenceSettings>("preference").query;
   const watermarkSettings = useDashboardSettings("watermark").query;
   const brandingSettings =
     useDashboardSettings<BrandSettings>("branding").query;
@@ -11473,6 +11549,8 @@ function CollectionDetailView({
     uploadImages,
     deleteImage,
     reorderImages,
+    updateImage,
+    copyMoveImage,
   } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
   const activityActions = useCollectionActivityActions(collectionId);
@@ -11480,6 +11558,11 @@ function CollectionDetailView({
   const collection =
     collectionQuery.data?.data ??
     collections.find((item) => item._id === collectionId);
+  const savedPreferences = collectionPreferencesFromGlobal(
+    preferenceSettings.data?.data?.[0]?.data as
+      | Partial<PreferenceSettings>
+      | undefined,
+  );
   const detail = collectionQuery.data?.data;
   const imagesLoading = collectionQuery.isLoading && !detail;
   const [loadedImages, setLoadedImages] = useState<CollectionImageRecord[]>([]);
@@ -11516,6 +11599,7 @@ function CollectionDetailView({
   const [shareOpen, setShareOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [addMediaOpen, setAddMediaOpen] = useState(false);
+  const [replaceImageId, setReplaceImageId] = useState("");
   const [deleteCollectionConfirmOpen, setDeleteCollectionConfirmOpen] = useState(false);
   const [shareTemplateSearch, setShareTemplateSearch] = useState("");
   const [selectedShareTemplateId, setSelectedShareTemplateId] = useState("");
@@ -11556,7 +11640,20 @@ function CollectionDetailView({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
-  const [form, setForm] = useState(() => collectionFormWithUniqueSets(collection));
+  const [imageRenameOpen, setImageRenameOpen] = useState(false);
+  const [imageMoveOpen, setImageMoveOpen] = useState(false);
+  const [imageWatermarkOpen, setImageWatermarkOpen] = useState(false);
+  const [imageShareOpen, setImageShareOpen] = useState(false);
+  const [imageRenameValue, setImageRenameValue] = useState("");
+  const [imageMoveMode, setImageMoveMode] = useState<"copy" | "move">("copy");
+  const [imageTargetCollectionId, setImageTargetCollectionId] = useState("");
+  const [imageTargetSetId, setImageTargetSetId] = useState("");
+  const [imageWatermarkId, setImageWatermarkId] = useState("");
+  const [imageShareAllowDownload, setImageShareAllowDownload] = useState(false);
+  const [imageMenuId, setImageMenuId] = useState("");
+  const [form, setForm] = useState(() =>
+    collectionFormWithUniqueSets(collection, savedPreferences),
+  );
   const [collectionStatus, setCollectionStatus] = useState<
     "draft" | "published"
   >(collection?.status === "published" ? "published" : "draft");
@@ -11700,6 +11797,132 @@ function CollectionDetailView({
     ? publicCollectionUrl(homepageSlug, collectionSlug, pageOrigin)
     : `${pageOrigin}/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collectionSlug)}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicLink)}`;
+  const selectedTargetCollection = collections.find(
+    (item) => item._id === imageTargetCollectionId,
+  );
+  const selectedTargetSets =
+    selectedTargetCollection?.sets?.length
+      ? selectedTargetCollection.sets
+      : [{ id: "highlights", name: "Highlights" }];
+  const imageQuickShareLink = activeImage
+    ? `${publicLink}?photo=${encodeURIComponent(activeImage._id)}&download=${imageShareAllowDownload ? "1" : "0"}`
+    : publicLink;
+  const imageWatermarkFor = (image: CollectionImageRecord) => {
+    const id = String(image.metadata?.watermarkId ?? "");
+    if (!id || id === "No watermark") return activeWatermark;
+    return (
+      watermarkItems.find(
+        (watermark) => watermark.id === id || watermark.name === id,
+      ) ?? activeWatermark
+    );
+  };
+  const openRenameImage = (image: CollectionImageRecord) => {
+    setActiveImageId(image._id);
+    setImageRenameValue(image.originalName || String(image.metadata?.filename ?? ""));
+    setImageRenameOpen(true);
+  };
+  const openMoveImage = (image: CollectionImageRecord, mode: "copy" | "move" = "copy") => {
+    const target = collections.find((item) => item._id !== image.collectionId) ?? collection;
+    setActiveImageId(image._id);
+    setImageMoveMode(mode);
+    setImageTargetCollectionId(target?._id ?? "");
+    setImageTargetSetId(target?.sets?.[0]?.id ?? "highlights");
+    setImageMoveOpen(true);
+  };
+  const openWatermarkImage = (image: CollectionImageRecord) => {
+    setActiveImageId(image._id);
+    setImageWatermarkId(String(image.metadata?.watermarkId ?? uploadWatermarkId ?? ""));
+    setImageWatermarkOpen(true);
+  };
+  const openQuickShareImage = (image: CollectionImageRecord) => {
+    setActiveImageId(image._id);
+    setImageShareAllowDownload(false);
+    setImageShareOpen(true);
+  };
+  const saveImageRename = () => {
+    if (!activeImage) return;
+    updateImage.mutate(
+      {
+        imageId: activeImage._id,
+        payload: { originalName: imageRenameValue },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Filename updated");
+          setImageRenameOpen(false);
+        },
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+  const saveImageMove = () => {
+    if (!activeImage || !imageTargetCollectionId) return;
+    copyMoveImage.mutate(
+      {
+        imageId: activeImage._id,
+        mode: imageMoveMode,
+        targetCollectionId: imageTargetCollectionId,
+        targetSetId: imageTargetSetId,
+      },
+      {
+        onSuccess: () => {
+          toast.success(imageMoveMode === "move" ? "Photo moved" : "Photo copied");
+          setImageMoveOpen(false);
+          void collectionQuery.refetch();
+        },
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+  const saveImageWatermark = () => {
+    if (!activeImage) return;
+    updateImage.mutate(
+      {
+        imageId: activeImage._id,
+        payload: { watermarkId: imageWatermarkId || "No watermark" },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Watermark updated");
+          setImageWatermarkOpen(false);
+        },
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+  const copyImageQuickShare = async () => {
+    await navigator.clipboard.writeText(imageQuickShareLink);
+    toast.success("Quick share link copied");
+    setImageShareOpen(false);
+  };
+  const setCollectionCoverImage = (image: CollectionImageRecord) => {
+    if (coverImageAccess.locked || image.mediaType === "video") return;
+    setForm((value) => ({ ...value, coverImage: image.url }));
+    updateCollection.mutate(
+      { coverImage: image.url },
+      {
+        onSuccess: () => toast.success("Cover photo updated"),
+        onError: (error) =>
+          toast.error(
+            error instanceof Error ? error.message : "Cover update failed",
+          ),
+      },
+    );
+  };
+  const copyImageFilename = async (image: CollectionImageRecord) => {
+    await navigator.clipboard.writeText(
+      image.originalName || String(image.metadata?.filename ?? ""),
+    );
+    toast.success("Filename copied");
+  };
+  const downloadImageFile = (image: CollectionImageRecord) => {
+    const link = document.createElement("a");
+    link.href = imageSrc(image.url);
+    link.download = image.originalName || "image";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
   const loadMoreCollectionImages = async () => {
     if (!collectionId || imagesLoadingMore || !imagesHasMore) return;
     setImagesLoadingMore(true);
@@ -11743,7 +11966,7 @@ function CollectionDetailView({
 
   useEffect(() => {
     if (!collection || updateCollection.isPending) return;
-    const nextForm = collectionFormWithUniqueSets(collection);
+    const nextForm = collectionFormWithUniqueSets(collection, savedPreferences);
     const nextFormKey = collectionFormKey(nextForm);
     if (syncedCollectionFormKeyRef.current === nextFormKey) return;
     syncedCollectionFormKeyRef.current = nextFormKey;
@@ -11751,7 +11974,17 @@ function CollectionDetailView({
     setCollectionStatus(
       collection.status === "published" ? "published" : "draft",
     );
-  }, [collection, updateCollection.isPending]);
+  }, [
+    collection,
+    savedPreferences.defaultLanguage,
+    savedPreferences.filenameDisplay,
+    savedPreferences.searchEngineVisibility,
+    savedPreferences.sharpeningLevel,
+    savedPreferences.rawPhotoSupport,
+    savedPreferences.termsOfService,
+    savedPreferences.privacyPolicy,
+    updateCollection.isPending,
+  ]);
 
   useEffect(() => {
     if (imagePage > totalImagePages) setImagePage(totalImagePages);
@@ -11794,13 +12027,17 @@ function CollectionDetailView({
         download: form.download,
         favorite: form.favorite,
         store: form.store,
+        preferences: form.preferences,
         access: collection?.settings?.access,
       },
     };
     updateCollection.mutate(payload, {
       onSuccess: (response) => {
         if (response?.data) {
-          const nextForm = collectionFormWithUniqueSets(response.data);
+          const nextForm = collectionFormWithUniqueSets(
+            response.data,
+            savedPreferences,
+          );
           syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
           setForm(nextForm);
         }
@@ -11893,7 +12130,10 @@ function CollectionDetailView({
       {
         onSuccess: (response) => {
           if (response?.data) {
-            const nextForm = collectionFormWithUniqueSets(response.data);
+            const nextForm = collectionFormWithUniqueSets(
+              response.data,
+              savedPreferences,
+            );
             syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
           }
         },
@@ -12001,7 +12241,7 @@ function CollectionDetailView({
   const handleImageUpload = async (files: FileList | File[] | null) => {
     if (!files?.length || uploadImages.isPending || uploadProgress.active)
       return;
-    const selectedFiles = Array.from(files);
+    const selectedFiles = replaceImageId ? Array.from(files).slice(0, 1) : Array.from(files);
     setUploadProgress({
       active: true,
       total: selectedFiles.length,
@@ -12030,6 +12270,12 @@ function CollectionDetailView({
           ? response.data
           : [];
         if (uploadedImages.length) {
+          if (replaceImageId && index === 0) {
+            await deleteImage.mutateAsync(replaceImageId);
+            setLoadedImages((current) =>
+              current.filter((image) => image._id !== replaceImageId),
+            );
+          }
           setLoadedImages((current) => {
             const seen = new Set(current.map((image) => image._id));
             return [
@@ -12045,7 +12291,9 @@ function CollectionDetailView({
         }));
       }
       toast.success(
-        `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
+        replaceImageId
+          ? "Photo replaced"
+          : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
@@ -12057,6 +12305,7 @@ function CollectionDetailView({
         currentName: "",
         currentPercent: 0,
       });
+      setReplaceImageId("");
     }
   };
   const handleUploadDragOver = (event: DragEvent<HTMLElement>) => {
@@ -12563,11 +12812,11 @@ function CollectionDetailView({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={addMediaOpen} onOpenChange={setAddMediaOpen}>
+      <Dialog open={addMediaOpen} onOpenChange={(open) => { setAddMediaOpen(open); if (!open && !uploading) setReplaceImageId(""); }}>
         <DialogContent className="rounded-none p-0 sm:max-w-[720px]">
           <div className="p-8 sm:p-12">
             <div className="flex items-center justify-between">
-              <DialogTitle className="text-base font-bold uppercase tracking-[0.13em]">Add Media</DialogTitle>
+              <DialogTitle className="text-base font-bold uppercase tracking-[0.13em]">{replaceImageId ? "Replace Photo" : "Add Media"}</DialogTitle>
               <button type="button" onClick={() => setAddMediaOpen(false)} aria-label="Close media uploader">
                 <X className="size-5 text-[#777]" />
               </button>
@@ -12599,7 +12848,7 @@ function CollectionDetailView({
             >
               {uploading ? <Loader2 className="size-12 animate-spin text-[#22bda7]" /> : <Upload className="size-12 text-[#c7c7c7]" />}
               <p className="mt-6 text-lg font-bold">
-                {uploading ? `${uploadProgress.currentPercent}% uploaded` : "Drag photos and videos here to upload"}
+                {uploading ? `${uploadProgress.currentPercent}% uploaded` : replaceImageId ? "Drag one replacement photo here" : "Drag photos and videos here to upload"}
               </p>
               <p className="mt-5 text-sm text-[#555]">or upload files from:</p>
               <span className="mt-5 inline-flex h-11 min-w-44 items-center justify-center gap-2 bg-[#f2f2f2] px-6 text-sm font-bold">
@@ -12609,7 +12858,7 @@ function CollectionDetailView({
               <input
                 type="file"
                 accept="image/*,video/*"
-                multiple
+                multiple={!replaceImageId}
                 disabled={uploading}
                 className="hidden"
                 onChange={(event) => {
@@ -12621,6 +12870,120 @@ function CollectionDetailView({
               />
             </label>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={imageRenameOpen} onOpenChange={setImageRenameOpen}>
+        <DialogContent className="max-w-md rounded-none">
+          <DialogHeader>
+            <DialogTitle>Rename Photo</DialogTitle>
+            <DialogDescription>Update photo filename shown in this collection.</DialogDescription>
+          </DialogHeader>
+          <Input value={imageRenameValue} onChange={(event) => setImageRenameValue(event.target.value)} className="h-12 rounded-none" placeholder="Filename" />
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setImageRenameOpen(false)}>Cancel</Button>
+            <Button className="rounded-none bg-[#22bda7] text-white" disabled={updateImage.isPending} onClick={saveImageRename}>
+              {updateImage.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={imageMoveOpen} onOpenChange={setImageMoveOpen}>
+        <DialogContent className="max-w-lg rounded-none">
+          <DialogHeader>
+            <DialogTitle>Move / Copy Photo</DialogTitle>
+            <DialogDescription>Send this photo to another collection or set.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="gap-5">
+            <Field>
+              <FieldLabel className="font-bold">Action</FieldLabel>
+              <div className="grid grid-cols-2 gap-2">
+                {(["copy", "move"] as const).map((mode) => (
+                  <button key={mode} type="button" className={cn("h-11 border text-sm font-bold capitalize", imageMoveMode === mode && "border-[#22bda7] bg-[#eefaf8] text-[#008f81]")} onClick={() => setImageMoveMode(mode)}>
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Collection</FieldLabel>
+              <select
+                value={imageTargetCollectionId}
+                onChange={(event) => {
+                  const nextCollection = collections.find((item) => item._id === event.target.value);
+                  setImageTargetCollectionId(event.target.value);
+                  setImageTargetSetId(nextCollection?.sets?.[0]?.id ?? "highlights");
+                }}
+                className="h-12 w-full rounded-none border bg-white px-4"
+              >
+                {collections.map((item) => (
+                  <option key={item._id} value={item._id}>{item.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel className="font-bold">Set</FieldLabel>
+              <select value={imageTargetSetId} onChange={(event) => setImageTargetSetId(event.target.value)} className="h-12 w-full rounded-none border bg-white px-4">
+                {selectedTargetSets.map((set) => (
+                  <option key={set.id} value={set.id}>{set.name}</option>
+                ))}
+              </select>
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setImageMoveOpen(false)}>Cancel</Button>
+            <Button className="rounded-none bg-[#22bda7] text-white" disabled={copyMoveImage.isPending || !imageTargetCollectionId} onClick={saveImageMove}>
+              {copyMoveImage.isPending ? "Working..." : imageMoveMode === "move" ? "Move Photo" : "Copy Photo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={imageWatermarkOpen} onOpenChange={setImageWatermarkOpen}>
+        <DialogContent className="max-w-md rounded-none">
+          <DialogHeader>
+            <DialogTitle>Photo Watermark</DialogTitle>
+            <DialogDescription>Choose watermark overlay for this photo.</DialogDescription>
+          </DialogHeader>
+          <select value={imageWatermarkId} onChange={(event) => setImageWatermarkId(event.target.value)} className="h-12 w-full rounded-none border bg-white px-4">
+            <option value="">Use set/default watermark</option>
+            <option value="No watermark">No watermark</option>
+            {watermarkItems.map((watermark) => (
+              <option key={watermark.id} value={watermark.id}>{watermark.name}</option>
+            ))}
+          </select>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setImageWatermarkOpen(false)}>Cancel</Button>
+            <Button className="rounded-none bg-[#22bda7] text-white" disabled={updateImage.isPending} onClick={saveImageWatermark}>
+              {updateImage.isPending ? "Saving..." : "Save Watermark"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={imageShareOpen} onOpenChange={setImageShareOpen}>
+        <DialogContent className="max-w-lg rounded-none">
+          <DialogHeader>
+            <DialogTitle>Quick Share Link</DialogTitle>
+            <DialogDescription>Copy one-photo share link with download preference.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="flex items-center justify-between border bg-[#fafafa] px-4 py-3">
+              <div>
+                <p className="text-sm font-bold">Allow download</p>
+                <p className="mt-1 text-xs text-[#666]">Marks this link as download allowed.</p>
+              </div>
+              <Switch checked={imageShareAllowDownload} onCheckedChange={setImageShareAllowDownload} />
+            </div>
+            <Input value={imageQuickShareLink} readOnly className="h-12 rounded-none bg-white" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-none" onClick={() => setImageShareOpen(false)}>Cancel</Button>
+            <Button className="rounded-none bg-[#22bda7] text-white" onClick={() => void copyImageQuickShare()}>
+              Copy Link
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -12667,8 +13030,8 @@ function CollectionDetailView({
         className={cn(
           "grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-300 ease-out",
           detailCollapsed
-            ? "md:grid-cols-[76px_minmax(0,1fr)]"
-            : "md:grid-cols-[296px_minmax(0,1fr)]",
+            ? "md:grid-cols-[88px_minmax(0,1fr)]"
+            : "md:grid-cols-[320px_minmax(0,1fr)]",
         )}
       >
         <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-[#fafafa] transition-colors duration-300">
@@ -13254,8 +13617,8 @@ function CollectionDetailView({
                             )}
                           />
                         )}
-                        {!image.watermarked && activeWatermark && (
-                          <WatermarkOverlay watermark={activeWatermark} />
+                        {!image.watermarked && imageWatermarkFor(image) && (
+                          <WatermarkOverlay watermark={imageWatermarkFor(image)!} />
                         )}
                       </button>
                       <button
@@ -13278,7 +13641,7 @@ function CollectionDetailView({
                         />
                       </button>
                       <button
-                        className="absolute right-2 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-red-600 group-hover:flex"
+                        className="absolute right-2 top-12 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-red-600 group-hover:flex"
                         disabled={deletingImages}
                         onClick={() => deleteSingleImage(image)}
                         aria-label="Delete image"
@@ -13291,17 +13654,6 @@ function CollectionDetailView({
                       </button>
                       <button
                         className="absolute right-12 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#00a997] group-hover:flex"
-                        disabled={deletingImages}
-                        onClick={() => {
-                          setActiveImageId(image._id);
-                          setPreviewOpen(true);
-                        }}
-                        aria-label="View image"
-                      >
-                        <Eye className="size-4" />
-                      </button>
-                      <button
-                        className="absolute right-[5.5rem] top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#00a997] group-hover:flex"
                         disabled={deletingImages}
                         onClick={() =>
                           starImage.mutate({
@@ -13322,6 +13674,47 @@ function CollectionDetailView({
                       </button>
                       <button
                         className={cn(
+                          "absolute right-2 top-2 size-9 items-center justify-center bg-white/95 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#00a997]",
+                          imageMenuId === image._id ? "flex" : "hidden group-hover:flex",
+                        )}
+                        disabled={deletingImages}
+                        aria-label="Photo options"
+                        type="button"
+                        onClick={() =>
+                          setImageMenuId((current) =>
+                            current === image._id ? "" : image._id,
+                          )
+                        }
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </button>
+                      {imageMenuId === image._id && (
+                        <div className="absolute right-2 top-12 z-40 w-56 border bg-white p-2 text-sm shadow-[0_18px_45px_rgba(0,0,0,0.16)]">
+                          <PhotoMenuItem icon={Eye} label="Open" onClick={() => { setImageMenuId(""); setActiveImageId(image._id); setPreviewOpen(true); }} />
+                          <PhotoMenuItem icon={Link2} label="Quick share" onClick={() => { setImageMenuId(""); openQuickShareImage(image); }} />
+                          <PhotoMenuItem icon={Download} label="Download" onClick={() => { setImageMenuId(""); downloadImageFile(image); }} />
+                          <PhotoMenuItem icon={ArrowRight} label="Move/Copy" onClick={() => { setImageMenuId(""); openMoveImage(image); }} />
+                          <PhotoMenuItem icon={Copy} label="Copy filename" onClick={() => { setImageMenuId(""); void copyImageFilename(image); }} />
+                          <PhotoMenuItem icon={Images} label="Set as cover" disabled={coverImageAccess.locked || image.mediaType === "video"} onClick={() => { setImageMenuId(""); setCollectionCoverImage(image); }} />
+                          <PhotoMenuItem icon={Pencil} label="Rename" onClick={() => { setImageMenuId(""); openRenameImage(image); }} />
+                          <PhotoMenuItem icon={RefreshCw} label="Replace photo" onClick={() => { setImageMenuId(""); setReplaceImageId(image._id); setAddMediaOpen(true); }} />
+                          <PhotoMenuItem icon={Palette} label="Watermark" onClick={() => { setImageMenuId(""); openWatermarkImage(image); }} />
+                          <div className="my-2 border-t" />
+                          <button
+                            type="button"
+                            className="flex h-10 w-full items-center gap-3 px-3 text-left text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              setImageMenuId("");
+                              deleteSingleImage(image);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                      <button
+                        className={cn(
                           "absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block",
                           coverImageAccess.locked &&
                             "cursor-not-allowed opacity-60",
@@ -13335,25 +13728,7 @@ function CollectionDetailView({
                             ? "Cover image is not included in your current plan"
                             : "Make collection cover"
                         }
-                        onClick={() => {
-                          setForm((value) => ({
-                            ...value,
-                            coverImage: image.url,
-                          }));
-                          updateCollection.mutate(
-                            { coverImage: image.url },
-                            {
-                              onSuccess: () =>
-                                toast.success("Cover photo updated"),
-                              onError: (error) =>
-                                toast.error(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "Cover update failed",
-                                ),
-                            },
-                          );
-                        }}
+                        onClick={() => setCollectionCoverImage(image)}
                       >
                         Make Cover
                       </button>
@@ -13752,6 +14127,119 @@ function CollectionDetailView({
                       }
                       text="Show walk-through cards for visitors."
                     />
+                    <div className="border-t pt-8">
+                      <h3 className="text-lg font-bold">Collection Preferences</h3>
+                      <p className="mt-2 text-sm leading-6 text-[#666]">
+                        Defaults come from Preferences. Changes here stay with this collection.
+                      </p>
+                      <FieldGroup className="mt-6 gap-7">
+                        <Field>
+                          <FieldLabel className="font-bold">Filename Display</FieldLabel>
+                          <select
+                            value={form.preferences.filenameDisplay}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                preferences: {
+                                  ...current.preferences,
+                                  filenameDisplay: event.target.value as PreferenceSettings["filenameDisplay"],
+                                },
+                              }))
+                            }
+                            className="h-12 w-full rounded-none border bg-white px-5"
+                          >
+                            <option value="show">Show</option>
+                            <option value="hide">Hide</option>
+                          </select>
+                        </Field>
+                        <Field>
+                          <FieldLabel className="font-bold">Search Engine Visibility</FieldLabel>
+                          <select
+                            value={form.preferences.searchEngineVisibility}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                preferences: {
+                                  ...current.preferences,
+                                  searchEngineVisibility: event.target.value as PreferenceSettings["searchEngineVisibility"],
+                                },
+                              }))
+                            }
+                            className="h-12 w-full rounded-none border bg-white px-5"
+                          >
+                            <option value="homepage">Homepage Only</option>
+                            <option value="all">All Public Pages</option>
+                            <option value="hidden">Hidden</option>
+                          </select>
+                        </Field>
+                        <Field>
+                          <FieldLabel className="font-bold">Sharpening Level</FieldLabel>
+                          <select
+                            value={form.preferences.sharpeningLevel}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                preferences: {
+                                  ...current.preferences,
+                                  sharpeningLevel: event.target.value as PreferenceSettings["sharpeningLevel"],
+                                },
+                              }))
+                            }
+                            className="h-12 w-full rounded-none border bg-white px-5"
+                          >
+                            <option value="optimal">Optimal</option>
+                            <option value="low">Low</option>
+                            <option value="high">High</option>
+                          </select>
+                        </Field>
+                        <SettingSwitch
+                          label="RAW Photo Support"
+                          checked={form.preferences.rawPhotoSupport}
+                          onCheckedChange={(value) =>
+                            setForm((current) => ({
+                              ...current,
+                              preferences: {
+                                ...current.preferences,
+                                rawPhotoSupport: value,
+                              },
+                            }))
+                          }
+                          text="Allow RAW files inside this collection."
+                        />
+                        <Field>
+                          <FieldLabel className="font-bold">Terms of Service</FieldLabel>
+                          <Textarea
+                            value={form.preferences.termsOfService}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                preferences: {
+                                  ...current.preferences,
+                                  termsOfService: event.target.value,
+                                },
+                              }))
+                            }
+                            className="min-h-32 rounded-none bg-white"
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel className="font-bold">Privacy Policy</FieldLabel>
+                          <Textarea
+                            value={form.preferences.privacyPolicy}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                preferences: {
+                                  ...current.preferences,
+                                  privacyPolicy: event.target.value,
+                                },
+                              }))
+                            }
+                            className="min-h-32 rounded-none bg-white"
+                          />
+                        </Field>
+                      </FieldGroup>
+                    </div>
                   </FieldGroup>
                 </>
               )}
@@ -15069,6 +15557,7 @@ const collectionDefaultGeneral: PresetGeneralSettings = {
   photoSets: "Highlights",
   defaultWatermark: "No watermark",
   emailRegistration: false,
+  marketingSubscription: true,
   galleryAssist: false,
   slideshow: true,
   slideshowSpeed: "regular",
@@ -15076,6 +15565,15 @@ const collectionDefaultGeneral: PresetGeneralSettings = {
   socialSharing: true,
   language: "English",
 };
+
+function collectionPreferencesFromGlobal(
+  preferences?: Partial<PreferenceSettings>,
+): PreferenceSettings {
+  return {
+    ...defaultPreferenceSettings,
+    ...(preferences ?? {}),
+  };
+}
 
 const collectionDefaultDownload: PresetDownloadSettings = {
   photoDownload: true,
@@ -15134,6 +15632,7 @@ type CollectionFormState = {
   download: PresetDownloadSettings;
   favorite: PresetFavoriteSettings;
   store: PresetStoreSettings;
+  preferences: PreferenceSettings;
 };
 
 function coverTextOrDefault(value: string | undefined, fallback: string) {
@@ -15148,7 +15647,11 @@ function coverTextOrDefault(value: string | undefined, fallback: string) {
     : fallback;
 }
 
-function collectionForm(collection?: CollectionRecord): CollectionFormState {
+function collectionForm(
+  collection?: CollectionRecord,
+  globalPreferences?: Partial<PreferenceSettings>,
+): CollectionFormState {
+  const preferenceDefaults = collectionPreferencesFromGlobal(globalPreferences);
   const savedDesign = (collection?.design ??
     {}) as Partial<PresetDesignSettings>;
   const eventLabel = collection?.eventDate
@@ -15183,6 +15686,7 @@ function collectionForm(collection?: CollectionRecord): CollectionFormState {
     design,
     general: {
       ...collectionDefaultGeneral,
+      language: preferenceDefaults.defaultLanguage,
       collectionTags:
         collection?.tags?.join(", ") ?? collectionDefaultGeneral.collectionTags,
       defaultWatermark:
@@ -15207,6 +15711,12 @@ function collectionForm(collection?: CollectionRecord): CollectionFormState {
       ...collectionDefaultStore,
       ...((collection?.settings?.store as
         | Partial<PresetStoreSettings>
+        | undefined) ?? {}),
+    },
+    preferences: {
+      ...preferenceDefaults,
+      ...((collection?.settings?.preferences as
+        | Partial<PreferenceSettings>
         | undefined) ?? {}),
     },
   };
@@ -15368,6 +15878,30 @@ function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
         </div>
       ))}
     </aside>
+  );
+}
+
+function PhotoMenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: typeof Eye;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className="flex h-10 w-full items-center gap-3 px-3 text-left text-[#222] hover:bg-[#f6f6f6] disabled:cursor-not-allowed disabled:opacity-45"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <Icon className="size-4" />
+      {label}
+    </button>
   );
 }
 
