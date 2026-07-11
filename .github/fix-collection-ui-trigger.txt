@@ -1,1 +1,1 @@
-capture collection UI patch error
+retry collection UI patch after syntax fix
