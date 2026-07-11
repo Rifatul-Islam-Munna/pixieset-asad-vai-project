@@ -7,6 +7,11 @@ on:
     paths:
       - .github/workflows/fix-collection-detail.yml
       - .github/fix-collection-detail.py
+  pull_request:
+    branches:
+      - developmentbranch
+    paths:
+      - .github/fix-collection-trigger.txt
 
 permissions:
   contents: write
