@@ -232,9 +232,8 @@ export const defaultHomeCms: HomeCmsData = {
         description: "An all-in-one platform for modern photographers, offering client photo galleries, websites, online stores and studio management software tools.",
         copyright: "Copyright 2026 Nikoset. Made with love in Vancity.",
         columns: [
-          { title: "Products", links: ["Client Gallery", "Website", "Studio Manager", "Store", "Mobile Gallery App", "Photo Editor", "Examples", "Pricing"] },
-          { title: "Resources", links: ["Help & Support", "Nikoset Blog", "Apps & Plugins", "Service Status"] },
-          { title: "Company", links: ["About", "Careers", "Terms Of Service", "Privacy Policy"] },
+          { title: "Products", links: ["Client Gallery", "Store Gallery", "Mobile Gallery App", "Pricing"] },
+          { title: "Legal", links: ["Terms of Service", "Privacy Policy"] },
         ],
       },
     },

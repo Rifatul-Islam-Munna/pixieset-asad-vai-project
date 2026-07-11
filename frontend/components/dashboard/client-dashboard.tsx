@@ -524,7 +524,7 @@ export function ClientDashboard({
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-white text-[#151515]">
+    <main className="gallerista-editorial min-h-screen overflow-x-hidden bg-[#F8F7F4] text-[#151515]">
       {dashboardChromeOpen && !storeTopNavOpen && (
         <aside
           className={cn(
@@ -586,14 +586,6 @@ export function ClientDashboard({
             >
               {section === "client-gallery" && <DashboardNotifications />}
               <DashboardProfileMenu billingUser={billingUser} logoutPending={logoutPending} onLogout={logout} />
-              <button
-                aria-label="Logout"
-                className="text-[#555] hover:text-red-600 disabled:opacity-50"
-                disabled={logoutPending}
-                onClick={logout}
-              >
-                <LogOut className="size-5" />
-              </button>
             </div>
           </div>
 
@@ -10749,7 +10741,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   };
 
   return (
-    <div className="min-h-full bg-white">
+    <div className="min-h-full bg-transparent">
       <Dialog
         open={Boolean(quickEdit)}
         onOpenChange={(open) => !open && setQuickEdit(null)}
@@ -10881,7 +10873,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             View Presets
           </button>
           <Button
-            className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-10 rounded-none bg-[#1C1C1C] px-7 text-sm font-bold text-white hover:bg-[#2E2E2E]"
             onClick={() => router.push(`/dashboard/${section}/collection-new`)}
           >
             New Collection
@@ -10957,7 +10949,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
           </CollectionFilterSelect>
           {filtersActive && (
             <button
-              className="h-9 px-3 text-xs font-semibold text-[#00a997]"
+              className="h-9 px-3 text-xs font-semibold text-[#6F57D9]"
               onClick={clearFilters}
             >
               Clear filters
@@ -10996,7 +10988,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       {collectionsQuery.isLoading ? (
         <p className="mt-10 py-8 text-sm text-[#666]">Loading collections...</p>
       ) : !filteredCollections.length ? (
-        <div className="mt-10 flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] p-8 text-center">
+        <div className="mt-10 flex min-h-[360px] flex-col items-center justify-center border border-[#E8E5E1] bg-[#FFFFFF] p-8 text-center shadow-[0_18px_50px_rgba(21,21,21,0.04)]">
           <Images className="size-10 text-[#999]" />
           <p className="mt-5 font-bold">
             {collections.length
@@ -11009,7 +11001,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               : "Create your first collection to get started."}
           </p>
           <Button
-            className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="mt-6 h-10 rounded-none bg-[#1C1C1C] px-7 text-sm font-bold text-white hover:bg-[#2E2E2E]"
             onClick={() => router.push(`/dashboard/${section}/collection-new`)}
           >
             Create Collection
@@ -11020,7 +11012,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
           {filteredCollections.map((collection) => (
             <article key={collection._id} className="group relative text-left">
               <button
-                className="absolute left-3 top-3 z-10 flex size-10 items-center justify-center rounded-full bg-white/92 text-[#666] shadow-sm transition hover:text-[#00a997]"
+                className="absolute left-3 top-3 z-10 flex size-10 items-center justify-center rounded-full bg-white/92 text-[#666] shadow-sm transition hover:text-[#6F57D9]"
                 onClick={() => toggleCollectionStar(collection)}
                 type="button"
                 aria-label="Star collection"
@@ -11029,7 +11021,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                   className={cn(
                     "size-4",
                     collection.settings?.starred === true &&
-                      "fill-[#00a997] text-[#00a997]",
+                      "fill-[#6F57D9] text-[#6F57D9]",
                   )}
                 />
               </button>
@@ -11046,7 +11038,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 }
               />
               <button
-                className="block w-full overflow-hidden bg-[#f2f2f2] text-left"
+                className="block w-full overflow-hidden bg-[#F3F0EA] text-left shadow-[0_16px_44px_rgba(21,21,21,0.05)]"
                 onClick={() =>
                   router.push(
                     `/dashboard/${section}/collections/${collection._id}`,
@@ -11081,7 +11073,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                   </button>
                 </div>
                 <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-[#777]">
-                  <span className="size-2 rounded-full bg-[#22bda7]" />
+                  <span className="size-2 rounded-full bg-[#6F57D9]" />
                   <span>{collection.imageCount ?? 0} items</span>
                   {collection.status && (
                     <>
@@ -11101,7 +11093,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
           ))}
         </div>
       ) : (
-        <div className="mt-10 divide-y border">
+        <div className="mt-10 divide-y border border-[#E8E5E1] bg-white shadow-[0_18px_50px_rgba(21,21,21,0.04)]">
           {filteredCollections.map((collection) => (
             <article
               key={collection._id}

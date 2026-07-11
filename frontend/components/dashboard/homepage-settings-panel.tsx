@@ -121,7 +121,7 @@ export function HomepageSettingsPanel() {
   };
 
   if (query.isLoading) {
-    return <div className="flex min-h-[520px] items-center justify-center"><Loader2 className="size-7 animate-spin text-[#18b89f]" /></div>;
+    return <div className="flex min-h-[520px] items-center justify-center"><Loader2 className="size-7 animate-spin text-[#6F57D9]" /></div>;
   }
 
   if (query.isError) {
@@ -129,8 +129,8 @@ export function HomepageSettingsPanel() {
   }
 
   return (
-    <div className="min-h-full bg-white pb-16">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-6">
+    <div className="min-h-full bg-transparent pb-16">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E8E5E1] pb-6">
         <div>
           <h1 className="text-2xl font-semibold md:text-[28px]">Homepage</h1>
           <p className="mt-2 text-sm text-[#667085]">Your public portfolio page shows only collections marked as Published.</p>
@@ -140,7 +140,7 @@ export function HomepageSettingsPanel() {
             type="button"
             disabled={!record?.slug}
             onClick={() => record?.slug && window.open(publicUrl, "_blank", "noopener,noreferrer")}
-            className="inline-flex h-11 items-center gap-2 border px-5 text-sm font-bold disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 border border-[#E8E5E1] bg-white px-5 text-sm font-bold disabled:opacity-50"
           >
             <ExternalLink className="size-4" />View Site
           </button>
@@ -148,7 +148,7 @@ export function HomepageSettingsPanel() {
             type="button"
             disabled={update.isPending}
             onClick={save}
-            className="inline-flex h-11 items-center gap-2 bg-[#18b89f] px-6 text-sm font-bold text-white disabled:opacity-60"
+            className="inline-flex h-11 items-center gap-2 bg-[#1C1C1C] px-6 text-sm font-bold text-white hover:bg-[#2E2E2E] disabled:opacity-60"
           >
             {update.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             Save
@@ -166,16 +166,16 @@ export function HomepageSettingsPanel() {
                 onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))}
                 className="peer sr-only"
               />
-              <span className="relative h-6 w-11 rounded-full bg-[#d8d8d8] transition peer-checked:bg-[#18b89f] after:absolute after:left-1 after:top-1 after:size-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5" />
+              <span className="relative h-6 w-11 rounded-full bg-[#d8d8d8] transition peer-checked:bg-[#6F57D9] after:absolute after:left-1 after:top-1 after:size-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5" />
               <span className="text-sm font-medium">{form.enabled ? "On" : "Off"}</span>
             </label>
             <HelpText>Your homepage is public when switched on. Draft collections never appear here.</HelpText>
           </Section>
 
           <Section title="Homepage URL">
-            <div className="flex min-h-14 items-center justify-between gap-3 bg-[#f6f6f6] px-5 py-3">
+            <div className="flex min-h-14 items-center justify-between gap-3 border border-[#E8E5E1] bg-white px-5 py-3 shadow-[0_12px_34px_rgba(21,21,21,0.03)]">
               <span className="min-w-0 truncate text-sm font-medium">{publicUrl}</span>
-              <button type="button" onClick={copyUrl} className="inline-flex shrink-0 items-center gap-2 text-sm font-bold text-[#00a997]">
+              <button type="button" onClick={copyUrl} className="inline-flex shrink-0 items-center gap-2 text-sm font-bold text-[#6F57D9]">
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />}{copied ? "Copied" : "Copy"}
               </button>
             </div>
@@ -190,7 +190,7 @@ export function HomepageSettingsPanel() {
                 placeholder={record?.hasPassword && !passwordDirty ? "Password is set" : "Add a password"}
                 className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none"
               />
-              <button type="button" onClick={generatePassword} className="inline-flex items-center gap-2 text-sm font-bold text-[#00a997]"><RefreshCw className="size-4" />Generate</button>
+              <button type="button" onClick={generatePassword} className="inline-flex items-center gap-2 text-sm font-bold text-[#6F57D9]"><RefreshCw className="size-4" />Generate</button>
               {record?.hasPassword && (
                 <button type="button" onClick={() => { setPassword(""); setPasswordDirty(true); }} className="text-xs font-bold text-red-600">Remove</button>
               )}
@@ -204,7 +204,7 @@ export function HomepageSettingsPanel() {
           </Section>
 
           <Section title="Biography">
-            <div className="border bg-white">
+            <div className="border border-[#E8E5E1] bg-white">
               <textarea
                 value={form.biography}
                 onChange={(event) => setForm((current) => ({ ...current, biography: event.target.value.slice(0, 500) }))}
@@ -244,7 +244,7 @@ export function HomepageSettingsPanel() {
                 ["address", "Business Address"],
               ] as const).map(([key, label]) => (
                 <label key={key} className="flex cursor-pointer items-center gap-3 text-sm font-medium">
-                  <input type="checkbox" checked={form.show[key]} onChange={() => toggleVisibility(key)} className="size-4 accent-[#18b89f]" />
+                  <input type="checkbox" checked={form.show[key]} onChange={() => toggleVisibility(key)} className="size-4 accent-[#6F57D9]" />
                   {label}
                 </label>
               ))}
@@ -256,7 +256,7 @@ export function HomepageSettingsPanel() {
             <select
               value={form.sortOrder}
               onChange={(event) => setForm((current) => ({ ...current, sortOrder: event.target.value as typeof current.sortOrder }))}
-              className="h-14 w-full border bg-white px-5 text-sm font-bold outline-none"
+              className="h-14 w-full border border-[#E8E5E1] bg-white px-5 text-sm font-bold outline-none"
             >
               <option value="newest">Date created: New to Old</option>
               <option value="oldest">Date created: Old to New</option>
@@ -265,8 +265,8 @@ export function HomepageSettingsPanel() {
           </Section>
         </div>
 
-        <div className="sticky top-8 hidden min-h-[610px] items-center justify-center bg-[#f5f5f5] p-10 xl:flex">
-          <div className="w-full max-w-[520px] bg-white px-8 py-10 shadow-[0_28px_70px_rgba(0,0,0,0.12)]">
+        <div className="sticky top-8 hidden min-h-[610px] items-center justify-center border border-[#E8E5E1] bg-[#F3F0EA] p-10 shadow-[0_18px_60px_rgba(21,21,21,0.04)] xl:flex">
+          <div className="w-full max-w-[520px] bg-white px-8 py-10 shadow-[0_28px_70px_rgba(21,21,21,0.10)]">
             <div className="flex justify-center">
               {form.logoUrl ? <img src={form.logoUrl} alt="" className="h-12 max-w-28 object-contain" /> : <div className="flex size-12 items-center justify-center rounded-full bg-[#111] text-xs font-bold text-white">LOGO</div>}
             </div>
@@ -314,7 +314,7 @@ function Field({ label, value, onChange, placeholder, icon }: { label: string; v
   return (
     <label className="grid gap-2">
       <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-[#667085]">{icon}{label}</span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="h-12 border bg-white px-4 text-sm outline-none focus:border-[#18b89f]" />
+      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="h-12 border border-[#E8E5E1] bg-white px-4 text-sm outline-none focus:border-[#6F57D9]" />
     </label>
   );
 }

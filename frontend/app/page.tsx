@@ -5,7 +5,7 @@ import { HomeHero } from "@/components/home/home-hero";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getUser } from "@/actions/auth";
 import { UserType } from "@/@types/user";
-import { type HomeLanguage } from "@/lib/home-cms";
+import { type FooterLink, type HomeLanguage } from "@/lib/home-cms";
 import { getHomeCms } from "@/lib/home-cms-server";
 import { cookies } from "next/headers";
 
@@ -31,16 +31,42 @@ function footerHref(label: string, configured?: string) {
   return routes[label] || "/";
 }
 
-function relevantFooterColumns(lang: HomeLanguage) {
-  return lang === "gr" ? [
-    { title: "Προϊόντα", links: [{ label: "Client Gallery", url: "/login?next=/dashboard/client-gallery" }, { label: "Store Gallery", url: "/login?next=/dashboard/store-gallery" }, { label: "Mobile Gallery App", url: "/login?next=/dashboard/mobile-gallery" }, { label: "Τιμές", url: "/pricing" }] },
-    { title: "Υποστήριξη", links: [{ label: "Βοήθεια & Υποστήριξη", url: "mailto:support@gallerista.app" }] },
-    { title: "Νομικά", links: [{ label: "Όροι Παροχής Υπηρεσιών", url: "/terms-of-service?lang=gr" }, { label: "Πολιτική Απορρήτου", url: "/privacy-policy?lang=gr" }] },
-  ] : [
-    { title: "Products", links: [{ label: "Client Gallery", url: "/login?next=/dashboard/client-gallery" }, { label: "Store Gallery", url: "/login?next=/dashboard/store-gallery" }, { label: "Mobile Gallery App", url: "/login?next=/dashboard/mobile-gallery" }, { label: "Pricing", url: "/pricing" }] },
-    { title: "Support", links: [{ label: "Help & Support", url: "mailto:support@gallerista.app" }] },
-    { title: "Legal", links: [{ label: "Terms of Service", url: "/terms-of-service" }, { label: "Privacy Policy", url: "/privacy-policy" }] },
-  ];
+const legacyFooterColumns = [
+  { title: "Products", links: ["Client Gallery", "Website", "Studio Manager", "Store", "Mobile Gallery App", "Photo Editor", "Examples", "Pricing"] },
+  { title: "Resources", links: ["Help & Support", "Nikoset Blog", "Apps & Plugins", "Service Status"] },
+  { title: "Company", links: ["About", "Careers", "Terms Of Service", "Privacy Policy"] },
+];
+
+const minimalFooterColumns = [
+  {
+    title: "Products",
+    links: [
+      { label: "Client Gallery", url: "/login?next=/dashboard/client-gallery" },
+      { label: "Store Gallery", url: "/login?next=/dashboard/store-gallery" },
+      { label: "Mobile Gallery App", url: "/login?next=/dashboard/mobile-gallery" },
+      { label: "Pricing", url: "/pricing" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Terms of Service", url: "/terms-of-service" },
+      { label: "Privacy Policy", url: "/privacy-policy" },
+    ],
+  },
+];
+
+function footerLabel(link: FooterLink) {
+  return typeof link === "string" ? link : link.label;
+}
+
+function isLegacyFooterColumn(column: { title: string; links: FooterLink[] }) {
+  return legacyFooterColumns.some(
+    (legacy) =>
+      legacy.title === column.title &&
+      legacy.links.length === column.links.length &&
+      legacy.links.every((label, index) => label === footerLabel(column.links[index])),
+  );
 }
 
 async function getDashboardHref() {
@@ -57,26 +83,30 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
   const t = cms.content[lang] ?? cms.content.en;
   const defaultGallery = t.gallery.tabs[0]?.value ?? "share";
   const defaultWorkflow = t.workflow.tabs[0]?.value ?? "wedding";
+  const footerColumns = t.footer.columns
+    .filter((column) => column.title.trim() || column.links.length)
+    .filter((column) => !isLegacyFooterColumn(column));
+  const visibleFooterColumns = footerColumns.length ? footerColumns : minimalFooterColumns;
 
   return (
-    <main className="min-h-screen bg-background text-foreground [&_a]:whitespace-pre-line [&_button]:whitespace-pre-line [&_h1]:whitespace-pre-line [&_h2]:whitespace-pre-line [&_h3]:whitespace-pre-line [&_p]:whitespace-pre-line [&_span]:whitespace-pre-line">
+    <main className="gallerista-editorial min-h-screen bg-[#F8F7F4] text-[#151515] [&_a]:whitespace-pre-line [&_button]:whitespace-pre-line [&_h1]:whitespace-pre-line [&_h2]:whitespace-pre-line [&_h3]:whitespace-pre-line [&_p]:whitespace-pre-line [&_span]:whitespace-pre-line">
       <HomeHero initialCms={cms} requestedLanguage={lang} dashboardHref={dashboardHref} />
 
-      <section className="border-t bg-white px-5 py-14 text-center md:px-6 md:py-20">
+      <section className="border-t border-[#E8E5E1] bg-[#F8F7F4] px-5 py-14 text-center md:px-6 md:py-20">
         <div className="mx-auto max-w-[1240px]">
           <h2 className="text-3xl font-semibold leading-[1.2] tracking-normal text-[#202020] md:text-[40px]">{lines(t.gallery.title)}</h2>
           <p className="mx-auto mt-5 max-w-[730px] text-base leading-7 text-[#666] md:mt-7 md:text-lg">{t.gallery.subtitle}</p>
           <Tabs defaultValue={defaultGallery} className="mt-12 w-full items-center gap-0">
             <TabsList className="flex h-auto w-full flex-wrap justify-center gap-2 bg-transparent p-0">
               {t.gallery.tabs.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value} className="h-11 min-w-[144px] rounded-full bg-[#fafafa] px-6 text-sm font-normal text-[#344054] data-active:bg-[#22bda7] data-active:text-white">
+                <TabsTrigger key={tab.value} value={tab.value} className="h-11 min-w-[144px] rounded-full bg-white px-6 text-sm font-normal text-[#344054] data-active:bg-[#1C1C1C] data-active:text-white">
                   {tab.label}
                 </TabsTrigger>
               ))}
             </TabsList>
             {t.gallery.tabs.map((tab) => (
               <TabsContent key={tab.value} value={tab.value} className="w-full">
-                <div className="mx-auto mt-8 grid max-w-[980px] gap-4 bg-[#eef4f3] p-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.09)] md:mt-12 md:grid-cols-[1fr_1.2fr] md:gap-6 md:p-8">
+                <div className="mx-auto mt-8 grid max-w-[980px] gap-4 border border-[#E8E5E1] bg-white p-4 text-left shadow-[0_18px_45px_rgba(21,21,21,0.08)] md:mt-12 md:grid-cols-[1fr_1.2fr] md:gap-6 md:p-8">
                   <img src={tab.image} alt={tab.label} className="h-72 w-full object-cover sm:h-[420px]" />
                   <div className="bg-white p-6 shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
                     <h3 className="text-base font-semibold text-[#222]">{tab.title ?? tab.label}</h3>
@@ -101,10 +131,10 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         </div>
       </section>
 
-      <section className="border-t bg-white px-5 py-14 md:px-6 md:py-24">
+      <section className="border-t border-[#E8E5E1] bg-[#F3F0EA] px-5 py-14 md:px-6 md:py-24">
         <div className="mx-auto max-w-[1240px]">
           <div className="mx-auto max-w-[780px] text-center">
-            <p className="text-sm font-bold tracking-[0.18em] text-[#008f7f]">{t.workflow.eyebrow}</p>
+            <p className="text-sm font-bold tracking-[0.18em] text-[#6F57D9]">{t.workflow.eyebrow}</p>
             <h2 className="mt-6 text-3xl font-semibold leading-[1.18] tracking-normal text-[#202020] md:mt-8 md:text-[40px]">{t.workflow.title}</h2>
             <p className="mt-5 text-base leading-7 text-[#666] md:mt-6 md:text-lg">{t.workflow.subtitle}</p>
           </div>
@@ -136,10 +166,10 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         </div>
       </section>
 
-      <section className="bg-[#f7f7f7] px-5 py-14 md:px-6 md:py-24">
+      <section className="bg-[#F8F7F4] px-5 py-14 md:px-6 md:py-24">
         <div className="mx-auto max-w-[1240px]">
           <div className="mx-auto max-w-[780px] text-center">
-            <p className="text-sm font-bold tracking-[0.18em] text-[#008f7f]">{t.testimonials.eyebrow}</p>
+            <p className="text-sm font-bold tracking-[0.18em] text-[#C89F65]">{t.testimonials.eyebrow}</p>
             <h2 className="mt-6 text-3xl font-semibold leading-[1.18] tracking-normal text-[#202020] md:mt-8 md:text-[40px]">{t.testimonials.title}</h2>
             <p className="mt-5 text-base leading-7 text-[#666] md:mt-6 md:text-lg">{t.testimonials.subtitle}</p>
           </div>
@@ -159,10 +189,10 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
         </div>
       </section>
 
-      <section className="overflow-hidden bg-white px-5 py-14 text-center md:px-6 md:py-20">
+      <section className="overflow-hidden border-t border-[#E8E5E1] bg-[#F3F0EA] px-5 py-14 text-center md:px-6 md:py-20">
         <h2 className="text-3xl font-semibold leading-[1.16] tracking-normal text-[#202020] md:text-[40px]">{t.cta.title}</h2>
         <p className="mt-7 text-lg text-[#666]">{t.cta.subtitle}</p>
-        <Button asChild className="mt-9 h-11 min-w-40 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"><a href="/register">{t.cta.button}</a></Button>
+        <Button asChild className="mt-9 h-11 min-w-40 rounded-none bg-[#1C1C1C] text-sm font-bold text-white hover:bg-[#2E2E2E]"><a href="/register">{t.cta.button}</a></Button>
         <div className="mx-auto mt-14 grid max-w-[1200px] gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {t.cta.images.filter(Boolean).map((item, index) => <img key={`${item}-${index}`} src={item} alt={`${t.cta.title} ${index + 1}`} className="h-72 w-full object-cover shadow-[0_20px_45px_rgba(0,0,0,0.16)]" />)}
         </div>
@@ -179,7 +209,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
             <p className="mt-auto pt-16 text-xs font-semibold text-white/80">{t.footer.copyright}</p>
           </div>
           <div className="grid gap-10 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
-            {t.footer.columns.map((column, columnIndex) => (
+            {visibleFooterColumns.map((column, columnIndex) => (
               <div key={`${column.title}-${columnIndex}`}>
                 <h3 className="text-sm font-bold text-white">{column.title}</h3>
                 <ul className="mt-5 flex flex-col gap-5 text-sm text-white/80">
