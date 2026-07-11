@@ -6,6 +6,7 @@ export async function getHomeCms() {
     const response = await fetch(`${apiBaseUrl()}/home-cms`, {
       cache: "no-store",
       next: { revalidate: 0 },
+      headers: { "Cache-Control": "no-cache, no-store" },
     });
     if (!response.ok) throw new Error(`Home CMS request failed (${response.status})`);
     const payload = await response.json();

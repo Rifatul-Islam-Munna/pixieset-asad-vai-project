@@ -19,6 +19,7 @@ export class HomeCmsController {
   }
 
   @Patch()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0')
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserType.ADMIN)
   async updateHomeCms(@Body() dto: UpdateHomeCmsDto) {

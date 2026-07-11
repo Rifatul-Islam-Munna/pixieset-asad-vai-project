@@ -44,23 +44,16 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   async headers() {
+    const noCacheHeaders = [
+      { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0" },
+      { key: "CDN-Cache-Control", value: "no-store" },
+      { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+    ];
     return [
-      {
-        source: "/",
-        headers: [
-          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0" },
-          { key: "CDN-Cache-Control", value: "no-store" },
-          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
-        ],
-      },
-      {
-        source: "/(login|register)",
-        headers: [
-          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0" },
-          { key: "CDN-Cache-Control", value: "no-store" },
-          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
-        ],
-      },
+      { source: "/", headers: noCacheHeaders },
+      { source: "/(login|register)", headers: noCacheHeaders },
+      { source: "/home/:path*", headers: noCacheHeaders },
+      { source: "/collection/:path*", headers: noCacheHeaders },
     ];
   },
   
