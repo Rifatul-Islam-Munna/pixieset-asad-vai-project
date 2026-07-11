@@ -226,10 +226,10 @@ export function HomepageSettingsPanel() {
 
           <Section title="Social Links">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field icon={<SocialBadge>IG</SocialBadge>} label="Instagram" value={form.socialLinks.instagram || ""} onChange={(instagram) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, instagram } }))} />
-              <Field icon={<SocialBadge>FB</SocialBadge>} label="Facebook" value={form.socialLinks.facebook || ""} onChange={(facebook) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, facebook } }))} />
-              <Field icon={<SocialBadge>YT</SocialBadge>} label="YouTube" value={form.socialLinks.youtube || ""} onChange={(youtube) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, youtube } }))} />
-              <Field icon={<SocialBadge>IN</SocialBadge>} label="LinkedIn" value={form.socialLinks.linkedin || ""} onChange={(linkedin) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, linkedin } }))} />
+              <Field icon={<SocialIcon network="instagram" />} label="Instagram" value={form.socialLinks.instagram || ""} onChange={(instagram) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, instagram } }))} />
+              <Field icon={<SocialIcon network="facebook" />} label="Facebook" value={form.socialLinks.facebook || ""} onChange={(facebook) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, facebook } }))} />
+              <Field icon={<SocialIcon network="youtube" />} label="YouTube" value={form.socialLinks.youtube || ""} onChange={(youtube) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, youtube } }))} />
+              <Field icon={<SocialIcon network="linkedin" />} label="LinkedIn" value={form.socialLinks.linkedin || ""} onChange={(linkedin) => setForm((current) => ({ ...current, socialLinks: { ...current.socialLinks, linkedin } }))} />
             </div>
           </Section>
 
@@ -296,12 +296,14 @@ export function HomepageSettingsPanel() {
   );
 }
 
-function SocialBadge({ children }: { children: ReactNode }) {
-  return <span className="text-[9px] font-black tracking-wide">{children}</span>;
-}
-
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return <section className="mb-12"><p className="mb-4 text-sm font-bold">{title}</p><div className="grid gap-4">{children}</div></section>;
+}
+
+function SocialIcon({ network }: { network: "instagram" | "facebook" | "youtube" | "linkedin" }) {
+  const labels = { instagram: "IG", facebook: "f", youtube: "▶", linkedin: "in" };
+  const colors = { instagram: "bg-[#E4405F]", facebook: "bg-[#1877F2]", youtube: "bg-[#FF0000]", linkedin: "bg-[#0A66C2]" };
+  return <span aria-hidden="true" className={`inline-flex size-5 items-center justify-center rounded-[4px] text-[9px] font-black normal-case tracking-[-0.03em] text-white ${colors[network]}`}>{labels[network]}</span>;
 }
 
 function HelpText({ children }: { children: ReactNode }) {

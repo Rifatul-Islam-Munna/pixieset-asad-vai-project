@@ -34,6 +34,14 @@ const allowedMimeTypes = [
   'video/ogg',
   'video/quicktime',
   'video/x-matroska',
+  'font/woff',
+  'font/woff2',
+  'font/ttf',
+  'font/otf',
+  'application/font-woff',
+  'application/x-font-ttf',
+  'application/x-font-opentype',
+  'application/octet-stream',
 ];
 
 const storage = diskStorage({
@@ -52,7 +60,7 @@ const uploadOptions = {
   limits: { fileSize: 1024 * 1024 * 20 },
   fileFilter: (_req: any, file: Express.Multer.File, cb: any) => {
     if (!allowedMimeTypes.includes(file.mimetype)) {
-      return cb(new BadRequestException('Only PDF, image, and video files are allowed'), false);
+      return cb(new BadRequestException('Only PDF, image, video, and font files are allowed'), false);
     }
     cb(null, true);
   },

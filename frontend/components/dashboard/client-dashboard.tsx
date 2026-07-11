@@ -3638,23 +3638,32 @@ function PresetDesignPanel({
   activePanel: "cover" | "typography" | "color" | "grid";
   onChange: (value: Partial<typeof design>) => void;
 }) {
+  type UploadedFont = { name: string; url: string; fileName: string };
   const [adminCoverTemplates, setAdminCoverTemplates] = useState<CustomCoverTemplate[]>([]);
+  const [fontUploading, setFontUploading] = useState(false);
+  const fontLibrary = useDashboardSettings<UploadedFont>("branding");
+  const uploadedFonts = (fontLibrary.query.data?.data ?? []).filter((item) => item.localId.startsWith("font:"));
   const customCoverAccess = usePlanFeatureAccess("customCover");
-  const readCustomFont = (file?: File) => {
-    if (!file) return;
-    if (!/\.(woff2?|ttf|otf)$/i.test(file.name)) {
-      toast.error("Upload a WOFF, WOFF2, TTF, or OTF font file");
-      return;
+  const uploadFonts = async (files: FileList | null) => {
+    const valid = Array.from(files ?? []).filter((file) => /\.(woff2?|ttf|otf)$/i.test(file.name));
+    if (!valid.length) return toast.error("Choose WOFF, WOFF2, TTF, or OTF fonts");
+    setFontUploading(true);
+    try {
+      for (const file of valid) {
+        const url = await uploadDashboardAsset(file);
+        const name = file.name.replace(/\.[^.]+$/, "");
+        await fontLibrary.saveSetting.mutateAsync({
+          localId: `font:${crypto.randomUUID()}`,
+          name,
+          data: { name, url, fileName: file.name },
+        });
+      }
+      toast.success(`${valid.length} font${valid.length === 1 ? "" : "s"} uploaded`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Font upload failed");
+    } finally {
+      setFontUploading(false);
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      onChange({
-        customFontName: file.name.replace(/\.[^.]+$/, ""),
-        customFontDataUrl: String(reader.result ?? ""),
-        typography: "Custom",
-      } as Partial<typeof design>);
-    };
-    reader.readAsDataURL(file);
   };
 
   useEffect(() => {
@@ -3760,16 +3769,16 @@ function PresetDesignPanel({
           <PlanFeatureLock feature="advancedDesign" label="Advanced design">
             <h2 className="text-2xl font-medium">Typography</h2>
             <div className="mt-8 grid grid-cols-2 gap-3">
-              {design.customFontName && design.customFontDataUrl && (
-                <button className="text-center" onClick={() => onChange({ typography: "Custom" } as Partial<typeof design>)} type="button">
-                  <span className={cn("block border p-8 text-left", design.typography === "Custom" && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
-                    <style>{`@font-face{font-family:"${design.customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
-                    <span className="block text-xl tracking-widest" style={{ fontFamily: `"${design.customFontName.replace(/"/g, "")}", serif` }}>{design.customFontName}</span>
-                    <span className="mt-3 block text-sm text-[#555]">Uploaded font</span>
+              {uploadedFonts.map((font) => (
+                <button key={font.localId} className="text-center" onClick={() => onChange({ typography: "Custom", customFontName: font.data.name, customFontDataUrl: font.data.url } as Partial<typeof design>)} type="button">
+                  <span className={cn("block border p-8 text-left", design.customFontDataUrl === font.data.url && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
+                    <style>{`@font-face{font-family:"${font.data.name.replace(/"/g, "")}";src:url("${font.data.url}");font-display:swap;}`}</style>
+                    <span className="block truncate text-xl" style={{ fontFamily: `"${font.data.name.replace(/"/g, "")}", serif` }}>Aa {font.data.name}</span>
+                    <span className="mt-3 block text-xs text-[#555]">Saved font</span>
                   </span>
-                  <span className="mt-3 block text-sm">Custom</span>
+                  <span className="mt-3 block truncate text-sm">{font.data.name}</span>
                 </button>
-              )}
+              ))}
               {typographyOptions.map(([name, sample, desc]) => (
                 <button key={name} className="text-center" onClick={() => onChange({ typography: name, customFontName: "", customFontDataUrl: "" } as Partial<typeof design>)} type="button">
                   <span className={cn("block border p-8 text-left", design.typography === name && "border-[#22bda7] ring-1 ring-[#22bda7]")}>
@@ -3781,16 +3790,18 @@ function PresetDesignPanel({
               ))}
             </div>
             <div className="mt-8 border bg-[#fafafa] p-5">
-              <p className="font-bold">Custom Font</p>
-              <p className="mt-2 text-sm text-[#666]">{design.customFontName || "Upload WOFF, WOFF2, TTF, or OTF font."}</p>
+              <p className="font-bold">Your Font Library</p>
+              <p className="mt-2 text-sm text-[#666]">Upload many once. Choose any saved font later.</p>
               <label className="mt-4 inline-flex h-10 cursor-pointer items-center gap-2 bg-[#111] px-4 text-sm font-bold text-white">
-                <Upload className="size-4" />
-                Upload Font
+                {fontUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                {fontUploading ? "Uploading..." : "Upload Fonts"}
                 <input
                   type="file"
+                  multiple
                   accept=".woff,.woff2,.ttf,.otf,font/*"
                   className="hidden"
-                  onChange={(event) => readCustomFont(event.target.files?.[0])}
+                  disabled={fontUploading}
+                  onChange={(event) => { void uploadFonts(event.target.files); event.currentTarget.value = ""; }}
                 />
               </label>
               {design.customFontDataUrl && (
