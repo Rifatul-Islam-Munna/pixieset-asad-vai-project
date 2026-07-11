@@ -342,7 +342,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
 
   return ({
   activeNav: "Collections",
-  collapsed: false,
+  collapsed: true,
   wizardOpen: false,
   wizardStep: 1,
   collectionName: "",

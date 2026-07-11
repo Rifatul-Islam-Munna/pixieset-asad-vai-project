@@ -521,14 +521,14 @@ export function ClientDashboard({
       {dashboardChromeOpen && !storeTopNavOpen && (
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 hidden border-r border-[#e6e6e6] bg-white transition-all md:flex md:flex-col",
-            collapsed ? "w-[76px]" : "w-[292px]",
+            "fixed inset-y-0 left-0 z-40 hidden border-r border-[#e8e8e8] bg-white shadow-[4px_0_20px_rgba(0,0,0,0.025)] transition-[width] duration-200 md:flex md:flex-col",
+            collapsed ? "w-[72px]" : "w-[248px]",
           )}
         >
-          <div className="flex h-[62px] items-center justify-between border-b border-[#f1f1f1] px-4">
+          <div className={cn("flex h-[72px] items-center border-b border-[#f1f1f1]", collapsed ? "justify-center px-2" : "justify-between px-4")}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 text-sm font-bold outline-none">
+                <button className={cn("flex h-11 items-center rounded-md text-sm font-bold outline-none hover:bg-[#f5f7f7]", collapsed ? "w-11 justify-center" : "gap-3 px-2")} title={collapsed ? active.title : undefined}>
                   <span
                     className={cn("size-5 rounded-full", activeSwitcher?.mark)}
                   />
@@ -600,8 +600,8 @@ export function ClientDashboard({
             </div>
           </div>
 
-          <nav className="flex flex-1 flex-col px-4 py-7">
-            <div className="flex flex-col gap-8">
+          <nav className={cn("flex min-h-0 flex-1 flex-col py-5", collapsed ? "px-2" : "px-3")}>
+            <div className="flex flex-col gap-2">
               {sidebarItems[section].map((item) => (
                 <Link
                   key={item.label}
@@ -611,9 +611,11 @@ export function ClientDashboard({
                       : `/dashboard/${section}/${item.page}`
                   }
                   className={cn(
-                    "flex items-center gap-4 text-left text-base text-[#222]",
-                    activeNav === item.label && "font-semibold text-[#00a997]",
+                    "group flex h-12 items-center rounded-md text-left text-sm text-[#333] transition-colors hover:bg-[#f5f7f7]",
+                    collapsed ? "justify-center px-0" : "gap-4 px-3",
+                    activeNav === item.label && "bg-[#eaf8f5] font-semibold text-[#009b8c]",
                   )}
+                  title={collapsed ? item.label : undefined}
                 >
                   <item.icon
                     className={cn(
@@ -627,14 +629,16 @@ export function ClientDashboard({
             </div>
 
             {section === "client-gallery" && (
-              <div className="mt-11 flex flex-col gap-8">
+              <div className="mt-5 flex flex-col gap-2 border-t border-[#eeeeee] pt-5">
                 {!collapsed && <p className="text-base text-[#777]">Tools</p>}
                 <Link
                   href={`/dashboard/${section}/marketing/email-campaigns`}
                   className={cn(
-                    "flex items-center gap-4 text-left text-base text-[#222]",
-                    page === "marketing" && "font-semibold text-[#00a997]",
+                    "flex h-12 items-center rounded-md text-left text-sm text-[#333] transition-colors hover:bg-[#f5f7f7]",
+                    collapsed ? "justify-center px-0" : "gap-4 px-3",
+                    page === "marketing" && "bg-[#eaf8f5] font-semibold text-[#009b8c]",
                   )}
+                  title={collapsed ? "Marketing" : undefined}
                 >
                   <Megaphone
                     className={cn(
@@ -645,7 +649,7 @@ export function ClientDashboard({
                   {!collapsed && "Marketing"}
                 </Link>
                 {!collapsed && (
-                  <div className="ml-7 flex flex-col border-l border-[#e8e8e8] pl-4">
+                  <div className="ml-5 flex flex-col border-l border-[#e8e8e8] pl-3">
                     {[
                       {
                         label: "Email Campaigns",
@@ -659,7 +663,7 @@ export function ClientDashboard({
                         key={item.slug}
                         href={`/dashboard/${section}/marketing/${item.slug}`}
                         className={cn(
-                          "flex h-12 items-center gap-4 px-3 text-base text-[#222]",
+                          "flex h-11 items-center gap-3 rounded-md px-3 text-sm text-[#333] hover:bg-[#f7f7f7]",
                           marketingPage === item.slug &&
                             "bg-[#f3f3f3] font-medium",
                         )}
@@ -673,19 +677,19 @@ export function ClientDashboard({
               </div>
             )}
 
-            <div className="mt-auto grid gap-4 pt-8">
+            <div className="mt-auto grid gap-2 border-t border-[#eeeeee] pt-4">
               {section === "client-gallery" && (
                 <Link
                   href={`/dashboard/${section}/storage`}
                   className={cn(
-                    "flex items-center gap-3 bg-[#f3faf6] text-left",
+                    "flex items-center rounded-md text-left transition-colors hover:bg-[#eef8f6]",
                     collapsed
-                      ? "mx-auto size-12 justify-center p-0"
-                      : "w-full p-4",
+                      ? "mx-auto size-11 justify-center p-0"
+                      : "w-full gap-3 bg-[#f3faf6] p-3",
                   )}
                   title="Storage"
                 >
-                  <div className="flex size-10 items-center justify-center rounded-full bg-[#dff6ef] text-[#19bba7]">
+                  <div className="flex size-9 items-center justify-center rounded-md bg-[#dff6ef] text-[#19bba7]">
                     <Database className="size-5" />
                   </div>
                   {!collapsed && (
@@ -720,11 +724,32 @@ export function ClientDashboard({
                   )}
                 </Link>
               )}
+              {section === "client-gallery" && collapsed && (
+                <div className="flex h-11 items-center justify-center" title="Notifications">
+                  <DashboardNotifications />
+                </div>
+              )}
+              {collapsed && (
+                <Link
+                  href="/dashboard/client-gallery/account"
+                  className="flex h-11 items-center justify-center"
+                  aria-label="Account profile"
+                  title="Account"
+                >
+                  <Avatar className="size-8">
+                    <AvatarImage src={billingUser?.avatar || ""} />
+                    <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">
+                      {billingUser?.name?.slice(0, 1).toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+              )}
               <button
                 className={cn(
-                  "flex items-center gap-3 text-sm font-semibold text-[#555] hover:text-red-600 disabled:opacity-50",
-                  collapsed && "justify-center",
+                  "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold text-[#555] hover:bg-red-50 hover:text-red-600 disabled:opacity-50",
+                  collapsed && "justify-center px-0",
                 )}
+                title={collapsed ? "Log out" : undefined}
                 onClick={logout}
                 disabled={logoutPending}
               >
@@ -733,15 +758,17 @@ export function ClientDashboard({
               </button>
               <button
                 className={cn(
-                  "flex items-center text-[#333]",
-                  collapsed && "justify-center",
+                  "flex h-11 items-center rounded-md px-3 text-[#555] hover:bg-[#f5f7f7]",
+                  collapsed ? "justify-center px-0" : "gap-3",
                 )}
+                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 onClick={toggleCollapsed}
                 aria-label="Toggle sidebar"
               >
                 <ChevronsLeft
-                  className={cn("size-6", collapsed && "rotate-180")}
+                  className={cn("size-5 transition-transform", collapsed && "rotate-180")}
                 />
+                {!collapsed && <span className="text-sm font-medium">Collapse</span>}
               </button>
             </div>
           </nav>
@@ -753,8 +780,8 @@ export function ClientDashboard({
           "min-h-screen transition-all",
           dashboardChromeOpen && !storeTopNavOpen
             ? collapsed
-              ? "md:pl-[76px]"
-              : "md:pl-[292px]"
+              ? "md:pl-[72px]"
+              : "md:pl-[248px]"
             : "",
         )}
       >
@@ -2088,6 +2115,44 @@ const defaultMarketingSettings: MarketingSettings = {
   },
 };
 
+function optimiseMarketingPopupImage(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Choose a JPG, PNG, or WebP image"));
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      reject(new Error("Image must be smaller than 10 MB"));
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    const image = new window.Image();
+    image.onload = () => {
+      try {
+        const maxSide = 1400;
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Image could not be processed");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+        resolve(canvas.toDataURL(outputType, 0.84));
+      } catch (error) {
+        reject(error);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Image could not be opened"));
+    };
+    image.src = objectUrl;
+  });
+}
+
 function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
   const {
     campaignSearch,
@@ -2175,6 +2240,7 @@ function MarketingSettingsPanel({
     query.data?.data?.find((item) => item.localId === "gallery-marketing")?.data ??
     defaultMarketingSettings;
   const [form, setForm] = useState<MarketingSettings>(saved);
+  const [popupImageUploading, setPopupImageUploading] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -2206,6 +2272,19 @@ function MarketingSettingsPanel({
       ...current,
       popup: { ...current.popup, [key]: value },
     }));
+  const uploadPopupImage = async (file?: File) => {
+    if (!file) return;
+    setPopupImageUploading(true);
+    try {
+      const imageUrl = await optimiseMarketingPopupImage(file);
+      updatePopup("imageUrl", imageUrl);
+      toast.success("Pop-up image ready. Save changes to publish it.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Image upload failed");
+    } finally {
+      setPopupImageUploading(false);
+    }
+  };
   const save = () => {
     saveSetting.mutate(
       { localId: "gallery-marketing", name: "Gallery Marketing", data: form },
@@ -2215,10 +2294,8 @@ function MarketingSettingsPanel({
       },
     );
   };
-  const activeSources = Object.values(form.optIn).filter(Boolean).length;
-
   return (
-    <div className="mx-auto w-full max-w-[1240px]">
+    <div className="mx-auto w-full max-w-[1180px]">
       <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7">
         <div>
           <PageHeader title="Marketing Settings" />
@@ -2241,10 +2318,10 @@ function MarketingSettingsPanel({
         </Button>
       </div>
 
-      <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_440px]">
-        <div className="space-y-7">
-          <section className="overflow-hidden border bg-white">
-            <div className="border-b bg-[#f4fbf9] px-6 py-5">
+      <div className="mt-8 grid gap-10 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <div className="divide-y divide-[#e9e9e9] border-y border-[#e9e9e9] bg-white">
+          <section className="px-1 py-8 sm:px-6">
+            <div>
               <div className="flex items-start justify-between gap-5">
                 <div className="flex gap-4">
                   <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-[#009b8c] shadow-sm">
@@ -2266,14 +2343,14 @@ function MarketingSettingsPanel({
                 />
               </div>
             </div>
-            <div className="px-6 py-5 text-sm leading-6 text-[#666]">
+            <div className="mt-5 border-l-2 border-[#22bda7] pl-4 text-sm leading-6 text-[#666]">
               This appears only when both <strong>Email Registration</strong> and
               <strong> Marketing Subscription</strong> are enabled in that
               collection’s Privacy settings.
             </div>
           </section>
 
-          <section className="border bg-white p-6">
+          <section className="px-1 py-8 sm:px-6">
             <div className="flex flex-wrap items-start justify-between gap-5">
               <div className="flex gap-4">
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#f4eeee] text-[#444]">
@@ -2294,7 +2371,7 @@ function MarketingSettingsPanel({
               />
             </div>
 
-            <div className="mt-7 grid gap-5 border-t pt-7 sm:grid-cols-2">
+            <div className="mt-8 grid gap-6 border-t border-[#ededed] pt-8 sm:grid-cols-2">
               <Field className="sm:col-span-2">
                 <FieldLabel className="font-bold">Headline</FieldLabel>
                 <Input
@@ -2323,58 +2400,42 @@ function MarketingSettingsPanel({
                   className="h-12 rounded-none bg-white"
                 />
               </Field>
-              <Field>
-                <FieldLabel className="font-bold">Image URL</FieldLabel>
-                <Input
-                  value={form.popup.imageUrl}
-                  onChange={(event) => updatePopup("imageUrl", event.target.value)}
-                  placeholder="https://..."
-                  className="h-12 rounded-none bg-white"
-                />
+              <Field className="sm:col-span-2">
+                <FieldLabel className="font-bold">Pop-up image</FieldLabel>
+                <div className="mt-2 grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
+                  <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center border border-dashed border-[#cfcfcf] bg-[#fafafa] px-5 py-5 text-center transition hover:border-[#22bda7] hover:bg-[#f4fbf9]">
+                    {popupImageUploading ? <Loader2 className="size-6 animate-spin text-[#22bda7]" /> : <Upload className="size-6 text-[#777]" />}
+                    <span className="mt-3 text-sm font-bold text-[#222]">{popupImageUploading ? "Processing image..." : "Upload image"}</span>
+                    <span className="mt-1 text-xs text-[#888]">JPG, PNG, or WebP up to 10 MB</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={popupImageUploading}
+                      className="hidden"
+                      onChange={(event) => {
+                        void uploadPopupImage(event.target.files?.[0]);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  <div className="relative min-h-28 overflow-hidden border bg-[#f4f4f4]">
+                    {form.popup.imageUrl ? (
+                      <>
+                        <img src={form.popup.imageUrl} alt="Subscription pop-up preview" className="h-full min-h-28 w-full object-cover" />
+                        <button type="button" onClick={() => updatePopup("imageUrl", "")} className="absolute right-2 top-2 flex size-8 items-center justify-center bg-white/95 text-[#444] shadow hover:text-red-600" aria-label="Remove pop-up image">
+                          <Trash2 className="size-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex h-full min-h-28 items-center justify-center px-4 text-center text-xs text-[#999]">Image preview</div>
+                    )}
+                  </div>
+                </div>
               </Field>
             </div>
           </section>
 
-          <section className="border bg-white p-6">
-            <div className="flex items-center justify-between gap-5">
-              <div>
-                <h2 className="text-lg font-bold">Other subscription points</h2>
-                <p className="mt-2 text-sm leading-6 text-[#666]">
-                  Choose which visitor actions may include an optional marketing
-                  subscription checkbox.
-                </p>
-              </div>
-              <span className="rounded-full bg-[#eef8f6] px-3 py-1 text-xs font-bold text-[#008f80]">
-                {activeSources} active
-              </span>
-            </div>
-            <div className="mt-6 divide-y border">
-              {([
-                ["storeCheckout", ShoppingCart, "Store checkout", "Let customers subscribe during checkout."],
-                ["download", Download, "Photo and video download", "Offer subscription when an email is collected for downloads."],
-                ["favoriteSignIn", Heart, "Favorite sign-in", "Offer subscription when visitors identify themselves for favorites."],
-              ] as const).map(([key, Icon, label, text]) => (
-                <label
-                  key={key}
-                  className="flex cursor-pointer items-center gap-4 px-4 py-4 hover:bg-[#fafafa]"
-                >
-                  <span className="flex size-10 shrink-0 items-center justify-center bg-[#f4f4f4] text-[#555]">
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold">{label}</span>
-                    <span className="mt-1 block text-xs leading-5 text-[#777]">
-                      {text}
-                    </span>
-                  </span>
-                  <Switch
-                    checked={form.optIn[key]}
-                    onCheckedChange={(value) => updateOptIn(key, value)}
-                  />
-                </label>
-              ))}
-            </div>
-          </section>
+
         </div>
 
         <div className="xl:sticky xl:top-6 xl:self-start">
@@ -2409,9 +2470,9 @@ function MarketingCheck({ label, checked, onChange }: { label: string; checked: 
 
 function MarketingPopupPreview({ settings }: { settings: MarketingSettings }) {
   return (
-    <aside className="bg-[#f3f3f3] p-10">
-      <div className="mx-auto max-w-[450px] bg-white p-10 shadow-[0_22px_60px_rgba(0,0,0,0.08)]">
-        {settings.popup.imageUrl && <img src={settings.popup.imageUrl} alt="" className="mb-6 h-32 w-full object-cover" />}
+    <aside className="border border-[#e7e7e7] bg-[#f7f7f7] p-6">
+      <div className="mx-auto max-w-[450px] border border-[#ededed] bg-white p-8 shadow-[0_14px_40px_rgba(0,0,0,0.06)]">
+        {settings.popup.imageUrl && <img src={settings.popup.imageUrl} alt="" className="mb-7 h-40 w-full object-cover" />}
         <h3 className="text-3xl font-bold uppercase tracking-[0.12em] text-[#202326]">{settings.popup.title}</h3>
         <p className="mt-7 whitespace-pre-line text-sm leading-6 text-[#111]">{settings.popup.body}</p>
         <Input placeholder="Your email" className="mt-7 h-12 rounded-none bg-white" readOnly />

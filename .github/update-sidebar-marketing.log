@@ -1,7 +1,0 @@
-Traceback (most recent call last):
-  File "/home/runner/work/pixieset-asad-vai-project/pixieset-asad-vai-project/.github/update-sidebar-marketing-v2.py", line 201, in <module>
-    text = first(
-           ^^^^^^
-  File "/home/runner/work/pixieset-asad-vai-project/pixieset-asad-vai-project/.github/update-sidebar-marketing-v2.py", line 6, in first
-    raise RuntimeError(f"{label}: target not found")
-RuntimeError: dashboard content offset: target not found
