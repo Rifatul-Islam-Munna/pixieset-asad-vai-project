@@ -603,7 +603,7 @@ export function PublicGallery({
         email,
         Boolean(
           marketingSubscriptionEnabled &&
-            marketingOptIn.emailRegistration &&
+            marketingEmailRegistrationEnabled &&
             visitorMarketingOptIn,
         ),
         "email-registration",
