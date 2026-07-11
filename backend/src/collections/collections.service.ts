@@ -686,11 +686,7 @@ export class CollectionsService {
 
     const images = await this.imageModel.find({ collectionId: id, userId });
     let reclaimedBytes = 0;
-    for (const image of images) {
-      reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
-      await this.deleteStoredImageFiles(image);
-    }
-    await this.faceSearchService.deleteCollectionFaces(id).catch(() => null);
+    for (const image of images) reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
 
     await Promise.all([
       this.imageModel.deleteMany({ collectionId: id, userId }),
@@ -701,6 +697,12 @@ export class CollectionsService {
     ]);
 
     await this.decrementStorageUsedBytes(userId, reclaimedBytes);
+
+    // Public/account state is removed first. Slow object-storage and face-index cleanup continues concurrently.
+    void Promise.allSettled([
+      ...images.map((image) => this.deleteStoredImageFiles(image)),
+      this.faceSearchService.deleteCollectionFaces(id),
+    ]);
 
     return { deleted: true, collectionId: id };
   }

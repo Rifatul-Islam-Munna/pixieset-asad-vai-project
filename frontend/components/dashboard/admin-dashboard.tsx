@@ -1072,12 +1072,6 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
     patchObject("cta", { images });
   };
 
-  const patchFooterColumn = (index: number, value: Partial<HomeContent["footer"]["columns"][number]>) => {
-    const columns = [...content.footer.columns];
-    columns[index] = { ...columns[index], ...value };
-    patchObject("footer", { columns });
-  };
-
   const patchMetaTag = (index: number, value: Partial<SeoMetaTag>) => {
     const extraMetaTags = [...form.seo.extraMetaTags];
     extraMetaTags[index] = { ...extraMetaTags[index], ...value };
@@ -1354,43 +1348,13 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
             <CmsInput label="CTA button" value={content.cta.button} onChange={(button) => patchObject("cta", { button })} />
             <CmsInput label="Footer copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
             <CmsTextarea label="Footer description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} wide />
+            <CmsInput label="Terms page title" value={form.legal[lang].terms.title} onChange={(title) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], terms: { ...form.legal[lang].terms, title } } } })} />
+            <CmsInput label="Privacy page title" value={form.legal[lang].privacy.title} onChange={(title) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], privacy: { ...form.legal[lang].privacy, title } } } })} />
+            <CmsTextarea label="Terms page full content" value={form.legal[lang].terms.content} onChange={(value) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], terms: { ...form.legal[lang].terms, content: value } } } })} wide />
+            <CmsTextarea label="Privacy page full content" value={form.legal[lang].privacy.content} onChange={(value) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], privacy: { ...form.legal[lang].privacy, content: value } } } })} wide />
             <CmsRepeater title="CTA images">
               {content.cta.images.map((image, index) => (
                 <CmsImageInput key={`${image}-${index}`} label={`Image ${index + 1}`} value={image} onChange={(value) => patchCtaImage(index, value)} onUpload={onUpload} busy={busy} />
-              ))}
-            </CmsRepeater>
-            <CmsRepeater title="Footer columns">
-              {content.footer.columns.map((column, index) => (
-                <div key={`${column.title}-${index}`} className="grid gap-3 border p-4">
-                  <CmsInput label="Column title" value={column.title} onChange={(title) => patchFooterColumn(index, { title })} />
-                  <CmsRepeater title="Links">
-                    {column.links.map((link, linkIndex) => {
-                      const item = typeof link === "string" ? { label: link, url: "#" } : link;
-                      return (
-                        <div key={`${item.label}-${linkIndex}`} className="grid gap-3 md:grid-cols-2">
-                          <CmsInput
-                            label="Title"
-                            value={item.label}
-                            onChange={(label) => {
-                              const links = [...column.links];
-                              links[linkIndex] = { ...item, label };
-                              patchFooterColumn(index, { links });
-                            }}
-                          />
-                          <CmsInput
-                            label="URL"
-                            value={item.url}
-                            onChange={(url) => {
-                              const links = [...column.links];
-                              links[linkIndex] = { ...item, url };
-                              patchFooterColumn(index, { links });
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </CmsRepeater>
-                </div>
               ))}
             </CmsRepeater>
           </div>

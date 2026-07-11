@@ -292,6 +292,29 @@ const emptyPresetStore: PresetStoreSettings = {
   productPreview: false,
 };
 
+const defaultPresetItems: PresetItem[] = [
+  {
+    id: "builtin-clean-classic",
+    name: "Clean Classic",
+    general: { ...emptyPresetGeneral, photoSets: "Highlights, Ceremony, Portraits" },
+    design: { ...emptyPresetDesign, cover: "Center", typography: "Classic", color: "White", gridStyle: "Vertical", gridSpacing: "Regular" },
+    download: { ...emptyPresetDownload },
+    favorite: { ...emptyPresetFavorite },
+    store: { ...emptyPresetStore, storeStatus: false },
+    updatedAt: "Built in",
+  },
+  {
+    id: "builtin-modern-story",
+    name: "Modern Story",
+    general: { ...emptyPresetGeneral, photoSets: "Story, Favorites", socialSharing: true },
+    design: { ...emptyPresetDesign, cover: "Left", typography: "Modern", color: "Sand", gridStyle: "Horizontal", thumbnailSize: "Large", gridSpacing: "Large", navigationStyle: "Icon & Text" },
+    download: { ...emptyPresetDownload, downloadPin: true },
+    favorite: { ...emptyPresetFavorite, favoriteNotes: false },
+    store: { ...emptyPresetStore, storeStatus: true },
+    updatedAt: "Built in",
+  },
+];
+
 const readEmailTemplates = () => {
   return defaultEmailTemplates;
 };
@@ -348,8 +371,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
   presetFavorite: emptyPresetFavorite,
   presetStore: emptyPresetStore,
   presetSaved: false,
-  presetItems: [],
-  activePresetId: "",
+  presetItems: defaultPresetItems,
+  activePresetId: defaultPresetItems[0].id,
   emailTemplates: initialEmailTemplates,
   activeEmailTemplateId: initialEmailTemplates[0]?.id ?? "",
   emailTemplateSaved: true,
@@ -739,7 +762,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
             updatedAt: data.updatedAt ?? "Saved",
           } satisfies PresetItem;
         });
-      const activePreset = presetItems[0];
+      const combinedPresets = [...presetItems, ...defaultPresetItems.filter((builtIn) => !presetItems.some((item) => item.id === builtIn.id))];
+      const activePreset = combinedPresets[0];
 
       if (emailTemplates.length) {
         writeEmailTemplates(emailTemplates);
@@ -750,7 +774,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         activeWatermarkId: watermarks[0]?.id ?? state.activeWatermarkId,
         emailTemplates: emailTemplates.length ? emailTemplates : state.emailTemplates,
         activeEmailTemplateId: emailTemplates[0]?.id ?? state.activeEmailTemplateId,
-        presetItems: presetItems.length ? presetItems : state.presetItems,
+        presetItems: combinedPresets,
         activePresetId: activePreset?.id ?? state.activePresetId,
         presetName: activePreset?.name ?? state.presetName,
         presetCollectionId: activePreset?.collectionId ?? state.presetCollectionId,

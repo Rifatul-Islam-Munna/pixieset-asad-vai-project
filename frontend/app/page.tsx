@@ -7,6 +7,7 @@ import { getUser } from "@/actions/auth";
 import { UserType } from "@/@types/user";
 import { type HomeLanguage } from "@/lib/home-cms";
 import { getHomeCms } from "@/lib/home-cms-server";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,6 +21,28 @@ function lines(text: string) {
   ));
 }
 
+function footerHref(label: string, configured?: string) {
+  if (configured && configured !== "#") return configured;
+  const routes: Record<string, string> = {
+    "Client Gallery": "/login?next=/dashboard/client-gallery", "Store Gallery": "/login?next=/dashboard/store-gallery", Store: "/login?next=/dashboard/store-gallery",
+    "Mobile Gallery App": "/login?next=/dashboard/mobile-gallery", Pricing: "/pricing",
+    "Help & Support": "mailto:support@gallerista.app", "Terms of Service": "/terms-of-service", "Terms Of Service": "/terms-of-service", "Privacy Policy": "/privacy-policy",
+  };
+  return routes[label] || "/";
+}
+
+function relevantFooterColumns(lang: HomeLanguage) {
+  return lang === "gr" ? [
+    { title: "Προϊόντα", links: [{ label: "Client Gallery", url: "/login?next=/dashboard/client-gallery" }, { label: "Store Gallery", url: "/login?next=/dashboard/store-gallery" }, { label: "Mobile Gallery App", url: "/login?next=/dashboard/mobile-gallery" }, { label: "Τιμές", url: "/pricing" }] },
+    { title: "Υποστήριξη", links: [{ label: "Βοήθεια & Υποστήριξη", url: "mailto:support@gallerista.app" }] },
+    { title: "Νομικά", links: [{ label: "Όροι Παροχής Υπηρεσιών", url: "/terms-of-service?lang=gr" }, { label: "Πολιτική Απορρήτου", url: "/privacy-policy?lang=gr" }] },
+  ] : [
+    { title: "Products", links: [{ label: "Client Gallery", url: "/login?next=/dashboard/client-gallery" }, { label: "Store Gallery", url: "/login?next=/dashboard/store-gallery" }, { label: "Mobile Gallery App", url: "/login?next=/dashboard/mobile-gallery" }, { label: "Pricing", url: "/pricing" }] },
+    { title: "Support", links: [{ label: "Help & Support", url: "mailto:support@gallerista.app" }] },
+    { title: "Legal", links: [{ label: "Terms of Service", url: "/terms-of-service" }, { label: "Privacy Policy", url: "/privacy-policy" }] },
+  ];
+}
+
 async function getDashboardHref() {
   const user = await getUser();
   if (!user) return undefined;
@@ -29,14 +52,15 @@ async function getDashboardHref() {
 export default async function Home({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {
   const [cms, dashboardHref] = await Promise.all([getHomeCms(), getDashboardHref()]);
   const params = await searchParams;
-  const lang: HomeLanguage = params?.lang === "gr" ? "gr" : cms.defaultLanguage;
+  const savedLanguage = (await cookies()).get("home_language")?.value;
+  const lang: HomeLanguage = params?.lang === "gr" || (!params?.lang && savedLanguage === "gr") ? "gr" : params?.lang === "en" || savedLanguage === "en" ? "en" : cms.defaultLanguage;
   const t = cms.content[lang] ?? cms.content.en;
   const defaultGallery = t.gallery.tabs[0]?.value ?? "share";
   const defaultWorkflow = t.workflow.tabs[0]?.value ?? "wedding";
 
   return (
     <main className="min-h-screen bg-background text-foreground [&_a]:whitespace-pre-line [&_button]:whitespace-pre-line [&_h1]:whitespace-pre-line [&_h2]:whitespace-pre-line [&_h3]:whitespace-pre-line [&_p]:whitespace-pre-line [&_span]:whitespace-pre-line">
-      <HomeHero initialCms={cms} requestedLanguage={params?.lang} dashboardHref={dashboardHref} />
+      <HomeHero initialCms={cms} requestedLanguage={lang} dashboardHref={dashboardHref} />
 
       <section className="border-t bg-white px-5 py-14 text-center md:px-6 md:py-20">
         <div className="mx-auto max-w-[1240px]">
@@ -147,7 +171,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
       <footer className="bg-[#171918] px-5 py-14 text-white md:px-6 md:py-20">
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[1.5fr_2fr]">
           <div className="flex min-h-[360px] flex-col">
-            <a href="#" className="inline-flex items-center gap-3 text-white" aria-label={cms.brand.brandText || t.nav.brand}>
+            <a href="/" className="inline-flex items-center gap-3 text-white" aria-label={cms.brand.brandText || t.nav.brand}>
               {(cms.brand.logoUrl || cms.brand.brandImageUrl) && <img src={cms.brand.logoUrl || cms.brand.brandImageUrl} alt="" className="h-10 max-w-32 object-contain" />}
               {(cms.brand.brandText || t.nav.brand) && <span className="font-serif text-2xl tracking-[0.36em]">{cms.brand.brandText || t.nav.brand}</span>}
             </a>
@@ -155,13 +179,13 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
             <p className="mt-auto pt-16 text-xs font-semibold text-white/80">{t.footer.copyright}</p>
           </div>
           <div className="grid gap-10 sm:grid-cols-3">
-            {t.footer.columns.map((column) => (
+            {relevantFooterColumns(lang).map((column) => (
               <div key={column.title}>
                 <h3 className="text-sm font-bold text-white">{column.title}</h3>
                 <ul className="mt-5 flex flex-col gap-5 text-sm text-white/80">
                   {column.links.map((link) => {
                     const item = typeof link === "string" ? { label: link, url: "#" } : link;
-                    return <li key={`${item.label}-${item.url}`}><a href={item.url || "#"} className="hover:text-white">{item.label}</a></li>;
+                    return <li key={`${item.label}-${item.url}`}><a href={footerHref(item.label, item.url)} className="hover:text-white">{item.label}</a></li>;
                   })}
                 </ul>
               </div>

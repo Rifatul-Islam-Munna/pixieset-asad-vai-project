@@ -7,6 +7,7 @@ export function publicSiteOrigin(siteSlug: string, fallbackOrigin = "") {
 }
 
 export function publicCollectionUrl(siteSlug: string, collectionSlug: string, fallbackOrigin = "") {
-  const origin = publicSiteOrigin(siteSlug, fallbackOrigin);
-  return `${origin}/${encodeURIComponent(collectionSlug)}`;
+  const configuredRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim();
+  if (!configuredRoot) return `${fallbackOrigin}/collection/${encodeURIComponent(siteSlug)}/${encodeURIComponent(collectionSlug)}`;
+  return `${publicSiteOrigin(siteSlug, fallbackOrigin)}/${encodeURIComponent(collectionSlug)}`;
 }

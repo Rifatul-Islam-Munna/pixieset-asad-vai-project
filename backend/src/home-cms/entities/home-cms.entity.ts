@@ -21,6 +21,9 @@ export class HomeCms {
   @Prop({ type: Object, required: true, default: () => ({}) })
   brand: Record<string, unknown>;
 
+  @Prop({ type: Object, required: true, default: () => ({ en: {}, gr: {} }) })
+  legal: Record<HomeLanguage, Record<string, unknown>>;
+
   @Prop({ type: [Object], required: true, default: () => [] })
   coverTemplates: Record<string, unknown>[];
 

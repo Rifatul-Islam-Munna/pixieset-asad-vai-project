@@ -241,6 +241,8 @@ export async function updateHomeCms(payload: HomeCmsData) {
   revalidatePath("/admin");
   revalidatePath("/login");
   revalidatePath("/register");
+  revalidatePath("/terms-of-service");
+  revalidatePath("/privacy-policy");
   return mergeHomeCms(data);
 }
 

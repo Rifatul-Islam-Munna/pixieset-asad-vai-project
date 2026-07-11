@@ -130,6 +130,15 @@ export function useCollections() {
       if (error) throw new Error(error.message);
       return data;
     },
+    onMutate: async (collectionId) => {
+      await queryClient.cancelQueries({ queryKey: ["collections"] });
+      const previous = queryClient.getQueryData<ListResponse<CollectionRecord>>(["collections"]);
+      queryClient.setQueryData<ListResponse<CollectionRecord>>(["collections"], (current) => current ? { ...current, data: current.data.filter((item) => item._id !== collectionId) } : current);
+      return { previous };
+    },
+    onError: (_error, _collectionId, context) => {
+      if (context?.previous) queryClient.setQueryData(["collections"], context.previous);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["collection-images"] });

@@ -10,6 +10,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { toast } from "sonner";
 import { ReactSortable } from "react-sortablejs";
+import hotkeys from "hotkeys-js";
 import {
   ArrowLeft,
   ArrowRight,
@@ -7649,6 +7650,7 @@ function ProductEditorDialog({
 
 function CollectionsPanel({ section }: { section: DashboardSection }) {
   const { collectionsQuery, updateCollection, deleteCollection, duplicateCollection } = useCollections();
+  const homepage = useHomepageSettings().query;
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
   const [quickEdit, setQuickEdit] = useState<CollectionRecord | null>(null);
@@ -7736,18 +7738,28 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     setSortFilter("newest");
   };
   const openCollectionPreview = (collection: CollectionRecord) => {
-    if (collection.status !== "published") {
-      toast.error("Publish this collection before opening its public gallery.");
+    const siteSlug = homepage.data?.data?.slug;
+    if (!siteSlug) return toast.error("Homepage address is still loading. Try Preview again.");
+    const url = publicCollectionUrl(siteSlug, collection.slug ?? collection._id, window.location.origin);
+    if (collection.status === "published") {
+      window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
-    window.open(publicCollectionPath(collection), "_blank", "noopener,noreferrer");
+    if (!window.confirm("This collection is Draft. Publish it and open Preview?")) return;
+    const previewTab = window.open("about:blank", "_blank");
+    updateCollection.mutate({ collectionId: collection._id, payload: { status: "published" } }, {
+      onSuccess: () => { if (previewTab) previewTab.location.href = url; else window.location.assign(url); },
+      onError: (error) => { previewTab?.close(); toast.error(error.message); },
+    });
   };
   const shareCollection = async (collection: CollectionRecord) => {
     if (collection.status !== "published") {
       toast.error("Publish this collection before sharing it.");
       return;
     }
-    const url = `${window.location.origin}${publicCollectionPath(collection)}`;
+    const siteSlug = homepage.data?.data?.slug;
+    if (!siteSlug) return toast.error("Homepage address is still loading.");
+    const url = publicCollectionUrl(siteSlug, collection.slug ?? collection._id, window.location.origin);
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Collection link copied");
@@ -7792,7 +7804,10 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   };
   const removeCollection = (collection: CollectionRecord) => {
     if (!window.confirm(`Delete "${collection.name}"? This cannot be undone.`)) return;
-    deleteCollection.mutate(collection._id);
+    deleteCollection.mutate(collection._id, {
+      onSuccess: () => toast.success("Collection deleted"),
+      onError: (error) => toast.error(error.message),
+    });
   };
 
   return (
@@ -8280,6 +8295,10 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
                 </option>
               ))}
             </select>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <span className="text-[#777]">{presetItems.length ? `${presetItems.length} preset${presetItems.length === 1 ? "" : "s"} available` : "No presets created yet."}</span>
+              <Link href={`/dashboard/${section}/settings/presets`} className="font-bold text-[#00a997]">{presetItems.length ? "Manage presets" : "Create a preset"}</Link>
+            </div>
           </Field>
         </FieldGroup>
       </div>
@@ -8661,15 +8680,41 @@ function CollectionDetailView({
       if (selectedImages.some((image) => image.url === form.coverImage)) {
         setForm((value) => ({ ...value, coverImage: "" }));
       }
-      for (const image of selectedImages) {
-        await deleteImage.mutateAsync(image._id);
-      }
+      setLoadedImages((current) => current.filter((image) => !selectedImageIds.includes(image._id)));
+      const results = await Promise.allSettled(selectedImages.map((image) => deleteImage.mutateAsync(image._id)));
+      const failed = results.filter((result) => result.status === "rejected").length;
+      if (failed) toast.error(`${failed} image${failed === 1 ? "" : "s"} could not be deleted`);
       setSelectedImageIds([]);
       await collectionQuery.refetch();
     } finally {
       setBulkDeleting(false);
     }
   };
+  useEffect(() => {
+    if (activeTab !== "photos") return;
+    const selectAll = (event: KeyboardEvent) => {
+      event.preventDefault();
+      setSelectedImageIds(activeSetImages.map((image) => image._id));
+      toast.success(`${activeSetImages.length} images selected`);
+    };
+    const removeSelected = (event: KeyboardEvent) => {
+      if (!selectedImageIds.length || deletingImages) return;
+      event.preventDefault();
+      if (window.confirm(`Delete ${selectedImageIds.length} selected image${selectedImageIds.length === 1 ? "" : "s"}?`)) void deleteSelectedImages();
+    };
+    const clearSelected = (event: KeyboardEvent) => {
+      event.preventDefault();
+      clearSelection();
+    };
+    hotkeys("ctrl+a,command+a", selectAll);
+    hotkeys("delete,backspace", removeSelected);
+    hotkeys("esc", clearSelected);
+    return () => {
+      hotkeys.unbind("ctrl+a,command+a", selectAll);
+      hotkeys.unbind("delete,backspace", removeSelected);
+      hotkeys.unbind("esc", clearSelected);
+    };
+  }, [activeSetImages, activeTab, deletingImages, selectedImageIds]);
   const reorderSetImages = (nextSetImages: CollectionImageRecord[]) => {
     const nextSetIds = nextSetImages.map((image) => image._id);
     if (nextSetIds.length === activeSetImages.length && nextSetIds.every((id, index) => id === activeSetImages[index]?._id)) {
@@ -9161,6 +9206,7 @@ function CollectionDetailView({
                     </Button>
                   </div>
                 </div>
+                <p className="mb-3 text-xs text-[#999]">⌘/Ctrl + A selects all · Delete removes selected · Esc clears</p>
                 {deletingImages && (
                   <div className="mb-4 flex items-center gap-3 border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                     <Loader2 className="size-4 animate-spin" />

@@ -18,6 +18,10 @@ export class UpdateHomeCmsDto {
   brand?: Record<string, any>;
 
   @IsOptional()
+  @IsObject()
+  legal?: Record<string, any>;
+
+  @IsOptional()
   coverTemplates?: Record<string, any>[];
 
   @IsOptional()

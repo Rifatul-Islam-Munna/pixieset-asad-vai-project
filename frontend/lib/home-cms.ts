@@ -4,6 +4,7 @@ export type HomeCmsData = {
   seo: SiteSeo;
   auth: AuthCms;
   brand: BrandSettings;
+  legal: Record<HomeLanguage, LegalPages>;
   coverTemplates: CustomCoverTemplate[];
   content: Record<HomeLanguage, HomeContent>;
   media: {
@@ -11,6 +12,11 @@ export type HomeCmsData = {
     heroMediaUrl: string;
   };
   defaultLanguage: HomeLanguage;
+};
+
+export type LegalPages = {
+  terms: { title: string; content: string };
+  privacy: { title: string; content: string };
 };
 
 export type BrandSettings = {
@@ -108,6 +114,16 @@ export const defaultHomeCms: HomeCmsData = {
     accentColor: "#22bda7",
   },
   coverTemplates: [],
+  legal: {
+    en: {
+      terms: { title: "Terms of Service", content: "These Terms of Service govern your use of Gallerista.\n\nBy creating an account, you agree to use the service lawfully and to protect access to your account. You retain ownership of content you upload." },
+      privacy: { title: "Privacy Policy", content: "This Privacy Policy explains how Gallerista handles account, gallery, and customer information.\n\nWe use submitted information to provide and secure the service. We do not sell personal information." },
+    },
+    gr: {
+      terms: { title: "Όροι Παροχής Υπηρεσιών", content: "Οι παρόντες όροι διέπουν τη χρήση του Gallerista.\n\nΜε τη δημιουργία λογαριασμού συμφωνείτε να χρησιμοποιείτε νόμιμα την υπηρεσία και να προστατεύετε την πρόσβαση στον λογαριασμό σας." },
+      privacy: { title: "Πολιτική Απορρήτου", content: "Η παρούσα πολιτική εξηγεί πώς το Gallerista διαχειρίζεται τα στοιχεία λογαριασμού, γκαλερί και πελατών.\n\nΧρησιμοποιούμε τα στοιχεία για την παροχή και ασφάλεια της υπηρεσίας." },
+    },
+  },
   seo: {
     siteTitle: "Nikoset",
     siteDescription: "An all-in-one platform for modern photographers with client galleries, websites, stores, and studio tools.",
@@ -227,6 +243,15 @@ export const defaultHomeCms: HomeCmsData = {
 };
 
 defaultHomeCms.content.gr = JSON.parse(JSON.stringify(defaultHomeCms.content.en));
+Object.assign(defaultHomeCms.content.gr, {
+  nav: { brand: "Gallerista", products: "Προϊόντα", examples: "Παραδείγματα", pricing: "Τιμές", login: "Σύνδεση", cta: "Ξεκινήστε" },
+  hero: { eyebrow: "Gallerista", title: "Σχεδιασμένο για φωτογράφους.\nΔημιουργήθηκε για να αναπτυχθείτε.", subtitle: "Κορυφαίες γκαλερί φωτογραφιών, ιστοσελίδες και εργαλεία επιχείρησης για καλύτερη ροή εργασίας.", cta: "Ξεκινήστε" },
+  gallery: { ...defaultHomeCms.content.gr.gallery, title: "Η απόλυτη γκαλερί φωτογραφιών που επαναπροσδιορίζει τον κλάδο.", subtitle: "Παραδώστε όμορφα τις φωτογραφίες σας και προσφέρετε μια αξέχαστη εμπειρία στους πελάτες σας.", cartLabel: "Καλάθι" },
+  workflow: { ...defaultHomeCms.content.gr.workflow, eyebrow: "ΣΧΕΔΙΑΣΜΕΝΟ ΓΙΑ ΚΑΘΕ ΡΟΗ ΕΡΓΑΣΙΑΣ", title: "Εργαλεία για κάθε φωτογράφο.", subtitle: "Από γάμους έως τοπία, όλα όσα χρειάζεστε σε ένα μέρος." },
+  testimonials: { ...defaultHomeCms.content.gr.testimonials, eyebrow: "ΕΜΠΙΣΤΕΥΟΝΤΑΙ ΟΙ ΕΠΑΓΓΕΛΜΑΤΙΕΣ", title: "Η πλατφόρμα των φωτογράφων.", subtitle: "Γίνετε μέρος μιας αναπτυσσόμενης δημιουργικής κοινότητας." },
+  cta: { ...defaultHomeCms.content.gr.cta, title: "Ξεκινήστε με το Gallerista σήμερα δωρεάν.", subtitle: "Δωρεάν για πάντα. Αναβαθμίστε όταν το χρειαστείτε.", button: "Ξεκινήστε" },
+  footer: { ...defaultHomeCms.content.gr.footer, description: "Η ολοκληρωμένη πλατφόρμα για σύγχρονους φωτογράφους, γκαλερί πελατών και ηλεκτρονικά καταστήματα." },
+});
 
 export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
   const media = { ...defaultHomeCms.media, ...(data?.media ?? {}) };
@@ -242,9 +267,11 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
   if (!Array.isArray(seo.extraMetaTags)) seo.extraMetaTags = [];
   if (seo.twitterCard !== "summary") seo.twitterCard = "summary_large_image";
 
+  const incomingGr = data?.content?.gr;
+  const grMatchesEnglish = incomingGr && data?.content?.en && JSON.stringify(incomingGr) === JSON.stringify(data.content.en);
   const content = {
     en: { ...defaultHomeCms.content.en, ...(data?.content?.en ?? {}) },
-    gr: { ...defaultHomeCms.content.gr, ...(data?.content?.gr ?? {}) },
+    gr: { ...defaultHomeCms.content.gr, ...(grMatchesEnglish ? {} : incomingGr ?? {}) },
   };
   (["en", "gr"] as HomeLanguage[]).forEach((lang) => {
     const titles = content[lang].products?.map((product) => product.title).join("|");
@@ -258,6 +285,16 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     seo,
     auth,
     brand: { ...defaultHomeCms.brand, ...(data?.brand ?? {}) },
+    legal: {
+      en: {
+        terms: { ...defaultHomeCms.legal.en.terms, ...(data?.legal?.en?.terms ?? {}) },
+        privacy: { ...defaultHomeCms.legal.en.privacy, ...(data?.legal?.en?.privacy ?? {}) },
+      },
+      gr: {
+        terms: { ...defaultHomeCms.legal.gr.terms, ...(data?.legal?.gr?.terms ?? {}) },
+        privacy: { ...defaultHomeCms.legal.gr.privacy, ...(data?.legal?.gr?.privacy ?? {}) },
+      },
+    },
     coverTemplates: Array.isArray(data?.coverTemplates) ? data.coverTemplates : [],
     media,
     content,
