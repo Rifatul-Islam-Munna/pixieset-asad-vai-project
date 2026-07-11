@@ -12,9 +12,6 @@ import { cn } from "@/lib/utils";
 const featureLabels: Record<string, string> = {
   pinSet: "PIN set",
   downloadLimit: "Download limit",
-  coverImage: "Cover image",
-  layouts: "Layouts",
-  advancedDesign: "Advanced design",
   store: "Store",
   marketingEmails: "Marketing email",
 };

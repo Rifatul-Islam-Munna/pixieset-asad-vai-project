@@ -17,7 +17,10 @@ export function HomeHero({ initialCms, requestedLanguage, dashboardHref }: {
   dashboardHref?: string;
 }) {
   const cms = useHomeCms(initialCms);
-  const lang: HomeLanguage = requestedLanguage === "gr" ? "gr" : cms.defaultLanguage;
+  const lang: HomeLanguage =
+    requestedLanguage === "gr" || requestedLanguage === "en"
+      ? requestedLanguage
+      : cms.defaultLanguage;
   const t = cms.content[lang] ?? cms.content.en;
 
   return (

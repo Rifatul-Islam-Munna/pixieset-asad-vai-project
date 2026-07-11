@@ -21,6 +21,13 @@ export type PlanCapabilities = {
   features: Partial<Record<PlanFeatureKey, boolean>>;
 };
 
+const freeDesignFeatures = new Set<PlanFeatureKey>([
+  "coverImage",
+  "layouts",
+  "advancedDesign",
+  "customCover",
+]);
+
 export function usePlanCapabilities() {
   return useQuery<{ data: PlanCapabilities }>({
     queryKey: ["billing-capabilities"],
@@ -38,6 +45,9 @@ export function usePlanCapabilities() {
 export function usePlanFeatureAccess(feature: PlanFeatureKey) {
   const query = usePlanCapabilities();
   const loading = query.isLoading;
-  const enabled = loading || Boolean(query.data?.data?.features?.[feature]);
+  const enabled =
+    freeDesignFeatures.has(feature) ||
+    loading ||
+    Boolean(query.data?.data?.features?.[feature]);
   return { enabled, locked: !loading && !enabled, loading, capabilities: query.data?.data };
 }

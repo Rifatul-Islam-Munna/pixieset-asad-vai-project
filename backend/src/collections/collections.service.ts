@@ -1554,28 +1554,6 @@ export class CollectionsService {
     const settings = { ...((next.settings ?? {}) as any) };
     const download = { ...(settings.download ?? {}) };
     const store = { ...(settings.store ?? {}) };
-    const design = { ...((next.design ?? {}) as any) };
-
-    if (next.coverImage && !features.coverImage) delete next.coverImage;
-
-    if (!features.customCover) {
-      delete design.customCoverTemplate;
-      if (String(design.cover ?? '').startsWith('custom:')) design.cover = 'Center';
-    }
-
-    if (!features.advancedDesign) {
-      delete design.typography;
-      delete design.customFontName;
-      delete design.customFontDataUrl;
-      delete design.color;
-      delete design.navigationStyle;
-    }
-
-    if (!features.layouts) {
-      design.gridStyle = 'Vertical';
-      design.thumbnailSize = 'Regular';
-      design.gridSpacing = 'Regular';
-    }
 
     if ((download.limitDownloads || download.restrictDownloads) && !features.downloadLimit) {
       download.limitDownloads = false;
@@ -1593,7 +1571,6 @@ export class CollectionsService {
       store.showBuyPhotoButton = false;
     }
 
-    if (next.design) next.design = design;
     if (next.settings) next.settings = { ...settings, download, store };
     return next as T;
   }

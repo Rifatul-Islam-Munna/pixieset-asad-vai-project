@@ -88,10 +88,6 @@ const emptyPlanForm: PlanForm = {
 const planFeatures = [
   ["pinSet", "PIN set"],
   ["downloadLimit", "Download limit"],
-  ["coverImage", "Cover image"],
-  ["layouts", "Layouts"],
-  ["advancedDesign", "Advanced design"],
-  ["customCover", "Custom cover"],
   ["store", "Store"],
   ["marketingEmails", "Marketing email"],
 ] as const;

@@ -29,6 +29,10 @@ export function SiteNav({ brand, nav, lang, dashboardHref }: { brand?: Partial<B
   const rememberLanguage = (value: "en" | "gr") => {
     document.cookie = `home_language=${value}; Path=/; Max-Age=31536000; SameSite=Lax`;
   };
+  const switchLanguage = (value: "en" | "gr") => {
+    rememberLanguage(value);
+    window.location.assign(`/?lang=${value}`);
+  };
   const productHref = (href: string) => dashboardHref ? href : `/login?next=${encodeURIComponent(href)}`;
 
   return (
@@ -61,8 +65,8 @@ export function SiteNav({ brand, nav, lang, dashboardHref }: { brand?: Partial<B
       </nav>
 
       <div className="hidden items-center gap-3 md:flex">
-        <Link href="/?lang=en" onClick={() => rememberLanguage("en")} className={lang === "en" ? "text-sm font-bold" : "text-sm text-white/75"}>EN</Link>
-        <Link href="/?lang=gr" onClick={() => rememberLanguage("gr")} className={lang === "gr" ? "text-sm font-bold" : "text-sm text-white/75"}>GR</Link>
+        <button type="button" onClick={() => switchLanguage("en")} className={lang === "en" ? "text-sm font-bold" : "text-sm text-white/75"}>EN</button>
+        <button type="button" onClick={() => switchLanguage("gr")} className={lang === "gr" ? "text-sm font-bold" : "text-sm text-white/75"}>GR</button>
         {!dashboardHref && <Link href="/login" className="text-sm font-semibold">{nav.login}</Link>}
         <Button asChild className="h-11 min-w-36 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]">
           <Link href={dashboardHref ?? "/register"}>{dashboardHref ? "Dashboard" : nav.cta}</Link>
@@ -98,8 +102,8 @@ export function SiteNav({ brand, nav, lang, dashboardHref }: { brand?: Partial<B
             {!dashboardHref && <Link href="/login" onClick={() => setOpen(false)}>{nav.login}</Link>}
           </nav>
           <div className="mt-10 flex items-center gap-4 text-sm font-bold">
-            <Link href="/?lang=en" onClick={() => { rememberLanguage("en"); setOpen(false); }} className={lang === "en" ? "text-[#22bda7]" : "text-white/70"}>EN</Link>
-            <Link href="/?lang=gr" onClick={() => { rememberLanguage("gr"); setOpen(false); }} className={lang === "gr" ? "text-[#22bda7]" : "text-white/70"}>GR</Link>
+            <button type="button" onClick={() => { setOpen(false); switchLanguage("en"); }} className={lang === "en" ? "text-[#22bda7]" : "text-white/70"}>EN</button>
+            <button type="button" onClick={() => { setOpen(false); switchLanguage("gr"); }} className={lang === "gr" ? "text-[#22bda7]" : "text-white/70"}>GR</button>
           </div>
           <Button asChild className="mt-10 h-12 w-full rounded-none bg-[#22bda7] text-base font-bold text-white hover:bg-[#19a995]">
             <Link href={dashboardHref ?? "/register"} onClick={() => setOpen(false)}>{dashboardHref ? "Dashboard" : nav.cta}</Link>
