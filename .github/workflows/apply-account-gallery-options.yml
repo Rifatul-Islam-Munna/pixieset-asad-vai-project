@@ -1,0 +1,50 @@
+name: Apply account and gallery options
+
+on:
+  push:
+    branches:
+      - developmentbranch
+    paths:
+      - .github/workflows/apply-account-gallery-options.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: developmentbranch
+          fetch-depth: 0
+
+      - name: Apply scoped changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/apply-account-gallery-options/*.b64 | base64 --decode > /tmp/apply_account_gallery_options.py
+          python /tmp/apply_account_gallery_options.py
+          rm -rf .github/apply-account-gallery-options
+          rm -f .github/workflows/apply-account-gallery-options.yml
+
+      - name: Build backend
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add account image upload and gallery options"
+          git push origin HEAD:developmentbranch
