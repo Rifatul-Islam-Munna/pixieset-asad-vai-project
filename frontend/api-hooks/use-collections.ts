@@ -77,6 +77,28 @@ export type CollectionDownloadActivityRecord = {
   updatedAt?: string;
 };
 
+export type CollectionEmailRegistrationRecord = {
+  _id: string;
+  email: string;
+  collectionId: string;
+  collectionName: string;
+  source: string;
+  sources?: string[];
+  marketingOptIn: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CollectionPrivatePhotoActivityRecord = {
+  _id: string;
+  email: string;
+  imageId: string;
+  imageName: string;
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 type ListResponse<T> = { data: T };
 export type ImagesPage<T> = { items: T[]; total: number; limit: number; offset: number; hasMore: boolean };
 
@@ -337,7 +359,58 @@ export function useCollectionDetail(collectionId?: string) {
     },
   });
 
-  return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages };
+  const updateImage = useMutation({
+    mutationFn: async ({
+      imageId,
+      payload,
+    }: {
+      imageId: string;
+      payload: { originalName?: string; setId?: string; watermarkId?: string };
+    }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<CollectionImageRecord> & { message: string }
+      >(`/collections/${collectionId}/images/${imageId}`, payload as any);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+    },
+  });
+
+  const copyMoveImage = useMutation({
+    mutationFn: async ({
+      imageId,
+      mode,
+      targetCollectionId,
+      targetSetId,
+    }: {
+      imageId: string;
+      mode: "copy" | "move";
+      targetCollectionId: string;
+      targetSetId?: string;
+    }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PostRequestAxios<
+        { data: unknown; message: string }
+      >(`/collections/${collectionId}/images/${imageId}/copy-move`, {
+        mode,
+        targetCollectionId,
+        targetSetId,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+      notifyStorageChanged();
+    },
+  });
+
+  return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages, updateImage, copyMoveImage };
 }
 
 export function fetchCollectionImagesPage(collectionId: string, offset: number, limit = 60) {
@@ -355,6 +428,8 @@ export function useCollectionActivity(collectionId?: string) {
         ListResponse<{
           favoriteLists: CollectionFavoriteActivityRecord[];
           downloads: CollectionDownloadActivityRecord[];
+          emailRegistrations: CollectionEmailRegistrationRecord[];
+          privatePhotos: CollectionPrivatePhotoActivityRecord[];
         }>
       >(`/collections/${collectionId}/activity`),
   });

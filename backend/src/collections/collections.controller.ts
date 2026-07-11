@@ -77,6 +77,27 @@ export class PublicCollectionsController {
     return { message: 'Access request sent', data };
   }
 
+  @Post(':identifier/email-registration')
+  async recordEmailRegistration(
+    @Param('identifier') identifier: string,
+    @Body() body: { email?: string; marketingOptIn?: boolean; source?: string },
+    @Query('siteSlug') siteSlug?: string,
+  ) {
+    const data = await this.collectionsService.recordPublicEmailRegistration(identifier, body, siteSlug);
+    return { message: 'Email registration saved', data };
+  }
+
+  @Post(':identifier/private-images/:imageId')
+  async togglePrivateImage(
+    @Param('identifier') identifier: string,
+    @Param('imageId') imageId: string,
+    @Body() body: { email?: string },
+    @Query('siteSlug') siteSlug?: string,
+  ) {
+    const data = await this.collectionsService.togglePublicPrivateImage(identifier, imageId, body, siteSlug);
+    return { message: data.private ? 'Photo marked private' : 'Photo made visible', data };
+  }
+
   @Post(':identifier/download-activity')
   async recordDownloadActivity(
     @Param('identifier') identifier: string,
@@ -131,6 +152,12 @@ export class CollectionsController {
   @Get('image-favorites')
   async imageFavorites(@Req() req: ExpressRequest) {
     const data = await this.collectionsService.listFavoriteImages(req.user.id);
+    return { data };
+  }
+
+  @Get('marketing-contacts')
+  async marketingContacts(@Req() req: ExpressRequest) {
+    const data = await this.collectionsService.listMarketingContacts(req.user.id);
     return { data };
   }
 
@@ -299,6 +326,28 @@ export class CollectionsController {
   ) {
     const data = await this.collectionsService.removeImage(req.user.id, id, imageId);
     return { message: 'Image deleted', data };
+  }
+
+  @Patch(':id/images/:imageId')
+  async updateImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Body() dto: { originalName?: string; setId?: string; watermarkId?: string },
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.updateImage(req.user.id, id, imageId, dto);
+    return { message: 'Image updated', data };
+  }
+
+  @Post(':id/images/:imageId/copy-move')
+  async copyMoveImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Body() dto: { mode?: 'copy' | 'move'; targetCollectionId?: string; targetSetId?: string },
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.copyMoveImage(req.user.id, id, imageId, dto);
+    return { message: dto.mode === 'move' ? 'Image moved' : 'Image copied', data };
   }
 
   @Patch(':id/images/:imageId/star')

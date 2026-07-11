@@ -38,7 +38,7 @@ export function HomeHero({ initialCms, requestedLanguage, dashboardHref }: {
           <p className="mb-5 text-xs font-bold tracking-wide sm:text-sm md:mb-7">{t.hero.eyebrow}</p>
           <h1 className="max-w-[760px] text-4xl font-semibold leading-[1.18] tracking-normal sm:text-5xl md:text-[52px] md:leading-[1.28]">{lines(t.hero.title)}</h1>
           <p className="mt-5 max-w-[760px] text-base font-semibold leading-7 text-white/90 sm:text-lg md:mt-6">{t.hero.subtitle}</p>
-          <Button asChild className="mt-8 h-11 min-w-40 rounded-none bg-[#22bda7] text-base font-bold text-white hover:bg-[#19a995]">
+          <Button asChild className="mt-8 h-11 min-w-40 rounded-none bg-[#1C1C1C] text-base font-bold text-white hover:bg-[#2E2E2E]">
             <a href="/register">{t.hero.cta}</a>
           </Button>
         </div>

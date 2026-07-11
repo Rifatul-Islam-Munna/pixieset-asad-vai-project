@@ -29,6 +29,7 @@ export function usePublicGalleryFavorites({
   maxFavorites,
   favoritesPath,
   marketingOptIn,
+  siteSlug,
 }: {
   collectionId?: string;
   identifier: string;
@@ -38,6 +39,7 @@ export function usePublicGalleryFavorites({
   maxFavorites: number;
   favoritesPath?: string;
   marketingOptIn?: boolean;
+  siteSlug?: string;
 }) {
   const router = useRouter();
   const storageKey = `pixieset-public-favorites:${collectionId || identifier}`;
@@ -161,6 +163,20 @@ export function usePublicGalleryFavorites({
     }
     window.localStorage.setItem(emailStorageKey, email);
     setFavoriteEmail(email);
+    if (marketingOptIn && marketingAccepted) {
+      void fetch(
+        `/api/public/collections/${encodeURIComponent(identifier)}/email-registration${siteSlug ? `?siteSlug=${encodeURIComponent(siteSlug)}` : ""}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email,
+            marketingOptIn: true,
+            source: "favorite",
+          }),
+        },
+      );
+    }
     setEmailDialogOpen(false);
     const action = pendingFavorite;
     setPendingFavorite(null);

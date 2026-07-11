@@ -117,6 +117,7 @@ export class HomepageService {
     const query = this.collectionModel.find({
       userId: homepage.userId,
       status: 'published',
+      $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: new Date() } }],
     });
     if (homepage.sortOrder === 'oldest') query.sort('createdAt');
     else if (homepage.sortOrder === 'name') query.sort('name');

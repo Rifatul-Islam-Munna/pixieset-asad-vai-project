@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
@@ -49,8 +49,11 @@ type PublicCollection = {
   settings?: {
     general?: {
       emailRegistration?: boolean | string;
+      marketingSubscription?: boolean | string;
       galleryAssist?: boolean | string;
       slideshow?: boolean | string;
+      slideshowSpeed?: "slow" | "regular" | "fast";
+      slideshowAutoLoop?: boolean | string;
       socialSharing?: boolean | string;
       language?: string;
     };
@@ -63,6 +66,7 @@ type PublicCollection = {
     filenameDisplay?: "show" | "hide";
     searchEngineVisibility?: "homepage" | "all" | "hidden";
     sharpeningLevel?: "optimal" | "low" | "high";
+    rawPhotoSupport?: boolean;
     termsOfService?: string;
     privacyPolicy?: string;
   };
@@ -131,6 +135,10 @@ const defaultDesign: PresetDesignSettings = {
 
 const defaultDownload: PresetDownloadSettings = {
   photoDownload: true,
+  galleryDownload: true,
+  singlePhotoDownload: true,
+  singlePhotoDownloadEmailTracking: true,
+  restrictedSinglePhotoDownloadSize: false,
   highResolution: true,
   highResolutionSize: "3600px",
   webSize: true,
@@ -194,12 +202,20 @@ export function PublicGallery({
   const slideshowEnabled = collection
     ? boolSetting(generalSettings.slideshow ?? true)
     : boolSetting(fallbackPresetGeneral.slideshow);
+  const slideshowSpeed = (generalSettings.slideshowSpeed ?? "regular") as "slow" | "regular" | "fast";
+  const slideshowDelay = slideshowSpeed === "slow" ? 5200 : slideshowSpeed === "fast" ? 1800 : 3200;
+  const slideshowAutoLoop = boolSetting(generalSettings.slideshowAutoLoop ?? true);
   const socialSharingEnabled = boolSetting(generalSettings.socialSharing ?? true);
   const galleryAssistEnabled = boolSetting(generalSettings.galleryAssist);
   const emailRegistrationEnabled = boolSetting(generalSettings.emailRegistration);
+  const marketingSubscriptionEnabled = boolSetting(
+    generalSettings.marketingSubscription ?? true,
+  );
   const marketing = collection?.marketing ?? {};
   const marketingOptIn = marketing.optIn ?? {};
   const marketingPopup = marketing.popup ?? {};
+  const marketingEmailRegistrationEnabled = marketingOptIn.emailRegistration !== false;
+  const marketingPopupEnabled = marketingPopup.enabled !== false;
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images = collection
     ? loadedImages
@@ -214,12 +230,16 @@ export function PublicGallery({
   const galleryImages = coverImage
     ? [coverImage, ...images.filter((image) => imageSrc(image.url) !== imageSrc(coverImage.url))]
     : images;
-  const gallerySets = useMemo(
-    () => collection?.sets?.length
-      ? collection.sets
-      : [{ id: "highlights", name: "Highlights" }],
-    [collection?.sets],
-  );
+  const gallerySets = useMemo(() => {
+    const seen = new Set<string>();
+    const unique = (collection?.sets ?? []).filter((set) => {
+      const id = String(set?.id ?? "").trim();
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return unique.length ? unique : [{ id: "highlights", name: "Highlights" }];
+  }, [collection?.sets]);
   const showSetTabs = gallerySets.length > 0;
   const coverPhoto = imageSrc(collection?.coverImage || images.find((image) => !isVideo(image))?.url || "");
   const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
@@ -232,8 +252,12 @@ export function PublicGallery({
   const [visitorEmailSaved, setVisitorEmailSaved] = useState(false);
   const [visitorMarketingOptIn, setVisitorMarketingOptIn] = useState(true);
   const [downloadMarketingOptIn, setDownloadMarketingOptIn] = useState(true);
-  const [popupOpen, setPopupOpen] = useState(() => Boolean(marketingPopup.enabled));
+  const [popupOpen, setPopupOpen] = useState(() =>
+    Boolean(marketingSubscriptionEnabled && marketingPopupEnabled),
+  );
   const [popupEmail, setPopupEmail] = useState("");
+  const [privateImageIds, setPrivateImageIds] = useState<Set<string>>(() => new Set());
+  const [privateImageBusy, setPrivateImageBusy] = useState("");
   const [zipDownloading, setZipDownloading] = useState(false);
   const [zipStage, setZipStage] = useState("Preparing your photos");
   const [faceBusy, setFaceBusy] = useState(false);
@@ -247,6 +271,7 @@ export function PublicGallery({
   const [downloadEmail, setDownloadEmail] = useState("");
   const [downloadEmailDraft, setDownloadEmailDraft] = useState("");
   const [downloadEmailOpen, setDownloadEmailOpen] = useState(false);
+  const [quickShareDownload, setQuickShareDownload] = useState<string | null>(null);
   const [pendingDownload, setPendingDownload] = useState<
     { type: "single"; photo: PublicImage; index: number } | { type: "all" } | null
   >(null);
@@ -275,7 +300,16 @@ export function PublicGallery({
   const masonryColumns = design.thumbnailSize === "Large"
     ? "columns-1 sm:columns-2"
     : "columns-1 sm:columns-2 lg:columns-3";
-  const downloadsEnabled = boolSetting(download.photoDownload);
+  const downloadsEnabled =
+    quickShareDownload === "1"
+      ? true
+      : quickShareDownload === "0"
+        ? false
+        : boolSetting(download.photoDownload);
+  const galleryDownloadEnabled = download.galleryDownload !== false;
+  const singlePhotoDownloadEnabled = download.singlePhotoDownload !== false;
+  const singlePhotoDownloadEmailTracking = download.singlePhotoDownloadEmailTracking !== false;
+  const restrictedSinglePhotoDownloadSize = Boolean(download.restrictedSinglePhotoDownloadSize);
   const preferences = collection?.preferences ?? {};
   const showFilenames = preferences.filenameDisplay !== "hide";
   const sharpeningLevel = preferences.sharpeningLevel ?? "optimal";
@@ -290,6 +324,7 @@ export function PublicGallery({
     enabled: favoritesEnabled,
     maxFavorites: maxFavoriteCount,
     marketingOptIn: marketingOptIn.favoriteSignIn,
+    siteSlug: name,
   });
   const {
     collectionFavorited,
@@ -303,6 +338,8 @@ export function PublicGallery({
   const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
   const canDownload = downloadsEnabled && pinOk && limitOk;
+  const canDownloadAll = canDownload && galleryDownloadEnabled;
+  const canDownloadSingle = canDownload && singlePhotoDownloadEnabled;
   const onDownload = () => setDownloadCount((count) => count + 1);
   const unlockDownloads = () => {
     setEnteredPin(pinDraft.trim());
@@ -311,6 +348,29 @@ export function PublicGallery({
       setShareNotice("Downloads unlocked");
     }
   };
+  const recordEmailRegistration = async (
+    email: string,
+    marketingAccepted: boolean,
+    source: "email-registration" | "popup" | "download" | "favorite",
+  ) => {
+    const identifier = collection?.slug ?? galary;
+    const response = await fetch(
+      `/api/public/collections/${encodeURIComponent(identifier)}/email-registration?siteSlug=${encodeURIComponent(name)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          marketingOptIn: marketingAccepted,
+          source,
+        }),
+      },
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.message || "Email registration failed");
+    return payload?.data;
+  };
+
   const savedDownloadEmail = () => downloadEmail || window.localStorage.getItem("pixieset-download-email") || "";
   const openDownloadEmail = (pending: typeof pendingDownload) => {
     setDownloadEmailDraft(savedDownloadEmail());
@@ -329,6 +389,9 @@ export function PublicGallery({
     if (!email) {
       setShareNotice("Email is required before download");
       return;
+    }
+    if (marketingOptIn.download && downloadMarketingOptIn) {
+      void recordEmailRegistration(email, true, "download").catch(() => null);
     }
     const pending = pendingDownload;
     setDownloadEmailOpen(false);
@@ -361,24 +424,30 @@ export function PublicGallery({
     }
   };
   const downloadPhoto = async (photo: PublicImage, index = 0, emailOverride = "") => {
-    if (!canDownload) return;
-    const email = ensureDownloadEmail({ type: "single", photo, index }, emailOverride);
-    if (!email) return;
-    try {
-      await recordDownloadActivity(
-        email,
-        [{
-          imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
-          imageName: photo.originalName || `photo-${index + 1}`,
-          imageUrl: imageSrc(photo.url),
-        }],
-        "single",
-      );
-    } catch (error) {
-      setShareNotice(error instanceof Error ? error.message : "Download activity failed");
-      return;
+    if (!canDownloadSingle) return;
+    let email = "";
+    if (singlePhotoDownloadEmailTracking) {
+      email = ensureDownloadEmail({ type: "single", photo, index }, emailOverride);
+      if (!email) return;
+      try {
+        await recordDownloadActivity(
+          email,
+          [{
+            imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
+            imageName: photo.originalName || `photo-${index + 1}`,
+            imageUrl: imageSrc(photo.url),
+          }],
+          "single",
+        );
+      } catch (error) {
+        setShareNotice(error instanceof Error ? error.message : "Download activity failed");
+        return;
+      }
     }
-    const url = `/api/public-download?url=${encodeURIComponent(imageSrc(photo.url))}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
+    const downloadSource = restrictedSinglePhotoDownloadSize
+      ? imageSrc(photo.thumbnailUrl || photo.url)
+      : imageSrc(photo.url);
+    const url = `/api/public-download?url=${encodeURIComponent(downloadSource)}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
     const link = document.createElement("a");
     link.href = url;
     link.download = "";
@@ -388,7 +457,7 @@ export function PublicGallery({
     onDownload();
   };
   const downloadAllImages = async (emailOverride = "") => {
-    if (!canDownload || zipDownloading) return;
+    if (!canDownloadAll || zipDownloading) return;
     const email = ensureDownloadEmail({ type: "all" }, emailOverride);
     if (!email) return;
     let allImages = galleryImages;
@@ -533,29 +602,40 @@ export function PublicGallery({
   }, [canLoadMoreImages, loadedImages.length, imagesLoadingMore]);
   const verifyAccessEmail = async () => {
     const email = accessEmail.trim().toLowerCase();
-    if (!email.includes("@") || accessBusy) return;
+    if (!/^\S+@\S+\.\S+$/.test(email) || accessBusy) return;
     setAccessBusy(true);
     setAccessNotice("");
-    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
-    const payload = response ? await response.json().catch(() => null) : null;
-    setAccessBusy(false);
-    if (!response?.ok || !payload?.data) {
-      setAccessNotice(payload?.message ?? "Access check failed");
-      return;
-    }
-    setCollection(payload.data);
-    setLoadedImages(payload.data?.images ?? []);
-    setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
-    if (payload.data?.settings?.access?.emailAuthorized) {
+    try {
+      await recordEmailRegistration(
+        email,
+        Boolean(
+          marketingSubscriptionEnabled &&
+            marketingEmailRegistrationEnabled &&
+            visitorMarketingOptIn,
+        ),
+        "email-registration",
+      );
+      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
+      const payload = response ? await response.json().catch(() => null) : null;
+      if (!response?.ok || !payload?.data) {
+        setAccessNotice(payload?.message ?? "Access check failed");
+        return;
+      }
+      setCollection(payload.data);
+      setLoadedImages(payload.data?.images ?? []);
+      setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
       setVisitorEmail(email);
       setVisitorEmailSaved(true);
       setDownloadEmail(email);
       window.localStorage.setItem(`collection-access-email:${galary}`, email);
       setAccessNotice("");
-    } else {
-      setAccessNotice(payload.data?.settings?.access?.emailStatus === "declined" ? "Access declined for this email." : "Email not approved for this gallery.");
+    } catch (error) {
+      setAccessNotice(error instanceof Error ? error.message : "Email registration failed");
+    } finally {
+      setAccessBusy(false);
     }
   };
+
   const requestAccess = async () => {
     const email = accessEmail.trim().toLowerCase();
     if (!email.includes("@") || accessBusy) return;
@@ -587,6 +667,54 @@ export function PublicGallery({
     await navigator.clipboard?.writeText(share.url).catch(() => null);
     setShareNotice("Link copied");
   };
+  const togglePrivatePhoto = async (photo: PublicImage) => {
+    if (!isPersistedImageId(photo._id) || privateImageBusy) return;
+    let email =
+      accessSettings?.email ||
+      visitorEmail ||
+      favoriteTools.favoriteEmail ||
+      downloadEmail ||
+      window.localStorage.getItem(`collection-access-email:${galary}`) ||
+      "";
+    if (!email.includes("@")) {
+      email = window.prompt("Enter your email to mark this photo private", "")?.trim().toLowerCase() || "";
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setShareNotice("Email is required");
+      return;
+    }
+    setPrivateImageBusy(photo._id);
+    try {
+      const response = await fetch(
+        `/api/public/collections/${encodeURIComponent(collection?.slug ?? galary)}/private-images/${encodeURIComponent(photo._id)}?siteSlug=${encodeURIComponent(name)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Private photo update failed");
+      setPrivateImageIds((current) => {
+        const next = new Set(current);
+        if (payload?.data?.private) next.add(photo._id);
+        else next.delete(photo._id);
+        if (collection?._id) {
+          window.localStorage.setItem(
+            `collection-private-photos:${collection._id}`,
+            JSON.stringify(Array.from(next)),
+          );
+        }
+        return next;
+      });
+      setShareNotice(payload?.data?.private ? "Photo marked private" : "Photo made visible");
+    } catch (error) {
+      setShareNotice(error instanceof Error ? error.message : "Private photo update failed");
+    } finally {
+      setPrivateImageBusy("");
+    }
+  };
+
   const shareCollection = () =>
     shareItem(
       { title, text: `View ${title}`, url: currentPublicUrl() },
@@ -603,8 +731,16 @@ export function PublicGallery({
     setSlideshowIndex(0);
   };
   const closeSlideshow = () => setSlideshowIndex(null);
-  const showNextSlide = () => setSlideshowIndex((index) => !visibleImages.length || index === null ? 0 : (index + 1) % visibleImages.length);
-  const showPreviousSlide = () => setSlideshowIndex((index) => !visibleImages.length || index === null ? 0 : (index - 1 + visibleImages.length) % visibleImages.length);
+  const showNextSlide = () => setSlideshowIndex((index) => {
+    if (!visibleImages.length || index === null) return 0;
+    if (index >= visibleImages.length - 1) return slideshowAutoLoop ? 0 : index;
+    return index + 1;
+  });
+  const showPreviousSlide = () => setSlideshowIndex((index) => {
+    if (!visibleImages.length || index === null) return 0;
+    if (index <= 0) return slideshowAutoLoop ? visibleImages.length - 1 : 0;
+    return index - 1;
+  });
   const loadFaces = async (force = false) => {
     setFaceSheetOpen(true);
     if (((!force && faces.length) || faceBusy)) return;
@@ -668,6 +804,18 @@ export function PublicGallery({
   }, [shareNotice]);
 
   useEffect(() => {
+    if (!collection?._id) return;
+    try {
+      const saved = JSON.parse(
+        window.localStorage.getItem(`collection-private-photos:${collection._id}`) || "[]",
+      );
+      setPrivateImageIds(new Set(Array.isArray(saved) ? saved : []));
+    } catch {
+      setPrivateImageIds(new Set());
+    }
+  }, [collection?._id]);
+
+  useEffect(() => {
     const startUrl = `${window.location.pathname}${window.location.search}`;
     const manifestHref = `/manifest.webmanifest?start=${encodeURIComponent(startUrl)}`;
     let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -680,26 +828,39 @@ export function PublicGallery({
   }, []);
 
   useEffect(() => {
-    if (slideshowIndex === null || visibleImages.length <= 1) return;
-    const timer = window.setTimeout(showNextSlide, 3200);
-    return () => window.clearTimeout(timer);
-  }, [slideshowIndex, visibleImages.length]);
+    setQuickShareDownload(new URLSearchParams(window.location.search).get("download"));
+  }, []);
 
   useEffect(() => {
-    if (!collection || !marketingPopup.enabled) return;
-    const key = `gallery-marketing-popup:${collection._id}`;
-    if (!window.sessionStorage.getItem(key)) setPopupOpen(true);
-  }, [collection?._id, marketingPopup.enabled]);
+    if (slideshowIndex === null || visibleImages.length <= 1) return;
+    if (!slideshowAutoLoop && slideshowIndex >= visibleImages.length - 1) return;
+    const timer = window.setTimeout(showNextSlide, slideshowDelay);
+    return () => window.clearTimeout(timer);
+  }, [slideshowAutoLoop, slideshowDelay, slideshowIndex, visibleImages.length]);
 
-  const closeMarketingPopup = () => {
-    if (collection?._id) window.sessionStorage.setItem(`gallery-marketing-popup:${collection._id}`, "1");
-    setPopupOpen(false);
-  };
+  useEffect(() => {
+    setPopupOpen(
+      Boolean(
+        collection &&
+          marketingSubscriptionEnabled &&
+          marketingPopupEnabled &&
+          !emailAccessLocked,
+      ),
+    );
+  }, [collection?._id, emailAccessLocked, marketingPopupEnabled, marketingSubscriptionEnabled]);
 
-  const submitMarketingPopup = () => {
-    if (!popupEmail.includes("@")) return;
-    window.localStorage.setItem("gallery-marketing-email", popupEmail.trim().toLowerCase());
-    closeMarketingPopup();
+  const closeMarketingPopup = () => setPopupOpen(false);
+
+  const submitMarketingPopup = async () => {
+    const email = popupEmail.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) return;
+    try {
+      await recordEmailRegistration(email, true, "popup");
+      window.localStorage.setItem("gallery-marketing-email", email);
+      closeMarketingPopup();
+    } catch (error) {
+      setShareNotice(error instanceof Error ? error.message : "Subscription failed");
+    }
   };
 
   return (
@@ -708,7 +869,7 @@ export function PublicGallery({
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
       <ScreenCaptureGuard />
-      {popupOpen && marketingPopup.enabled && (
+      {popupOpen && marketingSubscriptionEnabled && marketingPopupEnabled && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
           <div className="relative w-full max-w-[450px] bg-white p-8 text-[#111] shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-10">
             <button className="absolute right-4 top-4" onClick={closeMarketingPopup} aria-label="Close marketing signup" type="button">
@@ -737,31 +898,45 @@ export function PublicGallery({
         </div>
       )}
       {emailAccessLocked ? (
-        <main className="flex min-h-screen items-center justify-center bg-[#fafafa] p-6">
-          <section className="w-full max-w-md border bg-white p-7 shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#00a997]">Email access</p>
-            <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
-            <p className="mt-3 text-sm leading-6 text-[#666]">Enter an approved email to view this gallery.</p>
-            <Input value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} placeholder="you@example.com" className="mt-6 h-11 rounded-none" />
-            {marketingOptIn.emailRegistration && (
-              <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
-                <input type="checkbox" checked={visitorMarketingOptIn} onChange={(event) => setVisitorMarketingOptIn(event.target.checked)} className="mt-1" />
-                <span>Send me updates and special offers.</span>
-              </label>
-            )}
-            <Button className="mt-3 h-11 w-full rounded-none bg-[#22bda7] text-white" disabled={accessBusy || !accessEmail.includes("@")} onClick={() => void verifyAccessEmail()}>
-              {accessBusy ? "Checking..." : "Enter gallery"}
-            </Button>
-            <div className="mt-6 border-t pt-5">
-              <p className="text-sm font-bold">Request access</p>
-              <Textarea value={accessReason} onChange={(event) => setAccessReason(event.target.value)} placeholder="Tell the gallery owner why you need access" className="mt-3 min-h-24 rounded-none" />
-              <Button variant="outline" className="mt-3 h-10 w-full rounded-none bg-white" disabled={accessBusy || !accessEmail.includes("@")} onClick={() => void requestAccess()}>
-                Send request
-              </Button>
-            </div>
-            {accessNotice && <p className="mt-4 text-sm font-semibold text-[#666]">{accessNotice}</p>}
-          </section>
-        </main>
+      <main className="relative flex min-h-screen items-center justify-center bg-[#f6f6f4] p-6">
+        <section className="w-full max-w-md bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.14)]">
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#00a997]">Email registration</p>
+          <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
+          <p className="mt-3 text-sm leading-6 text-[#666]">
+            Enter your email address to view this collection.
+          </p>
+          <Input
+            type="email"
+            value={accessEmail}
+            onChange={(event) => setAccessEmail(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void verifyAccessEmail();
+            }}
+            placeholder="you@example.com"
+            className="mt-6 h-11 rounded-none"
+            autoFocus
+          />
+          {marketingSubscriptionEnabled && marketingEmailRegistrationEnabled && (
+            <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
+              <input
+                type="checkbox"
+                checked={visitorMarketingOptIn}
+                onChange={(event) => setVisitorMarketingOptIn(event.target.checked)}
+                className="mt-1"
+              />
+              <span>Subscribe to updates and special offers.</span>
+            </label>
+          )}
+          <Button
+            className="mt-5 h-11 w-full rounded-none bg-[#22bda7] text-white"
+            disabled={accessBusy || !accessEmail.includes("@")}
+            onClick={() => void verifyAccessEmail()}
+          >
+            {accessBusy ? "Opening..." : "View collection"}
+          </Button>
+          {accessNotice && <p className="mt-4 text-sm font-semibold text-red-600">{accessNotice}</p>}
+        </section>
+      </main>
       ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
       <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-black/5 px-4 sm:px-5 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
@@ -779,7 +954,7 @@ export function PublicGallery({
               <button className="flex items-center gap-2 text-sm" onClick={favoriteTools.openFavorites} type="button">
                 <Heart className="size-4" /> My Favorites
               </button>
-              {canDownload && (
+              {canDownloadAll && (
                 <button className="flex items-center gap-2 text-sm disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button">
                   {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} {zipDownloading ? "Preparing" : "Download All"}
                 </button>
@@ -795,7 +970,7 @@ export function PublicGallery({
               <button onClick={favoriteTools.openFavorites} type="button" aria-label="My Favorites" title="My Favorites">
                 <Heart className="size-5" />
               </button>
-              {canDownload && (
+              {canDownloadAll && (
                 <button onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" aria-label={zipDownloading ? "Preparing ZIP download" : "Download all photos"} title="Download all photos">
                   {zipDownloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
                 </button>
@@ -884,7 +1059,7 @@ export function PublicGallery({
               <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
               <span className="hidden sm:inline md:sr-only">Favorite</span>
             </button>
-            {canDownload && (
+            {canDownloadAll && (
               <button className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
                 {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               </button>
@@ -970,12 +1145,15 @@ export function PublicGallery({
                 photo={photo}
                 spacing={masonryGapPx}
                 canFavorite={favoritesEnabled}
-                canDownload={canDownload}
+                canDownload={canDownloadSingle}
                 canShare={socialSharingEnabled}
                 showFilename={showFilenames}
                 sharpeningLevel={sharpeningLevel}
                 favoriteBusy={favoriteImageBusy === photo._id}
                 favorited={favoriteImageIds.has(photo._id)}
+                privatePhoto={privateImageIds.has(photo._id)}
+                privateBusy={privateImageBusy === photo._id}
+                onPrivate={togglePrivatePhoto}
                 onDownload={downloadPhoto}
                 onFavorite={toggleImageFavorite}
                 onPreview={setActiveImage}
@@ -1123,7 +1301,7 @@ export function PublicGallery({
                 <Share2 className="size-5" />
               </button>
             )}
-            {canDownload && (
+            {canDownloadSingle && (
               <button className="polished-icon-button" onClick={() => downloadPhoto(activeImage)} type="button" aria-label="Download" title="Download">
                 <Download className="size-5" />
               </button>
@@ -1171,7 +1349,7 @@ export function PublicGallery({
                 <Share2 className="size-5" />
               </button>
             )}
-            {canDownload && (
+            {canDownloadSingle && (
               <button className="polished-icon-button" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button" aria-label="Download" title="Download">
                 <Download className="size-5" />
               </button>
@@ -1292,6 +1470,9 @@ function GalleryTile({
   sharpeningLevel,
   favoriteBusy,
   favorited,
+  privatePhoto,
+  privateBusy,
+  onPrivate,
   onDownload,
   onFavorite,
   onPreview,
@@ -1306,6 +1487,9 @@ function GalleryTile({
   sharpeningLevel: "optimal" | "low" | "high";
   favoriteBusy: boolean;
   favorited: boolean;
+  privatePhoto: boolean;
+  privateBusy: boolean;
+  onPrivate: (photo: PublicImage) => void;
   onDownload: (photo: PublicImage) => void;
   onFavorite: (photo: PublicImage) => void;
   onPreview: (photo: PublicImage) => void;
@@ -1344,6 +1528,18 @@ function GalleryTile({
         {canFavorite && isPersistedImageId(photo._id) && (
           <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" title="Favorite" type="button">
             <Heart className={cn("size-4", favorited && "fill-red-500 text-red-500")} />
+          </button>
+        )}
+        {isPersistedImageId(photo._id) && (
+          <button
+            className="polished-icon-button size-9 sm:size-10"
+            onClick={() => onPrivate(photo)}
+            disabled={privateBusy}
+            aria-label={privatePhoto ? "Make photo visible" : "Mark photo private"}
+            title={privatePhoto ? "Private" : "Mark private"}
+            type="button"
+          >
+            <EyeOff className={cn("size-4", privatePhoto && "text-[#00a997]")} />
           </button>
         )}
         <button className="polished-icon-button size-9 sm:size-10" onClick={() => onPreview(photo)} aria-label="View image" title="View">

@@ -16,9 +16,9 @@ type NavCopy = {
 };
 
 const productLinks = [
-  { title: "Client Gallery", text: "Share, deliver, proof and sell", href: "/dashboard/client-gallery", mark: "bg-[#0dc6b5]" },
-  { title: "Store Gallery", text: "Your online store for prints and downloads", href: "/dashboard/store-gallery", mark: "bg-[#ff6b7a]" },
-  { title: "Mobile Gallery App", text: "Create installable mobile-first photo apps", href: "/dashboard/mobile-gallery", mark: "bg-[#f5c84b]" },
+  { title: "Client Gallery", text: "Share, deliver, proof and sell", href: "/dashboard/client-gallery", mark: "bg-[#6F57D9]" },
+  { title: "Store Gallery", text: "Your online store for prints and downloads", href: "/dashboard/store-gallery", mark: "bg-[#C89F65]" },
+  { title: "Mobile Gallery App", text: "Create installable mobile-first photo apps", href: "/dashboard/mobile-gallery", mark: "bg-[#B7A3FF]" },
 ];
 
 export function SiteNav({ brand, nav, lang, dashboardHref }: { brand?: Partial<BrandSettings>; nav: NavCopy; lang: "en" | "gr"; dashboardHref?: string }) {
@@ -68,7 +68,7 @@ export function SiteNav({ brand, nav, lang, dashboardHref }: { brand?: Partial<B
         <button type="button" onClick={() => switchLanguage("en")} className={lang === "en" ? "text-sm font-bold" : "text-sm text-white/75"}>EN</button>
         <button type="button" onClick={() => switchLanguage("gr")} className={lang === "gr" ? "text-sm font-bold" : "text-sm text-white/75"}>GR</button>
         {!dashboardHref && <Link href="/login" className="text-sm font-semibold">{nav.login}</Link>}
-        <Button asChild className="h-11 min-w-36 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]">
+        <Button asChild className="h-11 min-w-36 rounded-none bg-[#1C1C1C] text-sm font-bold text-white hover:bg-[#2E2E2E]">
           <Link href={dashboardHref ?? "/register"}>{dashboardHref ? "Dashboard" : nav.cta}</Link>
         </Button>
       </div>
@@ -102,10 +102,10 @@ export function SiteNav({ brand, nav, lang, dashboardHref }: { brand?: Partial<B
             {!dashboardHref && <Link href="/login" onClick={() => setOpen(false)}>{nav.login}</Link>}
           </nav>
           <div className="mt-10 flex items-center gap-4 text-sm font-bold">
-            <button type="button" onClick={() => { setOpen(false); switchLanguage("en"); }} className={lang === "en" ? "text-[#22bda7]" : "text-white/70"}>EN</button>
-            <button type="button" onClick={() => { setOpen(false); switchLanguage("gr"); }} className={lang === "gr" ? "text-[#22bda7]" : "text-white/70"}>GR</button>
+            <button type="button" onClick={() => { setOpen(false); switchLanguage("en"); }} className={lang === "en" ? "text-[#B7A3FF]" : "text-white/70"}>EN</button>
+            <button type="button" onClick={() => { setOpen(false); switchLanguage("gr"); }} className={lang === "gr" ? "text-[#B7A3FF]" : "text-white/70"}>GR</button>
           </div>
-          <Button asChild className="mt-10 h-12 w-full rounded-none bg-[#22bda7] text-base font-bold text-white hover:bg-[#19a995]">
+          <Button asChild className="mt-10 h-12 w-full rounded-none bg-[#1C1C1C] text-base font-bold text-white hover:bg-[#2E2E2E]">
             <Link href={dashboardHref ?? "/register"} onClick={() => setOpen(false)}>{dashboardHref ? "Dashboard" : nav.cta}</Link>
           </Button>
         </div>

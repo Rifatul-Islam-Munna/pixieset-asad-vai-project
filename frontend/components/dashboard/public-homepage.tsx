@@ -76,8 +76,8 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
 
   if (data.locked) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f7f7f5] p-5 text-[#111]">
-        <form onSubmit={unlock} className="w-full max-w-md bg-white p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.1)] sm:p-10">
+      <main className="flex min-h-screen items-center justify-center bg-[#F8F7F4] p-5 text-[#151515]">
+        <form onSubmit={unlock} className="w-full max-w-md border border-[#E8E5E1] bg-white p-8 text-center shadow-[0_24px_80px_rgba(21,21,21,0.08)] sm:p-10">
           <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#111] text-white"><LockKeyhole className="size-6" /></div>
           {data.logoUrl && <img src={data.logoUrl} alt="" className="mx-auto mt-6 h-12 max-w-32 object-contain" />}
           <h1 className="mt-6 text-2xl font-semibold uppercase tracking-[0.1em]">{data.brandName}</h1>
@@ -107,7 +107,7 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
   ] as const;
 
   return (
-    <main className="min-h-screen bg-white text-[#111]">
+    <main className="min-h-screen bg-[#F8F7F4] text-[#151515]">
       <header className="mx-auto max-w-[1380px] px-5 pb-10 pt-8 sm:px-10 sm:pt-12">
         <div className="flex justify-end">
           <label className="flex items-center gap-2 border-b border-transparent pb-2 focus-within:border-[#111]">
@@ -153,7 +153,7 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
           <div className="grid gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
             {collections.map((collection) => (
               <Link key={collection._id} href={collection.url} className="group block text-center">
-                <div className="overflow-hidden bg-[#f1f1f1]">
+                <div className="overflow-hidden bg-[#F3F0EA] shadow-[0_18px_48px_rgba(21,21,21,0.06)]">
                   {collection.coverImage ? (
                     <img src={imageSrc(collection.coverImage)} alt={collection.name} className="aspect-[1.5] w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
                   ) : (

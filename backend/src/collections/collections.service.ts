@@ -21,6 +21,8 @@ import { CollectionImage, CollectionImageDocument } from './entities/collection-
 import { CollectionFavorite, CollectionFavoriteDocument } from './entities/collection-favorite.entity';
 import { CollectionImageFavorite, CollectionImageFavoriteDocument } from './entities/collection-image-favorite.entity';
 import { CollectionDownloadActivity, CollectionDownloadActivityDocument } from './entities/collection-download-activity.entity';
+import { CollectionEmailRegistration, CollectionEmailRegistrationDocument } from './entities/collection-email-registration.entity';
+import { CollectionPrivatePhoto, CollectionPrivatePhotoDocument } from './entities/collection-private-photo.entity';
 
 type WatermarkData = {
   id: string;
@@ -54,6 +56,8 @@ export class CollectionsService {
     @InjectModel(CollectionFavorite.name) private readonly favoriteModel: Model<CollectionFavoriteDocument>,
     @InjectModel(CollectionImageFavorite.name) private readonly imageFavoriteModel: Model<CollectionImageFavoriteDocument>,
     @InjectModel(CollectionDownloadActivity.name) private readonly downloadActivityModel: Model<CollectionDownloadActivityDocument>,
+    @InjectModel(CollectionEmailRegistration.name) private readonly emailRegistrationModel: Model<CollectionEmailRegistrationDocument>,
+    @InjectModel(CollectionPrivatePhoto.name) private readonly privatePhotoModel: Model<CollectionPrivatePhotoDocument>,
     @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(MobileGalleryImage.name) private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
@@ -112,7 +116,7 @@ export class CollectionsService {
 
   async findPublic(identifier: string, email?: string, limit?: string, offset?: string, siteSlug?: string) {
     const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
     const preset = collection.presetId
       ? await this.settingModel
           .findOne({
@@ -131,6 +135,9 @@ export class CollectionsService {
       },
     };
     const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
+    if (emailAccess.required && emailAccess.authorized && emailAccess.email) {
+      await this.saveEmailRegistration(collection, emailAccess.email, false, 'email-registration');
+    }
     const imagesPage = emailAccess.authorized
       ? await this.findPublicImages(identifier, email, limit, offset, siteSlug)
       : { items: [], total: 0, limit: this.pageLimit(limit), offset: this.pageOffset(offset), hasMore: false };
@@ -196,7 +203,10 @@ export class CollectionsService {
         ...(collection.design ?? {}),
       },
       settings: mergedSettings,
-      preferences: (preferences?.data as any) ?? {},
+      preferences: {
+        ...((preferences?.data as any) ?? {}),
+        ...(((collection.settings as any)?.preferences as any) ?? {}),
+      },
       integrations: {
         googleAnalytics: (integrations?.data as any) ?? {},
       },
@@ -215,7 +225,7 @@ export class CollectionsService {
 
   async findPublicImages(identifier: string, email?: string, limit?: string, offset?: string, siteSlug?: string) {
     const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
     const preset = collection.presetId
       ? await this.settingModel.findOne({ userId: collection.userId, type: DashboardSettingType.PRESET, localId: collection.presetId }).lean()
       : null;
@@ -237,7 +247,7 @@ export class CollectionsService {
 
   async requestPublicAccess(identifier: string, body: { email?: string; reason?: string }, siteSlug?: string) {
     const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
     const email = this.cleanEmail(body.email);
     if (!email) throw new BadRequestException('Email is required');
     const reason = String(body.reason ?? '').trim().slice(0, 1000);
@@ -261,6 +271,73 @@ export class CollectionsService {
       { $set: { settings: { ...settings, access: { ...access, requests: nextRequests } } } },
     );
     return { requested: true, email };
+  }
+
+  async recordPublicEmailRegistration(
+    identifier: string,
+    body: { email?: string; marketingOptIn?: boolean; source?: string },
+    siteSlug?: string,
+  ) {
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
+    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
+    const email = this.cleanEmail(body.email);
+    if (!email) throw new BadRequestException('Email is required');
+    const source = this.registrationSource(body.source);
+    await this.saveEmailRegistration(collection, email, Boolean(body.marketingOptIn), source);
+    return {
+      registered: true,
+      authorized: true,
+      email,
+      marketingOptIn: Boolean(body.marketingOptIn),
+    };
+  }
+
+  async togglePublicPrivateImage(
+    identifier: string,
+    imageId: string,
+    body: { email?: string },
+    siteSlug?: string,
+  ) {
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
+    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
+    const email = this.cleanEmail(body.email);
+    if (!email) throw new BadRequestException('Email is required');
+    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
+    const collectionId = collection._id.toString();
+    const image = await this.imageModel.findOne({ _id: imageId, collectionId }).select('_id').lean();
+    if (!image) throw new NotFoundException('Image not found');
+
+    const existing = await this.privatePhotoModel.findOne({ collectionId, email, imageId }).lean();
+    if (existing) {
+      await this.privatePhotoModel.deleteOne({ _id: existing._id });
+      return { private: false, collectionId, imageId, email };
+    }
+
+    await this.privatePhotoModel.updateOne(
+      { collectionId, email, imageId },
+      { $setOnInsert: { collectionId, email, imageId } },
+      { upsert: true },
+    );
+    return { private: true, collectionId, imageId, email };
+  }
+
+  async listMarketingContacts(userId: string) {
+    const contacts = await this.emailRegistrationModel
+      .find({ ownerId: userId, marketingOptIn: true })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    return contacts.map((contact) => ({
+      _id: contact._id,
+      email: contact.email,
+      collectionId: contact.collectionId,
+      collectionName: contact.collectionName,
+      source: contact.lastSource,
+      sources: contact.sources ?? [],
+      marketingOptIn: contact.marketingOptIn,
+      createdAt: contact.createdAt,
+      updatedAt: contact.updatedAt,
+    }));
   }
 
   async listFavoriteCollections(userId: string) {
@@ -383,7 +460,7 @@ export class CollectionsService {
     if (!email) throw new BadRequestException('Email is required');
     if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
     const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
     const collectionId = collection._id.toString();
     const image = await this.imageModel.findOne({ _id: imageId, collectionId }).select('_id collectionId').lean();
     if (!image) throw new NotFoundException('Image not found');
@@ -417,18 +494,23 @@ export class CollectionsService {
     const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
     if (!collection) throw new NotFoundException('Collection not found');
 
-    const [collectionFavorites, imageFavorites, downloads, images] = await Promise.all([
-      this.favoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
-      this.imageFavoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
-      this.downloadActivityModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
-      this.imageModel.find({ collectionId }).select('_id originalName url thumbnailUrl').lean(),
-    ]);
+    const [collectionFavorites, imageFavorites, downloads, images, emailRegistrations, privatePhotos] =
+      await Promise.all([
+        this.favoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
+        this.imageFavoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
+        this.downloadActivityModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+        this.imageModel.find({ collectionId }).select('_id originalName url thumbnailUrl').lean(),
+        this.emailRegistrationModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+        this.privatePhotoModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+      ]);
+
     const userIds = [...new Set([
       ...collectionFavorites.map((favorite) => favorite.userId),
       ...imageFavorites.map((favorite) => favorite.userId),
     ])];
-    const users = userIds.length
-      ? await this.userModel.find({ _id: { $in: userIds } }).select('_id email name').lean()
+    const accountUserIds = userIds.filter((id) => Types.ObjectId.isValid(id));
+    const users = accountUserIds.length
+      ? await this.userModel.find({ _id: { $in: accountUserIds } }).select('_id email name').lean()
       : [];
     const userMap = new Map(users.map((user) => [user._id.toString(), user]));
     const imageMap = new Map(images.map((image) => [image._id.toString(), image]));
@@ -484,6 +566,29 @@ export class CollectionsService {
         createdAt: download.createdAt,
         updatedAt: download.updatedAt,
       })),
+      emailRegistrations: emailRegistrations.map((registration) => ({
+        _id: registration._id,
+        email: registration.email,
+        collectionId: registration.collectionId,
+        collectionName: registration.collectionName,
+        source: registration.lastSource,
+        sources: registration.sources ?? [],
+        marketingOptIn: registration.marketingOptIn,
+        createdAt: registration.createdAt,
+        updatedAt: registration.updatedAt,
+      })),
+      privatePhotos: privatePhotos.map((privatePhoto) => {
+        const image = imageMap.get(privatePhoto.imageId);
+        return {
+          _id: privatePhoto._id,
+          email: privatePhoto.email,
+          imageId: privatePhoto.imageId,
+          imageName: image?.originalName || privatePhoto.imageId,
+          imageUrl: image?.thumbnailUrl || image?.url || '',
+          createdAt: privatePhoto.createdAt,
+          updatedAt: privatePhoto.updatedAt,
+        };
+      }),
     };
   }
 
@@ -493,7 +598,7 @@ export class CollectionsService {
     siteSlug?: string,
   ) {
     const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (collection.status !== 'published') throw new NotFoundException('Collection not found');
+    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
     const email = String(body?.email ?? '').trim().toLowerCase();
     if (!email || !email.includes('@')) throw new BadRequestException('Email is required');
     const items = Array.isArray(body?.items) ? body.items.slice(0, 250) : [];
@@ -699,7 +804,7 @@ export class CollectionsService {
     }
     if (dto.tags !== undefined) collection.tags = dto.tags;
     if (dto.watermarkId !== undefined) collection.watermarkId = dto.watermarkId || undefined;
-    if (dto.expiresAt !== undefined) collection.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : undefined;
+    if (dto.expiresAt !== undefined) collection.expiresAt = this.expiryDate(dto.expiresAt);
     if (dto.status !== undefined) collection.status = dto.status;
     if (dto.design !== undefined) collection.design = dto.design;
     if (dto.settings !== undefined) collection.settings = dto.settings;
@@ -977,6 +1082,97 @@ export class CollectionsService {
     await this.collectionModel.updateOne({ _id: collectionId, userId }, update);
 
     return image.toObject();
+  }
+
+  async updateImage(
+    userId: string,
+    collectionId: string,
+    imageId: string,
+    dto: { originalName?: string; setId?: string; watermarkId?: string },
+  ) {
+    const image = await this.imageModel.findOne({ _id: imageId, userId, collectionId });
+    if (!image) throw new NotFoundException('Image not found');
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).select('sets').lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    if (dto.originalName !== undefined) {
+      const name = String(dto.originalName ?? '').trim().slice(0, 240);
+      if (!name) throw new BadRequestException('Filename is required');
+      image.originalName = name;
+      image.metadata = { ...(image.metadata ?? {}), filename: name };
+    }
+    if (dto.setId !== undefined) {
+      const setId = String(dto.setId ?? '').trim();
+      if (setId && !collection.sets?.some((set) => set.id === setId)) {
+        throw new BadRequestException('Set not found');
+      }
+      image.setId = setId || undefined;
+    }
+    if (dto.watermarkId !== undefined) {
+      const watermarkId = String(dto.watermarkId ?? '').trim();
+      if (watermarkId && watermarkId !== 'No watermark') await this.resolveWatermarkById(userId, watermarkId);
+      image.metadata = { ...(image.metadata ?? {}), watermarkId };
+      image.watermarked = false;
+    }
+    await image.save();
+    return image.toObject();
+  }
+
+  async copyMoveImage(
+    userId: string,
+    collectionId: string,
+    imageId: string,
+    dto: { mode?: 'copy' | 'move'; targetCollectionId?: string; targetSetId?: string },
+  ) {
+    const image = await this.imageModel.findOne({ _id: imageId, userId, collectionId }).lean();
+    if (!image) throw new NotFoundException('Image not found');
+    const targetCollectionId = String(dto.targetCollectionId ?? '').trim();
+    if (!Types.ObjectId.isValid(targetCollectionId)) throw new BadRequestException('Target collection is required');
+    const targetCollection = await this.collectionModel.findOne({ _id: targetCollectionId, userId }).lean();
+    if (!targetCollection) throw new NotFoundException('Target collection not found');
+    const targetSetId = String(dto.targetSetId ?? '').trim() || targetCollection.sets?.[0]?.id || 'highlights';
+    if (targetSetId && !targetCollection.sets?.some((set) => set.id === targetSetId)) {
+      throw new BadRequestException('Target set not found');
+    }
+    if (dto.mode === 'move') {
+      await this.imageModel.updateOne(
+        { _id: imageId, userId, collectionId },
+        { $set: { collectionId: targetCollectionId, setId: targetSetId } },
+      );
+      await this.collectionModel.updateOne({ _id: collectionId, userId }, { $inc: { imageCount: -1 } });
+      await this.collectionModel.updateOne(
+        { _id: targetCollectionId, userId },
+        {
+          $inc: { imageCount: 1 },
+          $set: { coverImage: targetCollection.coverImage ?? image.url },
+        },
+      );
+      return { moved: true, imageId, targetCollectionId, targetSetId };
+    }
+
+    const lastImage = await this.imageModel
+      .findOne({ collectionId: targetCollectionId, userId })
+      .sort({ order: -1, createdAt: -1 })
+      .select('order')
+      .lean();
+    const imageCopy = { ...(image as any) };
+    delete imageCopy._id;
+    delete imageCopy.createdAt;
+    delete imageCopy.updatedAt;
+    delete imageCopy.__v;
+    const copy = await this.imageModel.create({
+      ...imageCopy,
+      collectionId: targetCollectionId,
+      setId: targetSetId,
+      order: Math.max(0, Number(lastImage?.order ?? 0)) + 1,
+    });
+    await this.collectionModel.updateOne(
+      { _id: targetCollectionId, userId },
+      {
+        $inc: { imageCount: 1 },
+        $set: { coverImage: targetCollection.coverImage ?? image.url },
+      },
+    );
+    return { copied: true, image: copy.toObject(), targetCollectionId, targetSetId };
   }
 
   async starImage(userId: string, collectionId: string, imageId: string, starred: boolean) {
@@ -1436,6 +1632,22 @@ export class CollectionsService {
     return collection;
   }
 
+  private isPublicCollectionVisible(collection: { status?: string; expiresAt?: Date | string | null }) {
+    if (collection.status !== 'published') return false;
+    if (!collection.expiresAt) return true;
+    const expiresAt = new Date(collection.expiresAt);
+    return Number.isNaN(expiresAt.getTime()) || expiresAt > new Date();
+  }
+
+  private expiryDate(value?: string) {
+    if (!value) return undefined;
+    const source = /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? `${value}T23:59:59.999Z`
+      : value;
+    const date = new Date(source);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+  }
+
   private escapeSvg(value: string) {
     return value
       .replace(/&/g, '&amp;')
@@ -1587,25 +1799,54 @@ export class CollectionsService {
 
   private cleanEmail(value?: string) {
     const email = String(value ?? '').trim().toLowerCase();
-    return email.includes('@') ? email : '';
+    return /^\S+@\S+\.\S+$/.test(email) ? email : '';
+  }
+
+  private registrationSource(value?: string) {
+    const source = String(value ?? 'email-registration').trim().toLowerCase();
+    return ['email-registration', 'popup', 'download', 'favorite', 'store-checkout'].includes(source)
+      ? source
+      : 'email-registration';
+  }
+
+  private async saveEmailRegistration(
+    collection: any,
+    email: string,
+    marketingOptIn: boolean,
+    source: string,
+  ) {
+    const collectionId = collection._id.toString();
+    const existing = await this.emailRegistrationModel
+      .findOne({ collectionId, email })
+      .select('marketingOptIn')
+      .lean();
+    await this.emailRegistrationModel.updateOne(
+      { collectionId, email },
+      {
+        $set: {
+          ownerId: String(collection.userId),
+          collectionName: collection.name,
+          email,
+          lastSource: source,
+          marketingOptIn: Boolean(existing?.marketingOptIn || marketingOptIn),
+        },
+        $setOnInsert: { collectionId },
+        $addToSet: { sources: source },
+      },
+      { upsert: true },
+    );
   }
 
   private resolveEmailAccess(settings: any, email?: string) {
     const general = settings?.general ?? {};
-    const access = settings?.access ?? {};
     const required = this.boolSetting(general.emailRegistration);
     if (!required) return { required: false, authorized: true, status: 'open', email: '' };
     const clean = this.cleanEmail(email);
     if (!clean) return { required: true, authorized: false, status: 'required', email: '' };
-    const allowedEmails = Array.isArray(access.allowedEmails) ? access.allowedEmails.map((item: string) => this.cleanEmail(item)).filter(Boolean) : [];
-    const requests = Array.isArray(access.requests) ? access.requests : [];
-    const request = requests.find((item: any) => this.cleanEmail(item.email) === clean);
-    const approved = request?.status === 'approved';
-    const denied = request?.status === 'declined';
     return {
       required: true,
-      authorized: allowedEmails.includes(clean) || approved,
-      status: allowedEmails.includes(clean) || approved ? 'approved' : denied ? 'declined' : request ? 'pending' : 'unknown',
+      authorized: true,
+      status: 'registered',
       email: clean,
     };
   }

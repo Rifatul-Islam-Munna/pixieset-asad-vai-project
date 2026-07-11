@@ -24,6 +24,14 @@ import {
   CollectionDownloadActivity,
   CollectionDownloadActivitySchema,
 } from './entities/collection-download-activity.entity';
+import {
+  CollectionEmailRegistration,
+  CollectionEmailRegistrationSchema,
+} from './entities/collection-email-registration.entity';
+import {
+  CollectionPrivatePhoto,
+  CollectionPrivatePhotoSchema,
+} from './entities/collection-private-photo.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
 import { MobileGalleryImage, MobileGalleryImageSchema } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
@@ -37,6 +45,8 @@ import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity'
       { name: CollectionFavorite.name, schema: CollectionFavoriteSchema },
       { name: CollectionImageFavorite.name, schema: CollectionImageFavoriteSchema },
       { name: CollectionDownloadActivity.name, schema: CollectionDownloadActivitySchema },
+      { name: CollectionEmailRegistration.name, schema: CollectionEmailRegistrationSchema },
+      { name: CollectionPrivatePhoto.name, schema: CollectionPrivatePhotoSchema },
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: User.name, schema: UserSchema },
       { name: MobileGalleryImage.name, schema: MobileGalleryImageSchema },
