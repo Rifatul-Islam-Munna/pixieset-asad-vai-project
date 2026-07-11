@@ -1,0 +1,44 @@
+name: Move share collection to page
+
+on:
+  pull_request:
+    branches:
+      - developmentbranch
+    paths:
+      - .github/move-share-page-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: developmentbranch
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Apply share page navigation patch
+        run: python .github/move-share-page.py
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Remove temporary files
+        run: |
+          rm -f .github/move-share-page.py
+          rm -f .github/workflows/move-share-page.yml
+          rm -f .github/move-share-page-trigger.txt
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Move collection email sharing to a dedicated page"
+          git push origin HEAD:developmentbranch
