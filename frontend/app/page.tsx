@@ -23,7 +23,7 @@ function lines(text: string) {
 async function getDashboardHref() {
   const user = await getUser();
   if (!user) return undefined;
-  return user.role === UserType.ADMIN ? "/admin" : "/dashboard/client-gallery";
+  return user.role === UserType.ADMIN ? "/admin" : "/dashboard/overview";
 }
 
 export default async function Home({ searchParams }: { searchParams?: Promise<{ lang?: string }> }) {

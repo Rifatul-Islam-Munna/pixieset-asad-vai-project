@@ -12,6 +12,7 @@ import { LoginDto } from './dto/update-user.dto';
 import { User, UserDocument, UserType } from './entities/user.entity';
 import { FreePlanSettingService } from 'src/admin/free-plan-setting.service';
 import { HomepageService } from 'src/homepage/homepage.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class UserService implements OnModuleInit {
@@ -66,8 +67,11 @@ export class UserService implements OnModuleInit {
     }
 
     const freePlan = await this.freePlanSettings.get();
+    const username = await this.generateUsername(dto.name);
     const user = await this.userModel.create({
       ...dto,
+      username,
+      businessName: dto.name,
       email: dto.email?.trim().toLowerCase(),
       role: dto.role ?? UserType.USER,
       password: await bcrypt.hash(dto.password, 10),
@@ -137,6 +141,8 @@ export class UserService implements OnModuleInit {
       existing ??
       (await this.userModel.create({
         name: payload.name || email.split('@')[0],
+        username: await this.generateUsername(payload.name || email.split('@')[0]),
+        businessName: payload.name || email.split('@')[0],
         email,
         phoneNumber: email,
         password: await bcrypt.hash(`${googleId || email}:${Date.now()}`, 10),
@@ -188,6 +194,11 @@ export class UserService implements OnModuleInit {
       userRecord.monthlyEmailsUsed = 0;
       await userRecord.save();
     }
+    if (userRecord && !userRecord.username) {
+      userRecord.username = await this.generateUsername(userRecord.name);
+      await userRecord.save();
+      await this.homepageService.setUsername(id, userRecord.username);
+    }
     const user = userRecord?.toObject();
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
@@ -197,6 +208,53 @@ export class UserService implements OnModuleInit {
     user.storageUsedBytes = recalculated;
 
     return { data: user };
+  }
+
+  async usernameAvailability(raw: string, currentUserId: string) {
+    const username = this.normalizeUsername(raw);
+    if (username.length < 3) return { data: { username, available: false, reason: 'Use at least 3 characters' } };
+    const exists = await this.userModel.exists({ username, _id: { $ne: currentUserId } });
+    return { data: { username, available: !exists, reason: exists ? 'Username is not available' : '' } };
+  }
+
+  async updateProfile(id: string, dto: UpdateProfileDto) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+    if (dto.username !== undefined) {
+      const username = this.normalizeUsername(dto.username);
+      const status = await this.usernameAvailability(username, id);
+      if (!status.data.available) throw new HttpException(status.data.reason, HttpStatus.CONFLICT);
+      await this.homepageService.setUsername(id, username);
+      user.username = username;
+    }
+    if (dto.email !== undefined) user.email = dto.email.trim().toLowerCase();
+    const fields = ['businessName', 'firstName', 'lastName', 'phoneNumber', 'avatar', 'website', 'businessAddress', 'biography'] as const;
+    for (const field of fields) if (dto[field] !== undefined) (user as any)[field] = dto[field]?.trim();
+    if (dto.password) user.password = await bcrypt.hash(dto.password, 10);
+    user.name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.businessName || user.name;
+
+    try {
+      await user.save();
+    } catch (error: any) {
+      if (error?.code === 11000) throw new HttpException('Email, phone, or username already used', HttpStatus.CONFLICT);
+      throw error;
+    }
+    const { password: _password, ...safe } = user.toObject();
+    return { message: 'Account updated', data: safe };
+  }
+
+  private normalizeUsername(value: string) {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+  }
+
+  private async generateUsername(name: string) {
+    const base = this.normalizeUsername(name).slice(0, 22) || 'user';
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const candidate = `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+      if (!(await this.userModel.exists({ username: candidate }))) return candidate;
+    }
+    return `${base}${Date.now().toString().slice(-8)}`;
   }
 
   async recalculateStorage(userId: string): Promise<number> {

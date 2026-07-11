@@ -27,6 +27,12 @@ export class BillingController {
     return { data };
   }
 
+  @Get('purchases')
+  @UseGuards(AuthGuard)
+  async purchases(@Req() req: ExpressRequest) {
+    return { data: await this.adminService.purchaseHistory(req.user.id) };
+  }
+
   @Post('plans/:id/checkout')
   @UseGuards(AuthGuard)
   async checkout(@Param('id') id: string, @Body() dto: any, @Req() req: ExpressRequest) {

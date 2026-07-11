@@ -67,7 +67,7 @@ import {
   X,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -126,7 +126,7 @@ import {
 import { PostRequestAxios } from "@/api-hooks/api-hooks";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import { logOutUser } from "@/actions/auth";
-import { checkoutPlan, confirmPlanCheckout, getBillingOverview, recordEmailUsage, type BillingUser } from "@/actions/billing";
+import { checkoutPlan, confirmPlanCheckout, getBillingOverview, getPurchaseHistory, recordEmailUsage, type BillingUser, type PlanPurchase } from "@/actions/billing";
 import type { AdminPlan } from "@/actions/admin";
 import { CoverPreview, coverOptions } from "@/components/dashboard/cover-designs";
 import {
@@ -171,6 +171,7 @@ import { PlanFeatureLock, PlanFeatureNotice } from "@/components/dashboard/plan-
 import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { publicCollectionUrl } from "@/lib/public-site-url";
+import { checkUsername, useAccount, type AccountProfile } from "@/api-hooks/use-account";
 
 export type DashboardSection = "client-gallery" | "store-gallery";
 export type DashboardPage =
@@ -190,7 +191,8 @@ export type DashboardPage =
   | "coupons"
   | "get-started"
   | "storefront"
-  | "storage";
+  | "storage"
+  | "account";
 export type MarketingPage = "email-campaigns" | "contacts" | "settings";
 export type SettingsPage =
   | "branding"
@@ -403,11 +405,18 @@ export function ClientDashboard({
     const onStorageChanged = () => {
       void loadBilling();
     };
+    const onVisible = () => { if (document.visibilityState === "visible") void loadBilling(); };
     void loadBilling();
     window.addEventListener("storage-usage-changed", onStorageChanged);
+    window.addEventListener("focus", loadBilling);
+    document.addEventListener("visibilitychange", onVisible);
+    const refreshTimer = window.setInterval(loadBilling, 30_000);
     return () => {
       active = false;
       window.removeEventListener("storage-usage-changed", onStorageChanged);
+      window.removeEventListener("focus", loadBilling);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(refreshTimer);
     };
   }, []);
   const sidebarUsedGb = bytesToGb(billingUser?.storageUsedBytes ?? 0);
@@ -457,7 +466,7 @@ export function ClientDashboard({
                 ))}
               </DropdownMenuGroup>
               <div className="bg-[#f7f7f7] p-5 text-center">
-                <Link href={`/dashboard/${section}`} className="inline-flex items-center gap-2 text-sm text-[#333]">
+                <Link href="/dashboard/overview" className="inline-flex items-center gap-2 text-sm text-[#333]">
                   <LayoutGrid className="size-4 text-[#999]" />
                   View Dashboard
                 </Link>
@@ -467,9 +476,12 @@ export function ClientDashboard({
 
           <div className={cn("flex items-center gap-4", collapsed && "hidden")}>
             {section === "client-gallery" && <DashboardNotifications />}
-            <Avatar className="size-7">
-              <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">R</AvatarFallback>
-            </Avatar>
+            <Link href="/dashboard/client-gallery/account" aria-label="Account profile">
+              <Avatar className="size-7">
+                <AvatarImage src={billingUser?.avatar || ""} />
+                <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">{billingUser?.name?.slice(0, 1).toUpperCase() || "U"}</AvatarFallback>
+              </Avatar>
+            </Link>
             <button
               aria-label="Logout"
               className="text-[#555] hover:text-red-600 disabled:opacity-50"
@@ -649,7 +661,7 @@ export function ClientDashboard({
                       ))}
                     </DropdownMenuGroup>
                     <div className="bg-[#f7f7f7] p-4 text-center">
-                      <Link href={`/dashboard/${section}`} onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center gap-2 text-sm text-[#333]">
+                      <Link href="/dashboard/overview" onClick={() => setMobileMenuOpen(false)} className="inline-flex items-center gap-2 text-sm text-[#333]">
                         <LayoutGrid className="size-4 text-[#999]" />
                         View Dashboard
                       </Link>
@@ -748,6 +760,8 @@ export function ClientDashboard({
             <HomepageSettings />
           ) : page === "storage" ? (
             <StoragePlanPanel />
+          ) : page === "account" ? (
+            <AccountPanel />
           ) : page === "marketing" ? (
             <MarketingPanel marketingPage={marketingPage} />
           ) : page === "collection-new" ? (
@@ -795,6 +809,100 @@ export function ClientDashboard({
   );
 }
 
+function AccountPanel() {
+  const { query, update } = useAccount();
+  const [tab, setTab] = useState<"profile" | "account" | "purchases">("profile");
+  const [purchases, setPurchases] = useState<PlanPurchase[]>([]);
+  const [form, setForm] = useState<Partial<AccountProfile> & { password?: string }>({});
+  const [usernameState, setUsernameState] = useState<"idle" | "checking" | "available" | "unavailable">("idle");
+  const [usernameMessage, setUsernameMessage] = useState("");
+
+  useEffect(() => {
+    if (query.data?.data) setForm(query.data.data);
+  }, [query.data]);
+
+  useEffect(() => { getPurchaseHistory().then(setPurchases).catch(() => setPurchases([])); }, []);
+
+  useEffect(() => {
+    const username = form.username?.trim() || "";
+    if (!username || username === query.data?.data?.username) {
+      setUsernameState("idle");
+      setUsernameMessage("");
+      return;
+    }
+    setUsernameState("checking");
+    const timer = window.setTimeout(() => {
+      checkUsername(username)
+        .then(({ data }) => {
+          setUsernameState(data.available ? "available" : "unavailable");
+          setUsernameMessage(data.available ? "Username available" : data.reason);
+        })
+        .catch(() => {
+          setUsernameState("unavailable");
+          setUsernameMessage("Could not check username");
+        });
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [form.username, query.data?.data?.username]);
+
+  const field = (key: keyof AccountProfile, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const save = () => update.mutate(form, {
+    onSuccess: () => toast.success("Account saved"),
+    onError: (error) => toast.error(error.message),
+  });
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "gallerista.app";
+
+  if (query.isLoading) return <div className="mx-auto max-w-[800px]"><Skeleton className="h-[520px] w-full" /></div>;
+  if (query.isError) return <p className="text-center text-red-600">Could not load account.</p>;
+
+  return (
+    <section className="mx-auto max-w-[800px] pb-20">
+      <header className="border-b pb-5">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00a997]">Workspace identity</p>
+        <h1 className="mt-2 text-3xl font-medium">{tab === "profile" ? "Profile" : tab === "account" ? "Account" : "Purchases"}</h1>
+      </header>
+      <nav className="mt-6 flex gap-8 border-b" aria-label="Account sections">
+        {(["profile", "account", "purchases"] as const).map((item) => (
+          <button key={item} type="button" onClick={() => setTab(item)} className={cn("border-b-2 px-1 pb-3 text-sm capitalize", tab === item ? "border-[#00b7a5] font-semibold text-[#111]" : "border-transparent text-[#777]")}>{item}</button>
+        ))}
+        <Link href="/dashboard/client-gallery/storage" className="px-1 pb-3 text-sm text-[#777]">Billing</Link>
+      </nav>
+
+      {tab === "profile" ? (
+        <div className="mt-10 grid gap-7">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">Business details</p>
+          <div className="flex items-center gap-5">
+            <Avatar className="size-24 rounded-none bg-[#f1f1f1]"><AvatarImage src={form.avatar || ""} className="object-cover" /><AvatarFallback className="rounded-none text-2xl">{form.businessName?.slice(0, 1) || "+"}</AvatarFallback></Avatar>
+            <FieldInput label="Profile image URL" value={form.avatar || ""} onChange={(value) => field("avatar", value)} help="Square image shown on galleries and account pages." />
+          </div>
+          <FieldInput label="Business Name" value={form.businessName || ""} onChange={(value) => field("businessName", value)} />
+          <div className="grid gap-6 sm:grid-cols-2"><FieldInput label="First Name" value={form.firstName || ""} onChange={(value) => field("firstName", value)} /><FieldInput label="Last Name" value={form.lastName || ""} onChange={(value) => field("lastName", value)} /></div>
+          <FieldInput label="Contact Email" value={form.email || ""} onChange={(value) => field("email", value)} type="email" />
+          <FieldInput label="Phone Number" value={form.phoneNumber || ""} onChange={(value) => field("phoneNumber", value)} />
+          <FieldInput label="Website" value={form.website || ""} onChange={(value) => field("website", value)} />
+          <FieldInput label="Business Address" value={form.businessAddress || ""} onChange={(value) => field("businessAddress", value)} />
+          <label className="grid gap-2"><span className="text-sm font-bold">Biography</span><Textarea value={form.biography || ""} onChange={(event) => field("biography", event.target.value)} className="min-h-32 rounded-none" /></label>
+        </div>
+      ) : tab === "account" ? (
+        <div className="mt-10 grid gap-7">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">Account info</p>
+          <FieldInput label="Username" value={form.username || ""} onChange={(value) => field("username", value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} help={`Homepage: https://${form.username || "username"}.${rootDomain}`} />
+          {usernameState !== "idle" && <p className={cn("-mt-5 text-sm font-semibold", usernameState === "available" ? "text-emerald-600" : usernameState === "checking" ? "text-[#777]" : "text-red-600")}>{usernameState === "checking" ? "Checking…" : usernameMessage}</p>}
+          <FieldInput label="Account Email" value={form.email || ""} onChange={(value) => field("email", value)} type="email" />
+          <FieldInput label="New Password" value={form.password || ""} onChange={(value) => setForm((current) => ({ ...current, password: value }))} type="password" help="Leave blank to keep current password." />
+        </div>
+      ) : (
+        <div className="mt-10"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#999]">Plan purchase history</p>{purchases.length ? <div className="mt-5 divide-y border-y">{purchases.map((purchase) => <div key={purchase._id} className="flex items-center justify-between py-5"><div><b>{purchase.planName}</b><p className="mt-1 text-xs capitalize text-[#888]">{purchase.source} · {purchase.status}</p></div><div className="text-right"><b>${Number(purchase.amount).toFixed(2)}</b><p className="mt-1 text-xs text-[#888]">{new Date(purchase.createdAt).toLocaleDateString()}</p></div></div>)}</div> : <p className="mt-5 text-sm text-[#888]">No plan purchases yet.</p>}</div>
+      )}
+      {tab !== "purchases" && <div className="mt-10 border-t pt-6"><Button type="button" onClick={save} disabled={update.isPending || usernameState === "checking" || usernameState === "unavailable"} className="h-11 rounded-none bg-[#00ad9c] px-8 font-bold text-white">{update.isPending ? <Loader2 className="size-4 animate-spin" /> : "Save changes"}</Button></div>}
+    </section>
+  );
+}
+
+function FieldInput({ label, value, onChange, help, type = "text" }: { label: string; value: string; onChange: (value: string) => void; help?: string; type?: string }) {
+  return <label className="grid w-full gap-2"><span className="text-sm font-bold">{label}</span><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-12 rounded-none border-[#d8d8d8] px-4 shadow-none focus-visible:ring-[#00b7a5]" />{help && <span className="text-xs leading-5 text-[#888]">{help}</span>}</label>;
+}
+
 function StoreTopNavigation({
   activePage,
   logout,
@@ -834,7 +942,7 @@ function StoreTopNavigation({
               ))}
               </DropdownMenuGroup>
               <div className="bg-[#f7f7f7] p-5 text-center">
-                <Link href="/dashboard/store-gallery" className="inline-flex items-center gap-2 text-sm text-[#333]">
+                <Link href="/dashboard/overview" className="inline-flex items-center gap-2 text-sm text-[#333]">
                   <LayoutGrid className="size-4 text-[#999]" />
                   View Dashboard
                 </Link>

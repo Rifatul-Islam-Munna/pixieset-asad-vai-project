@@ -14,6 +14,27 @@ export class User {
   @Prop({ required: true, trim: true })
   name: string;
 
+  @Prop({ unique: true, sparse: true, lowercase: true, trim: true, match: /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])?$/ })
+  username?: string;
+
+  @Prop({ trim: true })
+  businessName?: string;
+
+  @Prop({ trim: true })
+  firstName?: string;
+
+  @Prop({ trim: true })
+  lastName?: string;
+
+  @Prop({ trim: true })
+  website?: string;
+
+  @Prop({ trim: true })
+  businessAddress?: string;
+
+  @Prop({ trim: true, maxlength: 2000 })
+  biography?: string;
+
   @Prop({ trim: true, lowercase: true })
   email?: string;
 

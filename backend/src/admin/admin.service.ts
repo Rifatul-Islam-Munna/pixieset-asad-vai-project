@@ -16,6 +16,7 @@ import { FaceSearchService } from 'src/face-search/face-search.service';
 import { StoreDefaultProductService } from 'src/store/store-default-product.service';
 import { FreePlanSettingDto } from './dto/free-plan-setting.dto';
 import { FreePlanSettingService } from './free-plan-setting.service';
+import { PlanPurchase, PlanPurchaseDocument } from './entities/plan-purchase.entity';
 
 @Injectable()
 export class AdminService implements OnModuleInit {
@@ -27,6 +28,7 @@ export class AdminService implements OnModuleInit {
     @InjectModel(AdminStripeSetting.name)
     private readonly stripeSettingModel: Model<AdminStripeSettingDocument>,
     @InjectModel(StoreOrder.name) private readonly orderModel: Model<StoreOrderDocument>,
+    @InjectModel(PlanPurchase.name) private readonly planPurchaseModel: Model<PlanPurchaseDocument>,
     private readonly faceSearchService: FaceSearchService,
     private readonly defaultProducts: StoreDefaultProductService,
     private readonly freePlanSettings: FreePlanSettingService,
@@ -275,7 +277,7 @@ export class AdminService implements OnModuleInit {
     ]);
     if (!plan) throw new NotFoundException('Plan not found');
     if (Number(plan.priceMonthly ?? 0) <= 0) {
-      const activatedPlan = await this.assignPlanToUser(userId, plan._id.toString());
+      const activatedPlan = await this.assignPlanToUser(userId, plan._id.toString(), 'free');
       return { activated: true, checkoutUrl: null, sessionId: null, plan: activatedPlan };
     }
     if (!settings.enabled || !settings.secretKey) throw new BadRequestException('Stripe is not configured');
@@ -320,7 +322,7 @@ export class AdminService implements OnModuleInit {
     if (session.payment_status !== 'paid') {
       throw new BadRequestException('Checkout is not paid');
     }
-    const plan = await this.assignPlanToUser(userId, session.metadata.planId);
+    const plan = await this.assignPlanToUser(userId, session.metadata.planId, 'checkout', session.id);
     return plan;
   }
 
@@ -343,14 +345,14 @@ export class AdminService implements OnModuleInit {
         ? await stripe.checkout.sessions.retrieve(webhookSession.id)
         : webhookSession;
       if (session.metadata?.type === 'plan' && session.payment_status === 'paid' && session.metadata.userId && session.metadata.planId) {
-        await this.assignPlanToUser(session.metadata.userId, session.metadata.planId);
+        await this.assignPlanToUser(session.metadata.userId, session.metadata.planId, 'checkout', session.id);
       }
     }
 
     return { received: true };
   }
 
-  async assignPlanToUser(userId: string, planId: string) {
+  async assignPlanToUser(userId: string, planId: string, source: 'admin' | 'checkout' | 'free' = 'admin', stripeSessionId?: string) {
     const plan = await this.planModel.findById(planId).lean();
     if (!plan) throw new NotFoundException('Plan not found');
     await this.userModel.updateOne(
@@ -368,7 +370,14 @@ export class AdminService implements OnModuleInit {
         },
       },
     );
+    const purchase = { userId, planId: plan._id.toString(), planName: plan.name, amount: Number(plan.priceMonthly ?? 0), source, stripeSessionId, status: source === 'checkout' ? 'paid' : 'active' } as const;
+    if (stripeSessionId) await this.planPurchaseModel.updateOne({ stripeSessionId }, { $setOnInsert: purchase }, { upsert: true });
+    else await this.planPurchaseModel.create(purchase);
     return plan;
+  }
+
+  async purchaseHistory(userId: string) {
+    return this.planPurchaseModel.find({ userId }).sort('-createdAt').lean();
   }
 
   async clearUserPlan(userId: string) {

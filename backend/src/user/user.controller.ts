@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { CreateUserDto } from './dto/create-user.dto';
 import { FindOneTokenDto, LoginDto, OtpstringDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('user')
 export class UserController {
@@ -32,5 +33,17 @@ export class UserController {
   @UseGuards(AuthGuard)
   getMyProfile(@Req() req: ExpressRequest) {
     return this.userService.findProfile(req.user.id);
+  }
+
+  @Get('username-availability')
+  @UseGuards(AuthGuard)
+  usernameAvailability(@Req() req: ExpressRequest, @Query('username') username: string) {
+    return this.userService.usernameAvailability(username, req.user.id);
+  }
+
+  @Patch('profile')
+  @UseGuards(AuthGuard)
+  updateProfile(@Req() req: ExpressRequest, @Body() dto: UpdateProfileDto) {
+    return this.userService.updateProfile(req.user.id, dto);
   }
 }

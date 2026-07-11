@@ -11,6 +11,7 @@ const pages = [
   "marketing",
   "settings",
   "storage",
+  "account",
   "get-started",
   "storefront",
   "pricing",

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
@@ -31,6 +31,14 @@ export class HomepageService {
 
   async provisionForUser(userId: string) {
     return this.getOrCreate(userId);
+  }
+
+  async setUsername(userId: string, username: string) {
+    const collision = await this.homepageModel.exists({ slug: username, userId: { $ne: userId } });
+    if (collision) throw new ConflictException('Username is not available');
+    const homepage = await this.getOrCreate(userId);
+    homepage.slug = username;
+    await homepage.save();
   }
 
   async updateMine(userId: string, dto: UpdateHomepageDto) {
@@ -154,7 +162,7 @@ export class HomepageService {
     const brandingData = (branding?.data ?? {}) as Record<string, any>;
     homepage = await this.homepageModel.create({
       userId,
-      slug: await this.uniqueSlug(user.name),
+      slug: user.username || await this.uniqueSlug(user.name),
       enabled: true,
       brandName: brandingData.brandText || user.name,
       logoUrl: brandingData.logoUrl || '',

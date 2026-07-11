@@ -8,6 +8,8 @@ const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "htt
 
 export type BillingUser = {
   _id: string;
+  name?: string;
+  avatar?: string;
   planName?: string;
   storageLimitGb?: number;
   monthlyEmailLimit?: number;
@@ -15,6 +17,8 @@ export type BillingUser = {
   monthlyEmailsUsed?: number;
   planFeatures?: Record<string, boolean>;
 };
+
+export type PlanPurchase = { _id: string; planName: string; amount: number; source: "admin" | "checkout" | "free"; status: "active" | "paid"; createdAt: string };
 
 function normalizePlans(value: unknown): AdminPlan[] {
   if (!Array.isArray(value)) return [];
@@ -52,6 +56,10 @@ export async function getBillingOverview() {
     authedRequest<BillingUser>("/user/get-my-profile"),
   ]);
   return { plans, user };
+}
+
+export async function getPurchaseHistory() {
+  return authedRequest<PlanPurchase[]>("/billing/purchases");
 }
 
 export async function getPublicPlans() {

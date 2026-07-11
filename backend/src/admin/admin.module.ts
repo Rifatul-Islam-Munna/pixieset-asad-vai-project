@@ -11,6 +11,7 @@ import { Plan, PlanSchema } from './entities/plan.entity';
 import { StoreOrder, StoreOrderSchema } from 'src/store/entities/store-order.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
 import { StoreModule } from 'src/store/store.module';
+import { PlanPurchase, PlanPurchaseSchema } from './entities/plan-purchase.entity';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { StoreModule } from 'src/store/store.module';
       { name: Plan.name, schema: PlanSchema },
       { name: AdminStripeSetting.name, schema: AdminStripeSettingSchema },
       { name: StoreOrder.name, schema: StoreOrderSchema },
+      { name: PlanPurchase.name, schema: PlanPurchaseSchema },
     ]),
     FaceSearchModule,
     StoreModule,
