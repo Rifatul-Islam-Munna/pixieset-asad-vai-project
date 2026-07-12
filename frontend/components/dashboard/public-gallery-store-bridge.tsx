@@ -64,7 +64,6 @@ export function PublicGalleryStoreBridge({
   const [cartOpen, setCartOpen] = useState(false);
   const [activeProduct, setActiveProduct] = useState<PublicStoreProduct | null>(null);
   const [cart, setCart] = useState<PublicStoreCartItem[]>([]);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [extraImages, setExtraImages] = useState<GalleryImage[]>([]);
   const images = useMemo(() => {
     const base = collection?.images ?? [];
@@ -224,30 +223,15 @@ export function PublicGalleryStoreBridge({
     <>
       {navHost && showPrintStoreNav &&
         createPortal(
-          <div
-            className="relative hidden md:block"
-            onMouseEnter={() => setMenuOpen(true)}
-            onMouseLeave={() => setMenuOpen(false)}
-          >
+          <div className="relative shrink-0">
             <button
               type="button"
               data-print-store-reference="true"
-              className="inline-flex h-16 items-center gap-2 text-sm font-medium text-black/70 transition-colors hover:text-black"
+              className="inline-flex h-10 items-center whitespace-nowrap border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em] text-black/70 transition-colors hover:text-black"
               onClick={() => setStoreOpen(true)}
             >
               Print Store
             </button>
-            {menuOpen && (
-              <GalleryStoreMegaMenu
-                products={storeData?.products ?? []}
-                onOpen={(product) => {
-                  setActiveProduct(product);
-                  setStoreOpen(false);
-                  setMenuOpen(false);
-                }}
-                onClose={() => setMenuOpen(false)}
-              />
-            )}
           </div>,
           navHost,
         )}
@@ -326,48 +310,6 @@ export function PublicGalleryStoreBridge({
         onClear={() => setCart([])}
       />
     </>
-  );
-}
-
-function GalleryStoreMegaMenu({
-  products,
-  onOpen,
-  onClose,
-}: {
-  products: PublicStoreProduct[];
-  onOpen: (product: PublicStoreProduct) => void;
-  onClose: () => void;
-}) {
-  const categories = ["Prints", "Wall Art", "Digital Downloads", ...new Set(products.map(productCategory))]
-    .filter((category, index, list) => list.indexOf(category) === index);
-  return (
-    <div className="fixed left-0 right-0 top-16 z-[80] border-b border-black/10 bg-white/98 px-8 py-9 text-[#222] shadow-[0_18px_40px_rgba(0,0,0,0.08)] backdrop-blur">
-      <div className="mx-auto grid max-w-[900px] gap-20 md:grid-cols-2">
-        {categories.map((category) => (
-          <div key={category}>
-            <p className="mb-4 text-sm font-medium text-black">{category}</p>
-            <div className="grid gap-4">
-              {products
-                .filter((product) => product.active !== false && productCategory(product) === category)
-                .sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0))
-                .map((product) => (
-                  <button
-                    key={product._id}
-                    type="button"
-                    className="text-left text-sm text-[#777] transition hover:text-black"
-                    onClick={() => {
-                      onOpen(product);
-                      onClose();
-                    }}
-                  >
-                    {product.name}
-                  </button>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

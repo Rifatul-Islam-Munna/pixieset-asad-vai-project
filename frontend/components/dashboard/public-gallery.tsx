@@ -284,10 +284,6 @@ export function PublicGallery({
   const activeGalleryImages = showSetTabs
     ? galleryImages.filter((image) => imageSetId(image) === activeSetId)
     : galleryImages;
-  const visibleImages = faceResults ?? activeGalleryImages;
-  const canLoadMoreImages = Boolean(collection && !faceResults && imagesHasMore);
-  const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
-  const slideshowPosition = slideshowIndex ?? 0;
   const [bg, fg, accent] =
     themeMap[design.color as keyof typeof themeMap] ?? themeMap.Rose;
   const fallbackFontFamily =
@@ -337,6 +333,12 @@ export function PublicGallery({
     () => galleryImages.filter((image) => favoriteImageIds.has(image._id)),
     [favoriteImageIds, galleryImages],
   );
+  const visibleImages = favoritesPanelOpen
+    ? favoriteGalleryImages
+    : faceResults ?? activeGalleryImages;
+  const canLoadMoreImages = Boolean(collection && !favoritesPanelOpen && !faceResults && imagesHasMore);
+  const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
+  const slideshowPosition = slideshowIndex ?? 0;
   const pinRequired = (photoDownloadsEnabled || videoDownloadsEnabled) && boolSetting(download.downloadPin);
   const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
@@ -965,11 +967,6 @@ export function PublicGallery({
             <p className="mt-1 truncate text-[11px] uppercase tracking-[0.22em] text-black/45">{studioName}</p>
           </div>
           <div className="-mx-1 flex min-w-0 gap-5 overflow-x-auto px-1 text-xs font-semibold uppercase tracking-[0.12em] md:justify-center">
-            {storeStatus && (
-              <button className="shrink-0 text-black/70 transition hover:text-black" type="button" data-public-store-open="true">
-                Print Store
-              </button>
-            )}
             {showSetTabs && gallerySets.map((set) => (
               <button
                 key={set.id}
@@ -985,6 +982,7 @@ export function PublicGallery({
             ))}
           </div>
           <div className="flex min-w-0 items-center justify-end gap-2">
+            {storeStatus && <span data-print-store-nav-host="true" />}
             <span data-public-store-cart-host="true" />
             <button className="inline-flex size-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-black" onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Favorite" aria-label="My Favorite">
               <Heart className={cn("size-5", favoritesPanelOpen && "fill-current text-red-500")} />
