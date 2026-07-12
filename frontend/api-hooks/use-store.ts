@@ -8,7 +8,7 @@ import {
   PostRequestAxios,
 } from "./api-hooks";
 
-export type StoreProductType = "digital-download" | "self-fulfilled";
+export type StoreProductType = "digital-download" | "self-fulfilled" | "package";
 
 export type StoreProductRecord = {
   _id: string;
@@ -29,10 +29,23 @@ export type StoreProductRecord = {
   exemptFromSalesTax?: boolean;
   limitOnePerCheckout?: boolean;
   allowBulkPurchase?: boolean;
+  packageItems?: StorePackageItem[];
+  estimatedCost?: number;
+  labCost?: number;
+  singleImageRestriction?: boolean;
   createdAt?: string;
 };
 
 export type StoreProductOption = { name: string; values: string[] };
+
+export type StorePackageItem = {
+  productId?: string;
+  name: string;
+  quantity: number;
+  variantId?: string;
+  variantLabel?: string;
+  unitPrice?: number;
+};
 
 export type StoreProductVariant = {
   id: string;

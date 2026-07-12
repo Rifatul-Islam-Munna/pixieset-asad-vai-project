@@ -16,8 +16,12 @@ export class StoreCollectionProductService {
     const catalog = await this.catalogService.getCatalog(userId, collectionId);
     const priceSheetId = String(catalog._id);
     if (!body?.name?.trim()) throw new BadRequestException('Product name is required');
-    const type = body.type === 'digital-download' ? 'digital-download' : 'self-fulfilled';
-    const category = type === 'digital-download' ? 'Digital Downloads' : body.category || 'Prints';
+    const type = body.type === 'digital-download'
+      ? 'digital-download'
+      : body.type === 'package' ? 'package' : 'self-fulfilled';
+    const category = type === 'digital-download'
+      ? 'Digital Downloads'
+      : type === 'package' ? 'Packages' : body.category || 'Prints';
     const baseSlug = this.slugify(body.slug || body.name) || `product-${Date.now()}`;
     let slug = baseSlug;
     let suffix = 2;
@@ -55,6 +59,10 @@ export class StoreCollectionProductService {
         : undefined,
       options: Array.isArray(body.options) ? body.options : [],
       variants: Array.isArray(body.variants) ? body.variants : [],
+      packageItems: Array.isArray(body.packageItems) ? body.packageItems : [],
+      estimatedCost: Math.max(0, Number(body.estimatedCost ?? 0)),
+      labCost: Math.max(0, Number(body.labCost ?? 0)),
+      singleImageRestriction: Boolean(body.singleImageRestriction),
     });
     return product.toObject();
   }
@@ -74,6 +82,7 @@ export class StoreCollectionProductService {
       'category', 'images', 'previewImages', 'requiresPhoto', 'allowCrop',
       'allowBulkPurchase', 'noImageRequired', 'exemptFromSalesTax',
       'limitOnePerCheckout', 'downloadType', 'downloadSize', 'options', 'variants',
+      'packageItems', 'singleImageRestriction',
     ];
     for (const key of allowed) {
       if (body[key] !== undefined) (product as any)[key] = body[key];
@@ -83,6 +92,14 @@ export class StoreCollectionProductService {
     if (body.price !== undefined) product.price = Math.max(0, Number(body.price || 0));
     if (body.extraShipping !== undefined) {
       product.extraShipping = Math.max(0, Number(body.extraShipping || 0));
+    }
+    if (body.type === 'digital-download') product.category = 'Digital Downloads';
+    if (body.type === 'package') product.category = 'Packages';
+    if (body.estimatedCost !== undefined) {
+      (product as any).estimatedCost = Math.max(0, Number(body.estimatedCost || 0));
+    }
+    if (body.labCost !== undefined) {
+      (product as any).labCost = Math.max(0, Number(body.labCost || 0));
     }
     if (!product.name) throw new BadRequestException('Product name is required');
     await product.save();

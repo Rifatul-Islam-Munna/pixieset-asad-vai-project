@@ -1,8 +1,8 @@
 import { IsArray, IsBoolean, IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 
 export class CreateStoreProductDto {
-  @IsIn(['digital-download', 'self-fulfilled'])
-  type: 'digital-download' | 'self-fulfilled';
+  @IsIn(['digital-download', 'self-fulfilled', 'package'])
+  type: 'digital-download' | 'self-fulfilled' | 'package';
 
   @IsString()
   name: string;
@@ -59,4 +59,21 @@ export class CreateStoreProductDto {
   @IsBoolean()
   @IsOptional()
   allowBulkPurchase?: boolean;
+
+  @IsArray()
+  @IsObject({ each: true })
+  @IsOptional()
+  packageItems?: { productId?: string; name: string; quantity: number; variantId?: string; variantLabel?: string; unitPrice?: number }[];
+
+  @IsNumber()
+  @IsOptional()
+  estimatedCost?: number;
+
+  @IsNumber()
+  @IsOptional()
+  labCost?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  singleImageRestriction?: boolean;
 }

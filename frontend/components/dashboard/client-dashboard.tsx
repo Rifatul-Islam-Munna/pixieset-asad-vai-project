@@ -180,6 +180,7 @@ import {
   type StoreDashboardRecord,
   type StoreOrderRecord,
   type StoreOrderStatus,
+  type StorePackageItem,
   type StoreProductOption,
   type StoreProductPayload,
   type StoreProductRecord,
@@ -6959,6 +6960,7 @@ function SearchBox({
 
 const productTypeLabels: Record<StoreProductType, string> = {
   "digital-download": "Digital Download",
+  package: "Package",
   "self-fulfilled": "Self Fulfilled Item",
 };
 
@@ -8797,6 +8799,8 @@ function StorePricingPanel() {
       const key =
         product.type === "digital-download"
           ? "Digital Downloads"
+          : product.type === "package"
+            ? "Packages"
           : product.category || "Prints";
       groups[key] = [...(groups[key] ?? []), product];
       return groups;
@@ -8804,12 +8808,12 @@ function StorePricingPanel() {
     {},
   );
   const orderedGroups = [
-    ...["Prints", "Wall Art", "Digital Downloads"].filter(
+    ...["Prints", "Wall Art", "Packages", "Digital Downloads"].filter(
       (category) => groupedProducts[category]?.length,
     ),
     ...Object.keys(groupedProducts).filter(
       (category) =>
-        !["Prints", "Wall Art", "Digital Downloads"].includes(category),
+        !["Prints", "Wall Art", "Packages", "Digital Downloads"].includes(category),
     ),
   ];
 
@@ -8901,6 +8905,18 @@ function StorePricingPanel() {
                   </span>
                   <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
                     Sell downloadable files from the public gallery.
+                  </span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer items-start gap-4 rounded-none p-2"
+                onClick={() => goAdd("package")}
+              >
+                <Package className="mt-1 size-5 text-[#8a949e]" />
+                <span>
+                  <span className="block font-bold text-[#222]">Package</span>
+                  <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
+                    Sell a group of existing products at one price.
                   </span>
                 </span>
               </DropdownMenuItem>
@@ -9064,6 +9080,7 @@ function StorePricingRouteEditor({
       open={true}
       type={type}
       product={editingProduct}
+      products={ownerSheet?.products ?? []}
       pending={createProduct.isPending || updateProduct.isPending}
       onOpenChange={(open) => {
         if (!open) router.push("/dashboard/store-gallery/pricing");
@@ -9359,6 +9376,8 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
       const key =
         product.type === "digital-download"
           ? "Digital Downloads"
+          : product.type === "package"
+            ? "Packages"
           : product.category || "Prints";
       groups[key] = [...(groups[key] ?? []), product];
       return groups;
@@ -9439,6 +9458,12 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                       icon: Download,
                       title: "Digital Download",
                       text: "Digital files are automatically delivered via a secure link.",
+                    },
+                    {
+                      type: "package",
+                      icon: Package,
+                      title: "Package",
+                      text: "Sell a group of products at one price.",
                     },
                   ] as const
                 ).map((item) => (
@@ -9648,6 +9673,7 @@ function StoreProductRouteEditor({
       open={true}
       type={type}
       product={editingProduct}
+      products={sheet?.products ?? []}
       pending={createProduct.isPending || updateProduct.isPending}
       onOpenChange={(open) => {
         if (!open) router.push(listPath);
@@ -9981,6 +10007,7 @@ function ProductEditorDialog({
   open,
   type,
   product,
+  products = [],
   pending,
   onOpenChange,
   onSave,
@@ -9990,6 +10017,7 @@ function ProductEditorDialog({
   open: boolean;
   type: StoreProductType;
   product?: StoreProductRecord | null;
+  products?: StoreProductRecord[];
   pending: boolean;
   onOpenChange: (value: boolean) => void;
   onSave: (payload: StoreProductPayload) => void;
@@ -10011,6 +10039,10 @@ function ProductEditorDialog({
     allowBulkPurchase: false,
     options: [] as StoreProductOption[],
     variants: [] as StoreProductVariant[],
+    packageItems: [] as StorePackageItem[],
+    estimatedCost: "0",
+    labCost: "0",
+    singleImageRestriction: false,
   });
 
   useEffect(() => {
@@ -10023,7 +10055,9 @@ function ProductEditorDialog({
         extraShipping: String(product.extraShipping ?? 0),
         category:
           product.category ??
-          (type === "digital-download" ? "Digital Downloads" : "Prints"),
+          (type === "digital-download"
+            ? "Digital Downloads"
+            : type === "package" ? "Packages" : "Prints"),
         images: product.images ?? [],
         downloadType: product.downloadType ?? "single-photo",
         downloadSize:
@@ -10036,6 +10070,10 @@ function ProductEditorDialog({
           product.options ??
           (type === "self-fulfilled" ? defaultSelfFulfilledOptions : []),
         variants: product.variants ?? [],
+        packageItems: product.packageItems ?? [],
+        estimatedCost: String(product.estimatedCost ?? 0),
+        labCost: String(product.labCost ?? 0),
+        singleImageRestriction: Boolean(product.singleImageRestriction),
       });
       return;
     }
@@ -10049,7 +10087,7 @@ function ProductEditorDialog({
       description: "",
       price: "",
       extraShipping: "0",
-      category: type === "digital-download" ? "Digital Downloads" : "Prints",
+      category: type === "digital-download" ? "Digital Downloads" : type === "package" ? "Packages" : "Prints",
       images: [],
       downloadType: "single-photo",
       downloadSize: "High Resolution Original (Full res)",
@@ -10062,6 +10100,10 @@ function ProductEditorDialog({
         type === "self-fulfilled"
           ? buildProductVariants(defaultOptions, [], 0)
           : [],
+      packageItems: [],
+      estimatedCost: "0",
+      labCost: "0",
+      singleImageRestriction: false,
     });
   }, [open, product, type]);
 
@@ -10095,9 +10137,29 @@ function ProductEditorDialog({
       noImageRequired: form.noImageRequired,
       exemptFromSalesTax: form.exemptFromSalesTax,
       limitOnePerCheckout: form.limitOnePerCheckout,
-      allowBulkPurchase: form.allowBulkPurchase,
+      allowBulkPurchase: type === "package" ? false : form.allowBulkPurchase,
+      packageItems: type === "package" ? form.packageItems : [],
+      estimatedCost: type === "package" ? Number(form.estimatedCost) || 0 : 0,
+      labCost: type === "package" ? Number(form.labCost) || 0 : 0,
+      singleImageRestriction: type === "package" ? form.singleImageRestriction : false,
     });
   };
+  const packageSourceProducts = products
+    .filter((item) => item._id !== product?._id && item.type !== "package")
+    .sort((left, right) => {
+      const leftGroup =
+        left.type === "digital-download"
+          ? "Digital Downloads"
+          : left.category || "Prints";
+      const rightGroup =
+        right.type === "digital-download"
+          ? "Digital Downloads"
+          : right.category || "Prints";
+      return (
+        leftGroup.localeCompare(rightGroup) ||
+        left.name.localeCompare(right.name)
+      );
+    });
   const pickImages = async (files: FileList | null) => {
     if (!files?.length) return;
     const images = await Promise.all(
@@ -10126,7 +10188,7 @@ function ProductEditorDialog({
               ? "Edit Product"
               : type === "digital-download"
                 ? "Add Digital Download"
-                : "Add Product"}
+                : type === "package" ? "Add Package" : "Add Product"}
           </DialogTitle>
           <DialogDescription>{productTypeLabels[type]}</DialogDescription>
         </DialogHeader>
@@ -10261,7 +10323,9 @@ function ProductEditorDialog({
 
           <div className="grid gap-5 sm:grid-cols-2">
             <Field>
-              <FieldLabel className="font-bold">Price</FieldLabel>
+              <FieldLabel className="font-bold">
+                {type === "package" ? "Package Price" : "Price"}
+              </FieldLabel>
               <Input
                 value={form.price}
                 onChange={(event) =>
@@ -10291,6 +10355,37 @@ function ProductEditorDialog({
             )}
           </div>
 
+          {type === "package" && (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field>
+                <FieldLabel className="font-bold">Est. Cost</FieldLabel>
+                <Input
+                  value={form.estimatedCost}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      estimatedCost: event.target.value,
+                    }))
+                  }
+                  className="h-12 rounded-none"
+                />
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold">Lab Cost</FieldLabel>
+                <Input
+                  value={form.labCost}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      labCost: event.target.value,
+                    }))
+                  }
+                  className="h-12 rounded-none"
+                />
+              </Field>
+            </div>
+          )}
+
           {type === "self-fulfilled" && (
             <Field>
               <FieldLabel className="font-bold">Category</FieldLabel>
@@ -10314,6 +10409,135 @@ function ProductEditorDialog({
                 <option>Other</option>
               </select>
             </Field>
+          )}
+
+          {type === "package" && (
+            <div className="grid gap-5">
+              <div>
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-base font-bold">
+                      Package Items ({form.packageItems.length} Items)
+                    </p>
+                    <p className="mt-1 text-sm text-[#777]">
+                      Add existing products and sell them together at one price.
+                    </p>
+                  </div>
+                  <select
+                    className="h-11 min-w-[240px] border bg-white px-3 text-sm outline-none"
+                    value=""
+                    onChange={(event) => {
+                      const selected = packageSourceProducts.find(
+                        (item) => item._id === event.target.value,
+                      );
+                      if (!selected) return;
+                      setForm((current) => ({
+                        ...current,
+                        packageItems: [
+                          ...current.packageItems,
+                          {
+                            productId: selected._id,
+                            name: selected.name,
+                            quantity: 1,
+                            unitPrice: productDisplayPrice(selected),
+                          },
+                        ],
+                      }));
+                    }}
+                  >
+                    <option value="">+ Add Product</option>
+                    {packageSourceProducts.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.type === "digital-download"
+                          ? "Digital"
+                          : item.category || "Prints"} - {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-3 border bg-white">
+                  {form.packageItems.map((item, index) => (
+                    <div
+                      key={`${item.productId ?? item.name}-${index}`}
+                      className="grid grid-cols-[1fr_96px_42px] items-center gap-3 border-b px-4 py-3 last:border-b-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {item.name}
+                        </p>
+                        {item.unitPrice !== undefined && (
+                          <p className="mt-1 text-xs text-[#777]">
+                            Base {Number(item.unitPrice).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                      <Input
+                        value={String(item.quantity ?? 1)}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            packageItems: current.packageItems.map(
+                              (packageItem, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...packageItem,
+                                      quantity: Math.max(
+                                        1,
+                                        Number(event.target.value) || 1,
+                                      ),
+                                    }
+                                  : packageItem,
+                            ),
+                          }))
+                        }
+                        className="h-9 rounded-none text-center"
+                      />
+                      <button
+                        type="button"
+                        className="flex size-9 items-center justify-center text-red-600"
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            packageItems: current.packageItems.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          }))
+                        }
+                        aria-label="Remove package item"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {!form.packageItems.length && (
+                    <p className="px-4 py-6 text-sm text-[#777]">
+                      No products in this package yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="grid gap-5">
+                {(
+                  [
+                    ["limitOnePerCheckout", "Limit One Per Checkout"],
+                    ["singleImageRestriction", "Single Image Restriction"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex items-center justify-between gap-5 text-sm font-bold"
+                  >
+                    {label}
+                    <Switch
+                      checked={form[key]}
+                      onCheckedChange={(value) =>
+                        setForm((current) => ({ ...current, [key]: value }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
           )}
 
           {type === "self-fulfilled" && (

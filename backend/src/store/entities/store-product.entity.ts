@@ -2,7 +2,16 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type StoreProductDocument = HydratedDocument<StoreProduct>;
-export type StoreProductType = 'digital-download' | 'self-fulfilled';
+export type StoreProductType = 'digital-download' | 'self-fulfilled' | 'package';
+
+export type StorePackageItem = {
+  productId?: string;
+  name: string;
+  quantity: number;
+  variantId?: string;
+  variantLabel?: string;
+  unitPrice?: number;
+};
 
 @Schema({ timestamps: true, autoIndex: true })
 export class StoreProduct {
@@ -12,7 +21,7 @@ export class StoreProduct {
   @Prop({ required: true, index: true })
   priceSheetId: string;
 
-  @Prop({ required: true, enum: ['digital-download', 'self-fulfilled'], index: true })
+  @Prop({ required: true, enum: ['digital-download', 'self-fulfilled', 'package'], index: true })
   type: StoreProductType;
 
   @Prop({ required: true, trim: true })
@@ -104,6 +113,18 @@ export class StoreProduct {
 
   @Prop({ default: false })
   allowBulkPurchase: boolean;
+
+  @Prop({ type: [Object], default: [] })
+  packageItems: StorePackageItem[];
+
+  @Prop({ default: 0, min: 0 })
+  estimatedCost: number;
+
+  @Prop({ default: 0, min: 0 })
+  labCost: number;
+
+  @Prop({ default: false })
+  singleImageRestriction: boolean;
 }
 
 export const StoreProductSchema = SchemaFactory.createForClass(StoreProduct);

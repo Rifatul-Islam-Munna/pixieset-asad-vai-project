@@ -507,7 +507,9 @@ export class StoreService {
       description: dto.description ?? '',
       price: dto.price ?? 0,
       extraShipping: dto.extraShipping ?? 0,
-      category: dto.type === 'digital-download' ? 'Digital Downloads' : dto.category ?? 'Prints',
+      category: dto.type === 'digital-download'
+        ? 'Digital Downloads'
+        : dto.type === 'package' ? 'Packages' : dto.category ?? 'Prints',
       images: dto.images ?? [],
       downloadType: dto.type === 'digital-download' ? dto.downloadType ?? 'single-photo' : undefined,
       downloadSize: dto.type === 'digital-download' ? dto.downloadSize ?? 'High Resolution Original (Full res)' : undefined,
@@ -517,6 +519,10 @@ export class StoreService {
       exemptFromSalesTax: Boolean(dto.exemptFromSalesTax),
       limitOnePerCheckout: Boolean(dto.limitOnePerCheckout),
       allowBulkPurchase: Boolean(dto.allowBulkPurchase),
+      packageItems: Array.isArray(dto.packageItems) ? dto.packageItems : [],
+      estimatedCost: Number(dto.estimatedCost ?? 0),
+      labCost: Number(dto.labCost ?? 0),
+      singleImageRestriction: Boolean(dto.singleImageRestriction),
     });
 
     return product.toObject();
@@ -531,6 +537,8 @@ export class StoreService {
     if (dto.type === 'digital-download' && !product.downloadSize) {
       product.downloadSize = 'High Resolution Original (Full res)';
     }
+    if (dto.type === 'digital-download') product.category = 'Digital Downloads';
+    if (dto.type === 'package') product.category = 'Packages';
     await product.save();
     return product.toObject();
   }

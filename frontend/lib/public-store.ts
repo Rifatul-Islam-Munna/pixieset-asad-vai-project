@@ -21,7 +21,7 @@ export type PublicStoreProduct = {
   price: number;
   extraShipping?: number;
   category?: string;
-  type: "digital-download" | "self-fulfilled";
+  type: "digital-download" | "self-fulfilled" | "package";
   images?: string[];
   previewImages?: string[];
   requiresPhoto?: boolean;
@@ -33,6 +33,15 @@ export type PublicStoreProduct = {
   downloadSize?: string;
   options?: { name: string; values: string[] }[];
   variants?: PublicStoreVariant[];
+  packageItems?: Array<{
+    productId?: string;
+    name: string;
+    quantity: number;
+    variantId?: string;
+    variantLabel?: string;
+    unitPrice?: number;
+  }>;
+  singleImageRestriction?: boolean;
 };
 
 export type PublicStoreImage = {
@@ -115,7 +124,7 @@ export type PublicStoreCartItem = {
   quantity: number;
 };
 
-export const STORE_CATEGORY_ORDER = ["Prints", "Wall Art", "Digital Downloads"];
+export const STORE_CATEGORY_ORDER = ["Prints", "Wall Art", "Packages", "Digital Downloads"];
 
 export function visibleVariants(product: PublicStoreProduct) {
   return (product.variants ?? [])

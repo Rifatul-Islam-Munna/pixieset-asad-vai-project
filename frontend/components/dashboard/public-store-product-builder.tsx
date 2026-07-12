@@ -182,6 +182,19 @@ export function PublicStoreProductBuilder({
               {product.description && (
                 <p className="mt-6 text-sm leading-7 text-[#565656]">{stripHtml(product.description)}</p>
               )}
+              {product.type === "package" && Boolean(product.packageItems?.length) && (
+                <div className="mt-7 border bg-[#f8f8f6] p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#777]">Package includes</p>
+                  <div className="mt-3 grid gap-2 text-sm text-[#555]">
+                    {product.packageItems?.map((item, index) => (
+                      <p key={`${item.productId ?? item.name}-${index}`} className="flex justify-between gap-4">
+                        <span>{item.name}</span>
+                        <span className="shrink-0">x{item.quantity || 1}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {variants.length > 0 && (
                 <div className="mt-8">
@@ -232,7 +245,7 @@ export function PublicStoreProductBuilder({
               >
                 {buyPhotoMode
                   ? product.allowCrop !== false ? "Adjust Photo" : "Add to Cart"
-                  : requiresPhoto ? "Choose Photo" : "Add to Cart"}
+                  : product.type === "package" && requiresPhoto ? "Choose Photo for Package" : requiresPhoto ? "Choose Photo" : "Add to Cart"}
               </button>
 
               <div className="mt-9 border-t">

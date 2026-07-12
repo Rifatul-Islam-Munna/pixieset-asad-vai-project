@@ -29,7 +29,9 @@ type GalleryStoreSettings = {
 };
 
 function productCategory(product: PublicStoreProduct) {
-  return product.type === "digital-download" ? "Digital Downloads" : product.category || "Other";
+  if (product.type === "digital-download") return "Digital Downloads";
+  if (product.type === "package") return "Packages";
+  return product.category || "Other";
 }
 
 function isVideo(image?: GalleryImage) {

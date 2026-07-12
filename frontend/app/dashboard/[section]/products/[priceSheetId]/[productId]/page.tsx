@@ -23,7 +23,7 @@ export default async function StoreProductControlPage({
   }
 
   const type =
-    query.type === "digital-download" || query.type === "self-fulfilled"
+    query.type === "digital-download" || query.type === "self-fulfilled" || query.type === "package"
       ? (query.type as StoreProductType)
       : undefined;
 
