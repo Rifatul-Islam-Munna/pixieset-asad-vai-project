@@ -49,6 +49,17 @@ export default async function DashboardSettingsPage({
     );
   }
 
+  if (page === "email-templates" && action) {
+    return (
+      <ClientDashboard
+        page="settings"
+        section={section as DashboardSection}
+        settingsPage="email-templates"
+        emailTemplateId={action}
+      />
+    );
+  }
+
   if (!pages.includes(page as (typeof pages)[number])) {
     redirect(`/dashboard/${section}/settings/watermark`);
   }

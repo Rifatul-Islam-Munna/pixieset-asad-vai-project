@@ -1,6 +1,7 @@
 "use client";
 
-import { EyeOff, Mail, Megaphone } from "lucide-react";
+import { useState } from "react";
+import { Check, EyeOff, Mail, Megaphone, RotateCcw, X } from "lucide-react";
 import type {
   CollectionEmailRegistrationRecord,
   CollectionPrivatePhotoActivityRecord,
@@ -18,6 +19,13 @@ function activityDate(value?: string) {
         hour: "numeric",
         minute: "2-digit",
       });
+}
+
+function mediaSrc(url?: string) {
+  if (!url) return "";
+  if (/^(https?:|data:|blob:|\/)/i.test(url)) return url;
+  const base = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:4000";
+  return `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
 }
 
 function EmptyState({
@@ -59,14 +67,40 @@ export function CollectionRegistrationActivity({
   registrations = [],
   privatePhotos = [],
   collectionName,
+  updatePrivatePhotoRequest,
+  deletePrivatePhotoRequest,
 }: {
   mode: "registration" | "contacts" | "private";
   registrations: CollectionEmailRegistrationRecord[];
   privatePhotos: CollectionPrivatePhotoActivityRecord[];
   collectionName: string;
+  updatePrivatePhotoRequest?: (payload: {
+    privatePhotoId: string;
+    status: "pending" | "approved" | "declined";
+  }) => Promise<unknown>;
+  deletePrivatePhotoRequest?: (privatePhotoId: string) => Promise<unknown>;
 }) {
+  const [busyId, setBusyId] = useState("");
   const contacts = (Array.isArray(registrations) ? registrations : []).filter((item) => item.marketingOptIn);
   const rows = mode === "contacts" ? contacts : registrations;
+  const updatePrivate = async (id: string, status: "approved" | "declined") => {
+    if (!updatePrivatePhotoRequest || busyId) return;
+    setBusyId(id);
+    try {
+      await updatePrivatePhotoRequest({ privatePhotoId: id, status });
+    } finally {
+      setBusyId("");
+    }
+  };
+  const unhidePrivate = async (id: string) => {
+    if (!deletePrivatePhotoRequest || busyId) return;
+    setBusyId(id);
+    try {
+      await deletePrivatePhotoRequest(id);
+    } finally {
+      setBusyId("");
+    }
+  };
 
   if (mode === "private") {
     if (!privatePhotos.length) return <EmptyState mode="private" />;
@@ -77,7 +111,7 @@ export function CollectionRegistrationActivity({
   <h2 className="text-2xl font-medium">Private Photos</h2>
   <p className="mt-2 text-sm text-[#666]">{collectionName}</p>
 </div>
-<p className="text-sm text-[#666]">{privatePhotos.length} private photo record{privatePhotos.length === 1 ? "" : "s"}</p>
+<p className="text-sm text-[#666]">{privatePhotos.length} private photo request{privatePhotos.length === 1 ? "" : "s"}</p>
         </div>
         <div className="mt-7 overflow-x-auto">
 <table className="w-full min-w-[760px] text-left text-sm">
@@ -85,16 +119,18 @@ export function CollectionRegistrationActivity({
     <tr>
       <th className="px-1 py-3">Photo</th>
       <th className="px-1 py-3">Email</th>
+      <th className="px-1 py-3">Status</th>
       <th className="px-1 py-3">Updated</th>
+      <th className="px-1 py-3 text-right">Actions</th>
     </tr>
   </thead>
   <tbody>
-    {privatePhotos.map((item) => (
+  {privatePhotos.map((item) => (
       <tr key={item._id} className="border-b">
         <td className="px-1 py-4">
 <span className="inline-flex items-center gap-3">
   {item.imageUrl ? (
-    <img src={item.imageUrl} alt="" className="size-14 object-cover" />
+    <img src={mediaSrc(item.imageUrl)} alt="" className="size-14 object-cover" />
   ) : (
     <span className="flex size-14 items-center justify-center bg-[#f2f2f2]"><EyeOff className="size-5" /></span>
   )}
@@ -102,7 +138,27 @@ export function CollectionRegistrationActivity({
 </span>
         </td>
         <td className="px-1 py-4">{item.email}</td>
+        <td className="px-1 py-4 capitalize">{item.status ?? "pending"}</td>
         <td className="px-1 py-4">{activityDate(item.updatedAt || item.createdAt)}</td>
+        <td className="px-1 py-4">
+          <div className="flex justify-end gap-2">
+            {(item.status ?? "pending") !== "approved" && (
+              <button className="inline-flex h-9 items-center gap-1 border px-3 text-xs font-bold" disabled={busyId === item._id} onClick={() => void updatePrivate(item._id, "approved")} type="button">
+                <Check className="size-4" /> Approve
+              </button>
+            )}
+            {(item.status ?? "pending") !== "declined" && (
+              <button className="inline-flex h-9 items-center gap-1 border px-3 text-xs font-bold text-red-600" disabled={busyId === item._id} onClick={() => void updatePrivate(item._id, "declined")} type="button">
+                <X className="size-4" /> Decline
+              </button>
+            )}
+            {(item.status ?? "pending") === "approved" && (
+              <button className="inline-flex h-9 items-center gap-1 border px-3 text-xs font-bold" disabled={busyId === item._id} onClick={() => void unhidePrivate(item._id)} type="button">
+                <RotateCcw className="size-4" /> Unhide
+              </button>
+            )}
+          </div>
+        </td>
       </tr>
     ))}
   </tbody>

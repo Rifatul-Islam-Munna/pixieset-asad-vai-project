@@ -14,6 +14,9 @@ export class CollectionPrivatePhoto {
   @Prop({ required: true, index: true })
   imageId: string;
 
+  @Prop({ default: 'pending', enum: ['pending', 'approved', 'declined'], index: true })
+  status: 'pending' | 'approved' | 'declined';
+
   createdAt?: Date;
   updatedAt?: Date;
 }

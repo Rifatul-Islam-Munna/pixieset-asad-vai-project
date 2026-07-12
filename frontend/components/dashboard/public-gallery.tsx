@@ -300,12 +300,13 @@ export function PublicGallery({
   const masonryColumns = design.thumbnailSize === "Large"
     ? "columns-1 sm:columns-2"
     : "columns-1 sm:columns-2 lg:columns-3";
-  const downloadsEnabled =
+  const photoDownloadsEnabled =
     quickShareDownload === "1"
       ? true
       : quickShareDownload === "0"
         ? false
         : boolSetting(download.photoDownload);
+  const videoDownloadsEnabled = boolSetting(download.videoDownload);
   const galleryDownloadEnabled = download.galleryDownload !== false;
   const singlePhotoDownloadEnabled = download.singlePhotoDownload !== false;
   const singlePhotoDownloadEmailTracking = download.singlePhotoDownloadEmailTracking !== false;
@@ -327,19 +328,24 @@ export function PublicGallery({
     siteSlug: name,
   });
   const {
-    collectionFavorited,
     favoriteImageIds,
-    favoriteBusy,
     favoriteImageBusy,
-    toggleCollectionFavorite,
     toggleImageFavorite,
   } = favoriteTools;
-  const pinRequired = downloadsEnabled && boolSetting(download.downloadPin);
+  const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
+  const favoriteGalleryImages = useMemo(
+    () => galleryImages.filter((image) => favoriteImageIds.has(image._id)),
+    [favoriteImageIds, galleryImages],
+  );
+  const pinRequired = (photoDownloadsEnabled || videoDownloadsEnabled) && boolSetting(download.downloadPin);
   const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
   const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
-  const canDownload = downloadsEnabled && pinOk && limitOk;
-  const canDownloadAll = canDownload && galleryDownloadEnabled;
-  const canDownloadSingle = canDownload && singlePhotoDownloadEnabled;
+  const canDownloadPhoto = photoDownloadsEnabled && pinOk && limitOk;
+  const canDownloadVideo = videoDownloadsEnabled && pinOk && limitOk;
+  const canDownloadAll = canDownloadPhoto && galleryDownloadEnabled;
+  const canDownloadSingle = canDownloadPhoto && singlePhotoDownloadEnabled;
+  const canDownloadMedia = (photo: PublicImage) =>
+    isVideo(photo) ? canDownloadVideo : canDownloadSingle;
   const onDownload = () => setDownloadCount((count) => count + 1);
   const unlockDownloads = () => {
     setEnteredPin(pinDraft.trim());
@@ -424,7 +430,7 @@ export function PublicGallery({
     }
   };
   const downloadPhoto = async (photo: PublicImage, index = 0, emailOverride = "") => {
-    if (!canDownloadSingle) return;
+    if (!canDownloadMedia(photo)) return;
     let email = "";
     if (singlePhotoDownloadEmailTracking) {
       email = ensureDownloadEmail({ type: "single", photo, index }, emailOverride);
@@ -460,7 +466,7 @@ export function PublicGallery({
     if (!canDownloadAll || zipDownloading) return;
     const email = ensureDownloadEmail({ type: "all" }, emailOverride);
     if (!email) return;
-    let allImages = galleryImages;
+    let allImages = galleryImages.filter((photo) => !isVideo(photo));
     if (collection && imagesHasMore) {
       setZipStage("Loading remaining gallery photos");
       let offset = loadedImages.length;
@@ -480,7 +486,7 @@ export function PublicGallery({
       }
       if (loaded.length) {
         const seen = new Set(allImages.map((image) => image._id));
-        allImages = [...allImages, ...loaded.filter((image) => !seen.has(image._id))];
+        allImages = [...allImages, ...loaded.filter((image) => !seen.has(image._id) && !isVideo(image))];
         setLoadedImages((current) => {
           const currentIds = new Set(current.map((image) => image._id));
           return [...current, ...loaded.filter((image) => !currentIds.has(image._id))];
@@ -677,7 +683,7 @@ export function PublicGallery({
       window.localStorage.getItem(`collection-access-email:${galary}`) ||
       "";
     if (!email.includes("@")) {
-      email = window.prompt("Enter your email to mark this photo private", "")?.trim().toLowerCase() || "";
+      email = window.prompt("Enter your email to request hiding this photo", "")?.trim().toLowerCase() || "";
     }
     if (!/^\S+@\S+\.\S+$/.test(email)) {
       setShareNotice("Email is required");
@@ -697,7 +703,7 @@ export function PublicGallery({
       if (!response.ok) throw new Error(payload?.message || "Private photo update failed");
       setPrivateImageIds((current) => {
         const next = new Set(current);
-        if (payload?.data?.private) next.add(photo._id);
+        if (payload?.data?.requested) next.add(photo._id);
         else next.delete(photo._id);
         if (collection?._id) {
           window.localStorage.setItem(
@@ -707,7 +713,7 @@ export function PublicGallery({
         }
         return next;
       });
-      setShareNotice(payload?.data?.private ? "Photo marked private" : "Photo made visible");
+      setShareNotice(payload?.data?.requested ? "Hide request sent" : "Hide request cancelled");
     } catch (error) {
       setShareNotice(error instanceof Error ? error.message : "Private photo update failed");
     } finally {
@@ -939,48 +945,7 @@ export function PublicGallery({
       </main>
       ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
-      <nav className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-black/5 px-4 sm:px-5 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-4">
-        <p className="truncate text-sm uppercase tracking-[0.24em]">{title}</p>
-        <div className="hidden lg:block" />
-        <div className="flex min-w-0 items-center justify-end gap-3 sm:gap-4" data-print-store-actions-host="true">
-          <span data-public-store-cart-host="true" />
-          {design.navigationStyle === "Icon & Text" ? (
-            <>
-              {socialSharingEnabled && (
-                <button className="flex items-center gap-2 text-sm" onClick={() => void shareCollection()} type="button">
-                  <Share2 className="size-4" /> Share
-                </button>
-              )}
-              <button className="flex items-center gap-2 text-sm" onClick={favoriteTools.openFavorites} type="button">
-                <Heart className="size-4" /> My Favorites
-              </button>
-              {canDownloadAll && (
-                <button className="flex items-center gap-2 text-sm disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button">
-                  {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} {zipDownloading ? "Preparing" : "Download All"}
-                </button>
-              )}
-            </>
-          ) : (
-            <>
-              {socialSharingEnabled && (
-                <button onClick={() => void shareCollection()} type="button" aria-label="Share collection">
-                  <Share2 className="size-5" />
-                </button>
-              )}
-              <button onClick={favoriteTools.openFavorites} type="button" aria-label="My Favorites" title="My Favorites">
-                <Heart className="size-5" />
-              </button>
-              {canDownloadAll && (
-                <button onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" aria-label={zipDownloading ? "Preparing ZIP download" : "Download all photos"} title="Download all photos">
-                  {zipDownloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </nav>
-
-      <section className="px-3 pb-7 sm:px-5 sm:pb-10 md:px-10">
+      <section className="px-3 pb-7 pt-3 sm:px-5 sm:pb-10 md:px-10">
         <CoverPreview
           design={{
             ...design,
@@ -994,78 +959,68 @@ export function PublicGallery({
       </section>
 
       <section className="px-0 py-0">
-        <div className="sticky top-0 z-20 flex flex-col items-stretch gap-3 border-y border-black/10 bg-white/95 px-3 py-3 text-[#202326] shadow-[0_14px_35px_rgba(0,0,0,0.08)] backdrop-blur sm:px-4 md:px-8 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-4 lg:py-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-[0.26em] text-black/45">
-              Masonry gallery
-            </p>
-            <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2 sm:gap-x-6">
-              <h1 className="min-w-0 break-words text-xl font-semibold sm:text-2xl md:text-3xl">{title}</h1>
-              {showSetTabs && (
-                <div className="-mx-1 flex min-w-0 flex-1 gap-x-4 gap-y-2 overflow-x-auto px-1 pb-1 text-sm font-bold sm:flex-wrap sm:justify-center sm:gap-x-5 sm:overflow-visible sm:pb-0">
-                  {gallerySets.map((set) => (
-                    <button
-                      key={set.id}
-                      className={cn(
-                        "shrink-0 transition-opacity hover:opacity-100",
-                        activeSetId === set.id ? "opacity-100" : "opacity-45",
-                      )}
-                      onClick={() => setActiveSetId(set.id)}
-                      type="button"
-                    >
-                      {set.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+        <div className="sticky top-0 z-20 grid min-h-[76px] grid-cols-1 items-center gap-3 border-y border-black/10 bg-white/95 px-4 py-3 text-[#202326] shadow-[0_10px_28px_rgba(0,0,0,0.08)] backdrop-blur md:grid-cols-[minmax(180px,0.75fr)_minmax(0,1.6fr)_auto] md:px-8">
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-bold uppercase tracking-[0.12em]">{title}</h1>
+            <p className="mt-1 truncate text-[11px] uppercase tracking-[0.22em] text-black/45">{studioName}</p>
           </div>
-          <div className="flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-full border border-black/10 bg-[#f4f4f2] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.08)] backdrop-blur lg:w-auto lg:flex-wrap lg:overflow-visible">
+          <div className="-mx-1 flex min-w-0 gap-5 overflow-x-auto px-1 text-xs font-semibold uppercase tracking-[0.12em] md:justify-center">
             {storeStatus && (
-              <button className="inline-flex h-10 shrink-0 items-center rounded-full px-4 text-sm font-bold transition hover:bg-black/5" type="button" data-public-store-open="true">
+              <button className="shrink-0 text-black/70 transition hover:text-black" type="button" data-public-store-open="true">
                 Print Store
               </button>
             )}
-            <label className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90 md:w-10 md:justify-center md:px-0" title={faceBusy ? "Searching" : "Find me"}>
-              {faceBusy ? <Search className="size-4 animate-pulse" /> : <Camera className="size-4" />}
-              <span className="hidden sm:inline md:sr-only">{faceBusy ? "Searching" : "Find me"}</span>
+            {showSetTabs && gallerySets.map((set) => (
+              <button
+                key={set.id}
+                className={cn(
+                  "shrink-0 transition hover:text-black",
+                  activeSetId === set.id ? "text-black" : "text-black/45",
+                )}
+                onClick={() => setActiveSetId(set.id)}
+                type="button"
+              >
+                {set.name}
+              </button>
+            ))}
+          </div>
+          <div className="flex min-w-0 items-center justify-end gap-2">
+            <span data-public-store-cart-host="true" />
+            <button className="inline-flex size-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-black" onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Favorite" aria-label="My Favorite">
+              <Heart className={cn("size-5", favoritesPanelOpen && "fill-current text-red-500")} />
+            </button>
+            {canDownloadAll && (
+              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-black disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
+                {zipDownloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
+              </button>
+            )}
+            {socialSharingEnabled && (
+              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-black" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
+                <Share2 className="size-5" />
+              </button>
+            )}
+            {slideshowEnabled && (
+              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-black" onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
+                <Play className="size-5" />
+              </button>
+            )}
+            <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center text-black/70 transition hover:text-black" title={faceBusy ? "Searching" : "Find me"} aria-label="Find me">
+              {faceBusy ? <Search className="size-5 animate-pulse" /> : <Camera className="size-5" />}
               <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
                 void searchByFace(event.target.files?.[0]);
                 event.target.value = "";
               }} />
             </label>
-            <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
-              <Search className="size-4" />
-              <span className="hidden sm:inline md:sr-only">Faces</span>
+            <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-black" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
+              <Search className="size-5" />
             </button>
             {faceResults && (
-              <button className="inline-flex h-10 shrink-0 items-center rounded-full border border-black/10 px-4 text-sm font-bold transition hover:bg-black/5" onClick={() => setFaceResults(null)} type="button">
+              <button className="inline-flex h-10 shrink-0 items-center border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em]" onClick={() => setFaceResults(null)} type="button">
                 Show all
               </button>
             )}
-            {slideshowEnabled && (
-              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
-                <Play className="size-4" />
-                <span className="hidden sm:inline md:sr-only">Slideshow</span>
-              </button>
-            )}
-            {socialSharingEnabled && (
-              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 md:w-10 md:justify-center md:px-0" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
-                <Share2 className="size-4" />
-                <span className="hidden sm:inline md:sr-only">Share</span>
-              </button>
-            )}
-            <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 md:w-10 md:justify-center md:px-0" onClick={() => void toggleCollectionFavorite()} disabled={favoriteBusy} type="button" title="Favorite" aria-label="Favorite">
-              <Heart className={cn("size-4", collectionFavorited && "fill-current text-red-500")} />
-              <span className="hidden sm:inline md:sr-only">Favorite</span>
-            </button>
-            {canDownloadAll && (
-              <button className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold transition hover:bg-black/5 disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
-                {zipDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-              </button>
-            )}
             {pinRequired && !pinOk && (
-              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90" onClick={() => setPinDialogOpen(true)} type="button">
+              <button className="inline-flex h-10 shrink-0 items-center gap-2 bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90" onClick={() => setPinDialogOpen(true)} type="button">
                 <Lock className="size-4" />
                 Unlock
               </button>
@@ -1078,6 +1033,34 @@ export function PublicGallery({
             <Check className="size-4" />
             <span>Use favorite, share, slideshow, face search, and download tools from the gallery bar.</span>
           </div>
+        )}
+
+        {favoritesPanelOpen && (
+          <section className="border-b border-black/10 bg-[#fbfaf8] px-4 py-7 md:px-8">
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-black/45">My Favorite</p>
+                <h2 className="mt-2 text-2xl font-semibold">{title}</h2>
+              </div>
+              <p className="text-sm text-black/55">{favoriteGalleryImages.length} photo{favoriteGalleryImages.length === 1 ? "" : "s"}</p>
+            </div>
+            {favoriteGalleryImages.length ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                {favoriteGalleryImages.map((photo) => (
+                  <button key={photo._id} className="group relative aspect-[4/3] overflow-hidden bg-white" onClick={() => setActiveImage(photo)} type="button">
+                    <img src={imageSrc(photo.thumbnailUrl || photo.url)} alt={photo.originalName ?? ""} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+                    <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white text-red-500 shadow">
+                      <Heart className="size-4 fill-current" />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex min-h-36 items-center justify-center border border-dashed border-black/15 bg-white text-sm text-black/50">
+                Favorite photos from this collection will show here.
+              </div>
+            )}
+          </section>
         )}
 
         {emailRegistrationEnabled && !visitorEmailSaved && (
@@ -1105,7 +1088,7 @@ export function PublicGallery({
           </div>
         )}
 
-        {downloadsEnabled && boolSetting(download.limitDownloads) && maxDownloads > 0 && (
+        {(photoDownloadsEnabled || videoDownloadsEnabled) && boolSetting(download.limitDownloads) && maxDownloads > 0 && (
           <p className="mx-4 mt-4 text-sm md:mx-8" style={{ color: accent }}>
             {Math.max(0, maxDownloads - downloadCount)} downloads remaining
           </p>
@@ -1145,9 +1128,8 @@ export function PublicGallery({
                 photo={photo}
                 spacing={masonryGapPx}
                 canFavorite={favoritesEnabled}
-                canDownload={canDownloadSingle}
+                canDownload={canDownloadMedia(photo)}
                 canShare={socialSharingEnabled}
-                showFilename={showFilenames}
                 sharpeningLevel={sharpeningLevel}
                 favoriteBusy={favoriteImageBusy === photo._id}
                 favorited={favoriteImageIds.has(photo._id)}
@@ -1301,7 +1283,7 @@ export function PublicGallery({
                 <Share2 className="size-5" />
               </button>
             )}
-            {canDownloadSingle && (
+            {activeImage && canDownloadMedia(activeImage) && (
               <button className="polished-icon-button" onClick={() => downloadPhoto(activeImage)} type="button" aria-label="Download" title="Download">
                 <Download className="size-5" />
               </button>
@@ -1315,6 +1297,11 @@ export function PublicGallery({
               alt={activeImage.originalName ?? ""}
               className="max-h-full max-w-full object-contain"
             />
+          )}
+          {showFilenames && activeImage.originalName && (
+            <p className="absolute bottom-4 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full bg-black/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
+              {activeImage.originalName}
+            </p>
           )}
         </div>
       )}
@@ -1349,7 +1336,7 @@ export function PublicGallery({
                 <Share2 className="size-5" />
               </button>
             )}
-            {canDownloadSingle && (
+            {canDownloadMedia(slideshowImage) && (
               <button className="polished-icon-button" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button" aria-label="Download" title="Download">
                 <Download className="size-5" />
               </button>
@@ -1364,6 +1351,11 @@ export function PublicGallery({
               alt={slideshowImage.originalName ?? ""}
               className="max-h-full max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
             />
+          )}
+          {showFilenames && slideshowImage.originalName && (
+            <p className="absolute bottom-4 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-black shadow">
+              {slideshowImage.originalName}
+            </p>
           )}
         </div>
       )}
@@ -1466,7 +1458,6 @@ function GalleryTile({
   canFavorite,
   canDownload,
   canShare,
-  showFilename,
   sharpeningLevel,
   favoriteBusy,
   favorited,
@@ -1483,7 +1474,6 @@ function GalleryTile({
   canFavorite: boolean;
   canDownload: boolean;
   canShare: boolean;
-  showFilename: boolean;
   sharpeningLevel: "optimal" | "low" | "high";
   favoriteBusy: boolean;
   favorited: boolean;
@@ -1519,11 +1509,6 @@ function GalleryTile({
           />
         )}
       </button>
-      {showFilename && photo.originalName && (
-        <p className="truncate bg-white px-3 py-2 text-xs font-semibold text-[#555]">
-          {photo.originalName}
-        </p>
-      )}
       <div className="absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         {canFavorite && isPersistedImageId(photo._id) && (
           <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" title="Favorite" type="button">
@@ -1535,8 +1520,8 @@ function GalleryTile({
             className="polished-icon-button size-9 sm:size-10"
             onClick={() => onPrivate(photo)}
             disabled={privateBusy}
-            aria-label={privatePhoto ? "Make photo visible" : "Mark photo private"}
-            title={privatePhoto ? "Private" : "Mark private"}
+            aria-label={privatePhoto ? "Hide request pending" : "Request hide"}
+            title={privatePhoto ? "Hide request pending" : "Request hide"}
             type="button"
           >
             <EyeOff className={cn("size-4", privatePhoto && "text-[#00a997]")} />

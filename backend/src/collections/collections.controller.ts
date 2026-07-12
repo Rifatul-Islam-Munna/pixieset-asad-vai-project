@@ -95,7 +95,7 @@ export class PublicCollectionsController {
     @Query('siteSlug') siteSlug?: string,
   ) {
     const data = await this.collectionsService.togglePublicPrivateImage(identifier, imageId, body, siteSlug);
-    return { message: data.private ? 'Photo marked private' : 'Photo made visible', data };
+    return { message: data.requested ? 'Private photo request sent' : 'Private photo request cancelled', data };
   }
 
   @Post(':identifier/download-activity')
@@ -186,6 +186,28 @@ export class CollectionsController {
   ) {
     const data = await this.collectionsService.deleteFavoriteImageInfo(req.user.id, id, favoriteUserId, imageId);
     return { message: 'Favorite image deleted', data };
+  }
+
+  @Patch(':id/activity/private-photos/:privatePhotoId')
+  async updatePrivatePhotoRequest(
+    @Param('id') id: string,
+    @Param('privatePhotoId') privatePhotoId: string,
+    @Body('status') status: 'pending' | 'approved' | 'declined',
+    @Req() req: ExpressRequest,
+  ) {
+    const nextStatus = ['pending', 'approved', 'declined'].includes(status) ? status : 'pending';
+    const data = await this.collectionsService.updatePrivatePhotoRequest(req.user.id, id, privatePhotoId, nextStatus);
+    return { message: nextStatus === 'approved' ? 'Private photo approved' : nextStatus === 'declined' ? 'Private photo declined' : 'Private photo request updated', data };
+  }
+
+  @Delete(':id/activity/private-photos/:privatePhotoId')
+  async deletePrivatePhotoRequest(
+    @Param('id') id: string,
+    @Param('privatePhotoId') privatePhotoId: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.deletePrivatePhotoRequest(req.user.id, id, privatePhotoId);
+    return { message: 'Private photo made public', data };
   }
 
   @Post(':id/activity/favorites/:favoriteUserId/copy-to-set')

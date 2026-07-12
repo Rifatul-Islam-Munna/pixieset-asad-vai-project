@@ -95,6 +95,7 @@ export type CollectionPrivatePhotoActivityRecord = {
   imageId: string;
   imageName: string;
   imageUrl?: string;
+  status?: "pending" | "approved" | "declined";
   createdAt?: string;
   updatedAt?: string;
 };
@@ -514,7 +515,32 @@ export function useCollectionActivityActions(collectionId?: string) {
     },
   });
 
-  return { deleteFavoriteInfo, deleteFavoriteImageInfo, copyFavoriteListToSet, copyFavoriteListToCollection };
+  const updatePrivatePhotoRequest = useMutation({
+    mutationFn: async ({ privatePhotoId, status }: { privatePhotoId: string; status: "pending" | "approved" | "declined" }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PatchRequestAxios<{ data: CollectionPrivatePhotoActivityRecord; message: string }>(
+        `/collections/${collectionId}/activity/private-photos/${privatePhotoId}`,
+        { status },
+      );
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: refresh,
+  });
+
+  const deletePrivatePhotoRequest = useMutation({
+    mutationFn: async (privatePhotoId: string) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await DeleteRequestAxios<{ data: { deleted: number }; message: string }>(
+        `/collections/${collectionId}/activity/private-photos/${privatePhotoId}`,
+      );
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: refresh,
+  });
+
+  return { deleteFavoriteInfo, deleteFavoriteImageInfo, copyFavoriteListToSet, copyFavoriteListToCollection, updatePrivatePhotoRequest, deletePrivatePhotoRequest };
 }
 
 export function useCollectionImages() {

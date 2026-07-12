@@ -434,6 +434,7 @@ export function ClientDashboard({
   priceSheetId,
   productId,
   productType,
+  emailTemplateId,
 }: {
   section: DashboardSection;
   page: DashboardPage;
@@ -443,6 +444,7 @@ export function ClientDashboard({
   priceSheetId?: string;
   productId?: string;
   productType?: StoreProductType;
+  emailTemplateId?: string;
 }) {
   const router = useRouter();
   const active = dashboardCopy[section];
@@ -483,20 +485,11 @@ export function ClientDashboard({
     const onStorageChanged = () => {
       void loadBilling();
     };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void loadBilling();
-    };
     void loadBilling();
     window.addEventListener("storage-usage-changed", onStorageChanged);
-    window.addEventListener("focus", loadBilling);
-    document.addEventListener("visibilitychange", onVisible);
-    const refreshTimer = window.setInterval(loadBilling, 30_000);
     return () => {
       active = false;
       window.removeEventListener("storage-usage-changed", onStorageChanged);
-      window.removeEventListener("focus", loadBilling);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.clearInterval(refreshTimer);
     };
   }, []);
   const sidebarUsedGb = bytesToGb(billingUser?.storageUsedBytes ?? 0);
@@ -995,7 +988,7 @@ export function ClientDashboard({
             ) : section === "store-gallery" && page === "settings" ? (
               <StoreSettingsPanel />
             ) : page === "settings" ? (
-              <SettingsPanel section={section} settingsPage={settingsPage} />
+              <SettingsPanel section={section} settingsPage={settingsPage} emailTemplateId={emailTemplateId} />
             ) : page === "homepage" ? (
               <HomepageSettings />
             ) : page === "storage" ? (
@@ -3070,44 +3063,53 @@ function CampaignPreview({
   subject: string;
   template: string;
 }) {
+  const headline = template?.trim() || "Untitled Template";
+  const safeSubject = subject?.trim() || "Your gallery is ready";
+  const safePreview = previewText?.trim() || "A short preview line will appear here.";
+  const safeMessage = message?.trim() || "Write a polished note for your client here.";
+  const safeButton = buttonText?.trim() || "Open Gallery";
+  const safeFooter = footerText?.trim() || defaultFooterText;
   return (
-    <section className="flex justify-center overflow-auto p-4 sm:p-10">
-      <div className="w-full max-w-[600px] bg-white">
-        <div className="bg-[#080c0e] px-5 py-8 text-center text-white sm:px-10 sm:py-10">
-          <h1 className="break-words text-3xl font-bold uppercase tracking-wide sm:text-5xl">
-            {template}
+    <section className="flex justify-center overflow-auto">
+      <div className="w-full max-w-[640px] overflow-hidden bg-white shadow-[0_22px_80px_rgba(0,0,0,0.10)]">
+        <div className="bg-[#111412] px-6 py-10 text-center text-white sm:px-12">
+          <p className="text-[11px] font-bold uppercase tracking-[0.32em] text-white/45">
+            Client Gallery
+          </p>
+          <h1 className="mt-4 break-words text-3xl font-semibold uppercase tracking-[0.08em] sm:text-5xl">
+            {headline}
           </h1>
         </div>
-        <div className="h-[240px] overflow-hidden bg-[#080c0e]">
+        <div className="h-[260px] overflow-hidden bg-[#111412]">
           {image ? (
             <img
               src={image}
-              alt={template}
+              alt={headline}
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-4xl font-bold uppercase tracking-wide text-white/10">
-              {template}
+            <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_center,#26302d_0,#111412_55%,#070908_100%)] px-8 text-center text-3xl font-bold uppercase tracking-[0.14em] text-white/10">
+              {headline}
             </div>
           )}
         </div>
-        <div className="px-16 py-9 text-base leading-7">
-          <p className="text-sm font-bold uppercase tracking-wide text-[#777]">
-            {subject}
+        <div className="px-8 py-10 text-base leading-7 sm:px-16">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#8a8178]">
+            {safeSubject}
           </p>
-          <p className="mt-2 text-sm text-[#777]">{previewText}</p>
-          <div className="mt-6 whitespace-pre-line">{message}</div>
+          <p className="mt-2 text-sm text-[#777]">{safePreview}</p>
+          <div className="mt-7 whitespace-pre-line text-[#222]">{safeMessage}</div>
           <div className="mt-9 text-center">
             <a
               href={buttonLink === "Collection URL" ? "#" : buttonLink}
-              className="inline-flex h-11 items-center justify-center px-8 font-bold uppercase tracking-wide text-white"
+              className="inline-flex h-12 min-w-48 items-center justify-center px-9 text-sm font-bold uppercase tracking-[0.12em] text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]"
               style={{ backgroundColor: buttonColor }}
             >
-              {buttonText}
+              {safeButton}
             </a>
           </div>
-          <p className="mt-10 whitespace-pre-line text-center text-xs text-[#555]">
-            {footerText}
+          <p className="mt-10 border-t pt-7 whitespace-pre-line text-center text-xs leading-6 text-[#777]">
+            {safeFooter}
           </p>
         </div>
       </div>
@@ -3841,9 +3843,11 @@ const watermarkFonts = [
 function SettingsPanel({
   section,
   settingsPage,
+  emailTemplateId,
 }: {
   section: DashboardSection;
   settingsPage: SettingsPage;
+  emailTemplateId?: string;
 }) {
   const hydrateDashboardSettings = useDashboardStore(
     (state) => state.hydrateDashboardSettings,
@@ -3906,7 +3910,7 @@ function SettingsPanel({
         ) : settingsPage === "preset-new" ? (
           <PresetEditor section={section} />
         ) : settingsPage === "email-templates" ? (
-          <EmailTemplatesPanel />
+          <EmailTemplatesPanel section={section} editorId={emailTemplateId} />
         ) : settingsPage === "preferences" ? (
           <PreferencesPanel />
         ) : settingsPage === "integrations" ? (
@@ -4357,9 +4361,17 @@ function BrandingSettings() {
   );
 }
 
-function EmailTemplatesPanel() {
-  const [editorOpen, setEditorOpen] = useState(false);
+function EmailTemplatesPanel({
+  section,
+  editorId,
+}: {
+  section: DashboardSection;
+  editorId?: string;
+}) {
+  const router = useRouter();
+  const [editorOpen, setEditorOpen] = useState(Boolean(editorId));
   const [templateSearch, setTemplateSearch] = useState("");
+  const createdEditorRouteRef = useRef("");
   const {
     addEmailTemplateDraft,
     activeEmailTemplateId,
@@ -4381,6 +4393,24 @@ function EmailTemplatesPanel() {
       .toLowerCase()
       .includes(templateSearch.toLowerCase()),
   );
+  useEffect(() => {
+    if (!editorId) {
+      createdEditorRouteRef.current = "";
+      setEditorOpen(false);
+      return;
+    }
+    if (editorId === "new") {
+      if (createdEditorRouteRef.current !== editorId) {
+        addEmailTemplateDraft();
+        createdEditorRouteRef.current = editorId;
+      }
+      setEditorOpen(true);
+      return;
+    }
+    createdEditorRouteRef.current = "";
+    selectEmailTemplate(editorId);
+    setEditorOpen(true);
+  }, [addEmailTemplateDraft, editorId, selectEmailTemplate]);
   const saveActiveTemplate = () => {
     if (!activeTemplate) return;
     const updatedAt = new Date().toLocaleDateString("en-US", {
@@ -4395,20 +4425,21 @@ function EmailTemplatesPanel() {
       name: activeTemplate.name,
       data: { ...activeTemplate, updatedAt },
     });
+    if (editorId === "new") {
+      router.replace(`/dashboard/${section}/settings/email-templates/${encodeURIComponent(activeTemplate.id)}`);
+    }
   };
   const deleteActiveTemplate = () => {
     if (!activeTemplate) return;
     deleteEmailTemplate(activeTemplate.id);
     deleteSetting.mutate(activeTemplate.id);
-    setEditorOpen(false);
+    router.push(`/dashboard/${section}/settings/email-templates`);
   };
   const createTemplate = () => {
-    addEmailTemplateDraft();
-    setEditorOpen(true);
+    router.push(`/dashboard/${section}/settings/email-templates/new`);
   };
   const editTemplate = (id: string) => {
-    selectEmailTemplate(id);
-    setEditorOpen(true);
+    router.push(`/dashboard/${section}/settings/email-templates/${encodeURIComponent(id)}`);
   };
 
   if (!editorOpen) {
@@ -4504,12 +4535,13 @@ function EmailTemplatesPanel() {
   if (!activeTemplate) return null;
 
   return (
-    <div className="-mx-5 -mt-9">
-      <div className="flex min-h-[72px] items-center justify-between gap-4 border-b border-[#eee] bg-white px-5">
+    <div className="-mx-5 -mt-9 bg-[#f4f4f1]">
+      <div className="sticky top-0 z-20 flex min-h-[76px] items-center justify-between gap-4 border-b border-[#e5e1da] bg-white/95 px-5 backdrop-blur">
         <div className="flex min-w-0 items-center gap-4">
           <button
-            onClick={() => setEditorOpen(false)}
+            onClick={() => router.push(`/dashboard/${section}/settings/email-templates`)}
             aria-label="Back to templates"
+            className="flex size-10 items-center justify-center rounded-full hover:bg-[#f4f4f1]"
           >
             <ArrowLeft className="size-5 text-[#777]" />
           </button>
@@ -4537,7 +4569,7 @@ function EmailTemplatesPanel() {
             Use in Campaign
           </Button>
           <Button
-            className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-10 rounded-none bg-[#111] px-7 text-sm font-bold text-white hover:bg-[#222]"
             onClick={saveActiveTemplate}
           >
             <Save className="size-4" />
@@ -4555,15 +4587,24 @@ function EmailTemplatesPanel() {
         </div>
       </div>
 
-      <div className="grid min-h-[720px] lg:grid-cols-[minmax(420px,0.85fr)_minmax(460px,1fr)]">
-        <section className="border-r p-4 sm:p-7">
-          <FieldGroup className="gap-7">
+      <div className="grid min-h-[720px] lg:grid-cols-[minmax(420px,0.78fr)_minmax(520px,1fr)]">
+        <section className="border-r border-[#e5e1da] bg-white p-4 sm:p-7">
+          <div className="mb-7 border-b border-[#eee] pb-6">
+            <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#9a8f82]">
+              Compose
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold">Email template</h2>
+            <p className="mt-2 text-sm leading-6 text-[#666]">
+              Shape subject, message, action, and footer in one clean editor.
+            </p>
+          </div>
+          <FieldGroup className="gap-6">
             <Field>
               <FieldLabel className="font-bold uppercase text-[#777]">
                 Subject
               </FieldLabel>
               <Input
-                className="h-12 rounded-none"
+                className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]"
                 value={activeTemplate.subject}
                 onChange={(event) =>
                   updateEmailTemplate({ subject: event.target.value })
@@ -4575,7 +4616,7 @@ function EmailTemplatesPanel() {
                 Preview Text
               </FieldLabel>
               <Input
-                className="h-12 rounded-none"
+                className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]"
                 value={activeTemplate.previewText}
                 onChange={(event) =>
                   updateEmailTemplate({ previewText: event.target.value })
@@ -4587,7 +4628,7 @@ function EmailTemplatesPanel() {
                 Email Title
               </FieldLabel>
               <Input
-                className="h-12 rounded-none"
+                className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]"
                 value={activeTemplate.title}
                 onChange={(event) =>
                   updateEmailTemplate({ title: event.target.value })
@@ -4601,7 +4642,7 @@ function EmailTemplatesPanel() {
               <Input
                 type="file"
                 accept="image/*"
-                className="h-12 rounded-none"
+                className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file)
@@ -4614,7 +4655,7 @@ function EmailTemplatesPanel() {
                 Message
               </FieldLabel>
               <Textarea
-                className="min-h-[210px] resize-none rounded-none leading-6"
+                className="min-h-[220px] resize-none rounded-none border-[#ddd] bg-[#fbfbfa] leading-6"
                 value={activeTemplate.message}
                 onChange={(event) =>
                   updateEmailTemplate({ message: event.target.value })
@@ -4627,7 +4668,7 @@ function EmailTemplatesPanel() {
                   Button Text
                 </FieldLabel>
                 <Input
-                  className="h-12 rounded-none"
+                  className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]"
                   value={activeTemplate.buttonText}
                   onChange={(event) =>
                     updateEmailTemplate({ buttonText: event.target.value })
@@ -4639,7 +4680,7 @@ function EmailTemplatesPanel() {
                   Button Link
                 </FieldLabel>
                 <Input
-                  className="h-12 rounded-none"
+                  className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]"
                   value={activeTemplate.buttonLink}
                   onChange={(event) =>
                     updateEmailTemplate({ buttonLink: event.target.value })
@@ -4654,14 +4695,14 @@ function EmailTemplatesPanel() {
               <div className="flex gap-3">
                 <Input
                   type="color"
-                  className="h-12 w-16 rounded-none p-1"
+                  className="h-12 w-16 rounded-none border-[#ddd] bg-[#fbfbfa] p-1"
                   value={activeTemplate.buttonColor}
                   onChange={(event) =>
                     updateEmailTemplate({ buttonColor: event.target.value })
                   }
                 />
                 <Input
-                  className="h-12 rounded-none"
+                  className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]"
                   value={activeTemplate.buttonColor}
                   onChange={(event) =>
                     updateEmailTemplate({ buttonColor: event.target.value })
@@ -4674,7 +4715,7 @@ function EmailTemplatesPanel() {
                 Footer Text
               </FieldLabel>
               <Textarea
-                className="min-h-[120px] resize-none rounded-none leading-6"
+                className="min-h-[120px] resize-none rounded-none border-[#ddd] bg-[#fbfbfa] leading-6"
                 value={activeTemplate.footerText}
                 onChange={(event) =>
                   updateEmailTemplate({ footerText: event.target.value })
@@ -4684,7 +4725,18 @@ function EmailTemplatesPanel() {
           </FieldGroup>
         </section>
 
-        <div className="bg-[#f3f3f3] lg:sticky lg:top-0 lg:h-screen lg:overflow-auto">
+        <div className="bg-[#f4f4f1] p-5 lg:sticky lg:top-[76px] lg:h-[calc(100vh-76px)] lg:overflow-auto">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#9a8f82]">
+                Live preview
+              </p>
+              <p className="mt-1 text-sm text-[#666]">Desktop email view</p>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-[#777] shadow-sm">
+              640px
+            </span>
+          </div>
           <CampaignPreview
             buttonColor={activeTemplate.buttonColor}
             buttonLink={activeTemplate.buttonLink}
@@ -14361,6 +14413,12 @@ function CollectionDetailView({
               deleteFavoriteImageInfo={
                 activityActions.deleteFavoriteImageInfo.mutateAsync
               }
+              updatePrivatePhotoRequest={
+                activityActions.updatePrivatePhotoRequest.mutateAsync
+              }
+              deletePrivatePhotoRequest={
+                activityActions.deletePrivatePhotoRequest.mutateAsync
+              }
               copyFavoriteListToSet={(payload) => {
                 if (!activityActions.copyFavoriteListToSet)
                   throw new Error("Copy to set is not available");
@@ -14450,6 +14508,8 @@ function CollectionActivityPanel({
   saveAccessSettings,
   deleteFavoriteInfo,
   deleteFavoriteImageInfo,
+  updatePrivatePhotoRequest,
+  deletePrivatePhotoRequest,
   copyFavoriteListToSet,
   copyFavoriteListToCollection,
 }: {
@@ -14475,6 +14535,11 @@ function CollectionActivityPanel({
     favoriteUserId: string;
     imageId: string;
   }) => Promise<unknown>;
+  updatePrivatePhotoRequest: (payload: {
+    privatePhotoId: string;
+    status: "pending" | "approved" | "declined";
+  }) => Promise<unknown>;
+  deletePrivatePhotoRequest: (privatePhotoId: string) => Promise<unknown>;
   copyFavoriteListToSet: (payload: {
     favoriteUserId: string;
     name?: string;
@@ -14992,6 +15057,8 @@ function CollectionActivityPanel({
           registrations={emailRegistrations}
           privatePhotos={privatePhotos}
           collectionName={collectionName}
+          updatePrivatePhotoRequest={updatePrivatePhotoRequest}
+          deletePrivatePhotoRequest={deletePrivatePhotoRequest}
         />
         ) : activityPage === "download" ? (
           <>

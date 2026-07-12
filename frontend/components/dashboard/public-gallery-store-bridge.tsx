@@ -254,13 +254,13 @@ export function PublicGalleryStoreBridge({
         createPortal(
           <button
             type="button"
-            className="relative inline-flex size-10 items-center justify-center rounded-full bg-[#202326] text-white shadow-sm transition hover:opacity-90"
+            className="relative inline-flex size-10 items-center justify-center text-black/70 transition hover:text-black"
             onClick={() => setCartOpen(true)}
             aria-label="Open cart"
           >
-            <ShoppingBag className="size-4" />
+            <ShoppingBag className="size-5" />
             {cartCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-bold text-[#202326] shadow">
+              <span className="absolute right-0 top-0 flex min-w-4 items-center justify-center rounded-full bg-[#202326] px-1 text-[10px] font-bold text-white">
                 {cartCount}
               </span>
             )}

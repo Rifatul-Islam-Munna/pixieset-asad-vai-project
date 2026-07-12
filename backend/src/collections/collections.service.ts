@@ -242,7 +242,14 @@ export class CollectionsService {
       return { items: [], total: 0, limit: this.pageLimit(limit), offset: this.pageOffset(offset), hasMore: false };
     }
     void this.ensureCollectionPreviews(collection._id.toString());
-    return this.findImagesPage({ collectionId: collection._id.toString() }, limit, offset);
+    const privateRows = await this.privatePhotoModel
+      .find({ collectionId: collection._id.toString(), status: 'approved' })
+      .select('imageId')
+      .lean();
+    const hiddenImageIds = privateRows.map((row) => row.imageId);
+    const query: Record<string, unknown> = { collectionId: collection._id.toString() };
+    if (hiddenImageIds.length) query._id = { $nin: hiddenImageIds };
+    return this.findImagesPage(query, limit, offset);
   }
 
   async requestPublicAccess(identifier: string, body: { email?: string; reason?: string }, siteSlug?: string) {
@@ -309,16 +316,23 @@ export class CollectionsService {
 
     const existing = await this.privatePhotoModel.findOne({ collectionId, email, imageId }).lean();
     if (existing) {
-      await this.privatePhotoModel.deleteOne({ _id: existing._id });
-      return { private: false, collectionId, imageId, email };
+      if (existing.status === 'pending') {
+        await this.privatePhotoModel.deleteOne({ _id: existing._id });
+        return { private: false, requested: false, status: 'cancelled', collectionId, imageId, email };
+      }
+      if (existing.status === 'approved') {
+        return { private: true, requested: true, status: 'approved', collectionId, imageId, email };
+      }
+      await this.privatePhotoModel.updateOne({ _id: existing._id }, { $set: { status: 'pending' } });
+      return { private: false, requested: true, status: 'pending', collectionId, imageId, email };
     }
 
     await this.privatePhotoModel.updateOne(
       { collectionId, email, imageId },
-      { $setOnInsert: { collectionId, email, imageId } },
+      { $setOnInsert: { collectionId, email, imageId, status: 'pending' } },
       { upsert: true },
     );
-    return { private: true, collectionId, imageId, email };
+    return { private: false, requested: true, status: 'pending', collectionId, imageId, email };
   }
 
   async listMarketingContacts(userId: string) {
@@ -585,6 +599,7 @@ export class CollectionsService {
           imageId: privatePhoto.imageId,
           imageName: image?.originalName || privatePhoto.imageId,
           imageUrl: image?.thumbnailUrl || image?.url || '',
+          status: privatePhoto.status ?? 'pending',
           createdAt: privatePhoto.createdAt,
           updatedAt: privatePhoto.updatedAt,
         };
@@ -655,6 +670,32 @@ export class CollectionsService {
       userId: favoriteUserId,
       imageId,
     });
+    return { deleted: result.deletedCount ?? 0 };
+  }
+
+  async updatePrivatePhotoRequest(
+    userId: string,
+    collectionId: string,
+    privatePhotoId: string,
+    status: 'pending' | 'approved' | 'declined',
+  ) {
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).select('_id').lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    if (!Types.ObjectId.isValid(privatePhotoId)) throw new BadRequestException('Private photo request is required');
+    const record = await this.privatePhotoModel.findOneAndUpdate(
+      { _id: privatePhotoId, collectionId },
+      { $set: { status } },
+      { new: true },
+    ).lean();
+    if (!record) throw new NotFoundException('Private photo request not found');
+    return { _id: record._id, status: record.status, imageId: record.imageId, email: record.email };
+  }
+
+  async deletePrivatePhotoRequest(userId: string, collectionId: string, privatePhotoId: string) {
+    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).select('_id').lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    if (!Types.ObjectId.isValid(privatePhotoId)) throw new BadRequestException('Private photo request is required');
+    const result = await this.privatePhotoModel.deleteOne({ _id: privatePhotoId, collectionId });
     return { deleted: result.deletedCount ?? 0 };
   }
 
