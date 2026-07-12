@@ -197,24 +197,44 @@
   }
 
   .gallerista-editorial [class*="bg-white"],
-  .gallerista-editorial .bg-\[\#fafafa\] {
+  .gallerista-editorial .bg-\[\#fafafa\],
+  .gallerista-editorial .bg-\[\#f7f7f7\],
+  .gallerista-editorial .bg-\[\#f5f5f5\],
+  .gallerista-editorial .bg-\[\#f5f5f2\],
+  .gallerista-editorial .bg-\[\#f7f7f4\] {
     background-color: var(--gallery-card);
   }
 
-  .gallerista-editorial .bg-\[\#22bda7\] {
+  .gallerista-editorial .bg-\[\#22bda7\],
+  .gallerista-editorial .bg-\[\#111\],
+  .gallerista-editorial .bg-\[\#202326\],
+  .gallerista-editorial .bg-\[\#333\] {
     background-color: var(--gallery-primary) !important;
   }
 
   .gallerista-editorial .hover\:bg-\[\#19a995\]:hover,
-  .gallerista-editorial .hover\:bg-\[\#2E2E2E\]:hover {
+  .gallerista-editorial .hover\:bg-\[\#2E2E2E\]:hover,
+  .gallerista-editorial .hover\:bg-\[\#111\]:hover,
+  .gallerista-editorial .hover\:bg-\[\#202326\]:hover,
+  .gallerista-editorial .hover\:bg-\[\#333\]:hover {
     background-color: var(--gallery-primary-hover) !important;
   }
 
   .gallerista-editorial .text-\[\#00a997\],
   .gallerista-editorial .text-\[\#009b8c\],
   .gallerista-editorial .text-\[\#0b9f91\],
-  .gallerista-editorial .text-\[\#19bba7\] {
+  .gallerista-editorial .text-\[\#19bba7\],
+  .gallerista-editorial .text-\[\#008f80\],
+  .gallerista-editorial .text-\[\#008f81\] {
     color: var(--gallery-purple) !important;
+  }
+
+  .gallerista-editorial .text-\[\#111\],
+  .gallerista-editorial .text-\[\#151515\],
+  .gallerista-editorial .text-\[\#202326\],
+  .gallerista-editorial .text-\[\#222\],
+  .gallerista-editorial .text-\[\#333\] {
+    color: var(--gallery-text) !important;
   }
 
   .gallerista-editorial .bg-\[\#eaf8f5\],
@@ -222,14 +242,39 @@
   .gallerista-editorial .bg-\[\#dff3ef\],
   .gallerista-editorial .bg-\[\#dff6ef\],
   .gallerista-editorial .bg-\[\#f3faf6\],
-  .gallerista-editorial .bg-\[\#f2fffd\] {
-    background-color: #F1EEFF !important;
+  .gallerista-editorial .bg-\[\#f2fffd\],
+  .gallerista-editorial .bg-\[\#effbf8\],
+  .gallerista-editorial .bg-\[\#f1faf8\],
+  .gallerista-editorial .bg-\[\#f4fbf9\],
+  .gallerista-editorial .bg-\[\#e3f6f1\] {
+    background-color: color-mix(in srgb, var(--gallery-lavender) 22%, white) !important;
+  }
+
+  .gallerista-editorial .border-\[\#e8e8e8\],
+  .gallerista-editorial .border-\[\#E8E5E1\],
+  .gallerista-editorial .border-\[\#ddd\],
+  .gallerista-editorial .border-\[\#cfcfcf\] {
+    border-color: var(--gallery-border) !important;
   }
 
   .gallerista-editorial .border-\[\#22bda7\],
+  .gallerista-editorial .border-\[\#00a997\],
+  .gallerista-editorial .border-\[\#00b7a5\],
   .gallerista-editorial .outline-\[\#22bda7\] {
     border-color: var(--gallery-purple) !important;
     outline-color: var(--gallery-purple) !important;
+  }
+
+  .gallerista-editorial .fill-\[\#00a997\] {
+    fill: var(--gallery-purple) !important;
+  }
+
+  .gallerista-editorial .ring-\[\#22bda7\] {
+    --tw-ring-color: var(--gallery-purple) !important;
+  }
+
+  .gallerista-editorial .accent-\[\#22bda7\] {
+    accent-color: var(--gallery-purple) !important;
   }
 
   .gallerista-editorial .bg-\[\#0dc6b5\],
@@ -238,12 +283,19 @@
   }
 
   .gallerista-editorial .text-\[\#777\],
-  .gallerista-editorial .text-\[\#666\] {
+  .gallerista-editorial .text-\[\#666\],
+  .gallerista-editorial .text-\[\#555\] {
     color: #5F5A54;
   }
 
   .gallerista-editorial .luxury-accent {
     color: var(--gallery-gold);
+  }
+
+  .gallerista-editorial .border-l-\[\#22bda7\],
+  .gallerista-editorial .border-l-2.border-\[\#22bda7\],
+  .gallerista-editorial .border-l-4.border-\[\#22bda7\] {
+    border-left-color: var(--gallery-gold) !important;
   }
 }
 
@@ -252,7 +304,7 @@
 }
 
 .sortable-image-chosen {
-  outline: 2px solid #22bda7;
+  outline: 2px solid #6F57D9;
   outline-offset: 2px;
 }
 
