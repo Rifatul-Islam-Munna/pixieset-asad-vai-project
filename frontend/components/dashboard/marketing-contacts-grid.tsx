@@ -1,17 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Download,
   Loader2,
   Mail,
   Megaphone,
+  PlusCircle,
   Search,
+  Upload,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 
-import { GetRequestNormal } from "@/api-hooks/api-hooks";
+import { GetRequestNormal, PostRequestAxios } from "@/api-hooks/api-hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -46,6 +49,7 @@ function sourceLabel(value: string) {
 }
 
 export function MarketingContactsGrid() {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["marketing-contacts"],
     queryFn: () =>
@@ -56,15 +60,42 @@ export function MarketingContactsGrid() {
   const contacts = Array.isArray(query.data?.data) ? query.data.data : [];
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("all");
+  const [manualEmail, setManualEmail] = useState("");
+  const [manualCategory, setManualCategory] = useState("Manual Contacts");
+  const addContacts = useMutation({
+    mutationFn: async (
+      contactsPayload: { email: string; category: string }[],
+    ) => {
+      const [data, error] = await PostRequestAxios<
+        ListResponse<{ added: number }> & { message: string }
+      >("/collections/marketing-contacts", {
+        contacts: contactsPayload,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (result) => {
+      toast.success(`Added ${result?.data?.added ?? 0} contacts`);
+      setManualEmail("");
+      queryClient.invalidateQueries({ queryKey: ["marketing-contacts"] });
+    },
+  });
 
   const sources = useMemo(
-    () => [...new Set(contacts.map((contact) => contact.source).filter(Boolean))],
+    () => [
+      ...new Set(
+        contacts
+          .map((contact) => contact.collectionName || contact.source)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ],
     [contacts],
   );
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return contacts.filter((contact) => {
-      const matchesSource = source === "all" || contact.source === source;
+      const category = contact.collectionName || contact.source || "";
+      const matchesSource = source === "all" || category === source;
       const matchesSearch =
         !term ||
         contact.email.toLowerCase().includes(term) ||
@@ -104,6 +135,35 @@ export function MarketingContactsGrid() {
     link.click();
     URL.revokeObjectURL(url);
   };
+  const submitManual = () => {
+    const email = manualEmail.trim();
+    if (!email) return;
+    addContacts.mutate([{ email, category: manualCategory.trim() || "Manual Contacts" }]);
+  };
+  const uploadCsv = async (file?: File | null) => {
+    if (!file) return;
+    const text = await file.text();
+    const rows = text
+      .split(/\r?\n/)
+      .map((line) => line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, "")))
+      .filter((cells) => cells.some(Boolean));
+    const parsed = rows
+      .map((cells, index) => {
+        const looksLikeHeader =
+          index === 0 && cells.join(" ").toLowerCase().includes("email");
+        if (looksLikeHeader) return null;
+        return {
+          email: cells[0] ?? "",
+          category: cells[1] || manualCategory || "CSV Contacts",
+        };
+      })
+      .filter((item): item is { email: string; category: string } => Boolean(item?.email));
+    if (!parsed.length) {
+      toast.error("CSV needs email in first column");
+      return;
+    }
+    addContacts.mutate(parsed);
+  };
 
   if (query.isLoading) {
     return (
@@ -127,6 +187,57 @@ export function MarketingContactsGrid() {
 
   return (
     <div className="mt-8 space-y-6">
+      <section className="border bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+          <label className="grid flex-1 gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.15em] text-[#777]">
+              Email
+            </span>
+            <Input
+              value={manualEmail}
+              onChange={(event) => setManualEmail(event.target.value)}
+              placeholder="client@example.com"
+              className="h-11 rounded-none"
+            />
+          </label>
+          <label className="grid flex-1 gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.15em] text-[#777]">
+              Category
+            </span>
+            <Input
+              value={manualCategory}
+              onChange={(event) => setManualCategory(event.target.value)}
+              placeholder="Wedding Leads"
+              className="h-11 rounded-none"
+            />
+          </label>
+          <Button
+            className="h-11 rounded-none bg-[#22bda7] text-white"
+            disabled={addContacts.isPending || !manualEmail.trim()}
+            onClick={submitManual}
+          >
+            <PlusCircle className="size-4" />
+            Add Contact
+          </Button>
+          <label className="inline-flex h-11 cursor-pointer items-center gap-2 border px-4 text-sm font-semibold">
+            <Upload className="size-4" />
+            Upload CSV
+            <input
+              type="file"
+              accept=".csv,text/csv,text/plain"
+              className="hidden"
+              onChange={(event) => {
+                void uploadCsv(event.target.files?.[0]);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+        </div>
+        <p className="mt-3 text-xs text-[#777]">
+          CSV format: email, category. If category is empty, current category is used.
+        </p>
+      </section>
+
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="border bg-white p-5">
           <div className="flex items-center gap-3 text-[#008f80]">
@@ -171,7 +282,7 @@ export function MarketingContactsGrid() {
               onChange={(event) => setSource(event.target.value)}
               className="h-11 border bg-white px-4 text-sm outline-none"
             >
-              <option value="all">All subscription sources</option>
+              <option value="all">All contact categories</option>
               {sources.map((item) => (
                 <option key={item} value={item}>
                   {sourceLabel(item)}

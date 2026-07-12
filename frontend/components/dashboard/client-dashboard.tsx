@@ -12,6 +12,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { format, isValid, parse, parseISO } from "date-fns";
 import LinkExtension from "@tiptap/extension-link";
 import UnderlineExtension from "@tiptap/extension-underline";
@@ -147,7 +148,7 @@ import {
   type CollectionImageRecord,
   type CollectionRecord,
 } from "@/api-hooks/use-collections";
-import { PostRequestAxios } from "@/api-hooks/api-hooks";
+import { GetRequestNormal, PostRequestAxios } from "@/api-hooks/api-hooks";
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import { logOutUser } from "@/actions/auth";
 import {
@@ -2701,8 +2702,10 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
     campaignButtonLink,
     campaignButtonText,
     campaignFooterText,
+    campaignEyebrowText,
     campaignTab,
     campaignImage,
+    campaignShowImage,
     campaignMessage,
     campaignPreviewText,
     campaignSubject,
@@ -2713,7 +2716,9 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
     setCampaignButtonLink,
     setCampaignButtonText,
     setCampaignFooterText,
+    setCampaignEyebrowText,
     setCampaignImage,
+    setCampaignShowImage,
     setCampaignMessage,
     setCampaignPreviewText,
     setCampaignSubject,
@@ -2722,24 +2727,58 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
   } = useDashboardStore();
   const [sendPending, startSendTransition] = useTransition();
   const [sendError, setSendError] = useState("");
-  const recipients = [
-    "Avery Woodward",
-    "Jessie Ryan",
-    "Morgan Wells",
-    "Isla Bennett",
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [recipientCategory, setRecipientCategory] = useState("all");
+  const contactsQuery = useQuery({
+    queryKey: ["marketing-contacts"],
+    queryFn: () =>
+      GetRequestNormal<{
+        data: {
+          _id: string;
+          email: string;
+          collectionName?: string;
+          source?: string;
+        }[];
+      }>("/collections/marketing-contacts"),
+  });
+  const contacts = Array.isArray(contactsQuery.data?.data)
+    ? contactsQuery.data.data
+    : [];
+  const recipientCategories = [
+    ...new Set(
+      contacts
+        .map((contact) => contact.collectionName || contact.source || "Contacts")
+        .filter(Boolean),
+    ),
   ];
-  const collections = [
-    "Autumn Florals",
-    "Black Friday Clients",
-    "Wedding Leads",
-  ];
+  const visibleRecipients = contacts.filter((contact) => {
+    const category = contact.collectionName || contact.source || "Contacts";
+    const term = recipientSearch.trim().toLowerCase();
+    return (
+      (recipientCategory === "all" || category === recipientCategory) &&
+      (!term ||
+        contact.email.toLowerCase().includes(term) ||
+        category.toLowerCase().includes(term))
+    );
+  });
+  const selectedEmails = selectedRecipients.filter((value) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+  );
+  const toggleVisibleRecipients = () => {
+    const missing = visibleRecipients
+      .map((contact) => contact.email)
+      .filter((email) => !selectedRecipients.includes(email));
+    if (!missing.length) {
+      visibleRecipients.forEach((contact) => toggleRecipient(contact.email));
+      return;
+    }
+    missing.forEach((email) => toggleRecipient(email));
+  };
   const sendNow = () => {
     setSendError("");
     startSendTransition(async () => {
       try {
-        const emails = selectedRecipients.filter((value) =>
-          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-        );
+        const emails = selectedEmails;
         await recordEmailUsage(Math.max(1, selectedRecipients.length));
         if (emails.length) {
           const body = [
@@ -2855,6 +2894,18 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold uppercase text-[#777]">
+                    Header Label
+                  </FieldLabel>
+                  <Input
+                    className="h-12 rounded-none"
+                    value={campaignEyebrowText}
+                    onChange={(event) =>
+                      setCampaignEyebrowText(event.target.value)
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
                     Title
                   </FieldLabel>
                   <Input
@@ -2866,31 +2917,44 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">
-                    Image
-                  </FieldLabel>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    className="h-12 rounded-none"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) setCampaignImage(URL.createObjectURL(file));
-                    }}
-                  />
-                  <div className="mt-3 flex h-28 items-center justify-center overflow-hidden bg-[#090d0f] text-white">
-                    {campaignImage ? (
-                      <img
-                        src={campaignImage}
-                        alt="Campaign preview"
-                        className="h-full w-full object-cover"
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <FieldLabel className="font-bold uppercase text-[#777]">
+                      Image
+                    </FieldLabel>
+                    <label className="flex items-center gap-2 text-sm font-semibold">
+                      <Switch
+                        checked={campaignShowImage}
+                        onCheckedChange={setCampaignShowImage}
                       />
-                    ) : (
-                      <span className="text-xl font-bold uppercase">
-                        {campaignTemplate}
-                      </span>
-                    )}
+                      Show image
+                    </label>
                   </div>
+                  {campaignShowImage && (
+                    <>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        className="h-12 rounded-none"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) setCampaignImage(URL.createObjectURL(file));
+                        }}
+                      />
+                      <div className="mt-3 flex h-28 items-center justify-center overflow-hidden bg-[#090d0f] text-white">
+                        {campaignImage ? (
+                          <img
+                            src={campaignImage}
+                            alt="Campaign preview"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xl font-bold uppercase">
+                            {campaignTemplate}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold uppercase text-[#777]">
@@ -2977,49 +3041,86 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
             </TabsContent>
 
             <TabsContent value="recipients" className="p-8">
-              <h2 className="text-lg font-bold">Recipients</h2>
-              <div className="mt-8 flex flex-col gap-8">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="mb-4 text-sm font-bold uppercase text-[#777]">
-                    Select individually
+                  <h2 className="text-lg font-bold">Recipients</h2>
+                  <p className="mt-1 text-sm text-[#777]">
+                    {selectedEmails.length} selected
                   </p>
-                  <div className="grid gap-3">
-                    {recipients.map((name) => (
-                      <label
-                        key={name}
-                        className="flex items-center gap-3 border p-4"
-                      >
-                        <Checkbox
-                          checked={selectedRecipients.includes(name)}
-                          onCheckedChange={() => toggleRecipient(name)}
-                        />
-                        <span>{name}</span>
-                      </label>
-                    ))}
-                  </div>
                 </div>
-                <div>
-                  <p className="mb-4 text-sm font-bold uppercase text-[#777]">
-                    Select collection
-                  </p>
-                  <div className="grid gap-3">
-                    {collections.map((name) => (
-                      <button
-                        key={name}
-                        className="border p-4 text-left"
-                        onClick={() => toggleRecipient(name)}
-                      >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
+                <Link
+                  href="/dashboard/client-gallery/marketing/contacts"
+                  className="text-sm font-bold text-[#00a997]"
+                >
+                  Add contacts
+                </Link>
+              </div>
+              <div className="mt-6 grid gap-4">
+                <div className="flex h-12 items-center gap-3 border px-3">
+                  <Search className="size-4 text-[#777]" />
+                  <Input
+                    value={recipientSearch}
+                    onChange={(event) => setRecipientSearch(event.target.value)}
+                    placeholder="Search email or category"
+                    className="h-10 rounded-none border-0 px-0 focus-visible:ring-0"
+                  />
                 </div>
-                <Field>
-                  <FieldLabel className="font-bold uppercase text-[#777]">
-                    Upload new collection
-                  </FieldLabel>
-                  <Input type="file" className="h-12 rounded-none" />
-                </Field>
+                <select
+                  value={recipientCategory}
+                  onChange={(event) => setRecipientCategory(event.target.value)}
+                  className="h-12 border bg-white px-3 text-sm outline-none"
+                >
+                  <option value="all">All contact categories</option>
+                  {recipientCategories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-none"
+                  disabled={!visibleRecipients.length}
+                  onClick={toggleVisibleRecipients}
+                >
+                  Select visible contacts
+                </Button>
+                <div className="max-h-[520px] overflow-y-auto border bg-white">
+                  {contactsQuery.isLoading ? (
+                    <div className="flex h-40 items-center justify-center text-[#777]">
+                      <Loader2 className="size-5 animate-spin" />
+                    </div>
+                  ) : visibleRecipients.length ? (
+                    visibleRecipients.map((contact) => {
+                      const category =
+                        contact.collectionName || contact.source || "Contacts";
+                      return (
+                        <label
+                          key={contact._id}
+                          className="flex cursor-pointer items-start gap-3 border-b p-4 last:border-b-0 hover:bg-[#fafafa]"
+                        >
+                          <Checkbox
+                            checked={selectedRecipients.includes(contact.email)}
+                            onCheckedChange={() => toggleRecipient(contact.email)}
+                          />
+                          <span className="min-w-0">
+                            <span className="block break-all font-bold">
+                              {contact.email}
+                            </span>
+                            <span className="mt-1 block text-xs text-[#777]">
+                              {category}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <div className="px-5 py-12 text-center text-sm text-[#777]">
+                      No contacts found. Add manual contacts or upload CSV first.
+                    </div>
+                  )}
+                </div>
               </div>
             </TabsContent>
           </Tabs>
@@ -3030,8 +3131,10 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
             buttonColor={campaignButtonColor}
             buttonLink={campaignButtonLink}
             buttonText={campaignButtonText}
+            eyebrowText={campaignEyebrowText}
             footerText={campaignFooterText}
             image={campaignImage}
+            showImage={campaignShowImage}
             message={campaignMessage}
             previewText={campaignPreviewText}
             subject={campaignSubject}
@@ -3047,8 +3150,10 @@ function CampaignPreview({
   buttonColor,
   buttonLink,
   buttonText,
+  eyebrowText,
   footerText,
   image,
+  showImage,
   message,
   previewText,
   subject,
@@ -3057,8 +3162,10 @@ function CampaignPreview({
   buttonColor: string;
   buttonLink: string;
   buttonText: string;
+  eyebrowText: string;
   footerText: string;
   image: string;
+  showImage: boolean;
   message: string;
   previewText: string;
   subject: string;
@@ -3069,31 +3176,34 @@ function CampaignPreview({
   const safePreview = previewText?.trim() || "A short preview line will appear here.";
   const safeMessage = message?.trim() || "Write a polished note for your client here.";
   const safeButton = buttonText?.trim() || "Open Gallery";
-  const safeFooter = footerText?.trim() || defaultFooterText;
+  const safeFooter = footerText?.trim() || "";
+  const safeEyebrow = eyebrowText?.trim() || "Client Gallery";
   return (
     <section className="flex justify-center overflow-auto">
       <div className="w-full max-w-[640px] overflow-hidden bg-white shadow-[0_22px_80px_rgba(0,0,0,0.10)]">
         <div className="bg-[#111412] px-6 py-10 text-center text-white sm:px-12">
           <p className="text-[11px] font-bold uppercase tracking-[0.32em] text-white/45">
-            Client Gallery
+            {safeEyebrow}
           </p>
           <h1 className="mt-4 break-words text-3xl font-semibold uppercase tracking-[0.08em] sm:text-5xl">
             {headline}
           </h1>
         </div>
-        <div className="h-[260px] overflow-hidden bg-[#111412]">
-          {image ? (
-            <img
-              src={image}
-              alt={headline}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_center,#26302d_0,#111412_55%,#070908_100%)] px-8 text-center text-3xl font-bold uppercase tracking-[0.14em] text-white/10">
-              {headline}
-            </div>
-          )}
-        </div>
+        {showImage && (
+          <div className="h-[260px] overflow-hidden bg-[#111412]">
+            {image ? (
+              <img
+                src={image}
+                alt={headline}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_center,#26302d_0,#111412_55%,#070908_100%)] px-8 text-center text-3xl font-bold uppercase tracking-[0.14em] text-white/10">
+                {headline}
+              </div>
+            )}
+          </div>
+        )}
         <div className="px-8 py-10 text-base leading-7 sm:px-16">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#8a8178]">
             {safeSubject}
@@ -3109,9 +3219,11 @@ function CampaignPreview({
               {safeButton}
             </a>
           </div>
-          <p className="mt-10 border-t pt-7 whitespace-pre-line text-center text-xs leading-6 text-[#777]">
-            {safeFooter}
-          </p>
+          {safeFooter && (
+            <p className="mt-10 border-t pt-7 whitespace-pre-line text-center text-xs leading-6 text-[#777]">
+              {safeFooter}
+            </p>
+          )}
         </div>
       </div>
     </section>

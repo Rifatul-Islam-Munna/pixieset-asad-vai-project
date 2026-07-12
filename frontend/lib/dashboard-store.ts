@@ -146,6 +146,8 @@ type DashboardState = {
   campaignPreviewText: string;
   campaignMessage: string;
   campaignImage: string;
+  campaignEyebrowText: string;
+  campaignShowImage: boolean;
   campaignButtonText: string;
   campaignButtonLink: string;
   campaignButtonColor: string;
@@ -194,6 +196,8 @@ type DashboardState = {
   setCampaignPreviewText: (value: string) => void;
   setCampaignMessage: (value: string) => void;
   setCampaignImage: (value: string) => void;
+  setCampaignEyebrowText: (value: string) => void;
+  setCampaignShowImage: (value: boolean) => void;
   setCampaignButtonText: (value: string) => void;
   setCampaignButtonLink: (value: string) => void;
   setCampaignButtonColor: (value: string) => void;
@@ -362,6 +366,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
   campaignPreviewText: "",
   campaignMessage: "",
   campaignImage: "",
+  campaignEyebrowText: "Client Gallery",
+  campaignShowImage: true,
   campaignButtonText: "Open Gallery",
   campaignButtonLink: "Collection URL",
   campaignButtonColor: "#444444",
@@ -423,6 +429,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
           campaignButtonColor: savedTemplate.buttonColor,
           campaignFooterText: savedTemplate.footerText,
           campaignImage: savedTemplate.image,
+          campaignEyebrowText: "Client Gallery",
+          campaignShowImage: true,
           campaignTab: "email",
           showCampaignTemplates: false,
         };
@@ -439,6 +447,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
       campaignButtonColor: "#444444",
       campaignFooterText: defaultFooterText,
       campaignImage: "",
+      campaignEyebrowText: "Client Gallery",
+      campaignShowImage: true,
       campaignTab: "email",
       showCampaignTemplates: false,
     };
@@ -448,6 +458,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
   setCampaignPreviewText: (value) => set({ campaignPreviewText: value }),
   setCampaignMessage: (value) => set({ campaignMessage: value }),
   setCampaignImage: (value) => set({ campaignImage: value }),
+  setCampaignEyebrowText: (value) => set({ campaignEyebrowText: value }),
+  setCampaignShowImage: (value) => set({ campaignShowImage: value }),
   setCampaignButtonText: (value) => set({ campaignButtonText: value }),
   setCampaignButtonLink: (value) => set({ campaignButtonLink: value }),
   setCampaignButtonColor: (value) => set({ campaignButtonColor: value }),

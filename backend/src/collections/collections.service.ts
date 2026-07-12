@@ -354,6 +354,44 @@ export class CollectionsService {
     }));
   }
 
+  async addMarketingContacts(
+    userId: string,
+    body: { email?: string; category?: string; contacts?: { email?: string; category?: string }[] },
+  ) {
+    const incoming = Array.isArray(body.contacts) && body.contacts.length
+      ? body.contacts
+      : [{ email: body.email, category: body.category }];
+    const clean = incoming
+      .map((item) => ({
+        email: String(item.email ?? '').trim().toLowerCase(),
+        category: String(item.category ?? 'Manual Contacts').trim() || 'Manual Contacts',
+      }))
+      .filter((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.email));
+    if (!clean.length) throw new BadRequestException('Valid email is required');
+
+    let added = 0;
+    for (const item of clean) {
+      const source = `manual-${item.category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'contacts'}`;
+      await this.emailRegistrationModel.updateOne(
+        { collectionId: source, email: item.email },
+        {
+          $set: {
+            ownerId: userId,
+            collectionName: item.category,
+            email: item.email,
+            lastSource: source,
+            marketingOptIn: true,
+          },
+          $setOnInsert: { collectionId: source },
+          $addToSet: { sources: source },
+        },
+        { upsert: true },
+      );
+      added += 1;
+    }
+    return { added };
+  }
+
   async listFavoriteCollections(userId: string) {
     const favorites = await this.favoriteModel.find({ userId }).sort({ createdAt: -1 }).lean();
     const collectionIds = favorites.map((favorite) => favorite.collectionId);

@@ -161,6 +161,15 @@ export class CollectionsController {
     return { data };
   }
 
+  @Post('marketing-contacts')
+  async addMarketingContacts(
+    @Req() req: ExpressRequest,
+    @Body() body: { email?: string; category?: string; contacts?: { email?: string; category?: string }[] },
+  ) {
+    const data = await this.collectionsService.addMarketingContacts(req.user.id, body);
+    return { data, message: 'Marketing contacts added' };
+  }
+
   @Get(':id/activity')
   async collectionActivity(@Param('id') id: string, @Req() req: ExpressRequest) {
     const data = await this.collectionsService.getCollectionActivity(req.user.id, id);
