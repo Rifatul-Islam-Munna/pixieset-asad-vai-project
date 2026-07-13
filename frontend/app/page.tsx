@@ -99,7 +99,7 @@ export default async function Home({ searchParams }: { searchParams?: Promise<{ 
           <Tabs defaultValue={defaultGallery} className="mt-12 w-full items-center gap-0">
             <TabsList className="flex h-auto w-full flex-wrap justify-center gap-2 bg-transparent p-0">
               {t.gallery.tabs.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value} className="h-11 min-w-[144px] rounded-full bg-white px-6 text-sm font-normal text-[#344054] data-active:bg-[#1C1C1C] data-active:text-white">
+                <TabsTrigger key={tab.value} value={tab.value} className="h-11 min-w-[144px] rounded-full bg-white px-6 text-sm font-normal text-[#344054] data-active:bg-[#1C1C1C] data-active:text-white data-active:hover:text-white">
                   {tab.label}
                 </TabsTrigger>
               ))}

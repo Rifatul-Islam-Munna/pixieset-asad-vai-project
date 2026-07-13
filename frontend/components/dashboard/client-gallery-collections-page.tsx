@@ -141,7 +141,7 @@ export function ClientGalleryCollectionsPage() {
             </div>
             <div className="flex w-full flex-wrap items-center gap-3 sm:gap-5 lg:w-auto">
               <Link href="/dashboard/client-gallery/settings/presets" className="text-sm font-semibold">View Presets</Link>
-              <Link href="/dashboard/client-gallery/collection-new" className="inline-flex h-10 items-center bg-[#22bda7] px-5 text-sm font-bold text-white sm:px-7">New Collection</Link>
+              <Link href="/dashboard/client-gallery/collection-new" className="inline-flex h-9 items-center bg-[#22bda7] px-4 text-sm font-bold text-white sm:px-5">New Collection</Link>
             </div>
           </header>
 

@@ -39,14 +39,14 @@ export function LoginPageClient({ auth }: { auth: AuthCms }) {
           <div className="mt-10 grid gap-5">
             <label className="grid gap-2">
               <span className="text-sm font-bold">Email or Phone Number</span>
-              <div className="flex h-12 items-center border bg-white px-4 focus-within:border-[#22bda7]">
+              <div className="flex h-12 items-center border bg-white px-4 focus-within:border-primary">
                 <UserRound className="mr-3 size-4 text-[#777]" />
                 <Input value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} placeholder="test@gmail.com" className="h-11 rounded-none border-0 px-0 shadow-none focus-visible:ring-0" required />
               </div>
             </label>
             <label className="grid gap-2">
               <span className="text-sm font-bold">Password</span>
-              <div className="flex h-12 items-center border bg-white px-4 focus-within:border-[#22bda7]">
+              <div className="flex h-12 items-center border bg-white px-4 focus-within:border-primary">
                 <LockKeyhole className="mr-3 size-4 text-[#777]" />
                 <Input value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Password" type={showPassword ? "text" : "password"} className="h-11 rounded-none border-0 px-0 shadow-none focus-visible:ring-0" required />
                 <button type="button" onClick={() => setShowPassword((value) => !value)} className="ml-3 text-[#777]" aria-label={showPassword ? "Hide password" : "Show password"}>
@@ -56,7 +56,7 @@ export function LoginPageClient({ auth }: { auth: AuthCms }) {
             </label>
           </div>
           {error && <p className="mt-4 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">{error}</p>}
-          <Button className="mt-7 h-12 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending}>
+          <Button className="mt-7 h-12 w-full rounded-none bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90" disabled={pending}>
             {pending ? <Loader2 className="size-4 animate-spin" /> : "Log in"}
             {!pending && <ArrowRight className="size-4" />}
           </Button>
@@ -66,7 +66,7 @@ export function LoginPageClient({ auth }: { auth: AuthCms }) {
             <span className="h-px flex-1 bg-[#e5e5e5]" />
           </div>
           <GoogleLoginButton />
-          <p className="mt-6 text-sm text-[#667085]">New here? <Link href="/register" className="font-bold text-[#00a997]">Create an account</Link></p>
+          <p className="mt-6 text-sm text-[#667085]">New here? <Link href="/register" className="font-bold text-primary hover:text-primary/80">Create an account</Link></p>
         </form>
       </div>
     </section>
@@ -116,7 +116,7 @@ export function RegisterPageClient({ auth }: { auth: AuthCms }) {
             <AuthInput icon={<LockKeyhole className="size-4" />} label="Password" value={form.password} onChange={(value) => setForm({ ...form, password: value })} placeholder="Password" type="password" required />
           </div>
           {error && <p className="mt-4 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">{error}</p>}
-          <Button className="mt-7 h-12 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending}>
+          <Button className="mt-7 h-12 w-full rounded-none bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90" disabled={pending}>
             {pending ? <Loader2 className="size-4 animate-spin" /> : "Create account"}
             {!pending && <ArrowRight className="size-4" />}
           </Button>
@@ -126,7 +126,7 @@ export function RegisterPageClient({ auth }: { auth: AuthCms }) {
             <span className="h-px flex-1 bg-[#e5e5e5]" />
           </div>
           <GoogleLoginButton />
-          <p className="mt-6 text-sm text-[#667085]">Already have account? <Link href="/login" className="font-bold text-[#00a997]">Log in</Link></p>
+          <p className="mt-6 text-sm text-[#667085]">Already have account? <Link href="/login" className="font-bold text-primary hover:text-primary/80">Log in</Link></p>
         </form>
       </div>
     </section>
@@ -146,7 +146,7 @@ export function RegisterPageClient({ auth }: { auth: AuthCms }) {
 function AuthBrand({ brand }: { brand: string }) {
   return (
     <Link href="/" className="flex w-fit items-center gap-3 text-sm font-bold">
-      <span className="size-5 rounded-full bg-[#0dc6b5]" />
+      <span className="size-5 rounded-full bg-primary" />
       {brand}
     </Link>
   );
@@ -183,7 +183,7 @@ function AuthInput({ icon, label, value, onChange, placeholder, type = "text", r
   return (
     <label className="grid gap-2">
       <span className="text-sm font-bold">{label}</span>
-      <div className="flex h-12 items-center border bg-white px-4 text-[#777] focus-within:border-[#22bda7]">
+      <div className="flex h-12 items-center border bg-white px-4 text-[#777] focus-within:border-primary">
         <span className="mr-3">{icon}</span>
         <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} type={inputType} required={required} className="h-11 rounded-none border-0 px-0 text-[#151515] shadow-none focus-visible:ring-0" />
         {type === "password" && (

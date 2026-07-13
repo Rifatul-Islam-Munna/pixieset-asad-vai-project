@@ -3777,7 +3777,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
         </select>
         <div className="hidden justify-end lg:flex">
           <Button
-            className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-9 rounded-none bg-[#22bda7] px-4 text-sm font-bold text-white hover:bg-[#19a995]"
             onClick={onNewCollection}
           >
             New Collection
@@ -11261,11 +11261,11 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             View Presets
           </button>
           <Button
-            className="h-10 rounded-none bg-[#1C1C1C] px-7 text-sm font-bold text-white hover:bg-[#2E2E2E]"
+            className="h-9 rounded-none bg-[#1C1C1C] px-4 text-sm font-bold text-white hover:bg-[#2E2E2E]"
             onClick={() => router.push(`/dashboard/${section}/collection-new`)}
           >
             New Collection
-            <ChevronDown className="ml-3 size-4 border-l border-white/30 pl-3" />
+            <ChevronDown className="ml-2 size-3.5 border-l border-white/30 pl-2" />
           </Button>
         </div>
       </div>
