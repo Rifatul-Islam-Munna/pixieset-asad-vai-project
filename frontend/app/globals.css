@@ -141,6 +141,15 @@
 }
 
 @layer components {
+  @keyframes brand-marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
   .polished-control {
     @apply inline-flex items-center justify-center gap-2 rounded-full border border-black/10 bg-white/95 font-semibold text-[#111] shadow-[0_12px_34px_rgba(15,23,42,0.12)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_18px_44px_rgba(15,23,42,0.18)] focus-visible:ring-2 focus-visible:ring-black/20 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50;
   }

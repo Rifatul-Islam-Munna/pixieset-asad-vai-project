@@ -93,13 +93,17 @@ export type HomeContent = {
   hero: { eyebrow: string; title: string; subtitle: string; cta: string };
   gallery: { title: string; subtitle: string; tabs: GalleryTab[]; productTabs: string[]; cartLabel: string };
   products: { title: string; price: string; description?: string; href?: string }[];
+  featureCards: FeatureCard[];
   workflow: { eyebrow: string; title: string; subtitle: string; tabs: GalleryTab[]; cardText: string };
   testimonials: { eyebrow: string; title: string; subtitle: string; items: Testimonial[] };
+  brandLogos: BrandLogo[];
   cta: { title: string; subtitle: string; button: string; desktopName: string; desktopSubtitle: string; invoiceTitle: string; invoiceText: string; galleryName: string; images: string[] };
   footer: { description: string; copyright: string; columns: { title: string; links: FooterLink[] }[] };
 };
 
-export type GalleryTab = { value: string; label: string; image: string; title?: string };
+export type GalleryTab = { value: string; label: string; image: string; title?: string; icon?: string };
+export type FeatureCard = { title: string; text: string; icon: string };
+export type BrandLogo = { name: string; image: string; url?: string };
 export type Testimonial = { name: string; site: string; image: string; quote: string };
 export type FooterLink = string | { label: string; url: string };
 
@@ -184,20 +188,24 @@ export const defaultHomeCms: HomeCmsData = {
         { title: "Store Gallery", price: "Prints and downloads", description: "Sell print products, digital downloads and wall art from any collection.", href: "/dashboard/store-gallery" },
         { title: "Mobile Gallery App", price: "Installable photo apps", description: "Create mobile-first gallery apps clients can save to their phones.", href: "/dashboard/mobile-gallery" },
       ],
+      featureCards: [
+        { title: "Beautiful Galleries", text: "Create stunning, customizable galleries that reflect your style and wow your clients.", icon: "Image" },
+        { title: "Built-in Store", text: "Sell prints, downloads and products directly from your galleries.", icon: "ShoppingBag" },
+        { title: "Client Proofing", text: "Make selections easier for your clients with intuitive proofing and favorites.", icon: "ShieldCheck" },
+        { title: "Smart Automation", text: "Save time with workflows and automations that handle the busywork for you.", icon: "Zap" },
+      ],
       workflow: {
         eyebrow: "DESIGNED FOR EVERY WORKFLOW",
         title: "Made for all photographers.",
         subtitle: "From weddings to landscapes and everything in between, Nikoset is built to elevate your business - and make your work look its best.",
         cardText: "Booking, payment, and client details in one polished flow.",
         tabs: [
-          { value: "wedding", label: "Wedding", image: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1300&q=80" },
-          { value: "portrait", label: "Portrait", image: "https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?auto=format&fit=crop&w=1300&q=80" },
-          { value: "family", label: "Family", image: "https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1300&q=80" },
-          { value: "seniors", label: "Seniors", image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1300&q=80" },
-          { value: "events", label: "Events", image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1300&q=80" },
-          { value: "adventure", label: "Adventure", image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1300&q=80" },
-          { value: "commercial", label: "Commercial", image: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1300&q=80" },
-          { value: "sports", label: "Sports", image: "https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1300&q=80" },
+          { value: "wedding", label: "Wedding", icon: "Landmark", image: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1300&q=80" },
+          { value: "travel", label: "Travel", icon: "Plane", image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1300&q=80" },
+          { value: "food", label: "Food", icon: "Utensils", image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=1300&q=80" },
+          { value: "sports", label: "Sports", icon: "Volleyball", image: "https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1300&q=80" },
+          { value: "events", label: "Events", icon: "CalendarDays", image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1300&q=80" },
+          { value: "portraits", label: "Portraits", icon: "UserRound", image: "https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?auto=format&fit=crop&w=1300&q=80" },
         ],
       },
       testimonials: {
@@ -210,6 +218,15 @@ export const defaultHomeCms: HomeCmsData = {
           { name: "Chris Joubert", site: "chrisjoubert.com", image: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=120&q=80", quote: "I started with client galleries, then created my website on it, then the print store, and now invoices and documents are on it too." },
         ],
       },
+      brandLogos: [
+        { name: "Nikon", image: "", url: "" },
+        { name: "Canon", image: "", url: "" },
+        { name: "SONY", image: "", url: "" },
+        { name: "FUJIFILM", image: "", url: "" },
+        { name: "dji", image: "", url: "" },
+        { name: "Profoto", image: "", url: "" },
+        { name: "Adobe", image: "", url: "" },
+      ],
       cta: {
         title: "Start using Nikoset today for free",
         subtitle: "Free forever. Upgrade when you need to.",
@@ -232,8 +249,8 @@ export const defaultHomeCms: HomeCmsData = {
         description: "An all-in-one platform for modern photographers, offering client photo galleries, websites, online stores and studio management software tools.",
         copyright: "Copyright 2026 Nikoset. Made with love in Vancity.",
         columns: [
-          { title: "Products", links: ["Client Gallery", "Store Gallery", "Mobile Gallery App", "Pricing"] },
-          { title: "Legal", links: ["Terms of Service", "Privacy Policy"] },
+          { title: "Products", links: ["Client Gallery", "Store Gallery", "Mobile Gallery App"] },
+          { title: "Pages", links: ["Pricing", "Terms of Service", "Privacy Policy"] },
         ],
       },
     },
@@ -277,6 +294,17 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     if (titles === "Canvas|Metal Print|Standout") {
       content[lang].products = defaultHomeCms.content[lang].products;
     }
+    if (!Array.isArray(content[lang].featureCards) || !content[lang].featureCards.length) {
+      content[lang].featureCards = defaultHomeCms.content[lang].featureCards;
+    }
+    if (!Array.isArray(content[lang].brandLogos) || !content[lang].brandLogos.length) {
+      content[lang].brandLogos = defaultHomeCms.content[lang].brandLogos;
+    }
+    content[lang].workflow = {
+      ...defaultHomeCms.content[lang].workflow,
+      ...(content[lang].workflow ?? {}),
+      tabs: Array.isArray(content[lang].workflow?.tabs) ? content[lang].workflow.tabs : defaultHomeCms.content[lang].workflow.tabs,
+    };
   });
 
   return {

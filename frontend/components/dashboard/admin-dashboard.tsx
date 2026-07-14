@@ -32,7 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { mergeHomeCms, type FooterLink, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
+import { mergeHomeCms, type BrandLogo, type FeatureCard, type FooterLink, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 
 type UserForm = {
@@ -1120,6 +1120,10 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
   busy: boolean;
 }) {
   const content = form.content[lang];
+  const allowedFooterLabels = new Set(["Client Gallery", "Store Gallery", "Mobile Gallery App", "Pricing", "Terms of Service", "Terms Of Service", "Privacy Policy"]);
+  const visibleFooterColumns = content.footer.columns
+    .map((column, index) => ({ column: { ...column, links: column.links.filter((link) => allowedFooterLabels.has(typeof link === "string" ? link : link.label)) }, index }))
+    .filter((item) => item.column.title.trim() && item.column.links.length);
 
   const selectLanguage = (value: HomeLanguage) => {
     setLang(value);
@@ -1156,10 +1160,22 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
     patch("products", products);
   };
 
+  const patchFeatureCard = (index: number, value: Partial<FeatureCard>) => {
+    const featureCards = [...content.featureCards];
+    featureCards[index] = { ...featureCards[index], ...value };
+    patch("featureCards", featureCards);
+  };
+
   const patchTestimonial = (index: number, value: Partial<Testimonial>) => {
     const items = [...content.testimonials.items];
     items[index] = { ...items[index], ...value };
     patchObject("testimonials", { items });
+  };
+
+  const patchBrandLogo = (index: number, value: Partial<BrandLogo>) => {
+    const brandLogos = [...content.brandLogos];
+    brandLogos[index] = { ...brandLogos[index], ...value };
+    patch("brandLogos", brandLogos);
   };
 
   const patchFooterColumn = (index: number, value: Partial<HomeContent["footer"]["columns"][number]>) => {
@@ -1203,10 +1219,10 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
             </Button>
           </div>
         </div>
-        <nav className="mt-7 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" aria-label="CMS sections">
+        <nav className="mt-7 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label="CMS sections">
           {[
-            ['cms-start','Setup','Language & hero media'],['cms-brand','Brand','Logo & colours'],['cms-seo','SEO','Search & social'],['cms-nav','Navigation','Menu labels'],['cms-hero','Hero','Main headline'],
-            ['cms-gallery','Gallery','Gallery showcase'],['cms-workflow','Workflow','Feature section'],['cms-testimonials','Reviews','Customer quotes'],['cms-cta','CTA','Closing call to action'],['cms-footer','Footer','Links & footer copy'],
+            ['cms-start','Setup','Language'],['cms-brand','Brand + Nav','Logo and menu labels'],['cms-hero','Hero','Main headline and media'],['cms-gallery','Categories','Cards and features'],
+            ['cms-workflow','Device Block','Laptop and phone preview'],['cms-testimonials','Trusted Slider','Brand logos'],['cms-footer','Footer','Links and copy'],
           ].map(([id, label, description], index) => (
             <a key={id} href={`#${id}`} className="group border border-white/12 bg-white/5 px-4 py-3 transition hover:border-[#5ce0cd] hover:bg-white/10"><span className="text-[10px] font-bold text-[#5ce0cd]">{String(index + 1).padStart(2, '0')}</span><span className="mt-1 block text-sm font-bold">{label}</span><span className="mt-1 block text-xs text-white/50">{description}</span></a>
           ))}
@@ -1233,268 +1249,372 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
               <option value="gr">GR</option>
             </select>
           </label>
-          <label className="grid gap-2">
-            <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Hero media type</span>
-            <select
-              value={form.media.heroMediaType}
-              onChange={(event) => setForm({ ...form, media: { ...form.media, heroMediaType: event.target.value as "image" | "video" } })}
-              className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none"
-            >
-              <option value="image">Image</option>
-              <option value="video">Video</option>
-            </select>
-          </label>
-          <CmsInput label="Hero media URL" value={form.media.heroMediaUrl} onChange={(heroMediaUrl) => setForm({ ...form, media: { ...form.media, heroMediaUrl } })} />
-          <label className="grid gap-2 lg:col-span-2">
-            <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Upload image or video</span>
-            <Input
-              type="file"
-              accept="image/*,video/*"
-              disabled={busy}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) onHeroUpload(file);
-              }}
-              className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] pt-2 shadow-none"
-            />
-          </label>
-          {form.media.heroMediaUrl && (
-            <div className="overflow-hidden border bg-[#fbfbfa] p-2">
-              {form.media.heroMediaType === "video" ? (
-                <video src={form.media.heroMediaUrl} className="h-44 w-full object-cover" controls />
-              ) : (
-                <img src={form.media.heroMediaUrl} alt="Hero CMS preview" className="h-44 w-full object-cover" />
-              )}
-            </div>
-          )}
+          <div className="border bg-[#fbfbfa] px-4 py-3 text-sm leading-6 text-[#666] lg:col-span-2">Hero media, categories, features and slider assets are edited inside their visual sections below.</div>
         </div>
       </div>
 
       <div className="grid gap-5">
-        <div id="cms-brand" className="scroll-mt-24"><CmsSection title="Navbar brand" defaultOpen>
-          <div className="grid gap-4 md:grid-cols-2">
-            <CmsInput label="Brand text" value={form.brand.brandText} onChange={(brandText) => setForm({ ...form, brand: { ...form.brand, brandText } })} />
-            <CmsImageInput label="Logo image" value={form.brand.logoUrl} onChange={(logoUrl) => setForm({ ...form, brand: { ...form.brand, logoUrl } })} onUpload={onUpload} busy={busy} />
-            <CmsInput label="Accent color" value={form.brand.accentColor} onChange={(accentColor) => setForm({ ...form, brand: { ...form.brand, accentColor } })} />
-            {(form.brand.logoUrl || form.brand.brandText) && (
-              <div className="flex items-center gap-3 border bg-[#171918] p-4 text-white">
-                {form.brand.logoUrl && <img src={form.brand.logoUrl} alt="" className="h-10 max-w-32 object-contain" />}
-                {form.brand.brandText && <span className="font-serif text-xl tracking-[0.28em]">{form.brand.brandText}</span>}
-              </div>
-            )}
-          </div>
-        </CmsSection></div>
-
-        <div id="cms-seo" className="scroll-mt-24"><CmsSection title="SEO and auth" defaultOpen>
-          <div className="grid gap-5">
-            <CmsRepeater title="Site SEO">
-              <div className="grid gap-4 md:grid-cols-2">
-                <CmsInput label="Site title" value={form.seo.siteTitle} onChange={(siteTitle) => setForm({ ...form, seo: { ...form.seo, siteTitle } })} />
-                <CmsTextarea label="Site description" value={form.seo.siteDescription} onChange={(siteDescription) => setForm({ ...form, seo: { ...form.seo, siteDescription } })} wide />
-                <CmsTextarea label="Keywords (comma separated)" value={form.seo.siteKeywords} onChange={(siteKeywords) => setForm({ ...form, seo: { ...form.seo, siteKeywords } })} wide />
-                <CmsInput label="Canonical URL" value={form.seo.siteCanonicalUrl} onChange={(siteCanonicalUrl) => setForm({ ...form, seo: { ...form.seo, siteCanonicalUrl } })} />
-                <CmsImageInput label="Social share image" value={form.seo.siteImageUrl} onChange={(siteImageUrl) => setForm({ ...form, seo: { ...form.seo, siteImageUrl } })} onUpload={onUpload} busy={busy} />
-                <CmsInput label="Google Tag Manager ID" value={form.seo.googleTagManagerId} onChange={(googleTagManagerId) => setForm({ ...form, seo: { ...form.seo, googleTagManagerId } })} />
-                <CmsInput label="Robots" value={form.seo.robots} onChange={(robots) => setForm({ ...form, seo: { ...form.seo, robots } })} />
-                <label className="grid gap-2">
-                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Twitter card</span>
-                  <select value={form.seo.twitterCard} onChange={(event) => setForm({ ...form, seo: { ...form.seo, twitterCard: event.target.value } })} className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none">
-                    <option value="summary_large_image">summary_large_image</option>
-                    <option value="summary">summary</option>
-                  </select>
-                </label>
-                <CmsImageInput label="Favicon PNG" value={form.seo.faviconUrl} onChange={(faviconUrl) => setForm({ ...form, seo: { ...form.seo, faviconUrl } })} onUpload={onUpload} busy={busy} accept="image/png" wide />
-                <CmsTextarea label="JSON-LD (valid JSON)" value={form.seo.jsonLd} onChange={(jsonLd) => setForm({ ...form, seo: { ...form.seo, jsonLd } })} wide />
-              </div>
-            </CmsRepeater>
-            <CmsRepeater title="Extra meta tags">
-              {form.seo.extraMetaTags.map((tag, index) => (
-                <div key={`${tag.key}-${index}`} className="grid gap-3 border p-3 md:grid-cols-[150px_1fr_1fr_auto]">
-                  <label className="grid gap-2">
-                    <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Type</span>
-                    <select value={tag.type} onChange={(event) => patchMetaTag(index, { type: event.target.value as SeoMetaTag["type"] })} className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none">
-                      <option value="name">name</option>
-                      <option value="property">property</option>
-                      <option value="httpEquiv">httpEquiv</option>
-                    </select>
-                  </label>
-                  <CmsInput label="Key" value={tag.key} onChange={(key) => patchMetaTag(index, { key })} />
-                  <CmsInput label="Content" value={tag.value} onChange={(value) => patchMetaTag(index, { value })} />
-                  <button type="button" className="self-end bg-red-50 px-3 py-3 text-sm font-bold text-red-600" onClick={() => setForm({ ...form, seo: { ...form.seo, extraMetaTags: form.seo.extraMetaTags.filter((_, itemIndex) => itemIndex !== index) } })}>
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => setForm({ ...form, seo: { ...form.seo, extraMetaTags: [...form.seo.extraMetaTags, { type: "name", key: "", value: "" }] } })}>
-                Add meta tag
-              </Button>
-            </CmsRepeater>
-            <CmsRepeater title="Login SEO">
-              <div className="grid gap-4 md:grid-cols-2">
-                <CmsInput label="Login title" value={form.seo.loginTitle} onChange={(loginTitle) => setForm({ ...form, seo: { ...form.seo, loginTitle } })} />
-                <CmsTextarea label="Login description" value={form.seo.loginDescription} onChange={(loginDescription) => setForm({ ...form, seo: { ...form.seo, loginDescription } })} wide />
-                <CmsTextarea label="Login keywords" value={form.seo.loginKeywords} onChange={(loginKeywords) => setForm({ ...form, seo: { ...form.seo, loginKeywords } })} wide />
-              </div>
-            </CmsRepeater>
-            <CmsRepeater title="Register SEO">
-              <div className="grid gap-4 md:grid-cols-2">
-                <CmsInput label="Register title" value={form.seo.registerTitle} onChange={(registerTitle) => setForm({ ...form, seo: { ...form.seo, registerTitle } })} />
-                <CmsTextarea label="Register description" value={form.seo.registerDescription} onChange={(registerDescription) => setForm({ ...form, seo: { ...form.seo, registerDescription } })} wide />
-                <CmsTextarea label="Register keywords" value={form.seo.registerKeywords} onChange={(registerKeywords) => setForm({ ...form, seo: { ...form.seo, registerKeywords } })} wide />
-              </div>
-            </CmsRepeater>
-            <CmsRepeater title="Login and register screens">
-              <div className="grid gap-4 md:grid-cols-2">
-                <CmsInput label="Auth brand" value={form.auth.brand} onChange={(brand) => setForm({ ...form, auth: { ...form.auth, brand } })} />
-                <label className="grid gap-2">
-                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Login image side</span>
-                  <select value={form.auth.loginImageSide} onChange={(event) => setForm({ ...form, auth: { ...form.auth, loginImageSide: event.target.value as "left" | "right" } })} className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none">
-                    <option value="left">Left</option>
-                    <option value="right">Right</option>
-                  </select>
-                </label>
-                <CmsInput label="Login form title" value={form.auth.loginTitle} onChange={(loginTitle) => setForm({ ...form, auth: { ...form.auth, loginTitle } })} />
-                <CmsInput label="Login subtitle" value={form.auth.loginSubtitle} onChange={(loginSubtitle) => setForm({ ...form, auth: { ...form.auth, loginSubtitle } })} />
-                <CmsImageInput label="Login side image" value={form.auth.loginImageUrl} onChange={(loginImageUrl) => setForm({ ...form, auth: { ...form.auth, loginImageUrl } })} onUpload={onUpload} busy={busy} wide />
-                <label className="grid gap-2">
-                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Register image side</span>
-                  <select value={form.auth.registerImageSide} onChange={(event) => setForm({ ...form, auth: { ...form.auth, registerImageSide: event.target.value as "left" | "right" } })} className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none">
-                    <option value="left">Left</option>
-                    <option value="right">Right</option>
-                  </select>
-                </label>
-                <CmsInput label="Register form title" value={form.auth.registerTitle} onChange={(registerTitle) => setForm({ ...form, auth: { ...form.auth, registerTitle } })} />
-                <CmsInput label="Register subtitle" value={form.auth.registerSubtitle} onChange={(registerSubtitle) => setForm({ ...form, auth: { ...form.auth, registerSubtitle } })} />
-                <CmsImageInput label="Register side image" value={form.auth.registerImageUrl} onChange={(registerImageUrl) => setForm({ ...form, auth: { ...form.auth, registerImageUrl } })} onUpload={onUpload} busy={busy} wide />
-              </div>
-            </CmsRepeater>
-          </div>
-        </CmsSection></div>
-
-        <div id="cms-nav" className="scroll-mt-24"><CmsSection eyebrow={lang.toUpperCase()} title="Navigation" defaultOpen>
-          <div className="grid gap-4 md:grid-cols-2">
-            <CmsInput label="Brand" value={content.nav.brand} onChange={(brand) => patchObject("nav", { brand })} />
-            <CmsInput label="Products" value={content.nav.products} onChange={(products) => patchObject("nav", { products })} />
-            <CmsInput label="Examples" value={content.nav.examples} onChange={(examples) => patchObject("nav", { examples })} />
-            <CmsInput label="Pricing" value={content.nav.pricing} onChange={(pricing) => patchObject("nav", { pricing })} />
-            <CmsInput label="Login" value={content.nav.login} onChange={(login) => patchObject("nav", { login })} />
-            <CmsInput label="CTA" value={content.nav.cta} onChange={(cta) => patchObject("nav", { cta })} />
-          </div>
-        </CmsSection></div>
-
-        <div id="cms-hero" className="scroll-mt-24"><CmsSection title="Hero" defaultOpen>
-          <div className="grid gap-4">
-            <CmsInput label="Eyebrow" value={content.hero.eyebrow} onChange={(eyebrow) => patchObject("hero", { eyebrow })} />
-            <CmsTextarea label="Title" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
-            <CmsTextarea label="Subtitle" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
-            <CmsInput label="Button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
-          </div>
-        </CmsSection></div>
-
-        <div id="cms-gallery" className="scroll-mt-24"><CmsSection title="Gallery section" defaultOpen>
-          <div className="grid gap-4">
-            <CmsTextarea label="Heading" value={content.gallery.title} onChange={(title) => patchObject("gallery", { title })} />
-            <CmsTextarea label="Subtitle" value={content.gallery.subtitle} onChange={(subtitle) => patchObject("gallery", { subtitle })} />
-            <CmsInput label="Cart label" value={content.gallery.cartLabel} onChange={(cartLabel) => patchObject("gallery", { cartLabel })} />
-            <CmsInput label="Product tab labels" value={content.gallery.productTabs.join(", ")} onChange={(value) => patchObject("gallery", { productTabs: value.split(",").map((item) => item.trim()).filter(Boolean) })} />
-            <CmsRepeater title="Gallery tabs">
-              {content.gallery.tabs.map((tab, index) => (
-                <div key={tab.value} className="grid gap-3 border p-4 md:grid-cols-2">
-                  <CmsInput label="Label" value={tab.label} onChange={(label) => patchGalleryTab(index, { label })} />
-                  <CmsInput label="Title" value={tab.title ?? ""} onChange={(title) => patchGalleryTab(index, { title })} />
-                  <CmsImageInput label="Image" value={tab.image} onChange={(image) => patchGalleryTab(index, { image })} onUpload={onUpload} busy={busy} wide />
-                </div>
-              ))}
-            </CmsRepeater>
-            <CmsRepeater title="Products">
-              {content.products.map((product, index) => (
-                <div key={`${product.title}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
-                  <CmsInput label="Title" value={product.title} onChange={(title) => patchProduct(index, { title })} />
-                  <CmsInput label="Price" value={product.price} onChange={(price) => patchProduct(index, { price })} />
-                  <CmsInput label="Description" value={product.description ?? ""} onChange={(description) => patchProduct(index, { description })} />
-                  <CmsInput label="Link" value={product.href ?? ""} onChange={(href) => patchProduct(index, { href })} />
-                </div>
-              ))}
-            </CmsRepeater>
-          </div>
-        </CmsSection></div>
-
-        <div id="cms-workflow" className="scroll-mt-24"><CmsSection title="Workflow section">
-          <div className="grid gap-4">
-            <CmsInput label="Eyebrow" value={content.workflow.eyebrow} onChange={(eyebrow) => patchObject("workflow", { eyebrow })} />
-            <CmsInput label="Heading" value={content.workflow.title} onChange={(title) => patchObject("workflow", { title })} />
-            <CmsTextarea label="Subtitle" value={content.workflow.subtitle} onChange={(subtitle) => patchObject("workflow", { subtitle })} />
-            <CmsTextarea label="Card text" value={content.workflow.cardText} onChange={(cardText) => patchObject("workflow", { cardText })} />
-            <CmsRepeater title="Workflow tabs">
-              {content.workflow.tabs.map((tab, index) => (
-                <div key={tab.value} className="grid gap-3 border p-4 md:grid-cols-2">
-                  <CmsInput label="Label" value={tab.label} onChange={(label) => patchWorkflowTab(index, { label })} />
-                  <CmsImageInput label="Image" value={tab.image} onChange={(image) => patchWorkflowTab(index, { image })} onUpload={onUpload} busy={busy} />
-                </div>
-              ))}
-            </CmsRepeater>
-          </div>
-        </CmsSection></div>
-
-        <div id="cms-testimonials" className="scroll-mt-24"><CmsSection title="Testimonials">
-          <div className="grid gap-4">
-            <CmsInput label="Eyebrow" value={content.testimonials.eyebrow} onChange={(eyebrow) => patchObject("testimonials", { eyebrow })} />
-            <CmsInput label="Heading" value={content.testimonials.title} onChange={(title) => patchObject("testimonials", { title })} />
-            <CmsTextarea label="Subtitle" value={content.testimonials.subtitle} onChange={(subtitle) => patchObject("testimonials", { subtitle })} />
-            <CmsRepeater title="Cards">
-              {content.testimonials.items.map((item, index) => (
-                <div key={`${item.name}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
-                  <CmsInput label="Name" value={item.name} onChange={(name) => patchTestimonial(index, { name })} />
-                  <CmsInput label="Site" value={item.site} onChange={(site) => patchTestimonial(index, { site })} />
-                  <CmsImageInput label="Image" value={item.image} onChange={(image) => patchTestimonial(index, { image })} onUpload={onUpload} busy={busy} wide />
-                  <CmsTextarea label="Quote" value={item.quote} onChange={(quote) => patchTestimonial(index, { quote })} wide />
-                  <Button type="button" variant="outline" className="w-fit rounded-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => patchObject("testimonials", { items: content.testimonials.items.filter((_, itemIndex) => itemIndex !== index) })}><Trash2 className="size-4" /> Remove testimonial</Button>
-                </div>
-              ))}
-              <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("testimonials", { items: [...content.testimonials.items, { name: "", site: "", image: "", quote: "" }] })}><PlusCircle className="size-4" /> Add testimonial</Button>
-            </CmsRepeater>
-          </div>
-        </CmsSection></div>
-
-        <div id="cms-cta" className="scroll-mt-24"><CmsSection title="Call to action">
-          <div className="grid gap-4 md:grid-cols-2">
-            <CmsInput label="CTA heading" value={content.cta.title} onChange={(title) => patchObject("cta", { title })} />
-            <CmsInput label="CTA subtitle" value={content.cta.subtitle} onChange={(subtitle) => patchObject("cta", { subtitle })} />
-            <CmsInput label="CTA button" value={content.cta.button} onChange={(button) => patchObject("cta", { button })} />
-            <CmsRepeater title="CTA images">
-              {content.cta.images.map((image, index) => (
-                <div key={index} className="grid gap-3 border p-3 md:grid-cols-[1fr_auto]">
-                  <CmsImageInput label={`Image ${index + 1}`} value={image} onChange={(value) => patchCtaImage(index, value)} onUpload={onUpload} busy={busy} />
-                  <Button type="button" variant="outline" className="self-end rounded-none border-red-200 text-red-600" onClick={() => patchObject("cta", { images: content.cta.images.filter((_, imageIndex) => imageIndex !== index) })}><Trash2 className="size-4" /> Remove</Button>
-                </div>
-              ))}
-              <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("cta", { images: [...content.cta.images, ""] })}><PlusCircle className="size-4" /> Add CTA image</Button>
-            </CmsRepeater>
-          </div>
-        </CmsSection></div>
-
-        <div id="cms-footer" className="scroll-mt-24"><CmsSection title="Footer">
-          <div className="grid gap-4 md:grid-cols-2">
-            <CmsTextarea label="Footer description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} wide />
-            <CmsInput label="Footer copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
-            <CmsRepeater title="Footer columns">
-              {content.footer.columns.map((column, columnIndex) => (
-                <div key={columnIndex} className="grid gap-4 border p-4">
-                  <div className="flex items-end gap-3">
-                    <div className="flex-1"><CmsInput label="Column title" value={column.title} onChange={(title) => patchFooterColumn(columnIndex, { title })} /></div>
-                    <Button type="button" variant="outline" className="rounded-none border-red-200 text-red-600" onClick={() => patchObject("footer", { columns: content.footer.columns.filter((_, index) => index !== columnIndex) })}><Trash2 className="size-4" /> Remove</Button>
+        <div id="cms-brand" className="scroll-mt-24">
+          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
+            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} brand + nav</p>
+              <h3 className="mt-1 text-xl font-semibold">Navbar editor</h3>
+              <p className="mt-2 text-sm leading-6 text-[#666]">Homepage currently uses only Pricing and Product dropdown labels.</p>
+            </div>
+            <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.9fr)]">
+              <div className="bg-[#F8F7F4] p-4 sm:p-6">
+                <div className="border border-[#EEEAE5] bg-white px-5 py-5">
+                  <div className="flex flex-wrap items-center justify-between gap-5">
+                    <div className="inline-flex items-center gap-3">
+                      {form.brand.logoUrl && <img src={form.brand.logoUrl} alt="" className="h-8 max-w-28 object-contain" />}
+                      <span className="font-serif text-2xl tracking-[0.18em] text-[#111]">{form.brand.brandText || content.nav.brand}</span>
+                      <span className="font-serif text-2xl text-[#7A5CE8]">G</span>
+                    </div>
+                    <div className="flex items-center gap-9 text-[13px] font-semibold text-[#151515]">
+                      <span>{content.nav.pricing}</span>
+                      <span className="inline-flex items-center gap-1">{content.nav.products} <span className="text-xs">v</span></span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-[13px] font-semibold">{content.nav.login}</span>
+                      <span className="rounded-[6px] bg-[#050505] px-5 py-3 text-[13px] font-bold text-white">{content.nav.cta}</span>
+                    </div>
                   </div>
-                  {column.links.map((link: FooterLink, linkIndex) => {
-                    const item = typeof link === "string" ? { label: link, url: "" } : link;
-                    return <div key={linkIndex} className="grid gap-3 bg-[#f2f2ef] p-3 md:grid-cols-[1fr_1fr_auto]"><CmsInput label="Link label" value={item.label} onChange={(label) => patchFooterLink(columnIndex, linkIndex, { label })} /><CmsInput label="Link URL" value={item.url} onChange={(url) => patchFooterLink(columnIndex, linkIndex, { url })} /><Button type="button" variant="outline" className="self-end rounded-none border-red-200 text-red-600" onClick={() => patchFooterColumn(columnIndex, { links: column.links.filter((_, index) => index !== linkIndex) })}><Trash2 className="size-4" /></Button></div>;
-                  })}
-                  <Button type="button" variant="outline" className="w-fit rounded-none" onClick={() => patchFooterColumn(columnIndex, { links: [...column.links, { label: "", url: "" }] })}><PlusCircle className="size-4" /> Add link</Button>
+                  <div className="ml-auto mt-5 w-full max-w-[310px] rounded-[8px] border border-[#EEEAE5] bg-white p-3 shadow-[0_18px_45px_rgba(0,0,0,0.10)]">
+                    {["Client Gallery", "Store Gallery", "Mobile Gallery App"].map((item) => (
+                      <div key={item} className="rounded-[6px] px-4 py-3 hover:bg-[#F8F7F4]">
+                        <p className="text-sm font-bold">{item}</p>
+                        <p className="mt-1 text-xs leading-5 text-[#77716A]">Product dropdown item</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-              <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("footer", { columns: [...content.footer.columns, { title: "", links: [] }] })}><PlusCircle className="size-4" /> Add column</Button>
-            </CmsRepeater>
-          </div>
-        </CmsSection></div>
+              </div>
+              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
+                <CmsRepeater title="Brand">
+                  <div className="grid gap-4">
+                    <CmsInput label="Brand text" value={form.brand.brandText} onChange={(brandText) => setForm({ ...form, brand: { ...form.brand, brandText } })} />
+                    <CmsImageInput label="Logo image" value={form.brand.logoUrl} onChange={(logoUrl) => setForm({ ...form, brand: { ...form.brand, logoUrl } })} onUpload={onUpload} busy={busy} />
+                    <CmsInput label="Accent color" value={form.brand.accentColor} onChange={(accentColor) => setForm({ ...form, brand: { ...form.brand, accentColor } })} />
+                  </div>
+                </CmsRepeater>
+                <CmsRepeater title="Navbar text">
+                  <div className="grid gap-4">
+                    <CmsInput label="Product dropdown label" value={content.nav.products} onChange={(products) => patchObject("nav", { products })} />
+                    <CmsInput label="Pricing label" value={content.nav.pricing} onChange={(pricing) => patchObject("nav", { pricing })} />
+                    <CmsInput label="Login label" value={content.nav.login} onChange={(login) => patchObject("nav", { login })} />
+                    <CmsInput label="Button label" value={content.nav.cta} onChange={(cta) => patchObject("nav", { cta })} />
+                  </div>
+                </CmsRepeater>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div id="cms-hero" className="scroll-mt-24">
+          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
+            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} hero</p>
+              <h3 className="mt-1 text-xl font-semibold">Hero section editor</h3>
+              <p className="mt-2 text-sm leading-6 text-[#666]">Edit headline, image/video, button and gallery card in one place.</p>
+            </div>
+            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.08fr)_minmax(380px,0.92fr)]">
+              <div className="bg-[#F8F7F4] p-4 sm:p-6">
+                <div className="relative min-h-[520px] overflow-hidden border border-[#EEEAE5] bg-[#F8F7F4]">
+                  <div className="absolute left-8 top-8 z-10">
+                    <p className="font-serif text-lg tracking-[0.18em] text-[#111]">{form.brand.brandText || content.nav.brand}</p>
+                  </div>
+                  <div className="absolute inset-y-0 right-0 w-[58%] overflow-hidden">
+                    {form.media.heroMediaType === "video" ? (
+                      <video src={form.media.heroMediaUrl} className="h-full w-full object-cover" autoPlay muted loop playsInline />
+                    ) : (
+                      <img src={form.media.heroMediaUrl} alt="" className="h-full w-full object-cover" />
+                    )}
+                    <div className="absolute inset-y-0 left-0 w-36 bg-gradient-to-r from-[#F8F7F4] to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#F8F7F4] to-transparent" />
+                  </div>
+                  <div className="relative z-10 max-w-[440px] px-8 pb-10 pt-24">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7A5CE8]">{content.hero.eyebrow}</p>
+                    <h1 className="mt-5 whitespace-pre-line font-serif text-[54px] leading-[0.98] text-[#111]">{content.hero.title}</h1>
+                    <p className="mt-6 max-w-[340px] whitespace-pre-line text-sm leading-6 text-[#5F5A54]">{content.hero.subtitle}</p>
+                    <button type="button" className="mt-7 h-11 rounded-[6px] bg-[#050505] px-5 text-sm font-bold text-white">{content.hero.cta}</button>
+                    <div className="mt-8 flex max-w-[360px] flex-wrap gap-x-3 gap-y-2 pb-6 pr-4 text-[10px] font-medium leading-5 text-[#77716A]">
+                      <span>No credit card required</span>
+                      <span className="text-[#C7A56B]">+</span>
+                      <span>Free forever plan</span>
+                      <span className="text-[#C7A56B]">+</span>
+                      <span>Cancel anytime</span>
+                    </div>
+                  </div>
+                  <div className="absolute bottom-8 right-7 z-20 w-[260px] rounded-[8px] bg-white/95 p-4 shadow-[0_18px_55px_rgba(45,38,30,0.18)]">
+                    <p className="text-[10px] font-black text-[#7A5CE8]">+ New Gallery</p>
+                    <h4 className="mt-1 font-serif text-2xl leading-none text-[#111]">{content.gallery.tabs[0]?.title || content.gallery.tabs[0]?.label}</h4>
+                    <p className="mt-1 text-[11px] font-medium text-[#6B655F]">{content.gallery.cartLabel}</p>
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      {[form.media.heroMediaUrl, ...content.gallery.tabs.map((tab) => tab.image)].filter(Boolean).slice(0, 3).map((image, index) => (
+                        <img key={`${image}-${index}`} src={image} alt="" className="h-14 rounded-[5px] object-cover" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
+                <CmsRepeater title="Hero copy">
+                  <div className="grid gap-4">
+                    <CmsInput label="Eyebrow" value={content.hero.eyebrow} onChange={(eyebrow) => patchObject("hero", { eyebrow })} />
+                    <CmsTextarea label="Title" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
+                    <CmsTextarea label="Subtitle" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
+                    <CmsInput label="Button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
+                  </div>
+                </CmsRepeater>
+                <CmsRepeater title="Hero media">
+                  <div className="grid gap-4">
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Media type</span>
+                      <select
+                        value={form.media.heroMediaType}
+                        onChange={(event) => setForm({ ...form, media: { ...form.media, heroMediaType: event.target.value as "image" | "video" } })}
+                        className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none"
+                      >
+                        <option value="image">Image</option>
+                        <option value="video">Video</option>
+                      </select>
+                    </label>
+                    <CmsInput label="Image/video URL" value={form.media.heroMediaUrl} onChange={(heroMediaUrl) => setForm({ ...form, media: { ...form.media, heroMediaUrl } })} />
+                    <label className="grid gap-2">
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Upload image or video</span>
+                      <Input
+                        type="file"
+                        accept="image/*,video/*"
+                        disabled={busy}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) onHeroUpload(file);
+                        }}
+                        className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] pt-2 shadow-none"
+                      />
+                    </label>
+                  </div>
+                </CmsRepeater>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div id="cms-gallery" className="scroll-mt-24">
+          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
+            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} categories + features</p>
+              <h3 className="mt-1 text-xl font-semibold">Photographer cards and feature row</h3>
+              <p className="mt-2 text-sm leading-6 text-[#666]">These fields control cards under the hero and the four feature blocks.</p>
+            </div>
+            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+              <div className="bg-[#F8F7F4] p-4 sm:p-6">
+                <div className="border border-[#EEEAE5] bg-white p-6 text-center">
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#7A5CE8]">Perfect for every photographer</p>
+                  <h3 className="mt-3 font-serif text-[38px] leading-none text-[#111]">{content.workflow.title}</h3>
+                  <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-3">
+                    {content.workflow.tabs.map((tab) => (
+                      <div key={tab.value} className="relative h-[170px] overflow-hidden rounded-[7px] bg-[#111] text-left">
+                        <img src={tab.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                        <span className="absolute right-3 top-3 rounded-full bg-black/45 px-2 py-1 text-[10px] font-bold text-white">{tab.icon || "Icon"}</span>
+                        <p className="absolute bottom-4 left-4 text-sm font-bold text-white">{tab.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-6 grid gap-1 border-y border-[#EEEAE5] text-left md:grid-cols-2">
+                    {content.featureCards.slice(0, 4).map((card) => (
+                      <div key={card.title} className="bg-white p-5">
+                        <p className="text-xs font-black text-[#7A5CE8]">{card.icon}</p>
+                        <h4 className="mt-5 font-serif text-xl">{card.title}</h4>
+                        <p className="mt-3 text-xs leading-5 text-[#5F5A54]">{card.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
+                <CmsRepeater title="Category cards">
+                  {content.workflow.tabs.map((tab, index) => (
+                    <div key={tab.value} className="grid gap-3 border p-4 md:grid-cols-2">
+                      <CmsInput label="Label" value={tab.label} onChange={(label) => patchWorkflowTab(index, { label })} />
+                      <CmsInput label="Icon name" value={tab.icon ?? ""} onChange={(icon) => patchWorkflowTab(index, { icon })} />
+                      <CmsImageInput label="Image" value={tab.image} onChange={(image) => patchWorkflowTab(index, { image })} onUpload={onUpload} busy={busy} wide />
+                      <Button type="button" variant="outline" className="w-fit rounded-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => patchObject("workflow", { tabs: content.workflow.tabs.filter((_, itemIndex) => itemIndex !== index) })}><Trash2 className="size-4" /> Remove image</Button>
+                    </div>
+                  ))}
+                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("workflow", { tabs: [...content.workflow.tabs, { value: `category-${Date.now()}`, label: "New Category", icon: "Camera", image: "" }] })}><PlusCircle className="size-4" /> Add image card</Button>
+                </CmsRepeater>
+                <CmsRepeater title="Feature cards">
+                  {content.featureCards.map((card, index) => (
+                    <div key={`${card.title}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
+                      <CmsInput label="Title" value={card.title} onChange={(title) => patchFeatureCard(index, { title })} />
+                      <CmsInput label="Icon name" value={card.icon} onChange={(icon) => patchFeatureCard(index, { icon })} />
+                      <CmsTextarea label="Text" value={card.text} onChange={(text) => patchFeatureCard(index, { text })} wide />
+                      <Button type="button" variant="outline" className="w-fit rounded-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => patch("featureCards", content.featureCards.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="size-4" /> Remove feature</Button>
+                    </div>
+                  ))}
+                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patch("featureCards", [...content.featureCards, { title: "", text: "", icon: "Camera" }])}><PlusCircle className="size-4" /> Add feature</Button>
+                </CmsRepeater>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div id="cms-workflow" className="scroll-mt-24">
+          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
+            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} device block</p>
+              <h3 className="mt-1 text-xl font-semibold">Management preview section</h3>
+              <p className="mt-2 text-sm leading-6 text-[#666]">This controls the gray device area below feature cards.</p>
+            </div>
+            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+              <div className="bg-[#F1EFEB] p-4 sm:p-6">
+                <div className="grid items-center gap-8 border border-[#E8E5E1] bg-[#F1EFEB] p-6 md:grid-cols-[0.75fr_1.25fr]">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#7A5CE8]">{content.workflow.eyebrow}</p>
+                    <h3 className="mt-4 whitespace-pre-line font-serif text-[38px] leading-[0.98] text-[#111]">{content.workflow.title}</h3>
+                    <p className="mt-5 text-sm leading-6 text-[#5F5A54]">{content.workflow.subtitle}</p>
+                  </div>
+                  <div className="overflow-hidden rounded-[16px] border-[8px] border-[#101010] bg-white shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
+                    <div className="grid grid-cols-3 gap-2 p-4">
+                      {[...content.workflow.tabs.map((tab) => tab.image), ...content.cta.images].filter(Boolean).slice(0, 9).map((image, index) => (
+                        <img key={`${image}-${index}`} src={image} alt="" className="aspect-[1.2] w-full object-cover" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
+                <CmsRepeater title="Text">
+                  <div className="grid gap-4">
+                    <CmsInput label="Eyebrow" value={content.workflow.eyebrow} onChange={(eyebrow) => patchObject("workflow", { eyebrow })} />
+                    <CmsTextarea label="Heading" value={content.workflow.title} onChange={(title) => patchObject("workflow", { title })} />
+                    <CmsTextarea label="Subtitle" value={content.workflow.subtitle} onChange={(subtitle) => patchObject("workflow", { subtitle })} />
+                  </div>
+                </CmsRepeater>
+                <CmsRepeater title="Extra mockup images">
+                  {content.cta.images.map((image, index) => (
+                    <div key={index} className="grid gap-3 border p-3 md:grid-cols-[1fr_auto]">
+                      <CmsImageInput label={`Image ${index + 1}`} value={image} onChange={(value) => patchCtaImage(index, value)} onUpload={onUpload} busy={busy} />
+                      <Button type="button" variant="outline" className="self-end rounded-none border-red-200 text-red-600" onClick={() => patchObject("cta", { images: content.cta.images.filter((_, imageIndex) => imageIndex !== index) })}><Trash2 className="size-4" /> Remove</Button>
+                    </div>
+                  ))}
+                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("cta", { images: [...content.cta.images, ""] })}><PlusCircle className="size-4" /> Add image</Button>
+                </CmsRepeater>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div id="cms-testimonials" className="scroll-mt-24">
+          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
+            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} trusted slider</p>
+              <h3 className="mt-1 text-xl font-semibold">Trusted brand logo slider</h3>
+              <p className="mt-2 text-sm leading-6 text-[#666]">Only these heading and logo fields appear in the current homepage.</p>
+            </div>
+            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+              <div className="bg-white p-4 text-center sm:p-6">
+                <div className="border border-[#EEEAE5] px-6 py-12">
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#7A5CE8]">{content.testimonials.eyebrow}</p>
+                  <h3 className="mx-auto mt-4 max-w-[620px] whitespace-pre-line font-serif text-[38px] leading-[1.05] text-[#111]">{content.testimonials.title}</h3>
+                  <div className="mx-auto mt-9 max-w-[720px] overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_12%,black_88%,transparent)]">
+                    <div className="flex w-max items-center gap-12">
+                      {[...content.brandLogos, ...content.brandLogos].map((logo, index) => (
+                        <span key={`${logo.name}-${index}`} className="inline-flex min-w-28 items-center justify-center">
+                          {logo.image ? <img src={logo.image} alt={logo.name} className="max-h-10 max-w-32 object-contain grayscale" /> : <span className="text-xl font-black text-[#6C6761] opacity-80">{logo.name}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
+                <CmsRepeater title="Heading">
+                  <div className="grid gap-4">
+                    <CmsInput label="Eyebrow" value={content.testimonials.eyebrow} onChange={(eyebrow) => patchObject("testimonials", { eyebrow })} />
+                    <CmsTextarea label="Heading" value={content.testimonials.title} onChange={(title) => patchObject("testimonials", { title })} />
+                  </div>
+                </CmsRepeater>
+                <CmsRepeater title="Brand logos">
+                  {content.brandLogos.map((logo, index) => (
+                    <div key={`${logo.name}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
+                      <CmsInput label="Brand name" value={logo.name} onChange={(name) => patchBrandLogo(index, { name })} />
+                      <CmsInput label="Brand URL" value={logo.url ?? ""} onChange={(url) => patchBrandLogo(index, { url })} />
+                      <CmsImageInput label="Logo image" value={logo.image} onChange={(image) => patchBrandLogo(index, { image })} onUpload={onUpload} busy={busy} wide />
+                      <Button type="button" variant="outline" className="w-fit rounded-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => patch("brandLogos", content.brandLogos.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="size-4" /> Remove brand</Button>
+                    </div>
+                  ))}
+                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patch("brandLogos", [...content.brandLogos, { name: "", image: "", url: "" }])}><PlusCircle className="size-4" /> Add brand</Button>
+                </CmsRepeater>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div id="cms-footer" className="scroll-mt-24">
+          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
+            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} footer</p>
+              <h3 className="mt-1 text-xl font-semibold">Footer editor</h3>
+              <p className="mt-2 text-sm leading-6 text-[#666]">Edit footer brand copy and link columns with a live dark preview.</p>
+            </div>
+            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+              <div className="bg-[#F8F7F4] p-4 sm:p-6">
+                <div className="grid gap-10 bg-[#171918] p-8 text-white md:grid-cols-[1.2fr_1fr]">
+                  <div>
+                    <p className="font-serif text-2xl tracking-[0.18em]">{form.brand.brandText || content.nav.brand}</p>
+                    <p className="mt-6 max-w-[520px] whitespace-pre-line text-sm leading-6 text-white/70">{content.footer.description}</p>
+                    <p className="mt-10 text-xs text-white/55">{content.footer.copyright}</p>
+                  </div>
+                  <div className="grid gap-8 sm:grid-cols-2">
+                    {visibleFooterColumns.map(({ column, index }) => (
+                      <div key={`${column.title}-${index}`}>
+                        <h4 className="text-sm font-bold text-white">{column.title}</h4>
+                        <div className="mt-5 grid gap-3 text-sm text-white/70">
+                          {column.links.map((link, linkIndex) => {
+                            const item = typeof link === "string" ? { label: link, url: "" } : link;
+                            return <span key={`${item.label}-${linkIndex}`}>{item.label}</span>;
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
+                <CmsRepeater title="Footer copy">
+                  <div className="grid gap-4">
+                    <CmsTextarea label="Footer description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} />
+                    <CmsInput label="Footer copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
+                  </div>
+                </CmsRepeater>
+                <CmsRepeater title="Footer columns">
+                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("footer", { columns: [
+                    { title: "Products", links: ["Client Gallery", "Store Gallery", "Mobile Gallery App"] },
+                    { title: "Pages", links: ["Pricing", "Terms of Service", "Privacy Policy"] },
+                  ] })}>Use real page links only</Button>
+                  {content.footer.columns.map((column, columnIndex) => (
+                    <div key={columnIndex} className="grid gap-4 border p-4">
+                      <div className="flex items-end gap-3">
+                        <div className="flex-1"><CmsInput label="Column title" value={column.title} onChange={(title) => patchFooterColumn(columnIndex, { title })} /></div>
+                        <Button type="button" variant="outline" className="rounded-none border-red-200 text-red-600" onClick={() => patchObject("footer", { columns: content.footer.columns.filter((_, index) => index !== columnIndex) })}><Trash2 className="size-4" /> Remove</Button>
+                      </div>
+                      {column.links.map((link: FooterLink, linkIndex) => {
+                        const item = typeof link === "string" ? { label: link, url: "" } : link;
+                        return <div key={linkIndex} className="grid gap-3 bg-[#f2f2ef] p-3 md:grid-cols-[1fr_1fr_auto]"><CmsInput label="Link label" value={item.label} onChange={(label) => patchFooterLink(columnIndex, linkIndex, { label })} /><CmsInput label="Link URL" value={item.url} onChange={(url) => patchFooterLink(columnIndex, linkIndex, { url })} /><Button type="button" variant="outline" className="self-end rounded-none border-red-200 text-red-600" onClick={() => patchFooterColumn(columnIndex, { links: column.links.filter((_, index) => index !== linkIndex) })}><Trash2 className="size-4" /></Button></div>;
+                      })}
+                      <Button type="button" variant="outline" className="w-fit rounded-none" onClick={() => patchFooterColumn(columnIndex, { links: [...column.links, { label: "", url: "" }] })}><PlusCircle className="size-4" /> Add link</Button>
+                    </div>
+                  ))}
+                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("footer", { columns: [...content.footer.columns, { title: "", links: [] }] })}><PlusCircle className="size-4" /> Add column</Button>
+                </CmsRepeater>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
