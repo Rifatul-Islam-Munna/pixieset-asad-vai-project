@@ -286,7 +286,7 @@ const switcherItems = [
 
 const sidebarItems = {
   "client-gallery": [
-    { label: "Collections", icon: Images, page: "collections" },
+    { label: "Galleries", icon: Images, page: "collections" },
     { label: "Library", icon: LayoutGrid, page: "library" },
     { label: "Starred", icon: Star, page: "starred" },
     { label: "Homepage", icon: PanelTop, page: "homepage" },
@@ -318,7 +318,7 @@ const dashboardCopy = {
   "client-gallery": {
     title: "Client Gallery",
     eyebrow: "Get Started",
-    heading: "Create beautiful photo collections in 3 steps",
+    heading: "Create beautiful photo galleries in 3 steps",
     cta: "Get Started with Sample Photos",
     hero: "AUTUMN FLORALS",
     bg: "bg-[#dfe9eb]",
@@ -422,7 +422,7 @@ const libraryPhotos = [
   },
   {
     src: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
-    title: "wedding collection",
+    title: "wedding gallery",
     tags: "Headline Keyword Camera Orientation",
   },
 ];
@@ -2335,7 +2335,7 @@ function MarketingSettingsPanel({
           <PageHeader title="Marketing Settings" />
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#666]">
             Control where visitors can subscribe and customise the subscription
-            form shown inside your public collections.
+            form shown inside your public galleries.
           </p>
         </div>
         <Button
@@ -2477,7 +2477,7 @@ function MarketingSettingsPanel({
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#777]">
               Live preview
             </p>
-            <span className="text-xs text-[#999]">Public collection</span>
+            <span className="text-xs text-[#999]">Public gallery</span>
           </div>
           <MarketingPopupPreview settings={form} />
           <Link
@@ -3461,7 +3461,7 @@ function FavoriteCollectionsPanel() {
                     {favorite.originalName ?? "Favorite photo"}
                   </span>
                   <span className="mt-1 block truncate text-xs text-[#777]">
-                    {favorite.collectionName ?? "Collection"}
+                    {favorite.collectionName ?? "Gallery"}
                   </span>
                 </button>
               ))}
@@ -3500,7 +3500,7 @@ function FavoriteCollectionsPanel() {
                       {previewImage.originalName ?? "Favorite photo"}
                     </DialogTitle>
                     <DialogDescription>
-                      {previewImage.collectionName ?? "Collection"}
+                      {previewImage.collectionName ?? "Gallery"}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="mt-8 rounded-none border border-[#e7e7e2] bg-[#fafafa] p-4">
@@ -3508,7 +3508,7 @@ function FavoriteCollectionsPanel() {
                       Source
                     </p>
                     <p className="mt-2 truncate text-sm font-semibold text-[#222]">
-                      {previewImage.collectionName ?? "Collection"}
+                      {previewImage.collectionName ?? "Gallery"}
                     </p>
                   </div>
                 </div>
@@ -3526,7 +3526,7 @@ function FavoriteCollectionsPanel() {
                     disabled={!previewImage.galleryUrl}
                   >
                     <Images data-icon="inline-start" />
-                    Open Collection
+                    Open Gallery
                   </Button>
                   <Button
                     variant="outline"
@@ -3564,7 +3564,7 @@ function StarredPanel() {
             value="collections"
             className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
           >
-            Collections
+            Galleries
           </TabsTrigger>
           <TabsTrigger
             value="photos"
@@ -3576,8 +3576,8 @@ function StarredPanel() {
 
         <TabsContent value="collections" className="mt-20">
           <StarredGrid
-            emptyText="You have no starred collections yet"
-            emptySubtext="Track your favorite collections with stars."
+            emptyText="You have no starred galleries yet"
+            emptySubtext="Track your favorite galleries with stars."
             items={starredCollections}
             kind="collection"
           />
@@ -3634,7 +3634,7 @@ function StarredGrid({
           : (image.originalName ?? image.metadata?.filename ?? "Image");
         const subtitle = isCollection
           ? `${collection.imageCount ?? 0} images`
-          : `${image.collectionName ?? "Collection"} / ${image.setName ?? "Highlights"}`;
+          : `${image.collectionName ?? "Gallery"} / ${image.setName ?? "Highlights"}`;
 
         return (
           <button
@@ -3698,7 +3698,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
     new Map(
       images.map((image) => [
         image.collectionId,
-        image.collectionName ?? "Collection",
+        image.collectionName ?? "Gallery",
       ]),
     ),
   );
@@ -3768,7 +3768,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
           onChange={(event) => setCollectionFilter(event.target.value)}
           className="h-10 border bg-white px-3 text-sm outline-none"
         >
-          <option value="all">All collections</option>
+          <option value="all">All galleries</option>
           {collections.map(([id, name]) => (
             <option key={id} value={id}>
               {name}
@@ -3780,7 +3780,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
             className="h-9 rounded-none bg-[#22bda7] px-4 text-sm font-bold text-white hover:bg-[#19a995]"
             onClick={onNewCollection}
           >
-            New Collection
+            New Gallery
           </Button>
         </div>
       </div>
@@ -3841,7 +3841,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                         `/dashboard/client-gallery/collections/${photo.collectionId}`,
                       )
                     }
-                    aria-label="View in collection"
+                    aria-label="View in gallery"
                   >
                     <Images className="size-4" />
                   </button>
@@ -3918,7 +3918,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
         <div className="mx-auto mt-24 max-w-[360px] text-center">
           <p className="text-lg font-bold">No matching photos</p>
           <p className="mt-4 text-sm leading-6 text-[#555]">
-            Try filename, collection, set, camera, lens, keyword, or title.
+            Try filename, gallery, set, camera, lens, keyword, or title.
           </p>
           <Button
             className="mt-6 h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
@@ -4097,7 +4097,7 @@ function PreferencesPanel() {
       <FieldGroup>
         <Field>
           <FieldLabel className="font-bold">
-            Default Collection Language
+            Default Gallery Language
           </FieldLabel>
           <select
             value={form.defaultLanguage}
@@ -4110,7 +4110,7 @@ function PreferencesPanel() {
             <option>French</option>
           </select>
           <p className="text-sm leading-6 text-[#666]">
-            Select default language for newly created collections.
+            Select default language for newly created galleries.
           </p>
         </Field>
         <Field>
@@ -4124,7 +4124,7 @@ function PreferencesPanel() {
             <option value="hide">Hide</option>
           </select>
           <p className="text-sm leading-6 text-[#666]">
-            Choose whether filenames show on collection photos.
+            Choose whether filenames show on gallery photos.
           </p>
         </Field>
         <Field>
@@ -4141,7 +4141,7 @@ function PreferencesPanel() {
             <option value="hidden">Hidden</option>
           </select>
           <p className="text-sm leading-6 text-[#666]">
-            Choose whether collections can be searchable on search engines.
+            Choose whether galleries can be searchable on search engines.
           </p>
         </Field>
         <Field>
@@ -4174,7 +4174,7 @@ function PreferencesPanel() {
             value={form.termsOfService}
             onChange={(event) => setForm({ ...form, termsOfService: event.target.value })}
             className="min-h-36 rounded-none border bg-white p-4 text-sm"
-            placeholder="Terms shown on collection pages"
+            placeholder="Terms shown on gallery pages"
           />
         </Field>
         <Field>
@@ -4183,7 +4183,7 @@ function PreferencesPanel() {
             value={form.privacyPolicy}
             onChange={(event) => setForm({ ...form, privacyPolicy: event.target.value })}
             className="min-h-36 rounded-none border bg-white p-4 text-sm"
-            placeholder="Privacy policy shown on collection pages"
+            placeholder="Privacy policy shown on gallery pages"
           />
         </Field>
       </FieldGroup>
@@ -4257,7 +4257,7 @@ function IntegrationsPanel() {
             </span>
             <div>
               <h2 className="text-lg font-bold">Google Analytics</h2>
-              <p className="mt-1 text-sm text-[#666]">Public homepage and collection page tracking.</p>
+              <p className="mt-1 text-sm text-[#666]">Public homepage and gallery page tracking.</p>
             </div>
           </div>
           <span className={cn("w-fit px-3 py-1 text-xs font-bold uppercase", form.enabled ? "bg-[#e7f8f4] text-[#008f81]" : "bg-[#eeeeee] text-[#777]")}>
@@ -4281,7 +4281,7 @@ function IntegrationsPanel() {
                 className="h-12 rounded-none border bg-white px-4 text-sm"
               />
               <p className="text-sm leading-6 text-[#666]">
-                Used on `/home/your-name` and public collection pages.
+                Used on `/home/your-name` and public gallery pages.
               </p>
             </Field>
             <Button
@@ -4301,7 +4301,7 @@ function IntegrationsPanel() {
               </div>
               <div className="flex items-center gap-3">
                 <Check className="size-4 text-[#00a997]" />
-                <span>Public collections</span>
+                <span>Public galleries</span>
               </div>
               <div className="flex items-center gap-3">
                 <Check className="size-4 text-[#00a997]" />
@@ -4875,11 +4875,11 @@ function PresetList({ section }: { section: DashboardSection }) {
       <div className="flex items-center justify-between gap-6">
         <div>
           <h2 className="text-[28px] font-medium leading-none">
-            Collection Presets
+            Gallery Presets
           </h2>
           <p className="mt-4 max-w-[560px] text-sm leading-6 text-[#666]">
-            Presets save collection defaults by user and can be applied when
-            creating a collection.
+            Presets save gallery defaults by user and can be applied when
+            creating a gallery.
           </p>
         </div>
         <Link
@@ -4905,7 +4905,7 @@ function PresetList({ section }: { section: DashboardSection }) {
           <div className="min-w-[740px] md:min-w-[820px]">
             <div className="grid grid-cols-[1.6fr_1.2fr_1.2fr_1.3fr_1.1fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777]">
               <span>Name</span>
-              <span>Collection ID</span>
+              <span>Gallery ID</span>
               <span>Photo Sets</span>
               <span>Default Watermark</span>
               <span>Last Updated</span>
@@ -4991,11 +4991,11 @@ function PresetEditor({ section }: { section: DashboardSection }) {
     savePresetSettings();
     saveSetting.mutate({
       localId: id,
-      name: presetName || "Collection Preset",
+      name: presetName || "Gallery Preset",
       collectionId: presetCollectionId || undefined,
       data: {
         id,
-        name: presetName || "Collection Preset",
+        name: presetName || "Gallery Preset",
         collectionId: presetCollectionId || undefined,
         general: presetGeneral,
         design: presetDesign,
@@ -5027,7 +5027,7 @@ function PresetEditor({ section }: { section: DashboardSection }) {
           <Input
             value={presetCollectionId}
             onChange={(event) => setPresetCollectionId(event.target.value)}
-            placeholder="Collection ID (optional)"
+            placeholder="Gallery ID (optional)"
             className="h-10 min-w-[180px] flex-1 rounded-none border-0 px-0 text-sm focus-visible:ring-0 sm:w-[230px] sm:flex-none"
           />
         </div>
@@ -5266,7 +5266,7 @@ function PresetGeneralPanel({
       <h2 className="text-2xl font-medium">General</h2>
       <FieldGroup className="mt-8 gap-12">
         <Field>
-          <FieldLabel className="font-bold">Collection Tags</FieldLabel>
+          <FieldLabel className="font-bold">Gallery Tags</FieldLabel>
           <Input
             value={general.collectionTags}
             onChange={(event) =>
@@ -5325,22 +5325,22 @@ function PresetGeneralPanel({
           [
             "Email Registration",
             "emailRegistration",
-            "Track email addresses accessing this collection.",
+            "Track email addresses accessing this gallery.",
           ],
           [
             "Gallery Assist",
             "galleryAssist",
-            "Add walk-through cards to help visitors use the collection.",
+            "Add walk-through cards to help visitors use the gallery.",
           ],
           [
             "Slideshow",
             "slideshow",
-            "Allow visitors to view the images in their collection as a slideshow.",
+            "Allow visitors to view the images in their gallery as a slideshow.",
           ],
           [
             "Social Sharing",
             "socialSharing",
-            "Allow collection visitors to share your work to social media.",
+            "Allow gallery visitors to share your work to social media.",
           ],
         ].map(([label, key, text]) => {
           const typedKey = key as
@@ -5385,7 +5385,7 @@ function PresetGeneralPanel({
             <option>French</option>
           </select>
           <p className="text-sm leading-6 text-[#666]">
-            Choose the language to display these collections in.
+            Choose the language to display these galleries in.
           </p>
         </Field>
       </FieldGroup>
@@ -5524,7 +5524,7 @@ function PresetStorePanel({
               <option>Portrait Price Sheet</option>
             </select>
             <p className="text-sm leading-6 text-[#666]">
-              Set which products are for sale in collections. Manage price
+              Set which products are for sale in galleries. Manage price
               sheets in <span className="text-[#00a997]">Store</span>
             </p>
           </Field>
@@ -6425,7 +6425,7 @@ function PresetDownloadPanel({
           [
             "Download PIN",
             "downloadPin",
-            "If enabled, all collections created from this preset will have a download PIN set automatically.",
+            "If enabled, all galleries created from this preset will have a download PIN set automatically.",
           ],
         ].map(([label, key, text]) => (
           <Field
@@ -6473,14 +6473,14 @@ function PresetDownloadPanel({
           <FieldGroup className="gap-12">
             {[
               [
-                "Restrict Downloads to Collection Contacts",
+                "Restrict Downloads to Gallery Contacts",
                 "restrictDownloads",
-                "Allow only assigned Collection Contacts to download photos.",
+                "Allow only assigned Gallery Contacts to download photos.",
               ],
               [
                 "Limit Photo Downloads",
                 "limitDownloads",
-                "Set number of photos that can be downloaded in these collections.",
+                "Set number of photos that can be downloaded in these galleries.",
               ],
             ].map(([label, key, text]) => (
               <Field
@@ -9265,7 +9265,7 @@ function StoreProductsPanel() {
         <div>
           <h1 className="text-[26px] font-medium leading-none">Price Sheets</h1>
           <p className="mt-3 text-sm text-[#777]">
-            Manage store price sheets outside collection pages.
+            Manage store price sheets outside gallery pages.
           </p>
         </div>
         <Button
@@ -9415,7 +9415,7 @@ function StoreProductsPanel() {
               value="advanced"
               className="mt-7 text-sm leading-6 text-[#666]"
             >
-              Collections use the Store Gallery Pricing defaults unless changed
+              Galleries use the Store Gallery Pricing defaults unless changed
               by store settings.
             </TabsContent>
           </Tabs>
@@ -11059,7 +11059,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   };
   const shareCollection = async (collection: CollectionRecord) => {
     if (collection.status !== "published") {
-      toast.error("Publish this collection before sharing it.");
+      toast.error("Publish this gallery before sharing it.");
       return;
     }
     const siteSlug = homepage.data?.data?.slug;
@@ -11071,14 +11071,14 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     );
     try {
       await navigator.clipboard.writeText(url);
-      toast.success("Collection link copied");
+      toast.success("Gallery link copied");
     } catch {
       toast.error(url);
     }
   };
   const duplicate = (collection: CollectionRecord) => {
     duplicateCollection.mutate(collection._id, {
-      onSuccess: () => toast.success("Collection duplicated"),
+      onSuccess: () => toast.success("Gallery duplicated"),
       onError: (error) => toast.error(error.message),
     });
   };
@@ -11095,7 +11095,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       },
       {
         onSuccess: () => {
-          toast.success("Collection updated");
+          toast.success("Gallery updated");
           setQuickEdit(null);
         },
         onError: (error) => toast.error(error.message),
@@ -11121,7 +11121,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     if (!deleteTarget) return;
     deleteCollection.mutate(deleteTarget._id, {
       onSuccess: () => {
-        toast.success("Collection deleted");
+        toast.success("Gallery deleted");
         setDeleteTarget(null);
       },
       onError: (error) => toast.error(error.message),
@@ -11138,13 +11138,13 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
           <DialogHeader>
             <DialogTitle>Quick edit</DialogTitle>
             <DialogDescription>
-              Rename the collection and choose Draft or Published.
+              Rename the gallery and choose Draft or Published.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="quick-collection-name">
-                Collection Name
+                Gallery Name
               </FieldLabel>
               <Input
                 id="quick-collection-name"
@@ -11174,7 +11174,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="quick-status">Collection Status</FieldLabel>
+              <FieldLabel htmlFor="quick-status">Gallery Status</FieldLabel>
               <select
                 id="quick-status"
                 value={quickForm.status}
@@ -11190,7 +11190,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                 <option value="published">Published</option>
               </select>
               <p className="text-xs leading-5 text-[#777]">
-                Only Published collections appear on your public homepage.
+                Only Published galleries appear on your public homepage.
               </p>
             </Field>
           </FieldGroup>
@@ -11214,7 +11214,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       </Dialog>
       <DeleteConfirmDialog
         open={Boolean(deleteTarget)}
-        title="Delete collection"
+        title="Delete gallery"
         description={deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
         pending={deleteCollection.isPending}
         onCancel={() => setDeleteTarget(null)}
@@ -11223,8 +11223,8 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       <AlertDialog open={publishConfirmOpen} onOpenChange={setPublishConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Publish collection?</AlertDialogTitle>
-            <AlertDialogDescription>This collection is a Draft. Publish it and open Preview?</AlertDialogDescription>
+            <AlertDialogTitle>Publish gallery?</AlertDialogTitle>
+            <AlertDialogDescription>This gallery is a Draft. Publish it and open Preview?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -11235,7 +11235,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-8">
           <h1 className="text-[28px] font-medium leading-none tracking-normal">
-            {section === "client-gallery" ? "Collections" : "Products"}
+            {section === "client-gallery" ? "Galleries" : "Products"}
           </h1>
           <label className="flex h-10 w-full min-w-0 items-center gap-3 text-[#8a8f98] sm:min-w-[240px] sm:w-auto">
             <Search className="size-5" />
@@ -11264,7 +11264,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             className="h-9 rounded-none bg-[#1C1C1C] px-4 text-sm font-bold text-white hover:bg-[#2E2E2E]"
             onClick={() => router.push(`/dashboard/${section}/collection-new`)}
           >
-            New Collection
+            New Gallery
             <ChevronDown className="ml-2 size-3.5 border-l border-white/30 pl-2" />
           </Button>
         </div>
@@ -11370,29 +11370,29 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
         </div>
       </div>
       <p className="mt-6 text-xs text-[#777]">
-        Showing {filteredCollections.length} of {collections.length} collections
+        Showing {filteredCollections.length} of {collections.length} galleries
       </p>
 
       {collectionsQuery.isLoading ? (
-        <p className="mt-10 py-8 text-sm text-[#666]">Loading collections...</p>
+        <p className="mt-10 py-8 text-sm text-[#666]">Loading galleries...</p>
       ) : !filteredCollections.length ? (
         <div className="mt-10 flex min-h-[360px] flex-col items-center justify-center border border-[#E8E5E1] bg-[#FFFFFF] p-8 text-center shadow-[0_18px_50px_rgba(21,21,21,0.04)]">
           <Images className="size-10 text-[#999]" />
           <p className="mt-5 font-bold">
             {collections.length
-              ? "No matching collections"
-              : "No collections yet"}
+              ? "No matching galleries"
+              : "No galleries yet"}
           </p>
           <p className="mt-2 text-sm leading-6 text-[#666]">
             {collections.length
               ? "Try another search or filter."
-              : "Create your first collection to get started."}
+              : "Create your first gallery to get started."}
           </p>
           <Button
             className="mt-6 h-10 rounded-none bg-[#1C1C1C] px-7 text-sm font-bold text-white hover:bg-[#2E2E2E]"
             onClick={() => router.push(`/dashboard/${section}/collection-new`)}
           >
-            Create Collection
+            Create Gallery
           </Button>
         </div>
       ) : viewMode === "grid" ? (
@@ -11608,7 +11608,7 @@ function CollectionActionMenu({
             "flex size-10 items-center justify-center rounded-full bg-white/95 text-[#555] shadow-sm transition hover:text-[#00a997]",
             className,
           )}
-          aria-label="Collection actions"
+          aria-label="Gallery actions"
         >
           <MoreHorizontal className="size-5" />
         </button>
@@ -11751,19 +11751,19 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
         onClick={() => router.push(`/dashboard/${section}`)}
       >
         <ArrowLeft className="size-4" />
-        Back to Collections
+        Back to Galleries
       </button>
       <h1 className="text-[28px] font-medium leading-none tracking-normal">
-        Create Collection
+        Create Gallery
       </h1>
       <p className="mt-3 text-sm leading-6 text-[#666]">
-        Set up a new collection with a name, date, and optional preset.
+        Set up a new gallery with a name, date, and optional preset.
       </p>
       <div className="mt-8 bg-[#fafafa] p-8">
         <FieldGroup className="gap-8">
           <Field>
             <FieldLabel htmlFor="new-collection-name" className="font-bold">
-              Collection Name
+              Gallery Name
             </FieldLabel>
             <Input
               id="new-collection-name"
@@ -11794,7 +11794,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
           </Field>
           <Field>
             <FieldLabel htmlFor="new-status" className="font-bold">
-              Collection Status
+              Gallery Status
             </FieldLabel>
             <select
               id="new-status"
@@ -11811,7 +11811,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
               <option value="published">Published</option>
             </select>
             <p className="mt-2 text-xs leading-5 text-[#777]">
-              Published collections are listed on your unique homepage URL.
+              Published galleries are listed on your unique homepage URL.
             </p>
           </Field>
           <Field>
@@ -11862,7 +11862,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
           disabled={createCollection.isPending || !form.name.trim()}
           onClick={handleCreate}
         >
-          {createCollection.isPending ? "Creating..." : "Create Collection"}
+          {createCollection.isPending ? "Creating..." : "Create Gallery"}
         </Button>
       </div>
     </div>
@@ -12421,11 +12421,11 @@ function CollectionDetailView({
           syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
           setForm(nextForm);
         }
-        toast.success("Collection settings saved");
+        toast.success("Gallery settings saved");
       },
       onError: (error) => {
         toast.error(
-          error instanceof Error ? error.message : "Collection save failed",
+          error instanceof Error ? error.message : "Gallery save failed",
         );
       },
     });
@@ -12541,7 +12541,7 @@ function CollectionDetailView({
   const applyShareTemplate = (template?: EmailTemplateItem) => {
     setSelectedShareTemplateId(template?.id ?? "");
     setShareSubject(
-      template?.subject?.trim() || `Photos for ${collection?.name ?? "your collection"} are ready`,
+      template?.subject?.trim() || `Photos for ${collection?.name ?? "your gallery"} are ready`,
     );
     setShareHeading(template?.title?.trim() || (collection?.name ?? "Your photos are ready"));
     setShareMessage(
@@ -12606,7 +12606,7 @@ function CollectionDetailView({
         html,
       });
       await recordEmailUsage(recipients.length).catch(() => null);
-      toast.success(`Collection shared with ${recipients.length} recipient${recipients.length === 1 ? "" : "s"}`);
+      toast.success(`Gallery shared with ${recipients.length} recipient${recipients.length === 1 ? "" : "s"}`);
       setShareOpen(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Email could not be sent");
@@ -12826,7 +12826,7 @@ function CollectionDetailView({
       { status: nextStatus },
       {
         onSuccess: () =>
-          toast.success(nextStatus === "published" ? "Collection published" : "Collection hidden"),
+          toast.success(nextStatus === "published" ? "Gallery published" : "Gallery hidden"),
         onError: (error) => {
           setCollectionStatus(collection.status === "published" ? "published" : "draft");
           toast.error(error instanceof Error ? error.message : "Status update failed");
@@ -12838,7 +12838,7 @@ function CollectionDetailView({
     if (!collection || duplicateCollection.isPending) return;
     duplicateCollection.mutate(collection._id, {
       onSuccess: (response) => {
-        toast.success("Collection duplicated");
+        toast.success("Gallery duplicated");
         const duplicatedId = response?.data?.collection?._id;
         if (duplicatedId)
           router.push(`/dashboard/${section}/collections/${duplicatedId}`);
@@ -12852,7 +12852,7 @@ function CollectionDetailView({
     deleteCollection.mutate(collection._id, {
       onSuccess: () => {
         setDeleteCollectionConfirmOpen(false);
-        toast.success("Collection deleted");
+        toast.success("Gallery deleted");
         router.push(`/dashboard/${section}`);
       },
       onError: (error) =>
@@ -12871,7 +12871,7 @@ function CollectionDetailView({
           <button
             className="flex size-8 shrink-0 items-center justify-center text-[#8a8a8a] hover:text-[#222]"
             onClick={() => router.push(`/dashboard/${section}`)}
-            aria-label="Back to collections"
+            aria-label="Back to galleries"
             type="button"
           >
             <ArrowLeft className="size-5" />
@@ -12965,7 +12965,7 @@ function CollectionDetailView({
                 onSelect={() => setDeleteCollectionConfirmOpen(true)}
               >
                 <Trash2 className="size-4" />
-                Delete collection
+                Delete gallery
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -13011,7 +13011,7 @@ function CollectionDetailView({
                 <button type="button" onClick={() => setShareOpen(false)} aria-label="Close email composer">
                   <X className="size-5 text-[#777]" />
                 </button>
-                <h2 className="font-medium">Share Collection</h2>
+                <h2 className="font-medium">Share Gallery</h2>
               </div>
               <div className="flex items-center gap-8 text-sm font-medium">
                 <button type="button" onClick={() => void copyPublicLink().then(() => toast.success("Direct link copied"))}>
@@ -13257,7 +13257,7 @@ function CollectionDetailView({
         <DialogContent className="max-w-md rounded-none">
           <DialogHeader>
             <DialogTitle>Rename Photo</DialogTitle>
-            <DialogDescription>Update photo filename shown in this collection.</DialogDescription>
+            <DialogDescription>Update photo filename shown in this gallery.</DialogDescription>
           </DialogHeader>
           <Input value={imageRenameValue} onChange={(event) => setImageRenameValue(event.target.value)} className="h-12 rounded-none" placeholder="Filename" />
           <DialogFooter>
@@ -13273,7 +13273,7 @@ function CollectionDetailView({
         <DialogContent className="max-w-lg rounded-none">
           <DialogHeader>
             <DialogTitle>Move / Copy Photo</DialogTitle>
-            <DialogDescription>Send this photo to another collection or set.</DialogDescription>
+            <DialogDescription>Send this photo to another gallery or set.</DialogDescription>
           </DialogHeader>
           <FieldGroup className="gap-5">
             <Field>
@@ -13287,7 +13287,7 @@ function CollectionDetailView({
               </div>
             </Field>
             <Field>
-              <FieldLabel className="font-bold">Collection</FieldLabel>
+              <FieldLabel className="font-bold">Gallery</FieldLabel>
               <select
                 value={imageTargetCollectionId}
                 onChange={(event) => {
@@ -13369,7 +13369,7 @@ function CollectionDetailView({
 
       <DeleteConfirmDialog
         open={deleteCollectionConfirmOpen}
-        title="Delete collection"
+        title="Delete gallery"
         description={`Delete "${collection.name}" and all of its media? This action cannot be undone.`}
         pending={deleteCollection.isPending}
         onCancel={() => setDeleteCollectionConfirmOpen(false)}
@@ -13549,7 +13549,7 @@ function CollectionDetailView({
                   <DialogHeader>
                     <DialogTitle>Add Set</DialogTitle>
                     <DialogDescription>
-                      Create a named set inside this collection.
+                      Create a named set inside this gallery.
                     </DialogDescription>
                   </DialogHeader>
                   <FieldGroup>
@@ -13724,7 +13724,7 @@ function CollectionDetailView({
           <button
             className="mt-auto flex h-12 shrink-0 items-center justify-center border-t text-[#333]"
             onClick={() => setDetailCollapsed((value) => !value)}
-            aria-label="Toggle collection sidebar"
+            aria-label="Toggle gallery sidebar"
           >
             <ChevronsLeft
               className={cn("size-5", detailCollapsed && "rotate-180")}
@@ -14102,11 +14102,11 @@ function CollectionDetailView({
                         disabled={deletingImages || coverImageAccess.locked || image.mediaType === "video"}
                         title={
                           image.mediaType === "video"
-                            ? "Videos cannot be collection covers"
+                            ? "Videos cannot be gallery covers"
                             :
                           coverImageAccess.locked
                             ? "Cover image is not included in your current plan"
-                            : "Make collection cover"
+                            : "Make gallery cover"
                         }
                         onClick={() => setCollectionCoverImage(image)}
                       >
@@ -14307,7 +14307,7 @@ function CollectionDetailView({
                   <h2 className="text-2xl font-medium">General Settings</h2>
                   <FieldGroup className="mt-8 gap-7">
                     <Field>
-                      <FieldLabel className="font-bold">Collection Name</FieldLabel>
+                      <FieldLabel className="font-bold">Gallery Name</FieldLabel>
                       <Input
                         value={form.name}
                         onChange={(event) =>
@@ -14320,7 +14320,7 @@ function CollectionDetailView({
                       />
                     </Field>
                     <Field>
-                      <FieldLabel className="font-bold">Collection URL</FieldLabel>
+                      <FieldLabel className="font-bold">Gallery URL</FieldLabel>
                       <Input
                         value={form.slug}
                         onChange={(event) =>
@@ -14331,7 +14331,7 @@ function CollectionDetailView({
                         }
                         className="h-12 rounded-none bg-white"
                       />
-                      <p className="text-sm leading-6 text-[#666]">Choose a unique URL slug for visitors to access your collection.</p>
+                      <p className="text-sm leading-6 text-[#666]">Choose a unique URL slug for visitors to access your gallery.</p>
                     </Field>
                     <Field>
                       <FieldLabel className="font-bold">Category Tags</FieldLabel>
@@ -14411,7 +14411,7 @@ function CollectionDetailView({
                           general: { ...current.general, socialSharing: value },
                         }))
                       }
-                      text="Allow visitors to share your collection."
+                      text="Allow visitors to share your gallery."
                     />
                     <Field>
                       <FieldLabel className="font-bold">Language</FieldLabel>
@@ -14440,7 +14440,7 @@ function CollectionDetailView({
                   <h2 className="text-2xl font-medium">Privacy Settings</h2>
                   <FieldGroup className="mt-8 gap-10">
                     <Field>
-                      <FieldLabel htmlFor="collection-status" className="font-bold">Collection Status</FieldLabel>
+                      <FieldLabel htmlFor="collection-status" className="font-bold">Gallery Status</FieldLabel>
                       <select
                         id="collection-status"
                         value={collectionStatus}
@@ -14452,7 +14452,7 @@ function CollectionDetailView({
                         <option value="draft">Draft</option>
                         <option value="published">Published</option>
                       </select>
-                      <p className="text-sm leading-6 text-[#666]">Only published collections are visible on public URLs.</p>
+                      <p className="text-sm leading-6 text-[#666]">Only published galleries are visible on public URLs.</p>
                     </Field>
                     <SettingSwitch
                       label="Email Registration"
@@ -14472,7 +14472,7 @@ function CollectionDetailView({
                           <p className="mt-2 max-w-xl text-sm leading-6 text-[#666]">
                             Show the optional subscription checkbox in Email
                             Registration and allow the marketing subscription
-                            pop-up for this collection.
+                            pop-up for this gallery.
                           </p>
                         </div>
                         <Switch
@@ -14508,9 +14508,9 @@ function CollectionDetailView({
                       text="Show walk-through cards for visitors."
                     />
                     <div className="border-t pt-8">
-                      <h3 className="text-lg font-bold">Collection Preferences</h3>
+                      <h3 className="text-lg font-bold">Gallery Preferences</h3>
                       <p className="mt-2 text-sm leading-6 text-[#666]">
-                        Defaults come from Preferences. Changes here stay with this collection.
+                        Defaults come from Preferences. Changes here stay with this gallery.
                       </p>
                       <FieldGroup className="mt-6 gap-7">
                         <Field>
@@ -14584,7 +14584,7 @@ function CollectionDetailView({
                               },
                             }))
                           }
-                          text="Allow RAW files inside this collection."
+                          text="Allow RAW files inside this gallery."
                         />
                         <Field>
                           <FieldLabel className="font-bold">Terms of Service</FieldLabel>
@@ -14764,7 +14764,7 @@ function CollectionDetailView({
               }}
               copyFavoriteListToCollection={(payload) => {
                 if (!activityActions.copyFavoriteListToCollection)
-                  throw new Error("Copy to collection is not available");
+                  throw new Error("Copy to gallery is not available");
                 return activityActions.copyFavoriteListToCollection.mutateAsync(
                   payload,
                 );
@@ -14926,7 +14926,7 @@ function CollectionActivityPanel({
       `${safeCsvName(collectionName)}-download-activity.csv`,
       downloads.map((item) => ({
         email: item.email,
-        filename: item.imageName || item.imageId || "Collection download",
+        filename: item.imageName || item.imageId || "Gallery download",
         downloadType: item.downloadType,
         count: item.count,
         dateCreated: formatActivityDate(item.createdAt),
@@ -14958,7 +14958,7 @@ function CollectionActivityPanel({
         name: image.originalName || `photo-${index + 1}`,
       }));
     if (!images.length) {
-      toast.error("No collection images to download");
+      toast.error("No gallery images to download");
       return;
     }
     window.sessionStorage.setItem(
@@ -15152,14 +15152,14 @@ function CollectionActivityPanel({
   const copyToCollection = async (list: CollectionFavoriteActivityRecord) => {
     const name =
       window.prompt(
-        "New collection name",
+        "New gallery name",
         `${collectionName} - ${list.name}`,
       ) || "";
     if (!name.trim()) return;
     setCopyingListId(list.id);
     try {
       await copyFavoriteListToCollection({ favoriteUserId: list.id, name });
-      toast.success("Copied to new collection");
+      toast.success("Copied to new gallery");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Copy failed");
     } finally {
@@ -15240,7 +15240,7 @@ function CollectionActivityPanel({
               <div>
                 <h2 className="text-2xl font-medium">Email Access</h2>
                 <p className="mt-2 text-sm text-[#666]">
-                  Only listed or approved emails can open this collection when
+                  Only listed or approved emails can open this gallery when
                   Email Registration is on.
                 </p>
               </div>
@@ -15428,7 +15428,7 @@ function CollectionActivityPanel({
                       <td className="px-1 py-5">
                         {item.imageName ||
                           item.imageId ||
-                          "Collection download"}
+                          "Gallery download"}
                       </td>
                       <td className="px-1 py-5 capitalize">
                         {item.downloadType}
@@ -15804,7 +15804,7 @@ function CollectionActivityPanel({
           <DialogHeader>
             <DialogTitle>Send as download</DialogTitle>
             <DialogDescription>
-              Choose a saved template. Button URL becomes this collection link.
+              Choose a saved template. Button URL becomes this gallery link.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
@@ -16509,7 +16509,7 @@ function CollectionWizard() {
           <FieldGroup className="gap-12">
             <Field>
               <FieldLabel htmlFor="collection-name" className="font-bold">
-                Collection Name
+                Gallery Name
               </FieldLabel>
               <Input
                 id="collection-name"
@@ -16635,7 +16635,7 @@ function CollectionWizard() {
             design={{
               ...collectionDefaultDesign,
               cover: coverDesign,
-              coverTitle: collectionName || "My Sample Collection",
+              coverTitle: collectionName || "My Sample Gallery",
               coverDate: eventDate
                 ? format(parseISO(eventDate), "PPP")
                 : "June 14, 2026",
@@ -16686,7 +16686,7 @@ function CollectionWizard() {
           className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
           onClick={resetWizard}
         >
-          Create Collection
+          Create Gallery
         </Button>
       </div>
     </div>

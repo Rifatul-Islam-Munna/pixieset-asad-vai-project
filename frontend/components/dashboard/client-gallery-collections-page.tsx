@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 type ViewMode = "grid" | "list";
 
 const navigation = [
-  ["Collections", Images, "/dashboard/client-gallery"],
+  ["Galleries", Images, "/dashboard/client-gallery"],
   ["Library", Grid2X2, "/dashboard/client-gallery/library"],
   ["Starred", Star, "/dashboard/client-gallery/starred"],
   ["Homepage", PanelTop, "/dashboard/client-gallery/homepage"],
@@ -115,7 +115,7 @@ export function ClientGalleryCollectionsPage() {
               href={href}
               className={cn(
                 "flex items-center gap-4 text-base",
-                label === "Collections" && "font-semibold text-[#00a997]",
+                label === "Galleries" && "font-semibold text-[#00a997]",
               )}
             >
               <Icon className="size-5" /> {label}
@@ -128,20 +128,20 @@ export function ClientGalleryCollectionsPage() {
         <div className="mx-auto max-w-[1500px]">
           <header className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex w-full flex-wrap items-center gap-4 sm:gap-7 lg:w-auto">
-              <h1 className="text-[28px] font-medium">Collections</h1>
+              <h1 className="text-[28px] font-medium">Galleries</h1>
               <label className="flex h-10 w-full min-w-0 items-center gap-3 border-b text-[#777] sm:min-w-[260px] sm:w-auto">
                 <Search className="size-5" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search collections"
+                  placeholder="Search galleries"
                   className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
                 />
               </label>
             </div>
             <div className="flex w-full flex-wrap items-center gap-3 sm:gap-5 lg:w-auto">
               <Link href="/dashboard/client-gallery/settings/presets" className="text-sm font-semibold">View Presets</Link>
-              <Link href="/dashboard/client-gallery/collection-new" className="inline-flex h-9 items-center bg-[#22bda7] px-4 text-sm font-bold text-white sm:px-5">New Collection</Link>
+              <Link href="/dashboard/client-gallery/collection-new" className="inline-flex h-9 items-center bg-[#22bda7] px-4 text-sm font-bold text-white sm:px-5">New Gallery</Link>
             </div>
           </header>
 
@@ -186,15 +186,15 @@ export function ClientGalleryCollectionsPage() {
             </div>
           </div>
 
-          <p className="mt-6 text-xs text-[#777]">Showing {visibleCollections.length} of {collections.length} collections</p>
+          <p className="mt-6 text-xs text-[#777]">Showing {visibleCollections.length} of {collections.length} galleries</p>
 
           {collectionsQuery.isLoading ? (
             <div className="flex min-h-[360px] items-center justify-center"><Loader2 className="size-7 animate-spin" /></div>
           ) : visibleCollections.length === 0 ? (
             <div className="mt-8 flex min-h-[360px] flex-col items-center justify-center border bg-[#fafafa] text-center">
               <Images className="size-10 text-[#aaa]" />
-              <p className="mt-4 font-semibold">No matching collections</p>
-              <button className="mt-4 text-sm font-semibold text-[#00a997]" onClick={clearFilters}>Show all collections</button>
+              <p className="mt-4 font-semibold">No matching galleries</p>
+              <button className="mt-4 text-sm font-semibold text-[#00a997]" onClick={clearFilters}>Show all galleries</button>
             </div>
           ) : view === "grid" ? (
             <div className="mt-8 grid gap-x-7 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">

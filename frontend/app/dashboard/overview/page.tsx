@@ -61,8 +61,8 @@ const products = [
     icon: Images,
     color: "bg-[#09bfb4]",
     links: [
-      ["Manage Collections", "/dashboard/client-gallery"],
-      ["Create Collection", "/dashboard/client-gallery/collection-new"],
+      ["Manage Galleries", "/dashboard/client-gallery"],
+      ["Create Gallery", "/dashboard/client-gallery/collection-new"],
       ["View Homepage", "/dashboard/client-gallery/homepage"],
       ["Settings", "/dashboard/client-gallery/settings"],
     ],
@@ -179,9 +179,9 @@ export default async function DashboardOverviewPage() {
               <div className="flex items-center justify-between gap-4">
                 <h2 className="inline-flex items-center gap-3 text-sm font-bold uppercase tracking-[0.12em]">
                   <Images className="size-4 text-[#09bfb4]" />
-                  Recent Collections
+                  Recent Galleries
                 </h2>
-                <Link href="/dashboard/client-gallery" aria-label="Open collections">
+                <Link href="/dashboard/client-gallery" aria-label="Open galleries">
                   <LayoutGrid className="size-4 text-[#777]" />
                 </Link>
               </div>
@@ -214,7 +214,7 @@ export default async function DashboardOverviewPage() {
                   ))
                 ) : (
                   <div className="flex min-h-36 items-center justify-center bg-white text-sm font-semibold text-[#555]">
-                    No collections yet.
+                    No galleries yet.
                   </div>
                 )}
               </div>
