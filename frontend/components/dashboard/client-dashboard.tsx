@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  createElement,
   useEffect,
   useMemo,
   useRef,
@@ -228,6 +229,7 @@ import {
 
 export type DashboardSection = "client-gallery" | "store-gallery";
 export type DashboardPage =
+  | "dashboard"
   | "collections"
   | "collection-new"
   | "library"
@@ -263,6 +265,7 @@ const switcherItems = [
     title: "Client Gallery",
     text: "Better way to share, deliver, proof and sell",
     href: "/dashboard/client-gallery",
+    icon: Images,
     mark: "bg-[#0dc6b5]",
     accent: "from-[#0dc6b5] to-[#9de7de]",
   },
@@ -271,6 +274,7 @@ const switcherItems = [
     title: "Store Gallery",
     text: "Your online store for prints and downloads",
     href: "/dashboard/store-gallery",
+    icon: Store,
     mark: "bg-[#ff4f5d]",
     accent: "from-[#ff4f5d] to-[#ffc7cd]",
   },
@@ -279,6 +283,7 @@ const switcherItems = [
     title: "Mobile Gallery App",
     text: "Create installable mobile-first photo apps",
     href: "/dashboard/mobile-gallery",
+    icon: Smartphone,
     mark: "bg-[#f5c421]",
     accent: "from-[#f5c421] to-[#ffe99a]",
   },
@@ -461,8 +466,10 @@ export function ClientDashboard({
     toggleCollapsed,
   } = useDashboardStore();
   const activeNav =
-    sidebarItems[section].find((item) => item.page === page)?.label ??
-    (page === "marketing" ? "Marketing" : "Storage");
+    page === "dashboard"
+      ? "Dashboard"
+      : sidebarItems[section].find((item) => item.page === page)?.label ??
+        (page === "marketing" ? "Marketing" : "Storage");
   const isCollectionIndex =
     page === "collections" ||
     (section === "store-gallery" && page === "products");
@@ -494,6 +501,8 @@ export function ClientDashboard({
       window.removeEventListener("storage-usage-changed", onStorageChanged);
     };
   }, []);
+  const hasPaidPlan = Boolean(billingUser?.planName && !/free|starter/i.test(billingUser.planName));
+  const showUpgradeCard = Boolean(billingUser && !hasPaidPlan);
   const sidebarUsedGb = bytesToGb(billingUser?.storageUsedBytes ?? 0);
   const sidebarLimitGb = Math.max(0, Number(billingUser?.storageLimitGb ?? 0));
   const sidebarStorageLeftGb = Math.max(0, sidebarLimitGb - sidebarUsedGb);
@@ -519,7 +528,7 @@ export function ClientDashboard({
   };
 
   return (
-    <main className="gallerista-editorial min-h-screen overflow-x-hidden bg-[#F8F7F4] text-[#151515]">
+    <main className="gallerista-editorial min-h-screen overflow-x-hidden bg-[#fbfbfd] text-[#171717]">
       {dashboardChromeOpen && !storeTopNavOpen && (
         <aside
           className={cn(
@@ -531,9 +540,9 @@ export function ClientDashboard({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className={cn("flex h-11 items-center rounded-md text-sm font-bold outline-none hover:bg-[#f5f7f7]", collapsed ? "w-11 justify-center" : "gap-3 px-2")} title={collapsed ? active.title : undefined}>
-                  <span
-                    className={cn("size-5 rounded-full", activeSwitcher?.mark)}
-                  />
+                  <span className={cn("grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", activeSwitcher?.accent)}>
+                    {createElement(activeSwitcher?.icon ?? Images, { className: "size-4" })}
+                  </span>
                   {!collapsed && active.title}
                   {!collapsed && <ChevronDown className="size-3 text-[#777]" />}
                 </button>
@@ -546,12 +555,9 @@ export function ClientDashboard({
                         href={item.href}
                         className="flex gap-4 rounded-none px-2 py-4"
                       >
-                        <span
-                          className={cn(
-                            "mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br",
-                            item.accent,
-                          )}
-                        />
+                        <span className={cn("mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", item.accent)}>
+                          {createElement(item.icon, { className: "size-5" })}
+                        </span>
                         <span className="flex flex-col gap-1">
                           <span className="font-bold text-[#151515]">
                             {item.title}
@@ -566,7 +572,7 @@ export function ClientDashboard({
                 </DropdownMenuGroup>
                 <div className="bg-[#f7f7f7] p-5 text-center">
                   <Link
-                    href="/dashboard/overview"
+                    href="/dashboard/client-gallery/dashboard"
                     className="inline-flex items-center gap-2 text-sm text-[#333]"
                   >
                     <LayoutGrid className="size-4 text-[#999]" />
@@ -584,8 +590,14 @@ export function ClientDashboard({
             </div>
           </div>
 
-          <nav className={cn("flex min-h-0 flex-1 flex-col py-5", collapsed ? "px-2" : "px-3")}>
+          <nav className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto py-5", collapsed ? "px-2" : "px-3")}>
             <div className="flex flex-col gap-2">
+              {section === "client-gallery" && (
+                <Link href="/dashboard/client-gallery/dashboard" className={cn("group flex h-12 items-center rounded-md text-sm transition hover:bg-[#e9e1ff]", collapsed ? "justify-center px-0" : "gap-4 px-3", page === "dashboard" ? "bg-[#f0ebff] font-semibold text-[#6337d8]" : "text-[#333]")}>
+                  <LayoutGrid className={cn("size-5", page === "dashboard" ? "text-[#6337d8]" : "text-[#333]")} />
+                  {!collapsed && "Dashboard"}
+                </Link>
+              )}
               {sidebarItems[section].map((item) => (
                 <Link
                   key={item.label}
@@ -597,14 +609,14 @@ export function ClientDashboard({
                   className={cn(
                     "group flex h-12 items-center rounded-md text-left text-sm text-[#333] transition-colors hover:bg-[#f5f7f7]",
                     collapsed ? "justify-center px-0" : "gap-4 px-3",
-                    activeNav === item.label && "bg-[#eaf8f5] font-semibold text-[#009b8c]",
+                    activeNav === item.label && "bg-[#f0ebff] font-semibold text-[#6337d8]",
                   )}
                   title={collapsed ? item.label : undefined}
                 >
                   <item.icon
                     className={cn(
                       "size-5 text-[#333]",
-                      activeNav === item.label && "text-[#00a997]",
+                      activeNav === item.label && "text-[#6337d8]",
                     )}
                   />
                   {!collapsed && item.label}
@@ -653,7 +665,15 @@ export function ClientDashboard({
               </div>
             )}
 
-            <div className="mt-auto grid gap-2 border-t border-[#eeeeee] pt-4">
+            {section === "client-gallery" && !collapsed && showUpgradeCard && (
+              <div className="mb-5 mt-auto rounded-[10px] bg-gradient-to-br from-[#f4efff] to-[#eee5ff] p-5 shadow-[0_12px_30px_rgba(99,55,216,.08)]">
+                <Star className="size-7 text-[#6337d8]" />
+                <h3 className="mt-4 text-base font-bold">Upgrade to Plus</h3>
+                <p className="mt-2 text-xs leading-5 text-[#6f6a79]">Unlock premium features and grow your business.</p>
+                <Link href="/pricing" className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] bg-gradient-to-r from-[#5527c9] to-[#7135dc] text-sm font-semibold text-white">Upgrade Now <ArrowRight className="size-4" /></Link>
+              </div>
+            )}
+            <div className="grid gap-2 border-t border-[#eeeeee] pt-4">
               {section === "client-gallery" && (
                 <Link
                   href={`/dashboard/${section}/storage`}
@@ -792,12 +812,9 @@ export function ClientDashboard({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 text-sm font-bold outline-none">
-                      <span
-                        className={cn(
-                          "size-5 rounded-full",
-                          activeSwitcher?.mark,
-                        )}
-                      />
+                      <span className={cn("grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", activeSwitcher?.accent)}>
+                        {createElement(activeSwitcher?.icon ?? Images, { className: "size-4" })}
+                      </span>
                       {active.title}
                       <ChevronDown className="size-3" />
                     </button>
@@ -815,12 +832,9 @@ export function ClientDashboard({
                             onClick={() => setMobileMenuOpen(false)}
                             className="flex gap-4 px-4 py-4"
                           >
-                            <span
-                              className={cn(
-                                "mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br",
-                                item.accent,
-                              )}
-                            />
+                            <span className={cn("mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", item.accent)}>
+                              {createElement(item.icon, { className: "size-5" })}
+                            </span>
                             <span className="flex flex-col gap-1">
                               <span className="font-bold text-[#151515]">
                                 {item.title}
@@ -835,7 +849,7 @@ export function ClientDashboard({
                     </DropdownMenuGroup>
                     <div className="bg-[#f7f7f7] p-4 text-center">
                       <Link
-                        href="/dashboard/overview"
+                        href="/dashboard/client-gallery/dashboard"
                         onClick={() => setMobileMenuOpen(false)}
                         className="inline-flex items-center gap-2 text-sm text-[#333]"
                       >
@@ -855,6 +869,11 @@ export function ClientDashboard({
               </div>
 
               <nav className="mt-7 grid gap-5">
+                {section === "client-gallery" && (
+                  <Link href="/dashboard/client-gallery/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 font-semibold text-[#6337d8]">
+                    <LayoutGrid className="size-5" /> Dashboard
+                  </Link>
+                )}
                 {sidebarItems[section].map((item) => (
                   <Link
                     key={item.label}
@@ -1013,6 +1032,8 @@ export function ClientDashboard({
               <StoreCouponsPanel />
             ) : section === "store-gallery" && page === "taxes" ? (
               <StoreTaxesPanel />
+            ) : section === "client-gallery" && page === "dashboard" ? (
+              <ClientGalleryDashboardPanel billingUser={billingUser} />
             ) : section === "store-gallery" && page === "shipping" ? (
               <StoreShippingPanel />
             ) : section === "store-gallery" &&
@@ -1048,6 +1069,51 @@ export function ClientDashboard({
         </div>
       </section>
     </main>
+  );
+}
+
+function ClientGalleryDashboardPanel({ billingUser }: { billingUser: BillingUser | null }) {
+  const products = [
+    { title: "Client Gallery", icon: Images, href: "/dashboard/client-gallery", links: ["Manage Collections", "Create Collection", "View Homepage", "Settings"] },
+    { title: "Store", icon: Store, href: "/dashboard/store-gallery", links: ["View Orders", "Products", "Settings"] },
+    { title: "Mobile Gallery App", icon: Smartphone, href: "/dashboard/mobile-gallery", links: ["Manage Apps", "Create New App", "Settings"] },
+    { title: "Profile & Account", icon: CircleUserRound, href: "/dashboard/client-gallery/account", links: ["Profile", "Account", "Billing", "Preferences"] },
+  ];
+
+  return (
+    <div className="mx-auto w-full max-w-[1380px] px-5 py-8 sm:px-8 lg:px-10">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-[-.03em]">Dashboard</h1>
+          <p className="mt-2 text-sm text-[#6d6a73]">Welcome back{billingUser?.name ? `, ${billingUser.name}` : ""} 👋</p>
+        </div>
+        <Link href="/dashboard/client-gallery/account" className="inline-flex h-11 items-center gap-2 rounded-[7px] border border-[#dedbe8] bg-white px-4 text-sm font-semibold shadow-sm"><CircleUserRound className="size-4" /> Profile & Account</Link>
+      </div>
+
+      <p className="mt-10 text-xs font-bold uppercase tracking-[.18em] text-[#8a8791]">Products</p>
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {products.map((item, index) => {
+          const Icon = item.icon;
+          const accents = ["from-[#22c7b8] to-[#0db7a7]", "from-[#ff4960] to-[#f22d4a]", "from-[#ffcb20] to-[#ffb500]", "from-[#ec3aa6] to-[#df1b8d]"];
+          return <Link key={item.title} href={item.href} className="rounded-[10px] border border-[#eceaf1] bg-white p-5 shadow-[0_10px_30px_rgba(30,20,60,.04)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(30,20,60,.08)]">
+            <div className="flex items-center gap-4 border-b border-[#efedf3] pb-4"><span className={`grid size-12 place-items-center rounded-full bg-gradient-to-br ${accents[index]} text-white`}><Icon className="size-5" /></span><h2 className="text-base font-semibold">{item.title}</h2></div>
+            <div className="mt-4 grid gap-3 text-sm text-[#5e5b64]">{item.links.map((link) => <span key={link}>{link}</span>)}</div>
+          </Link>;
+        })}
+      </div>
+
+      <p className="mt-8 text-xs font-bold uppercase tracking-[.18em] text-[#8a8791]">Quick access</p>
+      <div className="mt-4 grid gap-5 xl:grid-cols-2">
+        <div className="rounded-[10px] border border-[#eceaf1] bg-white shadow-[0_10px_30px_rgba(30,20,60,.04)]">
+          <div className="flex items-center justify-between border-b border-[#efedf3] px-5 py-4"><div className="flex items-center gap-3"><Images className="size-5 text-[#20b9a8]"/><h3 className="font-semibold">Recent Collections</h3></div><Link href="/dashboard/client-gallery" className="rounded-[6px] border px-3 py-2 text-xs font-semibold">View All</Link></div>
+          <div className="grid min-h-[220px] place-items-center px-6 py-10 text-center"><div><div className="mx-auto grid size-14 place-items-center rounded-full bg-[#f7f5fb]"><Images className="size-6 text-[#8d8799]"/></div><p className="mt-4 font-medium">Your recent galleries will appear here.</p><Link href="/dashboard/client-gallery/collection-new" className="mt-4 inline-flex h-10 items-center rounded-[6px] bg-[#6337d8] px-4 text-sm font-semibold text-white">Create Gallery</Link></div></div>
+        </div>
+        <div className="rounded-[10px] border border-[#eceaf1] bg-white shadow-[0_10px_30px_rgba(30,20,60,.04)]">
+          <div className="flex items-center justify-between border-b border-[#efedf3] px-5 py-4"><div className="flex items-center gap-3"><Store className="size-5 text-[#ef3a64]"/><h3 className="font-semibold">Recent Orders</h3></div><Link href="/dashboard/store-gallery/orders" className="rounded-[6px] border px-3 py-2 text-xs font-semibold">View All</Link></div>
+          <div className="grid min-h-[220px] place-items-center px-6 py-10 text-center"><div><div className="mx-auto grid size-14 place-items-center rounded-full bg-[#f7f5fb]"><ShoppingBag className="size-6 text-[#8d8799]"/></div><p className="mt-4 font-medium">No orders yet.</p><p className="mt-2 text-sm text-[#77727f]">Once you receive orders, they will appear here.</p></div></div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1435,8 +1501,8 @@ function StoreTopNavigation({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex min-w-0 items-center gap-2 text-sm font-semibold outline-none">
-                  <span className="flex size-[18px] items-center justify-center rounded-full bg-[#ff4f5d]">
-                    <span className="h-[2px] w-3 bg-white" />
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#ff4f5d] to-[#ffc7cd] text-white">
+                    <Store className="size-4" />
                   </span>
                   <span>Store Gallery</span>
                   <ChevronDown className="size-4 text-[#333]" />
@@ -1453,12 +1519,9 @@ function StoreTopNavigation({
                         href={item.href}
                         className="flex gap-4 rounded-none px-2 py-4"
                       >
-                        <span
-                          className={cn(
-                            "mt-1 size-10 shrink-0 rounded-full bg-gradient-to-br",
-                            item.accent,
-                          )}
-                        />
+                        <span className={cn("mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", item.accent)}>
+                          {createElement(item.icon, { className: "size-5" })}
+                        </span>
                         <span className="flex flex-col gap-1">
                           <span className="font-bold text-[#151515]">
                             {item.title}
@@ -1473,7 +1536,7 @@ function StoreTopNavigation({
                 </DropdownMenuGroup>
                 <div className="bg-[#f7f7f7] p-5 text-center">
                   <Link
-                    href="/dashboard/overview"
+                    href="/dashboard/client-gallery/dashboard"
                     className="inline-flex items-center gap-2 text-sm text-[#333]"
                   >
                     <LayoutGrid className="size-4 text-[#999]" />
@@ -3780,6 +3843,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
             className="h-9 rounded-none bg-[#22bda7] px-4 text-sm font-bold text-white hover:bg-[#19a995]"
             onClick={onNewCollection}
           >
+            <PlusCircle className="mr-2 size-4" />
             New Gallery
           </Button>
         </div>
@@ -11261,9 +11325,10 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             View Presets
           </button>
           <Button
-            className="h-9 rounded-none bg-[#1C1C1C] px-4 text-sm font-bold text-white hover:bg-[#2E2E2E]"
+            className="h-10 rounded-[6px] bg-gradient-to-r from-[#5527c9] to-[#7135dc] px-5 text-sm font-bold text-white shadow-[0_10px_24px_rgba(99,55,216,.18)] hover:opacity-95"
             onClick={() => router.push(`/dashboard/${section}/collection-new`)}
           >
+            <PlusCircle className="mr-2 size-4" />
             New Gallery
             <ChevronDown className="ml-2 size-3.5 border-l border-white/30 pl-2" />
           </Button>

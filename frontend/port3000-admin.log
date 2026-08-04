@@ -1,0 +1,36 @@
+Starting port repair 08/04/2026 19:55:28
+Delete IPv4:
+Element not found.
+
+
+Delete IPv6:
+Element not found.
+
+
+Add lower IPv4:
+Ok.
+
+Add upper IPv4:
+Ok.
+
+Add lower IPv6:
+The process cannot access the file because it is being used by another process.
+
+
+Add upper IPv6:
+The process cannot access the file because it is being used by another process.
+
+
+Final IPv4:
+
+Protocol tcp Port Exclusion Ranges
+
+Start Port    End Port      
+----------    --------      
+      1462        1462      
+      2918        2999     *
+      3001        3017     *
+     50000       50059     *
+
+* - Administered port exclusions.
+

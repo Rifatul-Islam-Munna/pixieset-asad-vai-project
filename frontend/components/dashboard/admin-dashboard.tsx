@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -313,7 +313,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   };
 
   const saveHomeCms = (quiet = false) => {
-    const snapshot = homeCms;
+    const snapshot = { ...homeCms, auth: { ...homeCms.auth, brand: homeCms.brand.brandText } };
     console.log("[Home CMS] OUTGOING PATCH", JSON.stringify({
       defaultLanguage: snapshot.defaultLanguage,
       editingLanguage: homeCmsLang,
@@ -813,7 +813,7 @@ function AdminOverview({ data }: { data: AdminDashboardData }) {
         <MetricCard icon={Images} label="Collections" value={stats.collections} />
         <MetricCard icon={FileImage} label="Images" value={stats.images} />
         <MetricCard icon={ShoppingBag} label="Orders" value={stats.orders ?? 0} />
-        <MetricCard icon={Euro} label="Revenue" value={`€${Number(stats.revenue ?? 0).toLocaleString()}`} strong />
+        <MetricCard icon={Euro} label="Revenue" value={`â‚¬${Number(stats.revenue ?? 0).toLocaleString()}`} strong />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
@@ -831,7 +831,7 @@ function AdminOverview({ data }: { data: AdminDashboardData }) {
                 <CartesianGrid stroke="#eee" vertical={false} />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} />
-                <Tooltip formatter={(value, name) => name === "revenue" ? [`€${Number(value).toLocaleString()}`, "Revenue"] : [value, "Orders"]} />
+                <Tooltip formatter={(value, name) => name === "revenue" ? [`â‚¬${Number(value).toLocaleString()}`, "Revenue"] : [value, "Orders"]} />
                 <Bar dataKey="revenue" fill="#22bda7" radius={[4, 4, 0, 0]} />
                 <Line type="monotone" dataKey="orders" stroke="#111" strokeWidth={2} dot={false} />
               </ComposedChart>
@@ -1094,7 +1094,7 @@ function LegalCmsPanel({ type, form, lang, setForm, setLang, onSave, saveState, 
   const page = form.legal[lang][type];
   const update = (value: Partial<typeof page>) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], [type]: { ...page, ...value } } } });
   const previewHref = `${type === "terms" ? "/terms-of-service" : "/privacy-policy"}?lang=${lang}`;
-  return <div className="mt-6 overflow-hidden border border-[#dfe5e2] bg-white shadow-[0_18px_55px_rgba(18,38,32,.07)]"><header className="border-b bg-[#f7faf8] px-5 py-6 md:px-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-[#079c8a]">Public legal page</p><h2 className="mt-2 text-3xl font-semibold">{type === "terms" ? "Terms of Service" : "Privacy Policy"}</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#68726e]">Edit title and fully formatted page content.</p></div><div className="flex gap-2"><a href={previewHref} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 border bg-white px-4 text-sm font-bold">Preview <ExternalLink className="size-4" /></a><Button onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#111] px-5 text-white">Save now</Button></div></div></header><div className="grid md:grid-cols-[210px_1fr]"><aside className="border-b bg-[#fbfbfa] p-5 md:border-b-0 md:border-r"><p className="text-xs font-bold uppercase tracking-[.16em] text-[#888]">Language</p><div className="mt-4 grid gap-2">{(["en", "gr"] as HomeLanguage[]).map((value) => <button key={value} onClick={() => setLang(value)} className={cn("flex h-11 items-center justify-between px-4 text-left text-sm font-bold", lang === value ? "bg-[#111] text-white" : "border bg-white text-[#555]")}>{value === "en" ? "English" : "Greek"}<span>{value.toUpperCase()}</span></button>)}</div><div className={cn("mt-6 px-3 py-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>{saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved · Live"}</div></aside><section className="p-5 md:p-8"><label className="grid gap-2"><span className="text-sm font-bold">Page title</span><Input value={page.title} onChange={(event) => update({ title: event.target.value })} className="h-13 rounded-none border-[#ccd5d1] px-4 text-lg shadow-none" /></label><div className="mt-7 grid gap-2"><span className="text-sm font-bold">Page content</span><RichTextEditor key={`${type}-${lang}`} value={page.content} onChange={(content) => update({ content })} /></div></section></div></div>;
+  return <div className="mt-6 overflow-hidden border border-[#dfe5e2] bg-white shadow-[0_18px_55px_rgba(18,38,32,.07)]"><header className="border-b bg-[#f7faf8] px-5 py-6 md:px-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-[#079c8a]">Public legal page</p><h2 className="mt-2 text-3xl font-semibold">{type === "terms" ? "Terms of Service" : "Privacy Policy"}</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#68726e]">Edit title and fully formatted page content.</p></div><div className="flex gap-2"><a href={previewHref} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 border bg-white px-4 text-sm font-bold">Preview <ExternalLink className="size-4" /></a><Button onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#111] px-5 text-white">Save now</Button></div></div></header><div className="grid md:grid-cols-[210px_1fr]"><aside className="border-b bg-[#fbfbfa] p-5 md:border-b-0 md:border-r"><p className="text-xs font-bold uppercase tracking-[.16em] text-[#888]">Language</p><div className="mt-4 grid gap-2">{(["en", "gr"] as HomeLanguage[]).map((value) => <button key={value} onClick={() => setLang(value)} className={cn("flex h-11 items-center justify-between px-4 text-left text-sm font-bold", lang === value ? "bg-[#111] text-white" : "border bg-white text-[#555]")}>{value === "en" ? "English" : "Greek"}<span>{value.toUpperCase()}</span></button>)}</div><div className={cn("mt-6 px-3 py-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>{saveState === "saving" ? "Savingâ€¦" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved Â· Live"}</div></aside><section className="p-5 md:p-8"><label className="grid gap-2"><span className="text-sm font-bold">Page title</span><Input value={page.title} onChange={(event) => update({ title: event.target.value })} className="h-13 rounded-none border-[#ccd5d1] px-4 text-lg shadow-none" /></label><div className="mt-7 grid gap-2"><span className="text-sm font-bold">Page content</span><RichTextEditor key={`${type}-${lang}`} value={page.content} onChange={(content) => update({ content })} /></div></section></div></div>;
 }
 
 function RichTextEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -1119,71 +1119,37 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
   saveState: "saved" | "unsaved" | "saving" | "error";
   busy: boolean;
 }) {
-  const content = form.content[lang];
-  const allowedFooterLabels = new Set(["Client Gallery", "Store Gallery", "Mobile Gallery App", "Pricing", "Terms of Service", "Terms Of Service", "Privacy Policy"]);
-  const visibleFooterColumns = content.footer.columns
-    .map((column, index) => ({ column: { ...column, links: column.links.filter((link) => allowedFooterLabels.has(typeof link === "string" ? link : link.label)) }, index }))
-    .filter((item) => item.column.title.trim() && item.column.links.length);
+  const safeForm = mergeHomeCms(form);
+  const content = safeForm.content[lang] ?? safeForm.content.en;
 
-  const selectLanguage = (value: HomeLanguage) => {
-    setLang(value);
-    if (form.defaultLanguage !== value) setForm({ ...form, defaultLanguage: value });
+  const setContent = (next: HomeContent) => setForm({ ...safeForm, content: { ...safeForm.content, [lang]: next } });
+  const patch = <K extends keyof HomeContent>(key: K, value: HomeContent[K]) => setContent({ ...content, [key]: value });
+  const patchObject = <K extends keyof HomeContent>(key: K, value: Partial<HomeContent[K]>) => patch(key, { ...(content[key] as object), ...value } as HomeContent[K]);
+  const patchFeature = (index: number, value: Partial<FeatureCard>) => {
+    const items = [...content.featureCards];
+    items[index] = { ...items[index], ...value };
+    patch("featureCards", items);
   };
-
-  const setContent = (next: HomeContent) => {
-    setForm({ ...form, content: { ...form.content, [lang]: next } });
-  };
-
-  const patch = <K extends keyof HomeContent>(key: K, value: HomeContent[K]) => {
-    setContent({ ...content, [key]: value });
-  };
-
-  const patchObject = <K extends keyof HomeContent>(key: K, value: Partial<HomeContent[K]>) => {
-    patch(key, { ...(content[key] as object), ...value } as HomeContent[K]);
-  };
-
-  const patchGalleryTab = (index: number, value: Partial<GalleryTab>) => {
+  const patchGalleryImage = (index: number, value: Partial<GalleryTab>) => {
     const tabs = [...content.gallery.tabs];
     tabs[index] = { ...tabs[index], ...value };
     patchObject("gallery", { tabs });
   };
-
-  const patchWorkflowTab = (index: number, value: Partial<GalleryTab>) => {
+  const patchWorkflowImage = (index: number, value: Partial<GalleryTab>) => {
     const tabs = [...content.workflow.tabs];
     tabs[index] = { ...tabs[index], ...value };
     patchObject("workflow", { tabs });
   };
-
-  const patchProduct = (index: number, value: Partial<HomeContent["products"][number]>) => {
-    const products = [...content.products];
-    products[index] = { ...products[index], ...value };
-    patch("products", products);
-  };
-
-  const patchFeatureCard = (index: number, value: Partial<FeatureCard>) => {
-    const featureCards = [...content.featureCards];
-    featureCards[index] = { ...featureCards[index], ...value };
-    patch("featureCards", featureCards);
-  };
-
-  const patchTestimonial = (index: number, value: Partial<Testimonial>) => {
-    const items = [...content.testimonials.items];
-    items[index] = { ...items[index], ...value };
-    patchObject("testimonials", { items });
-  };
-
   const patchBrandLogo = (index: number, value: Partial<BrandLogo>) => {
-    const brandLogos = [...content.brandLogos];
-    brandLogos[index] = { ...brandLogos[index], ...value };
-    patch("brandLogos", brandLogos);
+    const logos = [...content.brandLogos];
+    logos[index] = { ...logos[index], ...value };
+    patch("brandLogos", logos);
   };
-
   const patchFooterColumn = (index: number, value: Partial<HomeContent["footer"]["columns"][number]>) => {
     const columns = [...content.footer.columns];
     columns[index] = { ...columns[index], ...value };
     patchObject("footer", { columns });
   };
-
   const patchFooterLink = (columnIndex: number, linkIndex: number, value: Partial<{ label: string; url: string }>) => {
     const column = content.footer.columns[columnIndex];
     const links = column.links.map((link) => typeof link === "string" ? { label: link, url: "" } : link);
@@ -1191,431 +1157,136 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
     patchFooterColumn(columnIndex, { links });
   };
 
-  const patchCtaImage = (index: number, value: string) => {
-    const images = [...content.cta.images];
-    images[index] = value;
-    patchObject("cta", { images });
-  };
-
-  const patchMetaTag = (index: number, value: Partial<SeoMetaTag>) => {
-    const extraMetaTags = [...form.seo.extraMetaTags];
-    extraMetaTags[index] = { ...extraMetaTags[index], ...value };
-    setForm({ ...form, seo: { ...form.seo, extraMetaTags } });
-  };
-
   return (
-    <div className="mt-6 grid gap-5 scroll-smooth">
-      <div className="border border-[#dfe5e2] bg-[#12201c] p-5 text-white shadow-[0_18px_50px_rgba(18,38,32,0.14)] sm:p-7">
-        <div className="flex flex-wrap items-start justify-between gap-5">
-          <div><p className="text-xs font-bold uppercase tracking-[.22em] text-[#5ce0cd]">Visual content manager</p><h2 className="mt-2 text-3xl font-semibold">Homepage Editor</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Choose a section below, edit its text or images, then preview the live homepage. Every field is grouped by where visitors see it.</p></div>
-          <div className="flex items-center gap-2">
-            <span className={cn("inline-flex h-9 items-center gap-2 px-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>
-              {saveState === "saving" ? <Loader2 className="size-3.5 animate-spin" /> : saveState === "saved" ? <Check className="size-3.5" /> : null}
-              {saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Autosave pending" : saveState === "error" ? "Save failed" : "Saved · Live"}
-            </span>
-            <Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#22bda7] px-5 text-white hover:bg-[#19a995]">Save now</Button>
-            <Button asChild type="button" variant="outline" className="h-10 rounded-none border-white/25 bg-white/10 text-white hover:bg-white hover:text-[#111]">
-              <a href={`/?lang=${lang}`} target="_blank" rel="noreferrer">Preview <ExternalLink className="size-3.5" /></a>
-            </Button>
-          </div>
-        </div>
-        <nav className="mt-7 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label="CMS sections">
-          {[
-            ['cms-start','Setup','Language'],['cms-brand','Brand + Nav','Logo and menu labels'],['cms-hero','Hero','Main headline and media'],['cms-gallery','Categories','Cards and features'],
-            ['cms-workflow','Device Block','Laptop and phone preview'],['cms-testimonials','Trusted Slider','Brand logos'],['cms-footer','Footer','Links and copy'],
-          ].map(([id, label, description], index) => (
-            <a key={id} href={`#${id}`} className="group border border-white/12 bg-white/5 px-4 py-3 transition hover:border-[#5ce0cd] hover:bg-white/10"><span className="text-[10px] font-bold text-[#5ce0cd]">{String(index + 1).padStart(2, '0')}</span><span className="mt-1 block text-sm font-bold">{label}</span><span className="mt-1 block text-xs text-white/50">{description}</span></a>
-          ))}
-        </nav>
-      </div>
-
-      <div id="cms-start" className="scroll-mt-24 bg-white p-4 shadow-[0_12px_35px_rgba(0,0,0,0.04)] sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
+    <div className="mt-6 grid gap-5">
+      <div className="sticky top-0 z-20 border border-[#dfe5e2] bg-[#12201c] p-5 text-white shadow-[0_14px_35px_rgba(18,38,32,.18)] sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">Home CMS</p>
-            <h2 className="mt-2 text-2xl font-semibold">Page control</h2>
-            <p className="mt-2 text-sm leading-6 text-[#666]">Editing {lang === "en" ? "English" : "Greek / GR"} content · Press Enter inside any text field for a new line.</p>
+            <p className="text-xs font-bold uppercase tracking-[.2em] text-[#5ce0cd]">Homepage CMS</p>
+            <h2 className="mt-1 text-2xl font-semibold">Six homepage sections</h2>
+            <p className="mt-1 text-sm text-white/65">Edit the fields below and press Save now. These values are used directly on the public homepage.</p>
           </div>
-          <div className="grid w-full grid-cols-2 gap-1 bg-[#f4f4f1] p-1 sm:min-w-[260px] sm:w-auto">
-            <Button type="button" onClick={() => selectLanguage("en")} className={cn("h-10 rounded-none shadow-none", lang === "en" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>English</Button>
-            <Button type="button" onClick={() => selectLanguage("gr")} className={cn("h-10 rounded-none shadow-none", lang === "gr" ? "bg-[#111] text-white hover:bg-[#111]" : "bg-transparent text-[#555] hover:bg-white")}>Greek / GR</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex bg-white/10 p-1">
+              {(["en", "gr"] as HomeLanguage[]).map((value) => <Button key={value} type="button" onClick={() => { setLang(value); if (safeForm.defaultLanguage !== value) setForm({ ...safeForm, defaultLanguage: value }); }} className={cn("h-9 rounded-none px-4 shadow-none", lang === value ? "bg-white text-[#111] hover:bg-white" : "bg-transparent text-white hover:bg-white/10")}>{value.toUpperCase()}</Button>)}
+            </div>
+            <span className={cn("inline-flex h-10 items-center gap-2 px-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>
+              {saveState === "saving" && <Loader2 className="size-3.5 animate-spin" />}
+              {saveState === "saved" && <Check className="size-3.5" />}
+              {saveState === "saving" ? "Saving" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved"}
+            </span>
+            <Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#22bda7] px-6 text-white hover:bg-[#19a995]">Save now</Button>
           </div>
-        </div>
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          <label className="flex h-11 items-center justify-between border bg-[#fbfbfa] px-3 text-sm">
-            <span className="font-semibold">Default language</span>
-            <select value={form.defaultLanguage} onChange={(event) => setForm({ ...form, defaultLanguage: event.target.value as HomeLanguage })} className="bg-transparent text-sm outline-none">
-              <option value="en">EN</option>
-              <option value="gr">GR</option>
-            </select>
-          </label>
-          <div className="border bg-[#fbfbfa] px-4 py-3 text-sm leading-6 text-[#666] lg:col-span-2">Hero media, categories, features and slider assets are edited inside their visual sections below.</div>
         </div>
       </div>
 
-      <div className="grid gap-5">
-        <div id="cms-brand" className="scroll-mt-24">
-          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
-            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} brand + nav</p>
-              <h3 className="mt-1 text-xl font-semibold">Navbar editor</h3>
-              <p className="mt-2 text-sm leading-6 text-[#666]">Homepage currently uses only Pricing and Product dropdown labels.</p>
-            </div>
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.9fr)]">
-              <div className="bg-[#F8F7F4] p-4 sm:p-6">
-                <div className="border border-[#EEEAE5] bg-white px-5 py-5">
-                  <div className="flex flex-wrap items-center justify-between gap-5">
-                    <div className="inline-flex items-center gap-3">
-                      {form.brand.logoUrl && <img src={form.brand.logoUrl} alt="" className="h-8 max-w-28 object-contain" />}
-                      <span className="font-serif text-2xl tracking-[0.18em] text-[#111]">{form.brand.brandText || content.nav.brand}</span>
-                      <span className="font-serif text-2xl text-[#7A5CE8]">G</span>
-                    </div>
-                    <div className="flex items-center gap-9 text-[13px] font-semibold text-[#151515]">
-                      <span>{content.nav.pricing}</span>
-                      <span className="inline-flex items-center gap-1">{content.nav.products} <span className="text-xs">v</span></span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-[13px] font-semibold">{content.nav.login}</span>
-                      <span className="rounded-[6px] bg-[#050505] px-5 py-3 text-[13px] font-bold text-white">{content.nav.cta}</span>
-                    </div>
-                  </div>
-                  <div className="ml-auto mt-5 w-full max-w-[310px] rounded-[8px] border border-[#EEEAE5] bg-white p-3 shadow-[0_18px_45px_rgba(0,0,0,0.10)]">
-                    {["Client Gallery", "Store Gallery", "Mobile Gallery App"].map((item) => (
-                      <div key={item} className="rounded-[6px] px-4 py-3 hover:bg-[#F8F7F4]">
-                        <p className="text-sm font-bold">{item}</p>
-                        <p className="mt-1 text-xs leading-5 text-[#77716A]">Product dropdown item</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
-                <CmsRepeater title="Brand">
-                  <div className="grid gap-4">
-                    <CmsInput label="Brand text" value={form.brand.brandText} onChange={(brandText) => setForm({ ...form, brand: { ...form.brand, brandText } })} />
-                    <CmsImageInput label="Logo image" value={form.brand.logoUrl} onChange={(logoUrl) => setForm({ ...form, brand: { ...form.brand, logoUrl } })} onUpload={onUpload} busy={busy} />
-                    <CmsInput label="Accent color" value={form.brand.accentColor} onChange={(accentColor) => setForm({ ...form, brand: { ...form.brand, accentColor } })} />
-                  </div>
-                </CmsRepeater>
-                <CmsRepeater title="Navbar text">
-                  <div className="grid gap-4">
-                    <CmsInput label="Product dropdown label" value={content.nav.products} onChange={(products) => patchObject("nav", { products })} />
-                    <CmsInput label="Pricing label" value={content.nav.pricing} onChange={(pricing) => patchObject("nav", { pricing })} />
-                    <CmsInput label="Login label" value={content.nav.login} onChange={(login) => patchObject("nav", { login })} />
-                    <CmsInput label="Button label" value={content.nav.cta} onChange={(cta) => patchObject("nav", { cta })} />
-                  </div>
-                </CmsRepeater>
-              </div>
-            </div>
-          </section>
+      <CmsSection eyebrow="Section 1" title="Header, brand, login and registration" defaultOpen>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Brand and navbar">
+            <CmsInput label="Brand text" value={safeForm.brand.brandText} onChange={(brandText) => setForm({ ...safeForm, brand: { ...safeForm.brand, brandText }, auth: { ...safeForm.auth, brand: brandText } })} />
+            <CmsImageInput label="Brand logo" value={safeForm.brand.logoUrl} onChange={(logoUrl) => setForm({ ...safeForm, brand: { ...safeForm.brand, logoUrl } })} onUpload={onUpload} busy={busy} />
+            <CmsInput label="Products label" value={content.nav.products} onChange={(products) => patchObject("nav", { products })} />
+            <CmsInput label="Pricing label" value={content.nav.pricing} onChange={(pricing) => patchObject("nav", { pricing })} />
+            <CmsInput label="Login label" value={content.nav.login} onChange={(login) => patchObject("nav", { login })} />
+            <CmsInput label="Top button label" value={content.nav.cta} onChange={(cta) => patchObject("nav", { cta })} />
+          </CmsRepeater>
+          <CmsRepeater title="Login and registration">
+            <CmsInput label="Login heading" value={safeForm.auth.loginTitle} onChange={(loginTitle) => setForm({ ...safeForm, auth: { ...safeForm.auth, loginTitle } })} />
+            <CmsTextarea label="Login description" value={safeForm.auth.loginSubtitle} onChange={(loginSubtitle) => setForm({ ...safeForm, auth: { ...safeForm.auth, loginSubtitle } })} />
+            <CmsImageInput label="Login image" value={safeForm.auth.loginImageUrl} onChange={(loginImageUrl) => setForm({ ...safeForm, auth: { ...safeForm.auth, loginImageUrl } })} onUpload={onUpload} busy={busy} />
+            <CmsInput label="Registration heading" value={safeForm.auth.registerTitle} onChange={(registerTitle) => setForm({ ...safeForm, auth: { ...safeForm.auth, registerTitle } })} />
+            <CmsTextarea label="Registration description" value={safeForm.auth.registerSubtitle} onChange={(registerSubtitle) => setForm({ ...safeForm, auth: { ...safeForm.auth, registerSubtitle } })} />
+            <CmsImageInput label="Registration image" value={safeForm.auth.registerImageUrl} onChange={(registerImageUrl) => setForm({ ...safeForm, auth: { ...safeForm.auth, registerImageUrl } })} onUpload={onUpload} busy={busy} />
+          </CmsRepeater>
         </div>
+      </CmsSection>
 
-        <div id="cms-hero" className="scroll-mt-24">
-          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
-            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} hero</p>
-              <h3 className="mt-1 text-xl font-semibold">Hero section editor</h3>
-              <p className="mt-2 text-sm leading-6 text-[#666]">Edit headline, image/video, button and gallery card in one place.</p>
+      <CmsSection eyebrow="Section 2" title="Hero section" defaultOpen>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Hero text">
+            <CmsInput label="Top badge" value={content.hero.eyebrow} onChange={(eyebrow) => patchObject("hero", { eyebrow })} />
+            <CmsInput label="Main heading (black)" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
+            <CmsInput label="Highlighted heading (purple)" value={content.hero.accentTitle} onChange={(accentTitle) => patchObject("hero", { accentTitle })} />
+            <CmsInput label="Ending heading (black)" value={content.hero.endingTitle} onChange={(endingTitle) => patchObject("hero", { endingTitle })} />
+            <CmsTextarea label="Description (normal paragraph text)" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
+            <CmsInput label="Primary button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
+            <CmsInput label="Secondary button" value={content.hero.secondaryCta} onChange={(secondaryCta) => patchObject("hero", { secondaryCta })} />
+            <CmsInput label="Review text" value={content.hero.ratingText} onChange={(ratingText) => patchObject("hero", { ratingText })} />
+          </CmsRepeater>
+          <CmsRepeater title="Hero media">
+            <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Media type</span><select value={safeForm.media.heroMediaType} onChange={(event) => setForm({ ...safeForm, media: { ...safeForm.media, heroMediaType: event.target.value as "image" | "video" } })} className="h-11 border bg-[#fbfbfa] px-3 text-sm"><option value="image">Image</option><option value="video">Video</option></select></label>
+            <CmsInput label="Image or video URL" value={safeForm.media.heroMediaUrl} onChange={(heroMediaUrl) => setForm({ ...safeForm, media: { ...safeForm.media, heroMediaUrl } })} />
+            <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Upload hero media</span><Input type="file" accept="image/*,video/*" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) onHeroUpload(file); }} className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] pt-2" /></label>
+            <div className="mt-2 grid gap-3">
+              <p className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Reviewer avatars</p>
+              {content.hero.avatarImages.map((avatar, index) => (
+                <CmsImageInput key={index} label={`Avatar ${index + 1}`} value={avatar} onChange={(value) => { const avatarImages = [...content.hero.avatarImages]; avatarImages[index] = value; patchObject("hero", { avatarImages }); }} onUpload={onUpload} busy={busy} />
+              ))}
+              <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={() => patchObject("hero", { avatarImages: [...content.hero.avatarImages, ""] })}><PlusCircle className="size-4" /> Add avatar</Button>
             </div>
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.08fr)_minmax(380px,0.92fr)]">
-              <div className="bg-[#F8F7F4] p-4 sm:p-6">
-                <div className="relative min-h-[520px] overflow-hidden border border-[#EEEAE5] bg-[#F8F7F4]">
-                  <div className="absolute left-8 top-8 z-10">
-                    <p className="font-serif text-lg tracking-[0.18em] text-[#111]">{form.brand.brandText || content.nav.brand}</p>
-                  </div>
-                  <div className="absolute inset-y-0 right-0 w-[58%] overflow-hidden">
-                    {form.media.heroMediaType === "video" ? (
-                      <video src={form.media.heroMediaUrl} className="h-full w-full object-cover" autoPlay muted loop playsInline />
-                    ) : (
-                      <img src={form.media.heroMediaUrl} alt="" className="h-full w-full object-cover" />
-                    )}
-                    <div className="absolute inset-y-0 left-0 w-36 bg-gradient-to-r from-[#F8F7F4] to-transparent" />
-                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#F8F7F4] to-transparent" />
-                  </div>
-                  <div className="relative z-10 max-w-[440px] px-8 pb-10 pt-24">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7A5CE8]">{content.hero.eyebrow}</p>
-                    <h1 className="mt-5 whitespace-pre-line font-serif text-[54px] leading-[0.98] text-[#111]">{content.hero.title}</h1>
-                    <p className="mt-6 max-w-[340px] whitespace-pre-line text-sm leading-6 text-[#5F5A54]">{content.hero.subtitle}</p>
-                    <button type="button" className="mt-7 h-11 rounded-[6px] bg-[#050505] px-5 text-sm font-bold text-white">{content.hero.cta}</button>
-                    <div className="mt-8 flex max-w-[360px] flex-wrap gap-x-3 gap-y-2 pb-6 pr-4 text-[10px] font-medium leading-5 text-[#77716A]">
-                      <span>No credit card required</span>
-                      <span className="text-[#C7A56B]">+</span>
-                      <span>Free forever plan</span>
-                      <span className="text-[#C7A56B]">+</span>
-                      <span>Cancel anytime</span>
-                    </div>
-                  </div>
-                  <div className="absolute bottom-8 right-7 z-20 w-[260px] rounded-[8px] bg-white/95 p-4 shadow-[0_18px_55px_rgba(45,38,30,0.18)]">
-                    <p className="text-[10px] font-black text-[#7A5CE8]">+ New Gallery</p>
-                    <h4 className="mt-1 font-serif text-2xl leading-none text-[#111]">{content.gallery.tabs[0]?.title || content.gallery.tabs[0]?.label}</h4>
-                    <p className="mt-1 text-[11px] font-medium text-[#6B655F]">{content.gallery.cartLabel}</p>
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      {[form.media.heroMediaUrl, ...content.gallery.tabs.map((tab) => tab.image)].filter(Boolean).slice(0, 3).map((image, index) => (
-                        <img key={`${image}-${index}`} src={image} alt="" className="h-14 rounded-[5px] object-cover" />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
-                <CmsRepeater title="Hero copy">
-                  <div className="grid gap-4">
-                    <CmsInput label="Eyebrow" value={content.hero.eyebrow} onChange={(eyebrow) => patchObject("hero", { eyebrow })} />
-                    <CmsTextarea label="Title" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
-                    <CmsTextarea label="Subtitle" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
-                    <CmsInput label="Button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
-                  </div>
-                </CmsRepeater>
-                <CmsRepeater title="Hero media">
-                  <div className="grid gap-4">
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Media type</span>
-                      <select
-                        value={form.media.heroMediaType}
-                        onChange={(event) => setForm({ ...form, media: { ...form.media, heroMediaType: event.target.value as "image" | "video" } })}
-                        className="h-11 border bg-[#fbfbfa] px-3 text-sm outline-none"
-                      >
-                        <option value="image">Image</option>
-                        <option value="video">Video</option>
-                      </select>
-                    </label>
-                    <CmsInput label="Image/video URL" value={form.media.heroMediaUrl} onChange={(heroMediaUrl) => setForm({ ...form, media: { ...form.media, heroMediaUrl } })} />
-                    <label className="grid gap-2">
-                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Upload image or video</span>
-                      <Input
-                        type="file"
-                        accept="image/*,video/*"
-                        disabled={busy}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) onHeroUpload(file);
-                        }}
-                        className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] pt-2 shadow-none"
-                      />
-                    </label>
-                  </div>
-                </CmsRepeater>
-              </div>
-            </div>
-          </section>
+          </CmsRepeater>
         </div>
+      </CmsSection>
 
-        <div id="cms-gallery" className="scroll-mt-24">
-          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
-            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} categories + features</p>
-              <h3 className="mt-1 text-xl font-semibold">Photographer cards and feature row</h3>
-              <p className="mt-2 text-sm leading-6 text-[#666]">These fields control cards under the hero and the four feature blocks.</p>
-            </div>
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-              <div className="bg-[#F8F7F4] p-4 sm:p-6">
-                <div className="border border-[#EEEAE5] bg-white p-6 text-center">
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#7A5CE8]">Perfect for every photographer</p>
-                  <h3 className="mt-3 font-serif text-[38px] leading-none text-[#111]">{content.workflow.title}</h3>
-                  <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-3">
-                    {content.workflow.tabs.map((tab) => (
-                      <div key={tab.value} className="relative h-[170px] overflow-hidden rounded-[7px] bg-[#111] text-left">
-                        <img src={tab.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-                        <span className="absolute right-3 top-3 rounded-full bg-black/45 px-2 py-1 text-[10px] font-bold text-white">{tab.icon || "Icon"}</span>
-                        <p className="absolute bottom-4 left-4 text-sm font-bold text-white">{tab.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-6 grid gap-1 border-y border-[#EEEAE5] text-left md:grid-cols-2">
-                    {content.featureCards.slice(0, 4).map((card) => (
-                      <div key={card.title} className="bg-white p-5">
-                        <p className="text-xs font-black text-[#7A5CE8]">{card.icon}</p>
-                        <h4 className="mt-5 font-serif text-xl">{card.title}</h4>
-                        <p className="mt-3 text-xs leading-5 text-[#5F5A54]">{card.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
-                <CmsRepeater title="Category cards">
-                  {content.workflow.tabs.map((tab, index) => (
-                    <div key={tab.value} className="grid gap-3 border p-4 md:grid-cols-2">
-                      <CmsInput label="Label" value={tab.label} onChange={(label) => patchWorkflowTab(index, { label })} />
-                      <CmsInput label="Icon name" value={tab.icon ?? ""} onChange={(icon) => patchWorkflowTab(index, { icon })} />
-                      <CmsImageInput label="Image" value={tab.image} onChange={(image) => patchWorkflowTab(index, { image })} onUpload={onUpload} busy={busy} wide />
-                      <Button type="button" variant="outline" className="w-fit rounded-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => patchObject("workflow", { tabs: content.workflow.tabs.filter((_, itemIndex) => itemIndex !== index) })}><Trash2 className="size-4" /> Remove image</Button>
-                    </div>
-                  ))}
-                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("workflow", { tabs: [...content.workflow.tabs, { value: `category-${Date.now()}`, label: "New Category", icon: "Camera", image: "" }] })}><PlusCircle className="size-4" /> Add image card</Button>
-                </CmsRepeater>
-                <CmsRepeater title="Feature cards">
-                  {content.featureCards.map((card, index) => (
-                    <div key={`${card.title}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
-                      <CmsInput label="Title" value={card.title} onChange={(title) => patchFeatureCard(index, { title })} />
-                      <CmsInput label="Icon name" value={card.icon} onChange={(icon) => patchFeatureCard(index, { icon })} />
-                      <CmsTextarea label="Text" value={card.text} onChange={(text) => patchFeatureCard(index, { text })} wide />
-                      <Button type="button" variant="outline" className="w-fit rounded-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => patch("featureCards", content.featureCards.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="size-4" /> Remove feature</Button>
-                    </div>
-                  ))}
-                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patch("featureCards", [...content.featureCards, { title: "", text: "", icon: "Camera" }])}><PlusCircle className="size-4" /> Add feature</Button>
-                </CmsRepeater>
-              </div>
-            </div>
-          </section>
+      <CmsSection eyebrow="Section 3" title="Feature strip">
+        <div className="grid gap-4">
+          {content.featureCards.map((card, index) => <div key={index} className="grid gap-3 border bg-[#fafaf8] p-4 md:grid-cols-3"><CmsInput label={`Feature ${index + 1} title`} value={card.title} onChange={(title) => patchFeature(index, { title })} /><CmsTextarea label="Description" value={card.text} onChange={(text) => patchFeature(index, { text })} /><CmsInput label="Icon name" value={card.icon} onChange={(icon) => patchFeature(index, { icon })} /></div>)}
+          <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={() => patch("featureCards", [...content.featureCards, { title: "New feature", text: "Feature description", icon: "Sparkles" }])}><PlusCircle className="size-4" /> Add feature</Button>
         </div>
+      </CmsSection>
 
-        <div id="cms-workflow" className="scroll-mt-24">
-          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
-            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} device block</p>
-              <h3 className="mt-1 text-xl font-semibold">Management preview section</h3>
-              <p className="mt-2 text-sm leading-6 text-[#666]">This controls the gray device area below feature cards.</p>
-            </div>
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-              <div className="bg-[#F1EFEB] p-4 sm:p-6">
-                <div className="grid items-center gap-8 border border-[#E8E5E1] bg-[#F1EFEB] p-6 md:grid-cols-[0.75fr_1.25fr]">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#7A5CE8]">{content.workflow.eyebrow}</p>
-                    <h3 className="mt-4 whitespace-pre-line font-serif text-[38px] leading-[0.98] text-[#111]">{content.workflow.title}</h3>
-                    <p className="mt-5 text-sm leading-6 text-[#5F5A54]">{content.workflow.subtitle}</p>
-                  </div>
-                  <div className="overflow-hidden rounded-[16px] border-[8px] border-[#101010] bg-white shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
-                    <div className="grid grid-cols-3 gap-2 p-4">
-                      {[...content.workflow.tabs.map((tab) => tab.image), ...content.cta.images].filter(Boolean).slice(0, 9).map((image, index) => (
-                        <img key={`${image}-${index}`} src={image} alt="" className="aspect-[1.2] w-full object-cover" />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
-                <CmsRepeater title="Text">
-                  <div className="grid gap-4">
-                    <CmsInput label="Eyebrow" value={content.workflow.eyebrow} onChange={(eyebrow) => patchObject("workflow", { eyebrow })} />
-                    <CmsTextarea label="Heading" value={content.workflow.title} onChange={(title) => patchObject("workflow", { title })} />
-                    <CmsTextarea label="Subtitle" value={content.workflow.subtitle} onChange={(subtitle) => patchObject("workflow", { subtitle })} />
-                  </div>
-                </CmsRepeater>
-                <CmsRepeater title="Extra mockup images">
-                  {content.cta.images.map((image, index) => (
-                    <div key={index} className="grid gap-3 border p-3 md:grid-cols-[1fr_auto]">
-                      <CmsImageInput label={`Image ${index + 1}`} value={image} onChange={(value) => patchCtaImage(index, value)} onUpload={onUpload} busy={busy} />
-                      <Button type="button" variant="outline" className="self-end rounded-none border-red-200 text-red-600" onClick={() => patchObject("cta", { images: content.cta.images.filter((_, imageIndex) => imageIndex !== index) })}><Trash2 className="size-4" /> Remove</Button>
-                    </div>
-                  ))}
-                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("cta", { images: [...content.cta.images, ""] })}><PlusCircle className="size-4" /> Add image</Button>
-                </CmsRepeater>
-              </div>
-            </div>
-          </section>
+      <CmsSection eyebrow="Section 4" title="Gallery showcase and statistics">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Showcase text">
+            <CmsInput label="Eyebrow" value={content.showcase.eyebrow} onChange={(eyebrow) => patchObject("showcase", { eyebrow })} />
+            <CmsTextarea label="Heading" value={content.showcase.title} onChange={(title) => patchObject("showcase", { title })} />
+            <CmsTextarea label="Description" value={content.showcase.subtitle} onChange={(subtitle) => patchObject("showcase", { subtitle })} />
+            <CmsInput label="Explore button" value={content.showcase.button} onChange={(button) => patchObject("showcase", { button })} />
+            <CmsInput label="Main card title" value={content.showcase.cardTitle} onChange={(cardTitle) => patchObject("showcase", { cardTitle })} />
+            <CmsInput label="Main card date" value={content.showcase.cardDate} onChange={(cardDate) => patchObject("showcase", { cardDate })} />
+            <CmsInput label="Main card button" value={content.showcase.cardButton} onChange={(cardButton) => patchObject("showcase", { cardButton })} />
+          </CmsRepeater>
+          <CmsRepeater title="Bullet points">
+            {content.showcase.bullets.map((bullet, index) => <CmsInput key={index} label={`Bullet ${index + 1}`} value={bullet} onChange={(value) => { const bullets = [...content.showcase.bullets]; bullets[index] = value; patchObject("showcase", { bullets }); }} />)}
+          </CmsRepeater>
+          <CmsRepeater title="Statistics">
+            {content.stats.map((stat, index) => <div key={index} className="grid grid-cols-2 gap-3"><CmsInput label={`Stat ${index + 1} value`} value={stat.value} onChange={(value) => { const stats = [...content.stats]; stats[index] = { ...stats[index], value }; patch("stats", stats); }} /><CmsInput label="Label" value={stat.label} onChange={(label) => { const stats = [...content.stats]; stats[index] = { ...stats[index], label }; patch("stats", stats); }} /></div>)}
+          </CmsRepeater>
+          <CmsRepeater title="Gallery images">
+            {content.gallery.tabs.map((tab, index) => <div key={index} className="border p-3"><CmsInput label={`Image ${index + 1} label`} value={tab.label} onChange={(label) => patchGalleryImage(index, { label })} /><div className="mt-3"><CmsImageInput label="Image" value={tab.image} onChange={(image) => patchGalleryImage(index, { image })} onUpload={onUpload} busy={busy} /></div></div>)}
+            {content.workflow.tabs.map((tab, index) => <div key={`workflow-${index}`} className="border p-3"><CmsInput label={`Extra image ${index + 1} label`} value={tab.label} onChange={(label) => patchWorkflowImage(index, { label })} /><div className="mt-3"><CmsImageInput label="Image" value={tab.image} onChange={(image) => patchWorkflowImage(index, { image })} onUpload={onUpload} busy={busy} /></div></div>)}
+          </CmsRepeater>
         </div>
+      </CmsSection>
 
-        <div id="cms-testimonials" className="scroll-mt-24">
-          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
-            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} trusted slider</p>
-              <h3 className="mt-1 text-xl font-semibold">Trusted brand logo slider</h3>
-              <p className="mt-2 text-sm leading-6 text-[#666]">Only these heading and logo fields appear in the current homepage.</p>
-            </div>
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-              <div className="bg-white p-4 text-center sm:p-6">
-                <div className="border border-[#EEEAE5] px-6 py-12">
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#7A5CE8]">{content.testimonials.eyebrow}</p>
-                  <h3 className="mx-auto mt-4 max-w-[620px] whitespace-pre-line font-serif text-[38px] leading-[1.05] text-[#111]">{content.testimonials.title}</h3>
-                  <div className="mx-auto mt-9 max-w-[720px] overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_12%,black_88%,transparent)]">
-                    <div className="flex w-max items-center gap-12">
-                      {[...content.brandLogos, ...content.brandLogos].map((logo, index) => (
-                        <span key={`${logo.name}-${index}`} className="inline-flex min-w-28 items-center justify-center">
-                          {logo.image ? <img src={logo.image} alt={logo.name} className="max-h-10 max-w-32 object-contain grayscale" /> : <span className="text-xl font-black text-[#6C6761] opacity-80">{logo.name}</span>}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
-                <CmsRepeater title="Heading">
-                  <div className="grid gap-4">
-                    <CmsInput label="Eyebrow" value={content.testimonials.eyebrow} onChange={(eyebrow) => patchObject("testimonials", { eyebrow })} />
-                    <CmsTextarea label="Heading" value={content.testimonials.title} onChange={(title) => patchObject("testimonials", { title })} />
-                  </div>
-                </CmsRepeater>
-                <CmsRepeater title="Brand logos">
-                  {content.brandLogos.map((logo, index) => (
-                    <div key={`${logo.name}-${index}`} className="grid gap-3 border p-4 md:grid-cols-2">
-                      <CmsInput label="Brand name" value={logo.name} onChange={(name) => patchBrandLogo(index, { name })} />
-                      <CmsInput label="Brand URL" value={logo.url ?? ""} onChange={(url) => patchBrandLogo(index, { url })} />
-                      <CmsImageInput label="Logo image" value={logo.image} onChange={(image) => patchBrandLogo(index, { image })} onUpload={onUpload} busy={busy} wide />
-                      <Button type="button" variant="outline" className="w-fit rounded-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => patch("brandLogos", content.brandLogos.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="size-4" /> Remove brand</Button>
-                    </div>
-                  ))}
-                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patch("brandLogos", [...content.brandLogos, { name: "", image: "", url: "" }])}><PlusCircle className="size-4" /> Add brand</Button>
-                </CmsRepeater>
-              </div>
-            </div>
-          </section>
+      <CmsSection eyebrow="Section 5" title="Call to action and trusted brands">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Call to action">
+            <CmsTextarea label="Heading" value={content.cta.title} onChange={(title) => patchObject("cta", { title })} />
+            <CmsTextarea label="Description" value={content.cta.subtitle} onChange={(subtitle) => patchObject("cta", { subtitle })} />
+            <CmsInput label="Button label" value={content.cta.button} onChange={(button) => patchObject("cta", { button })} />
+            <CmsInput label="Trial note" value={content.cta.trialText} onChange={(trialText) => patchObject("cta", { trialText })} />
+            <CmsInput label="Card note" value={content.cta.noCardText} onChange={(noCardText) => patchObject("cta", { noCardText })} />
+          </CmsRepeater>
+          <CmsRepeater title="Trusted brands">
+            <CmsInput label="Section heading" value={content.trustHeading} onChange={(trustHeading) => patch("trustHeading", trustHeading)} />
+            {content.brandLogos.map((logo, index) => <div key={index} className="border p-3"><CmsInput label="Brand name" value={logo.name} onChange={(name) => patchBrandLogo(index, { name })} /><div className="mt-3"><CmsImageInput label="Brand logo" value={logo.image} onChange={(image) => patchBrandLogo(index, { image })} onUpload={onUpload} busy={busy} /></div></div>)}
+            <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={() => patch("brandLogos", [...content.brandLogos, { name: "New brand", image: "", url: "" }])}><PlusCircle className="size-4" /> Add brand</Button>
+          </CmsRepeater>
         </div>
+      </CmsSection>
 
-        <div id="cms-footer" className="scroll-mt-24">
-          <section className="overflow-hidden bg-white shadow-[0_12px_35px_rgba(0,0,0,0.04)]">
-            <div className="border-b px-4 py-4 sm:px-6 sm:py-5">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7A5CE8]">{lang.toUpperCase()} footer</p>
-              <h3 className="mt-1 text-xl font-semibold">Footer editor</h3>
-              <p className="mt-2 text-sm leading-6 text-[#666]">Edit footer brand copy and link columns with a live dark preview.</p>
-            </div>
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-              <div className="bg-[#F8F7F4] p-4 sm:p-6">
-                <div className="grid gap-10 bg-[#171918] p-8 text-white md:grid-cols-[1.2fr_1fr]">
-                  <div>
-                    <p className="font-serif text-2xl tracking-[0.18em]">{form.brand.brandText || content.nav.brand}</p>
-                    <p className="mt-6 max-w-[520px] whitespace-pre-line text-sm leading-6 text-white/70">{content.footer.description}</p>
-                    <p className="mt-10 text-xs text-white/55">{content.footer.copyright}</p>
-                  </div>
-                  <div className="grid gap-8 sm:grid-cols-2">
-                    {visibleFooterColumns.map(({ column, index }) => (
-                      <div key={`${column.title}-${index}`}>
-                        <h4 className="text-sm font-bold text-white">{column.title}</h4>
-                        <div className="mt-5 grid gap-3 text-sm text-white/70">
-                          {column.links.map((link, linkIndex) => {
-                            const item = typeof link === "string" ? { label: link, url: "" } : link;
-                            return <span key={`${item.label}-${linkIndex}`}>{item.label}</span>;
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="grid content-start gap-5 border-t p-4 sm:p-6 xl:border-l xl:border-t-0">
-                <CmsRepeater title="Footer copy">
-                  <div className="grid gap-4">
-                    <CmsTextarea label="Footer description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} />
-                    <CmsInput label="Footer copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
-                  </div>
-                </CmsRepeater>
-                <CmsRepeater title="Footer columns">
-                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("footer", { columns: [
-                    { title: "Products", links: ["Client Gallery", "Store Gallery", "Mobile Gallery App"] },
-                    { title: "Pages", links: ["Pricing", "Terms of Service", "Privacy Policy"] },
-                  ] })}>Use real page links only</Button>
-                  {content.footer.columns.map((column, columnIndex) => (
-                    <div key={columnIndex} className="grid gap-4 border p-4">
-                      <div className="flex items-end gap-3">
-                        <div className="flex-1"><CmsInput label="Column title" value={column.title} onChange={(title) => patchFooterColumn(columnIndex, { title })} /></div>
-                        <Button type="button" variant="outline" className="rounded-none border-red-200 text-red-600" onClick={() => patchObject("footer", { columns: content.footer.columns.filter((_, index) => index !== columnIndex) })}><Trash2 className="size-4" /> Remove</Button>
-                      </div>
-                      {column.links.map((link: FooterLink, linkIndex) => {
-                        const item = typeof link === "string" ? { label: link, url: "" } : link;
-                        return <div key={linkIndex} className="grid gap-3 bg-[#f2f2ef] p-3 md:grid-cols-[1fr_1fr_auto]"><CmsInput label="Link label" value={item.label} onChange={(label) => patchFooterLink(columnIndex, linkIndex, { label })} /><CmsInput label="Link URL" value={item.url} onChange={(url) => patchFooterLink(columnIndex, linkIndex, { url })} /><Button type="button" variant="outline" className="self-end rounded-none border-red-200 text-red-600" onClick={() => patchFooterColumn(columnIndex, { links: column.links.filter((_, index) => index !== linkIndex) })}><Trash2 className="size-4" /></Button></div>;
-                      })}
-                      <Button type="button" variant="outline" className="w-fit rounded-none" onClick={() => patchFooterColumn(columnIndex, { links: [...column.links, { label: "", url: "" }] })}><PlusCircle className="size-4" /> Add link</Button>
-                    </div>
-                  ))}
-                  <Button type="button" className="w-fit rounded-none bg-[#111] text-white hover:bg-[#202020]" onClick={() => patchObject("footer", { columns: [...content.footer.columns, { title: "", links: [] }] })}><PlusCircle className="size-4" /> Add column</Button>
-                </CmsRepeater>
-              </div>
-            </div>
-          </section>
+      <CmsSection eyebrow="Section 6" title="Footer">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Footer text">
+            <CmsTextarea label="Description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} />
+            <CmsInput label="Copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
+          </CmsRepeater>
+          <CmsRepeater title="Footer columns and links">
+            {content.footer.columns.map((column, columnIndex) => <div key={columnIndex} className="grid gap-3 border p-4"><CmsInput label="Column title" value={column.title} onChange={(title) => patchFooterColumn(columnIndex, { title })} />{column.links.map((link, linkIndex) => { const item = typeof link === "string" ? { label: link, url: "" } : link; return <div key={linkIndex} className="grid gap-3 sm:grid-cols-2"><CmsInput label="Link label" value={item.label} onChange={(label) => patchFooterLink(columnIndex, linkIndex, { label })} /><CmsInput label="Link URL" value={item.url} onChange={(url) => patchFooterLink(columnIndex, linkIndex, { url })} /></div>; })}</div>)}
+          </CmsRepeater>
         </div>
-      </div>
+      </CmsSection>
     </div>
   );
 }
@@ -1769,11 +1440,11 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
               <td className="px-4 py-4">{plan.storageGb} GB</td>
               <td className="px-4 py-4">
                 <p>{plan.monthlyEmails} emails / month</p>
-                <p className="mt-1 text-xs text-[#777]">{Number(plan.videoMinutes ?? 0)} video min · {plan.videoQuality === "4k" ? "HD + 4K" : "HD"}</p>
+                <p className="mt-1 text-xs text-[#777]">{Number(plan.videoMinutes ?? 0)} video min Â· {plan.videoQuality === "4k" ? "HD + 4K" : "HD"}</p>
               </td>
               <td className="px-4 py-4">
-                <p>€{Number(plan.priceMonthly ?? 0).toLocaleString()} / month</p>
-                {plan.yearlyEnabled && <p className="mt-1 text-xs text-[#777]">€{Number(plan.priceYearly ?? 0).toLocaleString()} / year</p>}
+                <p>â‚¬{Number(plan.priceMonthly ?? 0).toLocaleString()} / month</p>
+                {plan.yearlyEnabled && <p className="mt-1 text-xs text-[#777]">â‚¬{Number(plan.priceYearly ?? 0).toLocaleString()} / year</p>}
               </td>
               <td className="px-4 py-4">{plan.active ? "Active" : "Inactive"}</td>
               <td className="px-4 py-4">
@@ -1800,3 +1471,4 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
     </div>
   );
 }
+

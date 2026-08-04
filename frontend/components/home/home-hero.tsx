@@ -1,91 +1,54 @@
-"use client";
+﻿"use client";
 
-import { ArrowRight, Play, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, Play, Sparkles, Star } from "lucide-react";
 import { SiteNav } from "@/components/home/site-nav";
 import { useHomeCms } from "@/api-hooks/use-home-cms";
 import type { HomeCmsData, HomeLanguage } from "@/lib/home-cms";
 
-function lines(text: string) {
-  return text.split("\n").map((line, index, all) => (
-    <span key={`${line}-${index}`}>
-      {line}
-      {index < all.length - 1 && <br />}
-    </span>
-  ));
-}
-
-export function HomeHero({
-  initialCms,
-  requestedLanguage,
-  dashboardHref,
-}: {
-  initialCms: HomeCmsData;
-  requestedLanguage?: string;
-  dashboardHref?: string;
-}) {
+export function HomeHero({ initialCms, requestedLanguage, dashboardHref }: { initialCms: HomeCmsData; requestedLanguage?: string; dashboardHref?: string }) {
   const cms = useHomeCms(initialCms);
-  const lang: HomeLanguage =
-    requestedLanguage === "gr" || requestedLanguage === "en"
-      ? requestedLanguage
-      : cms.defaultLanguage;
+  const lang: HomeLanguage = requestedLanguage === "gr" || requestedLanguage === "en" ? requestedLanguage : cms.defaultLanguage;
   const t = cms.content[lang] ?? cms.content.en;
-  const heroImage = cms.media.heroMediaUrl || t.workflow.tabs[0]?.image || t.gallery.tabs[0]?.image;
-  const previewImages = [heroImage, ...t.workflow.tabs.map((tab) => tab.image), ...t.cta.images].filter(Boolean).slice(0, 3);
+  const images = [...t.workflow.tabs.map((item) => item.image), ...t.gallery.tabs.map((item) => item.image), ...t.cta.images].filter(Boolean);
+  const hero = cms.media.heroMediaUrl || images[0];
 
   return (
-    <section className="relative overflow-hidden bg-[#F8F7F4]">
+    <section className="relative overflow-hidden bg-white">
+      <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_80%_45%,rgba(120,82,255,.18),transparent_54%)]" />
       <SiteNav brand={cms.brand} nav={t.nav} lang={lang} dashboardHref={dashboardHref} />
-      <div className="mx-auto grid min-h-[620px] max-w-[1240px] items-center gap-10 px-5 pb-10 pt-8 md:grid-cols-[0.86fr_1.14fr] md:px-7 md:pb-0 lg:px-8">
-        <div className="relative z-10 max-w-[520px]">
-          <p className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#7A5CE8]">
-            <Sparkles className="size-3" />
-            {t.hero.eyebrow}
-          </p>
-          <h1 className="text-[46px] leading-[0.98] text-[#111] sm:text-[64px] lg:text-[76px]">
-            {lines(t.hero.title)}
+      <div className="relative mx-auto grid max-w-[1320px] items-center gap-10 px-4 pb-14 pt-10 sm:px-5 sm:pb-16 sm:pt-12 md:grid-cols-[.86fr_1.14fr] md:px-8 md:pb-24 md:pt-24">
+        <div className="z-10">
+          <p className="inline-flex rounded-[5px] bg-[#f1edff] px-3.5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-[#6941d9]"><Sparkles className="mr-2 size-3.5" />{t.hero.eyebrow}</p>
+          <h1 className="mt-6 max-w-[560px] text-[40px] font-bold leading-[1.02] tracking-[-.045em] text-[#080808] sm:mt-7 sm:text-[54px] lg:text-[64px]">
+            <span className="block whitespace-pre-line">{t.hero.title}</span>
+            <span className="block whitespace-pre-line text-[#6240d7]">{t.hero.accentTitle}</span>
+            <span className="block whitespace-pre-line">{t.hero.endingTitle}</span>
           </h1>
-          <p className="mt-7 max-w-[390px] text-[15px] leading-7 text-[#57524C]">{t.hero.subtitle}</p>
-          <div className="mt-8 flex flex-wrap items-center gap-5">
-            <Button asChild className="h-12 rounded-[6px] bg-[#050505] px-6 text-sm font-bold text-white hover:bg-[#252525]">
-              <a href={dashboardHref ?? "/register"}>
-                {dashboardHref ? "Dashboard" : t.hero.cta}
-                <ArrowRight className="size-4" />
-              </a>
-            </Button>
-            <a href="/pricing" className="inline-flex h-12 items-center gap-3 text-sm font-bold text-[#151515]">
-              Watch Demo
-              <Play className="size-4 fill-transparent" />
-            </a>
+          <p className="mt-6 max-w-[470px] whitespace-pre-line text-[15px] leading-7 text-[#5f5f67] sm:mt-7 sm:text-[16px] sm:leading-8">{t.hero.subtitle}</p>
+          <div className="mt-7 grid gap-3 sm:flex sm:flex-wrap sm:gap-4">
+            <a href={dashboardHref ?? "/register"} className="inline-flex h-[50px] w-full items-center justify-center gap-3 rounded-[6px] bg-[#5e36d6] px-6 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(94,54,214,.22)] sm:h-[52px] sm:w-auto sm:px-7">{t.hero.cta}<ArrowRight className="size-4" /></a>
+            <a href="/pricing" className="inline-flex h-[50px] w-full items-center justify-center gap-3 rounded-[6px] border border-[#dad7e5] bg-white px-6 text-sm font-semibold text-[#222] sm:h-[52px] sm:w-auto sm:px-7"><span className="grid size-6 place-items-center rounded-full border border-[#222]"><Play className="ml-px size-3" /></span>{t.hero.secondaryCta}</a>
           </div>
-          <div className="mt-9 flex max-w-[430px] flex-wrap gap-x-4 gap-y-3 pb-8 pr-4 text-[11px] font-medium leading-5 text-[#77716A] sm:pb-10 md:pb-14">
-            <span>No credit card required</span>
-            <span className="text-[#C7A56B]">+</span>
-            <span>Free forever plan</span>
-            <span className="text-[#C7A56B]">+</span>
-            <span>Cancel anytime</span>
+          <div className="mt-7 flex flex-wrap items-center gap-3 sm:mt-8">
+            <div className="flex -space-x-2">{t.hero.avatarImages.filter(Boolean).slice(0,6).map((src,i)=><img key={`${src}-${i}`} src={src} alt={`Reviewer ${i + 1}`} className="size-9 rounded-full border-2 border-white object-cover" />)}</div>
+            <div><div className="flex text-[#6040d8]">{Array.from({length:5}).map((_,i)=><Star key={i} className="size-3 fill-current" />)}</div><p className="mt-1 text-[10px] text-[#666]">{t.hero.ratingText}</p></div>
           </div>
         </div>
-        <div className="relative min-h-[420px] md:min-h-[620px]">
-          {cms.media.heroMediaType === "video" && heroImage ? (
-            <video className="absolute inset-0 h-full w-full object-cover object-center md:object-[58%_center]" src={heroImage} autoPlay muted loop playsInline />
-          ) : (
-            <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover object-center md:object-[58%_center]" />
-          )}
-          <div className="absolute inset-y-0 left-0 hidden w-48 bg-gradient-to-r from-[#F8F7F4] to-transparent md:block" />
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#F8F7F4] to-transparent" />
-          <div className="absolute bottom-8 right-2 w-[300px] rounded-[8px] bg-white/95 p-4 shadow-[0_18px_55px_rgba(45,38,30,0.18)] backdrop-blur md:right-8">
-            <p className="text-[10px] font-black text-[#7A5CE8]">+ New Gallery</p>
-            <h3 className="mt-1 font-heading text-2xl leading-none text-[#111]">{t.gallery.tabs[0]?.title || t.gallery.tabs[0]?.label}</h3>
-            <p className="mt-1 text-[11px] font-medium text-[#6B655F]">124 Photos · Client Access</p>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {previewImages.map((image, index) => (
-                <img key={`${image}-${index}`} src={image} alt="" className="h-16 rounded-[5px] object-cover" />
-              ))}
+
+        <div className="relative min-h-[300px] sm:min-h-[380px] md:min-h-[520px]">
+          <div className="absolute bottom-2 right-0 w-[92%] rounded-[14px] border-[7px] border-[#111] bg-[#111] shadow-[0_24px_45px_rgba(40,20,100,.22)] sm:w-[88%] sm:rounded-[18px] sm:border-[9px] md:w-[86%] md:border-[10px] md:shadow-[0_32px_60px_rgba(40,20,100,.25)]">
+            <div className="rounded-[8px] bg-[#0f0f12] p-2.5 text-white sm:p-4">
+              <div className="mb-4 flex items-center justify-between text-[10px]"><span className="tracking-[.16em]">GALLERISTA</span><span className="text-white/50">My Galleries</span></div>
+              <div className="grid grid-cols-4 gap-2">{images.slice(0,8).map((src,i)=><img key={i} src={src} alt="" className="aspect-square w-full rounded-sm object-cover" />)}</div>
             </div>
           </div>
+          <div className="absolute bottom-0 left-0 w-[34%] min-w-[108px] rounded-[20px] border-[5px] border-black bg-black p-1 shadow-[0_18px_38px_rgba(0,0,0,.28)] sm:left-3 sm:w-[30%] sm:min-w-[140px] sm:rounded-[26px] sm:border-[7px] md:min-w-[150px] md:rounded-[28px] md:border-[8px] md:shadow-[0_24px_55px_rgba(0,0,0,.3)]">
+            <div className="overflow-hidden rounded-[19px] bg-[#101014] p-2"><p className="mb-2 px-1 text-[8px] text-white">Summer Wedding</p><div className="grid grid-cols-2 gap-1">{[hero,...images].slice(0,6).map((src,i)=><img key={i} src={src} alt="" className="aspect-square w-full object-cover" />)}</div></div>
+          </div>
+          <div className="absolute -bottom-4 left-16 h-16 w-[70%] rounded-full bg-[#7657f5]/30 blur-2xl" />
         </div>
       </div>
     </section>
   );
 }
+

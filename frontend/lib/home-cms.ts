@@ -1,4 +1,4 @@
-export type HomeLanguage = "en" | "gr";
+﻿export type HomeLanguage = "en" | "gr";
 
 export type HomeCmsData = {
   seo: SiteSeo;
@@ -90,14 +90,17 @@ export type AuthCms = {
 
 export type HomeContent = {
   nav: { brand: string; products: string; examples: string; pricing: string; login: string; cta: string };
-  hero: { eyebrow: string; title: string; subtitle: string; cta: string };
+  hero: { eyebrow: string; title: string; accentTitle: string; endingTitle: string; subtitle: string; cta: string; secondaryCta: string; ratingText: string; avatarImages: string[] };
   gallery: { title: string; subtitle: string; tabs: GalleryTab[]; productTabs: string[]; cartLabel: string };
   products: { title: string; price: string; description?: string; href?: string }[];
   featureCards: FeatureCard[];
+  showcase: { eyebrow: string; title: string; subtitle: string; bullets: string[]; button: string; cardTitle: string; cardDate: string; cardButton: string };
+  stats: { value: string; label: string }[];
+  trustHeading: string;
   workflow: { eyebrow: string; title: string; subtitle: string; tabs: GalleryTab[]; cardText: string };
   testimonials: { eyebrow: string; title: string; subtitle: string; items: Testimonial[] };
   brandLogos: BrandLogo[];
-  cta: { title: string; subtitle: string; button: string; desktopName: string; desktopSubtitle: string; invoiceTitle: string; invoiceText: string; galleryName: string; images: string[] };
+  cta: { title: string; subtitle: string; button: string; trialText: string; noCardText: string; desktopName: string; desktopSubtitle: string; invoiceTitle: string; invoiceText: string; galleryName: string; images: string[] };
   footer: { description: string; copyright: string; columns: { title: string; links: FooterLink[] }[] };
 };
 
@@ -124,8 +127,8 @@ export const defaultHomeCms: HomeCmsData = {
       privacy: { title: "Privacy Policy", content: "This Privacy Policy explains how Gallerista handles account, gallery, and customer information.\n\nWe use submitted information to provide and secure the service. We do not sell personal information." },
     },
     gr: {
-      terms: { title: "Όροι Παροχής Υπηρεσιών", content: "Οι παρόντες όροι διέπουν τη χρήση του Gallerista.\n\nΜε τη δημιουργία λογαριασμού συμφωνείτε να χρησιμοποιείτε νόμιμα την υπηρεσία και να προστατεύετε την πρόσβαση στον λογαριασμό σας." },
-      privacy: { title: "Πολιτική Απορρήτου", content: "Η παρούσα πολιτική εξηγεί πώς το Gallerista διαχειρίζεται τα στοιχεία λογαριασμού, γκαλερί και πελατών.\n\nΧρησιμοποιούμε τα στοιχεία για την παροχή και ασφάλεια της υπηρεσίας." },
+      terms: { title: "ÎŒÏÎ¿Î¹ Î Î±ÏÎ¿Ï‡Î®Ï‚ Î¥Ï€Î·ÏÎµÏƒÎ¹ÏŽÎ½", content: "ÎŸÎ¹ Ï€Î±ÏÏŒÎ½Ï„ÎµÏ‚ ÏŒÏÎ¿Î¹ Î´Î¹Î­Ï€Î¿Ï…Î½ Ï„Î· Ï‡ÏÎ®ÏƒÎ· Ï„Î¿Ï… Gallerista.\n\nÎœÎµ Ï„Î· Î´Î·Î¼Î¹Î¿Ï…ÏÎ³Î¯Î± Î»Î¿Î³Î±ÏÎ¹Î±ÏƒÎ¼Î¿Ï ÏƒÏ…Î¼Ï†Ï‰Î½ÎµÎ¯Ï„Îµ Î½Î± Ï‡ÏÎ·ÏƒÎ¹Î¼Î¿Ï€Î¿Î¹ÎµÎ¯Ï„Îµ Î½ÏŒÎ¼Î¹Î¼Î± Ï„Î·Î½ Ï…Ï€Î·ÏÎµÏƒÎ¯Î± ÎºÎ±Î¹ Î½Î± Ï€ÏÎ¿ÏƒÏ„Î±Ï„ÎµÏÎµÏ„Îµ Ï„Î·Î½ Ï€ÏÏŒÏƒÎ²Î±ÏƒÎ· ÏƒÏ„Î¿Î½ Î»Î¿Î³Î±ÏÎ¹Î±ÏƒÎ¼ÏŒ ÏƒÎ±Ï‚." },
+      privacy: { title: "Î Î¿Î»Î¹Ï„Î¹ÎºÎ® Î‘Ï€Î¿ÏÏÎ®Ï„Î¿Ï…", content: "Î— Ï€Î±ÏÎ¿ÏÏƒÎ± Ï€Î¿Î»Î¹Ï„Î¹ÎºÎ® ÎµÎ¾Î·Î³ÎµÎ¯ Ï€ÏŽÏ‚ Ï„Î¿ Gallerista Î´Î¹Î±Ï‡ÎµÎ¹ÏÎ¯Î¶ÎµÏ„Î±Î¹ Ï„Î± ÏƒÏ„Î¿Î¹Ï‡ÎµÎ¯Î± Î»Î¿Î³Î±ÏÎ¹Î±ÏƒÎ¼Î¿Ï, Î³ÎºÎ±Î»ÎµÏÎ¯ ÎºÎ±Î¹ Ï€ÎµÎ»Î±Ï„ÏŽÎ½.\n\nÎ§ÏÎ·ÏƒÎ¹Î¼Î¿Ï€Î¿Î¹Î¿ÏÎ¼Îµ Ï„Î± ÏƒÏ„Î¿Î¹Ï‡ÎµÎ¯Î± Î³Î¹Î± Ï„Î·Î½ Ï€Î±ÏÎ¿Ï‡Î® ÎºÎ±Î¹ Î±ÏƒÏ†Î¬Î»ÎµÎ¹Î± Ï„Î·Ï‚ Ï…Ï€Î·ÏÎµÏƒÎ¯Î±Ï‚." },
     },
   },
   seo: {
@@ -167,9 +170,19 @@ export const defaultHomeCms: HomeCmsData = {
       nav: { brand: "NIKOSET", products: "Products", examples: "Examples", pricing: "Pricing", login: "Log In", cta: "Get Started" },
       hero: {
         eyebrow: "NIKOSET PHOTOGRAPHER PLATFORM",
-        title: "Designed for photographers.\nBuilt to help you grow.",
+        title: "Your Moments.",
+        accentTitle: "Beautifully",
+        endingTitle: "Presented.",
         subtitle: "Industry-leading photo galleries, website and business tools to streamline your workflow and grow your photography business.",
         cta: "Get Started",
+        secondaryCta: "Watch Video",
+        ratingText: "Loved by 2,000+ photographers worldwide",
+        avatarImages: [
+          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80",
+          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80",
+          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+          "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=120&q=80"
+        ],
       },
       gallery: {
         title: "The ultimate photo gallery that\nredefined the industry.",
@@ -189,11 +202,29 @@ export const defaultHomeCms: HomeCmsData = {
         { title: "Mobile Gallery App", price: "Installable photo apps", description: "Create mobile-first gallery apps clients can save to their phones.", href: "/dashboard/mobile-gallery" },
       ],
       featureCards: [
-        { title: "Beautiful Galleries", text: "Create stunning, customizable galleries that reflect your style and wow your clients.", icon: "Image" },
-        { title: "Built-in Store", text: "Sell prints, downloads and products directly from your galleries.", icon: "ShoppingBag" },
-        { title: "Client Proofing", text: "Make selections easier for your clients with intuitive proofing and favorites.", icon: "ShieldCheck" },
-        { title: "Smart Automation", text: "Save time with workflows and automations that handle the busywork for you.", icon: "Zap" },
+        { title: "All in the Cloud", text: "Secure storage and lightning fast delivery.", icon: "CloudUpload" },
+        { title: "Private & Secure", text: "Password protection and privacy controls.", icon: "LockKeyhole" },
+        { title: "AI-Powered", text: "Smart search finds photos instantly.", icon: "Sparkles" },
+        { title: "Built to Sell", text: "Beautiful stores to sell prints and downloads.", icon: "ShoppingBag" },
+        { title: "Works Everywhere", text: "Perfect on any device, any time.", icon: "Smartphone" },
       ],
+      showcase: {
+        eyebrow: "For every photographer",
+        title: "Galleries as beautiful as your work",
+        subtitle: "Create unlimited galleries with a premium experience your clients will love.",
+        bullets: ["Unlimited galleries", "Custom branding", "Client favorites", "Download protection", "Slideshow & sharing"],
+        button: "Explore Features",
+        cardTitle: "Jessica & Michael",
+        cardDate: "May 25, 2024",
+        cardButton: "View Gallery",
+      },
+      stats: [
+        { value: "2,000+", label: "Photographers" },
+        { value: "1M+", label: "Galleries Delivered" },
+        { value: "50M+", label: "Photos Uploaded" },
+        { value: "120+", label: "Countries Worldwide" },
+      ],
+      trustHeading: "Trusted by professionals",
       workflow: {
         eyebrow: "DESIGNED FOR EVERY WORKFLOW",
         title: "Made for all photographers.",
@@ -231,6 +262,8 @@ export const defaultHomeCms: HomeCmsData = {
         title: "Start using Nikoset today for free",
         subtitle: "Free forever. Upgrade when you need to.",
         button: "Get Started",
+        trialText: "14-day free trial",
+        noCardText: "No credit card required",
         desktopName: "MORGAN WELLS",
         desktopSubtitle: "MODERN PORTRAIT PHOTOGRAPHY",
         invoiceTitle: "Invoice #1104",
@@ -260,20 +293,21 @@ export const defaultHomeCms: HomeCmsData = {
 
 defaultHomeCms.content.gr = JSON.parse(JSON.stringify(defaultHomeCms.content.en));
 Object.assign(defaultHomeCms.content.gr, {
-  nav: { brand: "Gallerista", products: "Προϊόντα", examples: "Παραδείγματα", pricing: "Τιμές", login: "Σύνδεση", cta: "Ξεκινήστε" },
-  hero: { eyebrow: "Gallerista", title: "Σχεδιασμένο για φωτογράφους.\nΔημιουργήθηκε για να αναπτυχθείτε.", subtitle: "Κορυφαίες γκαλερί φωτογραφιών, ιστοσελίδες και εργαλεία επιχείρησης για καλύτερη ροή εργασίας.", cta: "Ξεκινήστε" },
-  gallery: { ...defaultHomeCms.content.gr.gallery, title: "Η απόλυτη γκαλερί φωτογραφιών που επαναπροσδιορίζει τον κλάδο.", subtitle: "Παραδώστε όμορφα τις φωτογραφίες σας και προσφέρετε μια αξέχαστη εμπειρία στους πελάτες σας.", cartLabel: "Καλάθι" },
-  workflow: { ...defaultHomeCms.content.gr.workflow, eyebrow: "ΣΧΕΔΙΑΣΜΕΝΟ ΓΙΑ ΚΑΘΕ ΡΟΗ ΕΡΓΑΣΙΑΣ", title: "Εργαλεία για κάθε φωτογράφο.", subtitle: "Από γάμους έως τοπία, όλα όσα χρειάζεστε σε ένα μέρος." },
-  testimonials: { ...defaultHomeCms.content.gr.testimonials, eyebrow: "ΕΜΠΙΣΤΕΥΟΝΤΑΙ ΟΙ ΕΠΑΓΓΕΛΜΑΤΙΕΣ", title: "Η πλατφόρμα των φωτογράφων.", subtitle: "Γίνετε μέρος μιας αναπτυσσόμενης δημιουργικής κοινότητας." },
-  cta: { ...defaultHomeCms.content.gr.cta, title: "Ξεκινήστε με το Gallerista σήμερα δωρεάν.", subtitle: "Δωρεάν για πάντα. Αναβαθμίστε όταν το χρειαστείτε.", button: "Ξεκινήστε" },
-  footer: { ...defaultHomeCms.content.gr.footer, description: "Η ολοκληρωμένη πλατφόρμα για σύγχρονους φωτογράφους, γκαλερί πελατών και ηλεκτρονικά καταστήματα." },
+  nav: { brand: "Gallerista", products: "Î ÏÎ¿ÏŠÏŒÎ½Ï„Î±", examples: "Î Î±ÏÎ±Î´ÎµÎ¯Î³Î¼Î±Ï„Î±", pricing: "Î¤Î¹Î¼Î­Ï‚", login: "Î£ÏÎ½Î´ÎµÏƒÎ·", cta: "ÎžÎµÎºÎ¹Î½Î®ÏƒÏ„Îµ" },
+  hero: { eyebrow: "Gallerista", title: "Î£Ï‡ÎµÎ´Î¹Î±ÏƒÎ¼Î­Î½Î¿ Î³Î¹Î± Ï†Ï‰Ï„Î¿Î³ÏÎ¬Ï†Î¿Ï…Ï‚.\nÎ”Î·Î¼Î¹Î¿Ï…ÏÎ³Î®Î¸Î·ÎºÎµ Î³Î¹Î± Î½Î± Î±Î½Î±Ï€Ï„Ï…Ï‡Î¸ÎµÎ¯Ï„Îµ.", subtitle: "ÎšÎ¿ÏÏ…Ï†Î±Î¯ÎµÏ‚ Î³ÎºÎ±Î»ÎµÏÎ¯ Ï†Ï‰Ï„Î¿Î³ÏÎ±Ï†Î¹ÏŽÎ½, Î¹ÏƒÏ„Î¿ÏƒÎµÎ»Î¯Î´ÎµÏ‚ ÎºÎ±Î¹ ÎµÏÎ³Î±Î»ÎµÎ¯Î± ÎµÏ€Î¹Ï‡ÎµÎ¯ÏÎ·ÏƒÎ·Ï‚ Î³Î¹Î± ÎºÎ±Î»ÏÏ„ÎµÏÎ· ÏÎ¿Î® ÎµÏÎ³Î±ÏƒÎ¯Î±Ï‚.", cta: "ÎžÎµÎºÎ¹Î½Î®ÏƒÏ„Îµ" },
+  gallery: { ...defaultHomeCms.content.gr.gallery, title: "Î— Î±Ï€ÏŒÎ»Ï…Ï„Î· Î³ÎºÎ±Î»ÎµÏÎ¯ Ï†Ï‰Ï„Î¿Î³ÏÎ±Ï†Î¹ÏŽÎ½ Ï€Î¿Ï… ÎµÏ€Î±Î½Î±Ï€ÏÎ¿ÏƒÎ´Î¹Î¿ÏÎ¯Î¶ÎµÎ¹ Ï„Î¿Î½ ÎºÎ»Î¬Î´Î¿.", subtitle: "Î Î±ÏÎ±Î´ÏŽÏƒÏ„Îµ ÏŒÎ¼Î¿ÏÏ†Î± Ï„Î¹Ï‚ Ï†Ï‰Ï„Î¿Î³ÏÎ±Ï†Î¯ÎµÏ‚ ÏƒÎ±Ï‚ ÎºÎ±Î¹ Ï€ÏÎ¿ÏƒÏ†Î­ÏÎµÏ„Îµ Î¼Î¹Î± Î±Î¾Î­Ï‡Î±ÏƒÏ„Î· ÎµÎ¼Ï€ÎµÎ¹ÏÎ¯Î± ÏƒÏ„Î¿Ï…Ï‚ Ï€ÎµÎ»Î¬Ï„ÎµÏ‚ ÏƒÎ±Ï‚.", cartLabel: "ÎšÎ±Î»Î¬Î¸Î¹" },
+  workflow: { ...defaultHomeCms.content.gr.workflow, eyebrow: "Î£Î§Î•Î”Î™Î‘Î£ÎœÎ•ÎÎŸ Î“Î™Î‘ ÎšÎ‘Î˜Î• Î¡ÎŸÎ— Î•Î¡Î“Î‘Î£Î™Î‘Î£", title: "Î•ÏÎ³Î±Î»ÎµÎ¯Î± Î³Î¹Î± ÎºÎ¬Î¸Îµ Ï†Ï‰Ï„Î¿Î³ÏÎ¬Ï†Î¿.", subtitle: "Î‘Ï€ÏŒ Î³Î¬Î¼Î¿Ï…Ï‚ Î­Ï‰Ï‚ Ï„Î¿Ï€Î¯Î±, ÏŒÎ»Î± ÏŒÏƒÎ± Ï‡ÏÎµÎ¹Î¬Î¶ÎµÏƒÏ„Îµ ÏƒÎµ Î­Î½Î± Î¼Î­ÏÎ¿Ï‚." },
+  testimonials: { ...defaultHomeCms.content.gr.testimonials, eyebrow: "Î•ÎœÎ Î™Î£Î¤Î•Î¥ÎŸÎÎ¤Î‘Î™ ÎŸÎ™ Î•Î Î‘Î“Î“Î•Î›ÎœÎ‘Î¤Î™Î•Î£", title: "Î— Ï€Î»Î±Ï„Ï†ÏŒÏÎ¼Î± Ï„Ï‰Î½ Ï†Ï‰Ï„Î¿Î³ÏÎ¬Ï†Ï‰Î½.", subtitle: "Î“Î¯Î½ÎµÏ„Îµ Î¼Î­ÏÎ¿Ï‚ Î¼Î¹Î±Ï‚ Î±Î½Î±Ï€Ï„Ï…ÏƒÏƒÏŒÎ¼ÎµÎ½Î·Ï‚ Î´Î·Î¼Î¹Î¿Ï…ÏÎ³Î¹ÎºÎ®Ï‚ ÎºÎ¿Î¹Î½ÏŒÏ„Î·Ï„Î±Ï‚." },
+  cta: { ...defaultHomeCms.content.gr.cta, title: "ÎžÎµÎºÎ¹Î½Î®ÏƒÏ„Îµ Î¼Îµ Ï„Î¿ Gallerista ÏƒÎ®Î¼ÎµÏÎ± Î´Ï‰ÏÎµÎ¬Î½.", subtitle: "Î”Ï‰ÏÎµÎ¬Î½ Î³Î¹Î± Ï€Î¬Î½Ï„Î±. Î‘Î½Î±Î²Î±Î¸Î¼Î¯ÏƒÏ„Îµ ÏŒÏ„Î±Î½ Ï„Î¿ Ï‡ÏÎµÎ¹Î±ÏƒÏ„ÎµÎ¯Ï„Îµ.", button: "ÎžÎµÎºÎ¹Î½Î®ÏƒÏ„Îµ" },
+  footer: { ...defaultHomeCms.content.gr.footer, description: "Î— Î¿Î»Î¿ÎºÎ»Î·ÏÏ‰Î¼Î­Î½Î· Ï€Î»Î±Ï„Ï†ÏŒÏÎ¼Î± Î³Î¹Î± ÏƒÏÎ³Ï‡ÏÎ¿Î½Î¿Ï…Ï‚ Ï†Ï‰Ï„Î¿Î³ÏÎ¬Ï†Î¿Ï…Ï‚, Î³ÎºÎ±Î»ÎµÏÎ¯ Ï€ÎµÎ»Î±Ï„ÏŽÎ½ ÎºÎ±Î¹ Î·Î»ÎµÎºÏ„ÏÎ¿Î½Î¹ÎºÎ¬ ÎºÎ±Ï„Î±ÏƒÏ„Î®Î¼Î±Ï„Î±." },
 });
 
 export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
   const media = { ...defaultHomeCms.media, ...(data?.media ?? {}) };
   if (!media.heroMediaUrl?.trim()) media.heroMediaUrl = defaultHomeCms.media.heroMediaUrl;
   if (media.heroMediaType !== "video") media.heroMediaType = "image";
-  const auth = { ...defaultHomeCms.auth, ...(data?.auth ?? {}) };
+  const brand = { ...defaultHomeCms.brand, ...(data?.brand ?? {}) };
+  const auth = { ...defaultHomeCms.auth, ...(data?.auth ?? {}), brand: brand.brandText || defaultHomeCms.auth.brand };
   if (auth.loginImageSide !== "left") auth.loginImageSide = "right";
   if (auth.registerImageSide !== "right") auth.registerImageSide = "left";
   if (!auth.loginImageUrl?.trim()) auth.loginImageUrl = defaultHomeCms.auth.loginImageUrl;
@@ -300,6 +334,27 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     if (!Array.isArray(content[lang].brandLogos) || !content[lang].brandLogos.length) {
       content[lang].brandLogos = defaultHomeCms.content[lang].brandLogos;
     }
+    const savedHero = content[lang].hero ?? defaultHomeCms.content[lang].hero;
+    const savedHeadingLines = String(savedHero.title ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const needsHeadingMigration = !(savedHero as Partial<HomeContent["hero"]>).accentTitle && !(savedHero as Partial<HomeContent["hero"]>).endingTitle && savedHeadingLines.length > 1;
+    content[lang].hero = {
+      ...defaultHomeCms.content[lang].hero,
+      ...savedHero,
+      title: needsHeadingMigration ? savedHeadingLines[0] : savedHero.title,
+      accentTitle: needsHeadingMigration ? (savedHeadingLines[1] ?? defaultHomeCms.content[lang].hero.accentTitle) : (savedHero as Partial<HomeContent["hero"]>).accentTitle ?? defaultHomeCms.content[lang].hero.accentTitle,
+      endingTitle: needsHeadingMigration ? savedHeadingLines.slice(2).join(" ") : (savedHero as Partial<HomeContent["hero"]>).endingTitle ?? defaultHomeCms.content[lang].hero.endingTitle,
+      avatarImages: Array.isArray((savedHero as Partial<HomeContent["hero"]>).avatarImages) && (savedHero as Partial<HomeContent["hero"]>).avatarImages!.length
+        ? (savedHero as Partial<HomeContent["hero"]>).avatarImages!
+        : defaultHomeCms.content[lang].hero.avatarImages,
+    };
+    content[lang].showcase = {
+      ...defaultHomeCms.content[lang].showcase,
+      ...(content[lang].showcase ?? {}),
+      bullets: Array.isArray(content[lang].showcase?.bullets) ? content[lang].showcase.bullets : defaultHomeCms.content[lang].showcase.bullets,
+    };
+    content[lang].stats = Array.isArray(content[lang].stats) && content[lang].stats.length ? content[lang].stats : defaultHomeCms.content[lang].stats;
+    content[lang].trustHeading = content[lang].trustHeading || defaultHomeCms.content[lang].trustHeading;
+    content[lang].cta = { ...defaultHomeCms.content[lang].cta, ...(content[lang].cta ?? {}) };
     content[lang].workflow = {
       ...defaultHomeCms.content[lang].workflow,
       ...(content[lang].workflow ?? {}),
@@ -311,7 +366,7 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     defaultLanguage: data?.defaultLanguage === "gr" ? "gr" : "en",
     seo,
     auth,
-    brand: { ...defaultHomeCms.brand, ...(data?.brand ?? {}) },
+    brand,
     legal: {
       en: {
         terms: { ...defaultHomeCms.legal.en.terms, ...(data?.legal?.en?.terms ?? {}) },
@@ -327,3 +382,6 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     content,
   };
 }
+
+
+

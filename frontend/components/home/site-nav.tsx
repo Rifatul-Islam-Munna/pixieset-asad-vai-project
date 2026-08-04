@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -44,11 +44,10 @@ export function SiteNav({
   };
 
   return (
-    <header className="relative z-30 mx-auto flex h-20 max-w-[1240px] items-center justify-between px-5 md:px-7 lg:px-8">
+    <header className="relative z-30 mx-auto flex h-16 max-w-[1240px] items-center justify-between px-4 sm:h-20 sm:px-5 md:px-7 lg:px-8">
       <Link href="/" className="inline-flex min-w-0 items-center gap-3 text-[#101010]" aria-label={brandText}>
         {logoUrl && <img src={logoUrl} alt="" className="h-8 max-w-28 object-contain" />}
-        {brandText && <span className="font-heading text-2xl font-semibold tracking-[0.18em]">{brandText}</span>}
-        <span className="font-heading text-2xl font-semibold text-[#7A5CE8]">G</span>
+        {brandText && <span className="max-w-[210px] truncate font-heading text-lg font-semibold tracking-[0.12em] sm:max-w-[320px] sm:text-2xl sm:tracking-[0.18em]">{brandText}</span>}
       </Link>
 
       <nav className="hidden items-center gap-9 text-[13px] font-semibold text-[#151515] md:flex">
@@ -78,8 +77,8 @@ export function SiteNav({
           <button type="button" onClick={() => switchLanguage("gr")} className={lang === "gr" ? "text-[#151515]" : ""}>GR</button>
         </div>
         {!dashboardHref && <Link href="/login" className="text-[13px] font-semibold text-[#151515]">{nav.login}</Link>}
-        <Button asChild className="h-11 rounded-[6px] bg-[#050505] px-6 text-[13px] font-bold text-white hover:bg-[#252525]">
-          <Link href={dashboardHref ?? "/register"}>{dashboardHref ? "Dashboard" : nav.cta}</Link>
+        <Button asChild className="h-11 rounded-[7px] bg-gradient-to-r from-[#4f24bd] to-[#7936d2] px-6 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(95,53,200,.22)] hover:opacity-95">
+          <Link href={dashboardHref ?? "/register"}>{nav.cta}</Link>
         </Button>
       </div>
 
@@ -117,3 +116,4 @@ export function SiteNav({
     </header>
   );
 }
+

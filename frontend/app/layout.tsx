@@ -66,7 +66,7 @@ export default async function RootLayout({
         })}
         <JsonLdScript data={jsonLd} id="site-json-ld" />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body suppressHydrationWarning className="min-h-full flex flex-col">
         {gtmId && <GoogleTagManager gtmId={gtmId} />}
         <QueryClint>
           <TooltipProvider>{children}</TooltipProvider>

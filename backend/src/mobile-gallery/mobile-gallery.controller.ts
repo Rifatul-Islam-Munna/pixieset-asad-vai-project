@@ -61,8 +61,13 @@ export class MobileGalleryController {
   ) {}
 
   @Get('apps')
-  async apps(@Req() req: ExpressRequest) {
-    return { data: await this.service.findAll(req.user.id) };
+  async apps(
+    @Req() req: ExpressRequest,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return { data: await this.service.findAll(req.user.id, search, page, limit) };
   }
 
   @Post('apps')

@@ -66,8 +66,41 @@ export class MobileGalleryService {
     return app.toObject();
   }
 
-  async findAll(userId: string) {
-    return this.appModel.find({ userId }).sort({ createdAt: -1 }).lean();
+  async findAll(userId: string, searchValue?: string, pageValue?: string, limitValue?: string) {
+    const search = String(searchValue ?? '').trim();
+    const page = Math.max(1, Number.isFinite(Number(pageValue)) ? Math.floor(Number(pageValue)) : 1);
+    const limit = Math.min(48, Math.max(1, Number.isFinite(Number(limitValue)) ? Math.floor(Number(limitValue)) : 6));
+    const filter: Record<string, any> = { userId };
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = [
+        { name: { $regex: escaped, $options: 'i' } },
+        { slug: { $regex: escaped, $options: 'i' } },
+        { status: { $regex: escaped, $options: 'i' } },
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $dateToString: { date: '$eventDate', format: '%Y-%m-%d' } },
+              regex: escaped,
+              options: 'i',
+            },
+          },
+        },
+      ];
+    }
+    const offset = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.appModel.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+      this.appModel.countDocuments(filter),
+    ]);
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      hasMore: offset + items.length < total,
+    };
   }
 
   async findOne(userId: string, id: string, limit?: string, offset?: string) {

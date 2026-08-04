@@ -105,16 +105,36 @@ export type MobileGalleryInviteResult = {
 
 type Data<T> = { data: T; message?: string };
 
-export function useMobileGalleryApps() {
+export type MobileGalleryAppsPage = {
+  items: MobileGalleryApp[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasMore: boolean;
+};
+
+export function useMobileGalleryApps(params?: { search?: string; page?: number; limit?: number }) {
   const client = useQueryClient();
+  const search = params?.search?.trim() ?? "";
+  const page = Math.max(1, params?.page ?? 1);
+  const limit = Math.max(1, params?.limit ?? 6);
   const appsQuery = useQuery({
-    queryKey: ["mobile-gallery-apps"],
-    queryFn: () => GetRequestNormal<Data<MobileGalleryApp[]>>("/mobile-gallery/apps"),
+    queryKey: ["mobile-gallery-apps", search, page, limit],
+    queryFn: () => GetRequestNormal<Data<MobileGalleryAppsPage>>(`/mobile-gallery/apps?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`),
   });
   const createApp = useMutation({
     mutationFn: async (payload: { name: string; eventDate?: string }) => {
       const [data, error] = await PostRequestAxios<Data<MobileGalleryApp>>("/mobile-gallery/apps", payload);
       if (error || !data) throw new Error(error?.message || "Could not create app");
+      return data;
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: ["mobile-gallery-apps"] }),
+  });
+  const updateApp = useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: Pick<MobileGalleryApp, "name" | "eventDate"> }) => {
+      const [data, error] = await PatchRequestAxios<Data<MobileGalleryApp>>(`/mobile-gallery/apps/${id}`, payload as any);
+      if (error || !data) throw new Error(error?.message || "Could not update app");
       return data;
     },
     onSuccess: () => client.invalidateQueries({ queryKey: ["mobile-gallery-apps"] }),
@@ -130,7 +150,7 @@ export function useMobileGalleryApps() {
       notifyStorageChanged();
     },
   });
-  return { appsQuery, createApp, deleteApp };
+  return { appsQuery, createApp, updateApp, deleteApp };
 }
 
 export function useMobileGalleryApp(appId?: string) {
