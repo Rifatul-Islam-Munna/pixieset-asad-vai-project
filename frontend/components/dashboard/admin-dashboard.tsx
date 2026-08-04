@@ -1253,9 +1253,17 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
           <CmsRepeater title="Statistics">
             {content.stats.map((stat, index) => <div key={index} className="grid grid-cols-2 gap-3"><CmsInput label={`Stat ${index + 1} value`} value={stat.value} onChange={(value) => { const stats = [...content.stats]; stats[index] = { ...stats[index], value }; patch("stats", stats); }} /><CmsInput label="Label" value={stat.label} onChange={(label) => { const stats = [...content.stats]; stats[index] = { ...stats[index], label }; patch("stats", stats); }} /></div>)}
           </CmsRepeater>
-          <CmsRepeater title="Gallery images">
-            {content.gallery.tabs.map((tab, index) => <div key={index} className="border p-3"><CmsInput label={`Image ${index + 1} label`} value={tab.label} onChange={(label) => patchGalleryImage(index, { label })} /><div className="mt-3"><CmsImageInput label="Image" value={tab.image} onChange={(image) => patchGalleryImage(index, { image })} onUpload={onUpload} busy={busy} /></div></div>)}
-            {content.workflow.tabs.map((tab, index) => <div key={`workflow-${index}`} className="border p-3"><CmsInput label={`Extra image ${index + 1} label`} value={tab.label} onChange={(label) => patchWorkflowImage(index, { label })} /><div className="mt-3"><CmsImageInput label="Image" value={tab.image} onChange={(image) => patchWorkflowImage(index, { image })} onUpload={onUpload} busy={busy} /></div></div>)}
+          <CmsRepeater title="Five gallery showcase images">
+            <p className="rounded-[8px] bg-[#f5f1ff] px-3 py-2 text-xs leading-5 text-[#5f35c8]">These five slots map directly to the five images shown in the homepage gallery showcase. Each image can open its own gallery URL.</p>
+            {content.gallery.tabs.slice(0, 5).map((tab, index) => (
+              <div key={index} className="grid gap-3 rounded-[10px] border border-[#e8e3ef] bg-white p-4">
+                <div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-[#6337d8]">Image slot {index + 1}</p><span className="text-xs text-[#777]">{index === 0 ? "Main center card" : index === 1 ? "Left top" : index === 2 ? "Left bottom" : index === 3 ? "Right top" : "Right bottom"}</span></div>
+                <CmsInput label="Image label" value={tab.label} onChange={(label) => patchGalleryImage(index, { label })} />
+                <CmsInput label="Gallery title" value={tab.title ?? ""} onChange={(title) => patchGalleryImage(index, { title })} />
+                <CmsInput label="Full gallery URL (example: https://example.com/collection/name/gallery)" value={tab.href ?? ""} onChange={(href) => patchGalleryImage(index, { href })} />
+                <CmsImageInput label="Upload image" value={tab.image} onChange={(image) => patchGalleryImage(index, { image })} onUpload={onUpload} busy={busy} />
+              </div>
+            ))}
           </CmsRepeater>
         </div>
       </CmsSection>

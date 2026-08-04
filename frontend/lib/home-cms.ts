@@ -104,7 +104,7 @@ export type HomeContent = {
   footer: { description: string; copyright: string; columns: { title: string; links: FooterLink[] }[] };
 };
 
-export type GalleryTab = { value: string; label: string; image: string; title?: string; icon?: string };
+export type GalleryTab = { value: string; label: string; image: string; href?: string; title?: string; icon?: string };
 export type FeatureCard = { title: string; text: string; icon: string };
 export type BrandLogo = { name: string; image: string; url?: string };
 export type Testimonial = { name: string; site: string; image: string; quote: string };
@@ -191,10 +191,11 @@ export const defaultHomeCms: HomeCmsData = {
         productTabs: ["PRINTS", "WALL ART", "CARDS", "ALBUMS & BOOKS"],
         cartLabel: "Shopping Cart",
         tabs: [
-          { value: "share", label: "Share photos", image, title: "Client Gallery" },
-          { value: "delivery", label: "Digital delivery", image, title: "Download Delivery" },
-          { value: "proofing", label: "Online proofing", image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80", title: "Proofing Gallery" },
-          { value: "sell", label: "Sell photos", image, title: "Print Store" },
+          { value: "main", label: "Main gallery", image, href: "/register", title: "Jessica & Michael" },
+          { value: "left-top", label: "Left top gallery", image: "https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?auto=format&fit=crop&w=900&q=80", href: "/register", title: "Portrait Gallery" },
+          { value: "left-bottom", label: "Left bottom gallery", image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80", href: "/register", title: "Outdoor Gallery" },
+          { value: "right-top", label: "Right top gallery", image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=80", href: "/register", title: "Portrait Collection" },
+          { value: "right-bottom", label: "Right bottom gallery", image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=900&q=80", href: "/register", title: "Event Gallery" },
         ],
       },
       products: [
@@ -347,6 +348,17 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
       avatarImages: Array.isArray((savedHero as Partial<HomeContent["hero"]>).avatarImages) && (savedHero as Partial<HomeContent["hero"]>).avatarImages!.length
         ? (savedHero as Partial<HomeContent["hero"]>).avatarImages!
         : defaultHomeCms.content[lang].hero.avatarImages,
+    };
+    const savedGalleryTabs = Array.isArray(content[lang].gallery?.tabs) ? content[lang].gallery.tabs : [];
+    const fallbackGalleryTabs = defaultHomeCms.content[lang].gallery.tabs;
+    content[lang].gallery = {
+      ...defaultHomeCms.content[lang].gallery,
+      ...(content[lang].gallery ?? {}),
+      tabs: Array.from({ length: 5 }, (_, index) => ({
+        ...fallbackGalleryTabs[index],
+        ...(savedGalleryTabs[index] ?? {}),
+        href: savedGalleryTabs[index]?.href || fallbackGalleryTabs[index]?.href || "/register",
+      })),
     };
     content[lang].showcase = {
       ...defaultHomeCms.content[lang].showcase,
