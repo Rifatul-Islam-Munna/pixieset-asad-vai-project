@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   createElement,
@@ -27,11 +27,14 @@ import {
   ArrowRight,
   Bell,
   Calendar as CalendarIcon,
+  CalendarDays,
   Bold,
   ChevronDown,
   Check,
   ChevronsLeft,
+  CircleDollarSign,
   CircleUserRound,
+  Clock3,
   Copy,
   CreditCard,
   Database,
@@ -85,6 +88,8 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -275,8 +280,8 @@ const switcherItems = [
     text: "Your online store for prints and downloads",
     href: "/dashboard/store-gallery",
     icon: Store,
-    mark: "bg-[#ff4f5d]",
-    accent: "from-[#ff4f5d] to-[#ffc7cd]",
+    mark: "bg-[#6337d8]",
+    accent: "from-[#5527c9] to-[#8a5cf0]",
   },
   {
     key: "mobile-gallery",
@@ -479,7 +484,7 @@ export function ClientDashboard({
     (section === "store-gallery" && page === "pricing" && Boolean(productId));
   const dashboardChromeOpen =
     !campaignBuilderOpen && !isCollectionDetail && !isPriceSheetDetail;
-  const storeTopNavOpen = dashboardChromeOpen && section === "store-gallery";
+  const storeTopNavOpen = false;
   const [logoutPending, startLogoutTransition] = useTransition();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [billingUser, setBillingUser] = useState<BillingUser | null>(null);
@@ -632,14 +637,14 @@ export function ClientDashboard({
                   className={cn(
                     "flex h-12 items-center rounded-md text-left text-sm text-[#333] transition-colors hover:bg-[#f5f7f7]",
                     collapsed ? "justify-center px-0" : "gap-4 px-3",
-                    page === "marketing" && "bg-[#eaf8f5] font-semibold text-[#009b8c]",
+                    page === "marketing" && "bg-[#f0ebff] font-semibold text-[#6337d8]",
                   )}
                   title={collapsed ? "Marketing" : undefined}
                 >
                   <Megaphone
                     className={cn(
                       "size-5 text-[#333]",
-                      page === "marketing" && "text-[#00a997]",
+                      page === "marketing" && "text-[#6337d8]",
                     )}
                   />
                   {!collapsed && "Marketing"}
@@ -678,23 +683,23 @@ export function ClientDashboard({
                 <Link
                   href={`/dashboard/${section}/storage`}
                   className={cn(
-                    "flex items-center rounded-md text-left transition-colors hover:bg-[#eef8f6]",
+                    "flex items-center rounded-md text-left transition-colors hover:bg-[#f3efff]",
                     collapsed
                       ? "mx-auto size-11 justify-center p-0"
-                      : "w-full gap-3 bg-[#f3faf6] p-3",
+                      : "w-full gap-3 bg-[#f6f3ff] p-3",
                   )}
                   title="Storage"
                 >
-                  <div className="flex size-9 items-center justify-center rounded-md bg-[#dff6ef] text-[#19bba7]">
+                  <div className="flex size-9 items-center justify-center rounded-md bg-[#eee8ff] text-[#19bba7]">
                     <Database className="size-5" />
                   </div>
                   {!collapsed && (
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-[#00a997]">
+                        <p className="text-sm font-medium text-[#6337d8]">
                           Storage
                         </p>
-                        <PlusCircle className="size-4 text-[#16bda8]" />
+                        <PlusCircle className="size-4 text-[#7a4ce2]" />
                       </div>
                       <p className="mt-1 text-xs text-[#777]">
                         {sidebarUsedGb.toFixed(2)} GB used /{" "}
@@ -702,7 +707,7 @@ export function ClientDashboard({
                       </p>
                       <Progress
                         value={sidebarStoragePercent}
-                        className="mt-2 bg-[#dceee8]"
+                        className="mt-2 bg-[#e8e0ff]"
                       />
                       {sidebarEmailLimit > 0 && (
                         <>
@@ -712,7 +717,7 @@ export function ClientDashboard({
                           </p>
                           <Progress
                             value={sidebarEmailPercent}
-                            className="mt-2 bg-[#dceee8]"
+                            className="mt-2 bg-[#e8e0ff]"
                           />
                         </>
                       )}
@@ -886,13 +891,13 @@ export function ClientDashboard({
                     className={cn(
                       "flex items-center gap-4 text-base text-[#222]",
                       activeNav === item.label &&
-                        "font-semibold text-[#00a997]",
+                        "font-semibold text-[#6337d8]",
                     )}
                   >
                     <item.icon
                       className={cn(
                         "size-5 text-[#333]",
-                        activeNav === item.label && "text-[#00a997]",
+                        activeNav === item.label && "text-[#6337d8]",
                       )}
                     />
                     {item.label}
@@ -908,13 +913,13 @@ export function ClientDashboard({
                       onClick={() => setMobileMenuOpen(false)}
                       className={cn(
                         "flex items-center gap-4 text-base text-[#222]",
-                        page === "marketing" && "font-semibold text-[#00a997]",
+                        page === "marketing" && "font-semibold text-[#6337d8]",
                       )}
                     >
                       <Megaphone
                         className={cn(
                           "size-5 text-[#333]",
-                          page === "marketing" && "text-[#00a997]",
+                          page === "marketing" && "text-[#6337d8]",
                         )}
                       />
                       Marketing
@@ -1085,7 +1090,7 @@ function ClientGalleryDashboardPanel({ billingUser }: { billingUser: BillingUser
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-[-.03em]">Dashboard</h1>
-          <p className="mt-2 text-sm text-[#6d6a73]">Welcome back{billingUser?.name ? `, ${billingUser.name}` : ""} 👋</p>
+          <p className="mt-2 text-sm text-[#6d6a73]">Welcome back{billingUser?.name ? `, ${billingUser.name}` : ""} ðŸ‘‹</p>
         </div>
         <Link href="/dashboard/client-gallery/account" className="inline-flex h-11 items-center gap-2 rounded-[7px] border border-[#dedbe8] bg-white px-4 text-sm font-semibold shadow-sm"><CircleUserRound className="size-4" /> Profile & Account</Link>
       </div>
@@ -1225,7 +1230,7 @@ function AccountPanel() {
   return (
     <section className="mx-auto max-w-[800px] pb-20">
       <header className="border-b pb-5">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00a997]">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6337d8]">
           Workspace identity
         </p>
         <h1 className="mt-2 text-3xl font-medium">
@@ -1245,7 +1250,7 @@ function AccountPanel() {
             className={cn(
               "border-b-2 px-1 pb-3 text-sm capitalize",
               tab === item
-                ? "border-[#00b7a5] font-semibold text-[#111]"
+                ? "border-[#6337d8] font-semibold text-[#111]"
                 : "border-transparent text-[#777]",
             )}
           >
@@ -1374,13 +1379,13 @@ function AccountPanel() {
               className={cn(
                 "-mt-5 text-sm font-semibold",
                 usernameState === "available"
-                  ? "text-emerald-600"
+                  ? "text-[#6337d8]"
                   : usernameState === "checking"
                     ? "text-[#777]"
                     : "text-red-600",
               )}
             >
-              {usernameState === "checking" ? "Checking…" : usernameMessage}
+              {usernameState === "checking" ? "Checkingâ€¦" : usernameMessage}
             </p>
           )}
           <FieldInput
@@ -1414,11 +1419,11 @@ function AccountPanel() {
                   <div>
                     <b>{purchase.planName}</b>
                     <p className="mt-1 text-xs capitalize text-[#888]">
-                      {purchase.source} · {purchase.status}
+                      {purchase.source} Â· {purchase.status}
                     </p>
                   </div>
                   <div className="text-right">
-                    <b>€{Number(purchase.amount).toFixed(2)}</b>
+                    <b>â‚¬{Number(purchase.amount).toFixed(2)}</b>
                     <p className="mt-1 text-xs text-[#888]">
                       {new Date(purchase.createdAt).toLocaleDateString()}
                     </p>
@@ -1441,7 +1446,7 @@ function AccountPanel() {
               usernameState === "checking" ||
               usernameState === "unavailable"
             }
-            className="h-11 rounded-none bg-[#00ad9c] px-8 font-bold text-white"
+            className="h-11 rounded-none bg-[#6337d8] px-8 font-bold text-white"
           >
             {update.isPending ? (
               <Loader2 className="size-4 animate-spin" />
@@ -1475,7 +1480,7 @@ function FieldInput({
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 rounded-none border-[#d8d8d8] px-4 shadow-none focus-visible:ring-[#00b7a5]"
+        className="h-12 rounded-none border-[#d8d8d8] px-4 shadow-none focus-visible:ring-[#6337d8]"
       />
       {help && <span className="text-xs leading-5 text-[#888]">{help}</span>}
     </label>
@@ -1574,7 +1579,7 @@ function StoreTopNavigation({
                 }
                 className={cn(
                   "flex h-10 items-center border-b-2 border-transparent text-sm text-[#777] transition-colors hover:text-[#111]",
-                  activePage === item.page && "border-[#00a997] text-[#111]",
+                  activePage === item.page && "border-[#6337d8] text-[#111]",
                 )}
               >
                 {item.label}
@@ -1714,7 +1719,7 @@ function StoragePlanPanel() {
         <PageHeader title="Storage & Plan" />
         <Button
           asChild
-          className="h-11 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]"
+          className="h-11 rounded-none bg-[#6337d8] px-6 text-sm font-bold text-white hover:bg-[#542bc2]"
         >
           <Link href="/pricing">View Pricing Plans</Link>
         </Button>
@@ -1725,7 +1730,7 @@ function StoragePlanPanel() {
         </p>
       )}
       {notice && (
-        <p className="mt-5 border-l-2 border-[#22bda7] pl-3 text-sm font-semibold text-[#008f80]">
+        <p className="mt-5 border-l-2 border-[#6337d8] pl-3 text-sm font-semibold text-[#5a2fc5]">
           {notice}
         </p>
       )}
@@ -1756,8 +1761,8 @@ function StoragePlanPanel() {
           Yearly
         </button>
       </div>
-      <div className="mt-5 border-l-4 border-[#22bda7] bg-[#f1faf8] px-5 py-4">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#008f80]">
+      <div className="mt-5 border-l-4 border-[#6337d8] bg-[#f5f1ff] px-5 py-4">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5a2fc5]">
           Current plan
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
@@ -1818,7 +1823,7 @@ function StoragePlanPanel() {
                     Storage allowance + monthly email quota
                   </p>
                 </div>
-                <CreditCard className="size-5 text-[#00a997]" />
+                <CreditCard className="size-5 text-[#6337d8]" />
               </div>
               <div className="mt-8 grid gap-3 text-sm">
                 <div className="flex justify-between">
@@ -1832,7 +1837,7 @@ function StoragePlanPanel() {
                 <div className="flex justify-between">
                   <span>Price</span>
                   <b>
-                    €{monthlyEquivalent.toFixed(2)}{" "}
+                    â‚¬{monthlyEquivalent.toFixed(2)}{" "}
                     {billingInterval === "year" ? "/yearly" : "/month"}
                   </b>
                 </div>
@@ -1841,7 +1846,7 @@ function StoragePlanPanel() {
                     <span>Billed</span>
                     <b>
                       {yearlyAvailable
-                        ? `€${Number(plan.priceYearly).toFixed(2)} yearly`
+                        ? `â‚¬${Number(plan.priceYearly).toFixed(2)} yearly`
                         : "Unavailable"}
                     </b>
                   </div>
@@ -1889,7 +1894,7 @@ function UsagePanel({
   return (
     <div className="border bg-white p-6">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center bg-[#e3f6f1] text-[#00a997]">
+        <span className="flex size-10 items-center justify-center bg-[#eee8ff] text-[#6337d8]">
           {icon}
         </span>
         <div>
@@ -2039,7 +2044,7 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
         >
           <Bell className="size-5" />
           {unreadCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-[#22bda7] px-1 text-[10px] font-bold text-white">
+            <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-[#6337d8] px-1 text-[10px] font-bold text-white">
               {Math.min(unreadCount, 9)}
             </span>
           )}
@@ -2056,7 +2061,7 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
               Recent collection and store activity
             </p>
           </div>
-          <span className="rounded-full bg-[#eef8f6] px-2.5 py-1 text-[11px] font-bold text-[#008f80]">
+          <span className="rounded-full bg-[#f3efff] px-2.5 py-1 text-[11px] font-bold text-[#5a2fc5]">
             {recentItems.length}
           </span>
         </div>
@@ -2067,7 +2072,7 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
                 key={item.id}
                 className="flex gap-3 border-b px-4 py-3.5 last:border-b-0"
               >
-                <span className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eef8f6] text-[#009b8c]">
+                <span className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#f3efff] text-[#6337d8]">
                   {item.id.startsWith("download") ? (
                     <Download />
                   ) : item.id.startsWith("favorite") ? (
@@ -2114,7 +2119,7 @@ function DashboardProfileMenu({
   const avatar = (
     <Avatar className={collapsed ? "size-8" : "size-7"}>
       <AvatarImage src={billingUser?.avatar || ""} />
-      <AvatarFallback className="bg-[#dff3ef] text-[#0b9f91]">
+      <AvatarFallback className="bg-[#eee8ff] text-[#6337d8]">
         {billingUser?.name?.slice(0, 1).toUpperCase() || "U"}
       </AvatarFallback>
     </Avatar>
@@ -2284,7 +2289,7 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
           </div>
           <Link
             href="/dashboard/client-gallery/marketing/settings"
-            className="inline-flex h-10 items-center gap-2 border bg-white px-4 text-sm font-bold text-[#222] hover:border-[#22bda7] hover:text-[#009b8c]"
+            className="inline-flex h-10 items-center gap-2 border bg-white px-4 text-sm font-bold text-[#222] hover:border-[#6337d8] hover:text-[#6337d8]"
           >
             <Settings className="size-4" />
             Subscription settings
@@ -2402,7 +2407,7 @@ function MarketingSettingsPanel({
           </p>
         </div>
         <Button
-          className="h-11 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+          className="h-11 rounded-none bg-[#6337d8] px-8 text-sm font-bold text-white hover:bg-[#542bc2]"
           disabled={saveSetting.isPending}
           onClick={save}
         >
@@ -2421,13 +2426,13 @@ function MarketingSettingsPanel({
             <div>
               <div className="flex items-start justify-between gap-5">
                 <div className="flex gap-4">
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-[#009b8c] shadow-sm">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-[#6337d8] shadow-sm">
                     <MailCheck className="size-5" />
                   </span>
                   <div>
                     <h2 className="text-lg font-bold">Email registration subscription</h2>
                     <p className="mt-2 text-sm leading-6 text-[#5d6b68]">
-                      Show an optional “Subscribe to updates and special offers”
+                      Show an optional â€œSubscribe to updates and special offersâ€
                       checkbox inside the collection email-registration modal.
                     </p>
                   </div>
@@ -2440,10 +2445,10 @@ function MarketingSettingsPanel({
                 />
               </div>
             </div>
-            <div className="mt-5 border-l-2 border-[#22bda7] pl-4 text-sm leading-6 text-[#666]">
+            <div className="mt-5 border-l-2 border-[#6337d8] pl-4 text-sm leading-6 text-[#666]">
               This appears only when both <strong>Email Registration</strong> and
               <strong> Marketing Subscription</strong> are enabled in that
-              collection’s Privacy settings.
+              collectionâ€™s Privacy settings.
             </div>
           </section>
 
@@ -2500,8 +2505,8 @@ function MarketingSettingsPanel({
               <Field className="sm:col-span-2">
                 <FieldLabel className="font-bold">Pop-up image</FieldLabel>
                 <div className="mt-2 grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
-                  <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center border border-dashed border-[#cfcfcf] bg-[#fafafa] px-5 py-5 text-center transition hover:border-[#22bda7] hover:bg-[#f4fbf9]">
-                    {popupImageUploading ? <Loader2 className="size-6 animate-spin text-[#22bda7]" /> : <Upload className="size-6 text-[#777]" />}
+                  <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center border border-dashed border-[#cfcfcf] bg-[#fafafa] px-5 py-5 text-center transition hover:border-[#6337d8] hover:bg-[#f4fbf9]">
+                    {popupImageUploading ? <Loader2 className="size-6 animate-spin text-[#6337d8]" /> : <Upload className="size-6 text-[#777]" />}
                     <span className="mt-3 text-sm font-bold text-[#222]">{popupImageUploading ? "Processing image..." : "Upload image"}</span>
                     <span className="mt-1 text-xs text-[#888]">JPG, PNG, or WebP up to 10 MB</span>
                     <input
@@ -2545,10 +2550,10 @@ function MarketingSettingsPanel({
           <MarketingPopupPreview settings={form} />
           <Link
             href="/dashboard/client-gallery/marketing/contacts"
-            className="mt-4 flex items-center justify-between border bg-white px-5 py-4 text-sm font-bold hover:border-[#22bda7]"
+            className="mt-4 flex items-center justify-between border bg-white px-5 py-4 text-sm font-bold hover:border-[#6337d8]"
           >
             View subscribed contacts
-            <ArrowRight className="size-4 text-[#00a997]" />
+            <ArrowRight className="size-4 text-[#6337d8]" />
           </Link>
         </div>
       </div>
@@ -2611,7 +2616,7 @@ function CampaignListHeader({
           </div>
         </div>
         <Button
-          className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+          className="h-10 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white hover:bg-[#542bc2]"
           onClick={onNew}
         >
           New Campaign
@@ -2651,7 +2656,7 @@ function CampaignTable({
     return (
       <div className="mt-12 flex min-h-[520px] flex-col items-center justify-center text-center">
         <div className="relative">
-          <div className="size-28 rounded-full bg-[#e5f0ef]" />
+          <div className="size-28 rounded-full bg-[#eee8ff]" />
           <Mail className="absolute -left-3 top-3 size-10 text-[#444]" />
           <MailCheck className="absolute left-12 top-14 size-9 text-[#444]" />
         </div>
@@ -2733,7 +2738,7 @@ function TemplateGrid({
       {emailTemplates.map((template) => (
         <button
           key={template.id}
-          className="border bg-white p-4 text-left hover:border-[#22bda7]"
+          className="border bg-white p-4 text-left hover:border-[#6337d8]"
           onClick={() => onSelect(template.id)}
         >
           <div className="flex h-28 items-center justify-center bg-[#090d0f] text-white">
@@ -2886,7 +2891,7 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-8">
           <button className="text-sm font-semibold">Send Test</button>
           <Button
-            className="h-12 rounded-none bg-[#22bda7] px-9 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-12 rounded-none bg-[#6337d8] px-9 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={sendNow}
             disabled={sendPending}
           >
@@ -2916,14 +2921,14 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
             <TabsList className="grid h-16 w-full grid-cols-2 rounded-none bg-[#fafafa] p-0">
               <TabsTrigger
                 value="email"
-                className="rounded-none data-active:border-b-2 data-active:border-[#22bda7] data-active:bg-white"
+                className="rounded-none data-active:border-b-2 data-active:border-[#6337d8] data-active:bg-white"
               >
                 <Mail data-icon="inline-start" />
                 Email
               </TabsTrigger>
               <TabsTrigger
                 value="recipients"
-                className="rounded-none data-active:border-b-2 data-active:border-[#22bda7] data-active:bg-white"
+                className="rounded-none data-active:border-b-2 data-active:border-[#6337d8] data-active:bg-white"
               >
                 <Users data-icon="inline-start" />
                 Recipients
@@ -3113,7 +3118,7 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                 </div>
                 <Link
                   href="/dashboard/client-gallery/marketing/contacts"
-                  className="text-sm font-bold text-[#00a997]"
+                  className="text-sm font-bold text-[#6337d8]"
                 >
                   Add contacts
                 </Link>
@@ -3143,7 +3148,7 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-11 rounded-none"
+                  className="h-11 rounded-[7px] border-[#ded9ea] focus-visible:border-[#6337d8] focus-visible:ring-[#6337d8]/15"
                   disabled={!visibleRecipients.length}
                   onClick={toggleVisibleRecipients}
                 >
@@ -3299,7 +3304,7 @@ function PageHeader({ title, action }: { title: string; action?: string }) {
       <h1 className="text-[28px] font-medium leading-none">{title}</h1>
       <div className="flex flex-wrap items-center gap-3 sm:gap-5">
         {action && (
-          <Button className="h-10 rounded-none bg-[#22bda7] px-5 text-sm font-bold text-white hover:bg-[#19a995] sm:px-7">
+          <Button className="h-10 rounded-none bg-[#6337d8] px-5 text-sm font-bold text-white hover:bg-[#542bc2] sm:px-7">
             {action}
           </Button>
         )}
@@ -3322,7 +3327,7 @@ function ContactGrid() {
         <div key={email} className="border bg-white p-5">
           <p className="font-bold">{name}</p>
           <p className="mt-2 text-sm text-[#666]">{email}</p>
-          <p className="mt-4 text-xs uppercase tracking-wide text-[#00a997]">
+          <p className="mt-4 text-xs uppercase tracking-wide text-[#6337d8]">
             Opted in
           </p>
         </div>
@@ -3425,13 +3430,13 @@ function FavoriteCollectionsPanel() {
         <TabsList className="h-auto gap-8 bg-transparent p-0">
           <TabsTrigger
             value="albums"
-            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
+            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#6337d8] data-active:decoration-2 data-active:underline-offset-[10px]"
           >
             Albums
           </TabsTrigger>
           <TabsTrigger
             value="photos"
-            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
+            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#6337d8] data-active:decoration-2 data-active:underline-offset-[10px]"
           >
             Photos
           </TabsTrigger>
@@ -3481,7 +3486,7 @@ function FavoriteCollectionsPanel() {
             </div>
           ) : (
             <div className="mx-auto flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
-              <Heart className="size-10 text-[#22bda7]" />
+              <Heart className="size-10 text-[#6337d8]" />
               <h2 className="mt-5 text-xl font-semibold">
                 No favorite albums yet
               </h2>
@@ -3531,7 +3536,7 @@ function FavoriteCollectionsPanel() {
             </div>
           ) : (
             <div className="mx-auto flex min-h-[360px] max-w-[420px] flex-col items-center justify-center text-center">
-              <Heart className="size-10 text-[#22bda7]" />
+              <Heart className="size-10 text-[#6337d8]" />
               <h2 className="mt-5 text-xl font-semibold">
                 No favorite photos yet
               </h2>
@@ -3577,7 +3582,7 @@ function FavoriteCollectionsPanel() {
                 </div>
                 <div className="grid gap-3">
                   <Button
-                    className="h-11 rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]"
+                    className="h-11 rounded-none bg-[#6337d8] text-sm font-bold text-white hover:bg-[#542bc2]"
                     onClick={() =>
                       previewImage.galleryUrl &&
                       window.open(
@@ -3625,13 +3630,13 @@ function StarredPanel() {
         <TabsList className="h-auto gap-8 bg-transparent p-0">
           <TabsTrigger
             value="collections"
-            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
+            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#6337d8] data-active:decoration-2 data-active:underline-offset-[10px]"
           >
             Galleries
           </TabsTrigger>
           <TabsTrigger
             value="photos"
-            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#22bda7] data-active:decoration-2 data-active:underline-offset-[10px]"
+            className="h-auto rounded-none px-0 pb-2 text-sm font-semibold data-active:bg-transparent data-active:text-[#111] data-active:shadow-none data-active:underline data-active:decoration-[#6337d8] data-active:decoration-2 data-active:underline-offset-[10px]"
           >
             Photos
           </TabsTrigger>
@@ -3840,7 +3845,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
         </select>
         <div className="hidden justify-end lg:flex">
           <Button
-            className="h-9 rounded-none bg-[#22bda7] px-4 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-9 rounded-none bg-[#6337d8] px-4 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={onNewCollection}
           >
             <PlusCircle className="mr-2 size-4" />
@@ -3865,7 +3870,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                 </span>
                 <span className="absolute right-2 top-2 hidden gap-1 group-hover:flex">
                   <button
-                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#6337d8]"
                     onClick={() =>
                       starImage.mutate({
                         collectionId: photo.collectionId,
@@ -3879,19 +3884,19 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                       className={cn(
                         "size-4",
                         photo.metadata?.starred === true &&
-                          "fill-[#00a997] text-[#00a997]",
+                          "fill-[#6337d8] text-[#6337d8]",
                       )}
                     />
                   </button>
                   <button
-                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#6337d8]"
                     onClick={() => setPreviewImage(photo)}
                     aria-label="View image"
                   >
                     <Eye className="size-4" />
                   </button>
                   <a
-                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#6337d8]"
                     href={imageSrc(photo.url)}
                     download={photo.originalName ?? "image"}
                     aria-label="Download image"
@@ -3899,7 +3904,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                     <Download className="size-4" />
                   </a>
                   <button
-                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#00a997]"
+                    className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#6337d8]"
                     onClick={() =>
                       router.push(
                         `/dashboard/client-gallery/collections/${photo.collectionId}`,
@@ -3985,7 +3990,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
             Try filename, gallery, set, camera, lens, keyword, or title.
           </p>
           <Button
-            className="mt-6 h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="mt-6 h-10 rounded-none bg-[#6337d8] px-8 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={() => {
               setLibraryQuery("");
               setCollectionFilter("all");
@@ -4067,7 +4072,7 @@ function SettingsPanel({
             className={cn(
               "pb-2 text-sm font-semibold",
               activeTab === tab.page &&
-                "underline decoration-[#22bda7] decoration-2 underline-offset-[10px]",
+                "underline decoration-[#6337d8] decoration-2 underline-offset-[10px]",
             )}
           >
             {tab.label}
@@ -4253,7 +4258,7 @@ function PreferencesPanel() {
       </FieldGroup>
 
       <Button
-        className="h-11 rounded-none bg-[#22bda7] px-8 text-white"
+        className="h-11 rounded-none bg-[#6337d8] px-8 text-white"
         disabled={saveSetting.isPending}
         onClick={save}
       >
@@ -4324,7 +4329,7 @@ function IntegrationsPanel() {
               <p className="mt-1 text-sm text-[#666]">Public homepage and gallery page tracking.</p>
             </div>
           </div>
-          <span className={cn("w-fit px-3 py-1 text-xs font-bold uppercase", form.enabled ? "bg-[#e7f8f4] text-[#008f81]" : "bg-[#eeeeee] text-[#777]")}>
+          <span className={cn("w-fit px-3 py-1 text-xs font-bold uppercase", form.enabled ? "bg-[#eee8ff] text-[#5a2fc5]" : "bg-[#eeeeee] text-[#777]")}>
             {form.enabled ? "Enabled" : "Off"}
           </span>
         </div>
@@ -4349,7 +4354,7 @@ function IntegrationsPanel() {
               </p>
             </Field>
             <Button
-              className="h-11 w-fit rounded-none bg-[#22bda7] px-8 text-white hover:bg-[#19a995]"
+              className="h-11 w-fit rounded-none bg-[#6337d8] px-8 text-white hover:bg-[#542bc2]"
               disabled={saveSetting.isPending}
               onClick={save}
             >
@@ -4360,15 +4365,15 @@ function IntegrationsPanel() {
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#777]">Scope</p>
             <div className="mt-5 grid gap-4 text-sm">
               <div className="flex items-center gap-3">
-                <Check className="size-4 text-[#00a997]" />
+                <Check className="size-4 text-[#6337d8]" />
                 <span>Tenant homepage</span>
               </div>
               <div className="flex items-center gap-3">
-                <Check className="size-4 text-[#00a997]" />
+                <Check className="size-4 text-[#6337d8]" />
                 <span>Public galleries</span>
               </div>
               <div className="flex items-center gap-3">
-                <Check className="size-4 text-[#00a997]" />
+                <Check className="size-4 text-[#6337d8]" />
                 <span>GA4 only</span>
               </div>
             </div>
@@ -4383,7 +4388,7 @@ const defaultBrandSettings: BrandSettings = {
   logoUrl: "",
   brandText: "Studio Brand",
   brandImageUrl: "",
-  accentColor: "#22bda7",
+  accentColor: "#6337d8",
 };
 
 function BrandingSettings() {
@@ -4489,7 +4494,7 @@ function BrandingSettings() {
           </Field>
         </FieldGroup>
         <Button
-          className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white"
+          className="mt-8 h-11 rounded-none bg-[#6337d8] px-8 text-white"
           disabled={saveSetting.isPending}
           onClick={save}
         >
@@ -4638,7 +4643,7 @@ function EmailTemplatesPanel({
             </div>
           </div>
           <Button
-            className="h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-10 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={createTemplate}
           >
             New Template
@@ -4648,7 +4653,7 @@ function EmailTemplatesPanel({
         {!emailTemplates.length ? (
           <div className="mt-12 flex min-h-[520px] flex-col items-center justify-center text-center">
             <div className="relative">
-              <div className="size-28 rounded-full bg-[#e5f0ef]" />
+              <div className="size-28 rounded-full bg-[#eee8ff]" />
               <Mail className="absolute -left-3 top-3 size-10 text-[#444]" />
               <MailCheck className="absolute left-12 top-14 size-9 text-[#444]" />
             </div>
@@ -4660,7 +4665,7 @@ function EmailTemplatesPanel({
               in Marketing email campaigns.
             </p>
             <Button
-              className="mt-7 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+              className="mt-7 h-10 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white hover:bg-[#542bc2]"
               onClick={createTemplate}
             >
               New Template
@@ -4735,7 +4740,7 @@ function EmailTemplatesPanel({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {emailTemplateSaved && (
-            <span className="text-sm font-semibold text-[#00a997]">Saved</span>
+            <span className="text-sm font-semibold text-[#6337d8]">Saved</span>
           )}
           <Button
             variant="outline"
@@ -4948,7 +4953,7 @@ function PresetList({ section }: { section: DashboardSection }) {
         </div>
         <Link
           href={`/dashboard/${section}/settings/presets/new`}
-          className="inline-flex h-10 items-center gap-2 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white"
+          className="inline-flex h-10 items-center gap-2 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white"
           onClick={addPresetDraft}
         >
           <PlusCircle className="size-4" />
@@ -5097,16 +5102,16 @@ function PresetEditor({ section }: { section: DashboardSection }) {
         </div>
         <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           {presetSaved && (
-            <span className="text-sm font-semibold text-[#00a997]">Saved</span>
+            <span className="text-sm font-semibold text-[#6337d8]">Saved</span>
           )}
           <Link
             href={`/collection/${encodeURIComponent(presetName || "preset")}/sample-gallery`}
-            className="text-sm font-semibold text-[#00a997]"
+            className="text-sm font-semibold text-[#6337d8]"
           >
             Preview Gallery
           </Link>
           <Button
-            className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-10 rounded-none bg-[#6337d8] px-8 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={savePresetToDb}
           >
             Save
@@ -5130,7 +5135,7 @@ function PresetEditor({ section }: { section: DashboardSection }) {
               className={cn(
                 "flex items-center gap-6 border-l-2 py-1 pl-6 text-left text-base",
                 presetEditorPanel === item.panel
-                  ? "border-[#22bda7] font-semibold text-[#111]"
+                  ? "border-[#6337d8] font-semibold text-[#111]"
                   : "border-transparent text-[#777]",
               )}
               onClick={() => setPresetEditorPanel(item.panel)}
@@ -5164,7 +5169,7 @@ function PresetEditor({ section }: { section: DashboardSection }) {
                   className={cn(
                     "flex h-12 items-center gap-3 px-3 text-left text-sm",
                     presetDesignPanel === panel &&
-                      "bg-[#f5f5f5] font-bold text-[#00a997]",
+                      "bg-[#f5f5f5] font-bold text-[#6337d8]",
                   )}
                   onClick={() => setPresetDesignPanel(panel)}
                   type="button"
@@ -5259,7 +5264,7 @@ function SlideshowAdditionalOptions({
     <div className="grid gap-4">
       <button
         type="button"
-        className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#00a997]"
+        className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#6337d8]"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
       >
@@ -5278,7 +5283,7 @@ function SlideshowAdditionalOptions({
                     name="slideshow-speed"
                     checked={speed === value}
                     onChange={() => onChange({ slideshowSpeed: value })}
-                    className="size-5 accent-[#22bda7]"
+                    className="size-5 accent-[#6337d8]"
                   />
                   {value}
                 </label>
@@ -5377,7 +5382,7 @@ function PresetGeneralPanel({
             Set default watermark. Manage watermarks in{" "}
             <Link
               href={`/dashboard/${section}/settings/watermark`}
-              className="text-[#00a997]"
+              className="text-[#6337d8]"
             >
               App Settings
             </Link>
@@ -5550,13 +5555,13 @@ function PresetStorePanel({
     <PlanFeatureLock feature="store" label="Store">
       <div className="max-w-[560px]">
         <h2 className="text-2xl font-medium">Store</h2>
-        <div className="mt-8 bg-[#eef7f9] p-6">
+        <div className="mt-8 bg-[#f5f1ff] p-6">
           <p className="font-bold">Activate Store</p>
           <p className="mt-4 text-sm leading-7 text-[#222]">
             Setup Nikoset Store to start selling prints, digital downloads, and
             more directly from your collections.
           </p>
-          <button className="mt-3 text-sm font-semibold text-[#00a997]">
+          <button className="mt-3 text-sm font-semibold text-[#6337d8]">
             Get Started
           </button>
         </div>
@@ -5589,7 +5594,7 @@ function PresetStorePanel({
             </select>
             <p className="text-sm leading-6 text-[#666]">
               Set which products are for sale in galleries. Manage price
-              sheets in <span className="text-[#00a997]">Store</span>
+              sheets in <span className="text-[#6337d8]">Store</span>
             </p>
           </Field>
 
@@ -5870,7 +5875,7 @@ function PresetDesignPanel({
                   className={cn(
                     "block border p-1",
                     design.cover === `custom:${template.id}` &&
-                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                      "border-[#6337d8] ring-1 ring-[#6337d8]",
                   )}
                 >
                   <span className="relative block aspect-[1.45] overflow-hidden bg-white">
@@ -5899,7 +5904,7 @@ function PresetDesignPanel({
                   className={cn(
                     "block border p-1",
                     design.cover === name &&
-                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                      "border-[#6337d8] ring-1 ring-[#6337d8]",
                   )}
                 >
                   <span className="relative block aspect-[1.45] overflow-hidden bg-white">
@@ -5938,7 +5943,7 @@ function PresetDesignPanel({
                   className={cn(
                     "block border p-8 text-left",
                     design.customFontDataUrl === font.data.url &&
-                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                      "border-[#6337d8] ring-1 ring-[#6337d8]",
                   )}
                 >
                   <style>{`@font-face{font-family:"${font.data.name.replace(/"/g, "")}";src:url("${font.data.url}");font-display:swap;}`}</style>
@@ -5976,7 +5981,7 @@ function PresetDesignPanel({
                   className={cn(
                     "block border p-8 text-left",
                     design.typography === name &&
-                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                      "border-[#6337d8] ring-1 ring-[#6337d8]",
                   )}
                 >
                   <span className="block text-xl tracking-widest">
@@ -6046,7 +6051,7 @@ function PresetDesignPanel({
                   className={cn(
                     "flex h-[118px] items-center justify-center gap-2 border",
                     design.color === name &&
-                      "border-[#22bda7] ring-1 ring-[#22bda7]",
+                      "border-[#6337d8] ring-1 ring-[#6337d8]",
                   )}
                 >
                   {colors.map((color) => (
@@ -6329,7 +6334,7 @@ function TwoOption({
           <span
             className={cn(
               "flex h-[108px] items-center justify-center border",
-              value === item && "border-[#22bda7] ring-1 ring-[#22bda7]",
+              value === item && "border-[#6337d8] ring-1 ring-[#6337d8]",
             )}
           >
             <LayoutGrid className="size-7" />
@@ -6385,7 +6390,7 @@ function PresetDownloadPanel({
           </p>
           <button
             type="button"
-            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#00a997]"
+            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#6337d8]"
             onClick={() => setDownloadOptionsOpen((value) => !value)}
             aria-expanded={downloadOptionsOpen}
           >
@@ -6606,7 +6611,7 @@ function WatermarkList({ section }: { section: DashboardSection }) {
         </div>
         <Link
           href={`/dashboard/${section}/settings/watermark/new`}
-          className="inline-flex h-10 items-center rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
+          className="inline-flex h-10 items-center rounded-none bg-[#6337d8] px-6 text-sm font-bold text-white"
           onClick={addWatermarkDraft}
         >
           Add Watermark
@@ -6857,13 +6862,13 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
             <Field>
               <FieldLabel className="font-bold">Font Color</FieldLabel>
               <div className="flex gap-3">
-                {["#ffffff", "#000000", "#22bda7"].map((color) => (
+                {["#ffffff", "#000000", "#6337d8"].map((color) => (
                   <button
                     key={color}
                     className={cn(
                       "size-10 rounded-full border",
                       watermarkColor === color &&
-                        "ring-2 ring-[#22bda7] ring-offset-2",
+                        "ring-2 ring-[#6337d8] ring-offset-2",
                     )}
                     style={{ backgroundColor: color }}
                     onClick={() => setWatermarkColor(color)}
@@ -6893,7 +6898,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
               }}
             />
             {watermarkImageUploading && (
-              <p className="mt-2 text-xs font-semibold text-[#00a997]">
+              <p className="mt-2 text-xs font-semibold text-[#6337d8]">
                 Uploading watermark image...
               </p>
             )}
@@ -6938,7 +6943,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
                     "size-4 rounded-full bg-[#d8d8d8]",
                     Math.abs(watermarkPosition.x - x) < 16 &&
                       Math.abs(watermarkPosition.y - y) < 16 &&
-                      "bg-[#22bda7]",
+                      "bg-[#6337d8]",
                   )}
                   onClick={() => setWatermarkPosition({ x, y })}
                   aria-label={`Set watermark ${x} ${y}`}
@@ -6963,7 +6968,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
 
         <div className="flex items-center gap-4">
           <Button
-            className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-10 rounded-none bg-[#6337d8] px-8 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={saveWatermarkToDb}
             disabled={watermarkImageUploading}
           >
@@ -6971,12 +6976,12 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
           </Button>
           <Link
             href={`/dashboard/${section}/settings/watermark`}
-            className="text-sm font-semibold text-[#00a997]"
+            className="text-sm font-semibold text-[#6337d8]"
           >
             Watermark List
           </Link>
           {watermarkSaved && (
-            <span className="text-sm font-semibold text-[#00a997]">Saved</span>
+            <span className="text-sm font-semibold text-[#6337d8]">Saved</span>
           )}
         </div>
       </div>
@@ -7048,7 +7053,7 @@ function DashboardPlaceholder({
           <p className="text-sm text-[#777]">Dashboard</p>
           <h1 className="mt-2 text-[28px] font-medium">{title}</h1>
         </div>
-        <Button className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white hover:bg-[#19a995]">
+        <Button className="h-10 rounded-none bg-[#6337d8] px-6 text-sm font-bold text-white hover:bg-[#542bc2]">
           New {title}
         </Button>
       </div>
@@ -7154,65 +7159,101 @@ function StoreDashboardPanel() {
   const settingsQuery = useStoreSettings().settingsQuery;
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const data = dashboardQuery.data?.data;
-  const stats = [
-    ["Revenue", money(data?.revenue ?? 0, currency)],
-    ["Orders", String(data?.orderCount ?? 0)],
-    ["Customers", String(data?.customerCount ?? 0)],
-    ["Pending", String(data?.pending ?? 0)],
-    ["Avg Order", money(data?.averageOrderValue ?? 0, currency)],
-    ["Products", String(data?.productCount ?? 0)],
+  const recentOrders = data?.recentOrders ?? [];
+  const totalStatuses = Math.max(1, Object.values(data?.statusCounts ?? {}).reduce((sum, value) => sum + Number(value || 0), 0));
+  const metricCards = [
+    { label: "Total Revenue", value: money(data?.revenue ?? 0, currency), icon: CircleDollarSign, accent: "from-[#6d36df] to-[#8d56f0]" },
+    { label: "Total Orders", value: String(data?.orderCount ?? 0), icon: Package, accent: "from-[#7550ec] to-[#9b7cff]" },
+    { label: "Total Customers", value: String(data?.customerCount ?? 0), icon: Users, accent: "from-[#7a42e8] to-[#aa78f8]" },
+    { label: "Pending Orders", value: String(data?.pending ?? 0), icon: Clock3, accent: "from-[#8c4de9] to-[#bc87f7]" },
+    { label: "Products", value: String(data?.productCount ?? 0), icon: ShoppingBag, accent: "from-[#5c2acb] to-[#7d4be4]" },
   ];
+  const salesChartData = recentOrders.slice().reverse().map((order, index) => ({
+    label: order.createdAt ? new Date(order.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `Order ${index + 1}`,
+    revenue: Number(order.total || 0),
+  }));
+  const statusChartData = orderStatuses.map((status, index) => ({
+    status,
+    count: Number(data?.statusCounts?.[status] ?? 0),
+    fill: ["#5b2bc8", "#6d3bd5", "#8050df", "#9568e8", "#ad85ef", "#c8aaf6"][index % 6],
+  })).filter((item) => item.count > 0);
+  const salesChartConfig = {
+    revenue: { label: "Revenue", color: "#6734db" },
+  } satisfies ChartConfig;
+  const statusChartConfig = orderStatuses.reduce((config, status, index) => {
+    config[status] = { label: status.charAt(0).toUpperCase() + status.slice(1), color: ["#5b2bc8", "#6d3bd5", "#8050df", "#9568e8", "#ad85ef", "#c8aaf6"][index % 6] };
+    return config;
+  }, {} as ChartConfig);
 
   return (
-    <StorePageShell
-      title="Store Dashboard"
-      subtitle="Revenue, orders, customers, and fulfillment status."
-    >
-      <div className="grid gap-4 md:grid-cols-3">
-        {stats.map(([label, value]) => (
-          <div key={label} className="border bg-white p-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-[#777]">
-              {label}
-            </p>
-            <p className="mt-3 text-2xl font-semibold">{value}</p>
-          </div>
-        ))}
-      </div>
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
-        <div className="border bg-white">
-          <StoreTableHeader title="Recent Orders" />
-          <StoreTable
-            columns={["Order", "Customer", "Status", "Total"]}
-            rows={(data?.recentOrders ?? []).map((order) => [
-              order.orderNumber,
-              order.customer?.name ?? "Customer",
-              <StatusBadge key="status" value={order.status} />,
-              money(order.total, currency),
-            ])}
-            empty="No orders yet"
-          />
+    <div className="mx-auto w-full max-w-[1480px] px-4 py-7 sm:px-7 lg:px-9 lg:py-9">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-[-.03em]">Store Dashboard 👋</h1>
+          <p className="mt-2 text-sm text-[#716c7b]">Overview of your store performance and key metrics.</p>
         </div>
-        <div className="border bg-white p-5">
-          <p className="text-sm font-bold">Status Breakdown</p>
-          <div className="mt-5 flex flex-col gap-3">
-            {orderStatuses.map((status) => (
-              <div
-                key={status}
-                className="flex items-center justify-between text-sm"
-              >
-                <span className="capitalize text-[#555]">{status}</span>
-                <span className="font-bold">
-                  {data?.statusCounts?.[status] ?? 0}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/dashboard/store-gallery/orders" className="inline-flex h-11 items-center gap-2 rounded-[7px] border border-[#dfdbe9] bg-white px-4 text-sm font-semibold"><CalendarDays className="size-4" /> View Orders</Link>
+          <button className="inline-flex h-11 items-center gap-2 rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] px-5 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(95,53,200,.2)]"><Download className="size-4" /> Export Report</button>
         </div>
       </div>
-    </StorePageShell>
+
+      <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {metricCards.map((card) => {
+          const Icon = card.icon;
+          return <div key={card.label} className="rounded-[12px] border border-[#ebe7f2] bg-white p-5 shadow-[0_10px_30px_rgba(39,25,85,.05)]">
+            <div className="flex items-center gap-4"><span className={`grid size-12 place-items-center rounded-full bg-gradient-to-br ${card.accent} text-white`}><Icon className="size-5" /></span><div><p className="text-xs font-medium text-[#787381]">{card.label}</p><p className="mt-1 text-2xl font-bold tracking-[-.03em]">{card.value}</p></div></div>
+            <div className="mt-5 flex h-10 items-end gap-1">{[24,42,30,52,38,66,45,78,56,84,62,90].map((height,index)=><span key={index} className="flex-1 rounded-t bg-gradient-to-t from-[#ece4ff] to-[#6b35dd]" style={{height:`${height}%`}} />)}</div>
+          </div>;
+        })}
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_.75fr]">
+        <section className="overflow-hidden rounded-[12px] border border-[#ebe7f2] bg-white shadow-[0_10px_30px_rgba(39,25,85,.05)]">
+          <div className="flex items-center justify-between border-b border-[#eeeaf3] px-5 py-4"><h2 className="font-semibold">Recent Orders</h2><Link href="/dashboard/store-gallery/orders" className="rounded-[6px] border border-[#dfdbe8] px-3 py-2 text-xs font-semibold">View All Orders</Link></div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-[#faf9fd] text-xs uppercase tracking-wide text-[#817b89]"><tr><th className="px-5 py-4">Order</th><th className="px-5 py-4">Customer</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Total</th><th className="px-5 py-4">Date</th></tr></thead><tbody>{recentOrders.slice(0,6).map((order)=><tr key={order._id} className="border-t border-[#f0edf4]"><td className="px-5 py-4 font-semibold">{order.orderNumber}</td><td className="px-5 py-4">{order.customer?.name ?? "Customer"}</td><td className="px-5 py-4"><StatusBadge value={order.status} /></td><td className="px-5 py-4 font-semibold">{money(order.total,currency)}</td><td className="px-5 py-4 text-[#77727f]">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "—"}</td></tr>)}</tbody></table>
+          </div>
+          {!recentOrders.length && <div className="grid min-h-[220px] place-items-center text-sm text-[#777]">No orders yet.</div>}
+        </section>
+
+        <section className="rounded-[12px] border border-[#ebe7f2] bg-white p-4 shadow-[0_10px_30px_rgba(39,25,85,.05)] sm:p-5">
+          <h2 className="font-semibold">Status Breakdown</h2>
+          <div className="mt-5 grid items-center gap-6 sm:grid-cols-[220px_1fr] xl:grid-cols-1 2xl:grid-cols-[220px_1fr]">
+            <ChartContainer config={statusChartConfig} className="mx-auto h-[220px] w-full max-w-[240px] aspect-auto">
+              <PieChart>
+                <ChartTooltip content={<ChartTooltipContent nameKey="status" />} />
+                <Pie data={statusChartData.length ? statusChartData : [{ status: "No orders", count: 1, fill: "#eee6ff" }]} dataKey="count" nameKey="status" innerRadius={62} outerRadius={88} paddingAngle={2} strokeWidth={0}>
+                  {(statusChartData.length ? statusChartData : [{ fill: "#eee6ff" }]).map((item, index) => <Cell key={index} fill={item.fill} />)}
+                </Pie>
+              </PieChart>
+            </ChartContainer>
+            <div className="grid content-center gap-3">{orderStatuses.map((status,index)=>{const count=data?.statusCounts?.[status]??0;return <div key={status} className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-2 capitalize text-[#66616f]"><span className="size-2.5 rounded-full" style={{backgroundColor:["#5b2bc8", "#6d3bd5", "#8050df", "#9568e8", "#ad85ef", "#c8aaf6"][index%6]}} />{status}</span><span className="font-semibold">{count} <span className="text-xs font-normal text-[#999]">({Math.round((count/totalStatuses)*100)}%)</span></span></div>})}</div>
+          </div>
+        </section>
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-[1.35fr_.65fr]">
+        <section className="rounded-[12px] border border-[#ebe7f2] bg-white p-4 shadow-[0_10px_30px_rgba(39,25,85,.05)] sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">Sales Overview</h2><span className="rounded-[6px] border border-[#e1ddec] px-3 py-2 text-xs">Recent orders</span></div>
+          {salesChartData.length ? (
+            <ChartContainer config={salesChartConfig} className="mt-5 h-[260px] w-full aspect-auto">
+              <AreaChart data={salesChartData} margin={{ left: 0, right: 12, top: 12, bottom: 0 }}>
+                <defs><linearGradient id="storeRevenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6734db" stopOpacity={0.35}/><stop offset="95%" stopColor="#6734db" stopOpacity={0.03}/></linearGradient></defs>
+                <CartesianGrid vertical={false} stroke="#eee9f7" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} minTickGap={18} />
+                <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(value) => Number(value).toLocaleString()} />
+                <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
+                <Area type="monotone" dataKey="revenue" stroke="#6734db" strokeWidth={3} fill="url(#storeRevenueFill)" />
+              </AreaChart>
+            </ChartContainer>
+          ) : <div className="grid h-[260px] place-items-center text-sm text-[#888]">Sales data will appear after orders are created.</div>}
+        </section>
+        <section className="rounded-[12px] border border-[#ebe7f2] bg-white p-5 shadow-[0_10px_30px_rgba(39,25,85,.05)]"><h2 className="font-semibold">Store Performance</h2><div className="mt-5 grid gap-4">{[["Average Order Value",money(data?.averageOrderValue??0,currency)],["Customers",String(data?.customerCount??0)],["Products",String(data?.productCount??0)],["Coupons",String(data?.couponCount??0)]].map(([label,value])=><div key={label} className="flex items-center justify-between rounded-[8px] bg-[#faf8ff] px-4 py-4"><span className="text-sm text-[#6f6978]">{label}</span><span className="font-semibold text-[#5e2fd4]">{value}</span></div>)}</div></section>
+      </div>
+    </div>
   );
 }
-
 function storeOrderImageSrc(url?: string) {
   if (!url) return "";
   if (
@@ -7694,7 +7735,7 @@ function StoreOrdersPanel() {
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-[#22bda7] text-white"
+              className="rounded-none bg-[#6337d8] text-white"
               disabled={!form.email.trim()}
               onClick={addOrder}
             >
@@ -7782,7 +7823,7 @@ function StoreCustomersPanel() {
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-[#22bda7] text-white"
+              className="rounded-none bg-[#6337d8] text-white"
               disabled={!form.email.trim()}
               onClick={addCustomer}
             >
@@ -7944,7 +7985,7 @@ function StoreTaxesPanel() {
                 />,
                 <div
                   key="actions"
-                  className="flex justify-end gap-4 text-[#00a997]"
+                  className="flex justify-end gap-4 text-[#6337d8]"
                 >
                   <button
                     aria-label="Edit tax rate"
@@ -8058,7 +8099,7 @@ function StoreTaxesPanel() {
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-[#22bda7] px-8 text-white"
+              className="rounded-none bg-[#6337d8] px-8 text-white"
               onClick={saveTax}
             >
               Save
@@ -8135,7 +8176,7 @@ function StoreShippingPanel() {
             </TabsTrigger>
             <TabsTrigger
               value="auto"
-              className="h-14 rounded-none px-5 text-[#00a997]"
+              className="h-14 rounded-none px-5 text-[#6337d8]"
             >
               Automatic Fulfillment
             </TabsTrigger>
@@ -8170,7 +8211,7 @@ function StoreShippingPanel() {
                             : rate.region || "United States"}
                         </td>
                         <td className="px-2 py-5">
-                          <div className="flex justify-end gap-4 text-[#00a997]">
+                          <div className="flex justify-end gap-4 text-[#6337d8]">
                             <button
                               aria-label="Edit shipping method"
                               onClick={() => {
@@ -8315,7 +8356,7 @@ function StoreShippingPanel() {
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-[#22bda7] px-8 text-white"
+              className="rounded-none bg-[#6337d8] px-8 text-white"
               disabled={!form.name.trim()}
               onClick={saveShipping}
             >
@@ -8564,7 +8605,7 @@ function StoreSettingsPanel() {
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-sm font-bold">Checkout Links</h2>
             <button
-              className="text-sm font-bold text-[#00a997]"
+              className="text-sm font-bold text-[#6337d8]"
               onClick={() =>
                 setForm((current) => ({
                   ...current,
@@ -8714,8 +8755,8 @@ function StorePageShell({
   children: ReactNode;
 }) {
   return (
-    <div>
-      <div className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
+    <div className="w-full">
+      <div className="flex flex-col gap-4 border-b border-[#ece8f3] pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[28px] font-medium leading-none">{title}</h1>
           <p className="mt-3 max-w-[680px] text-sm leading-6 text-[#666]">
@@ -8724,7 +8765,7 @@ function StorePageShell({
         </div>
         {action && (
           <Button
-            className="h-10 w-fit rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
+            className="h-10 w-fit rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] px-6 text-sm font-bold text-white shadow-[0_10px_24px_rgba(99,55,216,.18)] hover:opacity-95"
             onClick={onAction}
           >
             <PlusCircle data-icon="inline-start" />
@@ -8755,7 +8796,7 @@ function StoreTable({
   empty: string;
 }) {
   return (
-    <div className="overflow-x-auto border bg-white">
+    <div className="overflow-x-auto rounded-[10px] border border-[#e9e5f0] bg-white shadow-[0_10px_28px_rgba(39,25,85,.04)]">
       <table className="w-full min-w-[720px] border-collapse text-left text-sm">
         <thead className="bg-[#fafafa] text-xs uppercase tracking-wide text-[#777]">
           <tr>
@@ -8845,7 +8886,7 @@ function StoreRuleForm({
         )}
       </div>
       <Button
-        className="mt-4 h-10 rounded-none bg-[#22bda7] px-6 text-white"
+        className="mt-4 h-10 rounded-none bg-[#6337d8] px-6 text-white"
         onClick={onSave}
       >
         Save
@@ -8855,15 +8896,12 @@ function StoreRuleForm({
 }
 
 function StatusBadge({ value }: { value: string }) {
-  const positive = ["paid", "delivered", "fulfilled", "active"].includes(value);
   const danger = ["cancelled", "refunded", "off"].includes(value);
   return (
     <span
       className={cn(
-        "inline-flex h-7 items-center px-3 text-xs font-bold capitalize",
-        positive && "bg-[#e3f7f2] text-[#008b7d]",
-        danger && "bg-[#fff0f0] text-red-600",
-        !positive && !danger && "bg-[#f1f1f1] text-[#555]",
+        "inline-flex h-7 items-center rounded-full px-3 text-xs font-bold capitalize",
+        danger ? "bg-[#fff0f0] text-red-600" : "bg-[#f0ebff] text-[#5a2fc5]",
       )}
     >
       {value}
@@ -8879,7 +8917,7 @@ function money(value: number, currency = "EUR") {
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   } catch {
-    return `€${Number(value || 0).toFixed(2)}`;
+    return `â‚¬${Number(value || 0).toFixed(2)}`;
   }
 }
 
@@ -9016,7 +9054,7 @@ function StorePricingPanel() {
         <CreditCard className="size-10 text-[#999]" />
         <p className="mt-5 font-bold">Default pricing not ready</p>
         <Button
-          className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white"
+          className="mt-6 h-10 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white"
           onClick={() =>
             createPriceSheet.mutate({
               name: "Default Print Store Pricing",
@@ -9045,7 +9083,7 @@ function StorePricingPanel() {
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white">
+            <Button className="h-10 rounded-none bg-[#6337d8] px-6 text-sm font-bold text-white">
               <PlusCircle data-icon="inline-start" />
               Add Product
             </Button>
@@ -9333,7 +9371,7 @@ function StoreProductsPanel() {
           </p>
         </div>
         <Button
-          className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white"
+          className="h-10 rounded-none bg-[#6337d8] px-6 text-sm font-bold text-white"
           onClick={() => setSettingsOpen(true)}
         >
           <PlusCircle data-icon="inline-start" />
@@ -9351,7 +9389,7 @@ function StoreProductsPanel() {
             Create one sheet for digital downloads and self fulfilled products.
           </p>
           <Button
-            className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white"
+            className="mt-6 h-10 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white"
             onClick={() => setSettingsOpen(true)}
           >
             Add Price Sheet
@@ -9378,7 +9416,7 @@ function StoreProductsPanel() {
                 </span>
                 <span className="mt-4 flex items-center justify-between gap-4">
                   <span className="font-bold uppercase">{sheet.name}</span>
-                  <MoreHorizontal className="size-5 text-[#00a997]" />
+                  <MoreHorizontal className="size-5 text-[#6337d8]" />
                 </span>
                 <span className="mt-2 block text-sm text-[#777]">
                   {sheet.productCount ?? 0} Products &nbsp;{" "}
@@ -9448,7 +9486,7 @@ function StoreProductsPanel() {
                         className={cn(
                           "border px-4 py-4 text-left",
                           fulfillment === value &&
-                            "border-[#22bda7] bg-[#f2fbf9]",
+                            "border-[#6337d8] bg-[#f2fbf9]",
                         )}
                         onClick={() => setFulfillment(value)}
                       >
@@ -9492,7 +9530,7 @@ function StoreProductsPanel() {
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-[#22bda7] text-white"
+              className="rounded-none bg-[#6337d8] text-white"
               disabled={createPriceSheet.isPending}
               onClick={addSheet}
             >
@@ -9611,7 +9649,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="h-10 rounded-none bg-[#22bda7] px-6 text-sm font-bold text-white">
+              <Button className="h-10 rounded-none bg-[#6337d8] px-6 text-sm font-bold text-white">
                 <PlusCircle data-icon="inline-start" />
                 Add Product
               </Button>
@@ -9780,7 +9818,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-[#22bda7] text-white"
+              className="rounded-none bg-[#6337d8] text-white"
               onClick={saveSettings}
             >
               Save
@@ -9977,10 +10015,10 @@ function ProductTile({
           </p>
           <p className="mt-1 text-xs text-[#999]">
             {productTypeLabels[product.type]}
-            {product.active === false ? " â€¢ Hidden" : ""}
+            {product.active === false ? " Ã¢â‚¬Â¢ Hidden" : ""}
           </p>
         </div>
-        <MoreHorizontal className="size-5 shrink-0 text-[#00a997]" />
+        <MoreHorizontal className="size-5 shrink-0 text-[#6337d8]" />
       </button>
     </div>
   );
@@ -10023,7 +10061,7 @@ function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "min-h-36 px-4 py-3 text-sm leading-6 outline-none [&_a]:text-[#00a997] [&_a]:underline [&_p]:mb-2",
+          "min-h-36 px-4 py-3 text-sm leading-6 outline-none [&_a]:text-[#6337d8] [&_a]:underline [&_p]:mb-2",
       },
     },
     onUpdate: ({ editor: currentEditor }) => {
@@ -10098,7 +10136,7 @@ function RichTextEditor({
             type="button"
             className={cn(
               "flex h-9 w-10 items-center justify-center border-r text-[#1f2937]",
-              tool.active && "bg-[#e8f7f4] text-[#00a997]",
+              tool.active && "bg-[#e8f7f4] text-[#6337d8]",
             )}
             onClick={tool.action}
             aria-label={tool.label}
@@ -10384,7 +10422,7 @@ function ProductEditorDialog({
                     key={value}
                     className={cn(
                       "flex size-24 flex-col items-center justify-center border text-xs",
-                      form.downloadType === value && "border-[#22bda7]",
+                      form.downloadType === value && "border-[#6337d8]",
                     )}
                     onClick={() =>
                       setForm((current) => ({
@@ -10424,7 +10462,7 @@ function ProductEditorDialog({
           <Field>
             <FieldLabel className="font-bold">Product Images</FieldLabel>
             <label className="flex min-h-[150px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white text-center">
-              <FileUp className="size-8 text-[#22bda7]" />
+              <FileUp className="size-8 text-[#6337d8]" />
               <span className="mt-3 text-sm font-bold">
                 Upload product photo
               </span>
@@ -10779,7 +10817,7 @@ function ProductEditorDialog({
                 </div>
                 <button
                   type="button"
-                  className="mt-3 text-sm font-bold text-[#00a997]"
+                  className="mt-3 text-sm font-bold text-[#6337d8]"
                   onClick={() =>
                     setForm((current) => ({
                       ...current,
@@ -10919,7 +10957,7 @@ function ProductEditorDialog({
             Cancel
           </Button>
           <Button
-            className="rounded-none bg-[#22bda7] text-white"
+            className="rounded-none bg-[#6337d8] text-white"
             disabled={pending || !form.name.trim()}
             onClick={save}
           >
@@ -11267,7 +11305,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-[#22bda7] text-white hover:bg-[#19a995]"
+              className="rounded-none bg-[#6337d8] text-white hover:bg-[#542bc2]"
               disabled={updateCollection.isPending || !quickForm.name.trim()}
               onClick={saveQuickEdit}
             >
@@ -11311,7 +11349,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             />
           </label>
           <p className="hidden">
-            Manage your collections â€” create, view, and organize your photos.
+            Manage your collections Ã¢â‚¬â€ create, view, and organize your photos.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-5">
@@ -11576,7 +11614,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
                   <button
-                    className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f5] text-[#666] hover:text-[#00a997]"
+                    className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f5] text-[#666] hover:text-[#6337d8]"
                     onClick={() => toggleCollectionStar(collection)}
                     type="button"
                     aria-label="Star collection"
@@ -11585,7 +11623,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
                       className={cn(
                         "size-4",
                         collection.settings?.starred === true &&
-                          "fill-[#00a997] text-[#00a997]",
+                          "fill-[#6337d8] text-[#6337d8]",
                       )}
                     />
                   </button>
@@ -11619,7 +11657,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
               </div>
               <div className="flex items-center justify-end gap-3">
                 <button
-                  className="text-sm font-bold text-[#00a997]"
+                  className="text-sm font-bold text-[#6337d8]"
                   onClick={() => openCollectionPreview(collection)}
                   type="button"
                 >
@@ -11670,7 +11708,7 @@ function CollectionActionMenu({
         <button
           type="button"
           className={cn(
-            "flex size-10 items-center justify-center rounded-full bg-white/95 text-[#555] shadow-sm transition hover:text-[#00a997]",
+            "flex size-10 items-center justify-center rounded-full bg-white/95 text-[#555] shadow-sm transition hover:text-[#6337d8]",
             className,
           )}
           aria-label="Gallery actions"
@@ -11906,7 +11944,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
               </span>
               <Link
                 href={`/dashboard/${section}/settings/presets`}
-                className="font-bold text-[#00a997]"
+                className="font-bold text-[#6337d8]"
               >
                 {presetItems.length ? "Manage presets" : "Create a preset"}
               </Link>
@@ -11923,7 +11961,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
           Cancel
         </Button>
         <Button
-          className="h-12 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+          className="h-12 rounded-none bg-[#6337d8] px-8 text-sm font-bold text-white hover:bg-[#542bc2]"
           disabled={createCollection.isPending || !form.name.trim()}
           onClick={handleCreate}
         >
@@ -13043,7 +13081,7 @@ function CollectionDetailView({
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex h-10 items-center bg-[#22bda7] font-bold text-white hover:bg-[#19a995]" type="button">
+              <button className="inline-flex h-10 items-center bg-[#6337d8] font-bold text-white hover:bg-[#542bc2]" type="button">
                 <span className="px-7">Share</span>
                 <span className="flex h-6 items-center border-l border-white/30 px-4">
                   <ChevronDown className="size-4" />
@@ -13146,7 +13184,7 @@ function CollectionDetailView({
                   </FieldGroup>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button type="button" className="mt-8 inline-flex items-center gap-2 text-sm font-bold text-[#00a997]">
+                      <button type="button" className="mt-8 inline-flex items-center gap-2 text-sm font-bold text-[#6337d8]">
                         <FileUp className="size-4" />
                         Insert Email Template
                       </button>
@@ -13182,7 +13220,7 @@ function CollectionDetailView({
                 </div>
                 <footer className="flex shrink-0 items-center justify-end border-t px-7 py-4">
                   <Button
-                    className="h-11 min-w-32 rounded-none bg-[#22bda7] text-white hover:bg-[#19a995]"
+                    className="h-11 min-w-32 rounded-none bg-[#6337d8] text-white hover:bg-[#542bc2]"
                     disabled={shareSending || !shareRecipient.trim() || !shareSubject.trim()}
                     onClick={() => void sendShareEmail()}
                   >
@@ -13248,7 +13286,7 @@ function CollectionDetailView({
               <a
                 href={qrCodeUrl}
                 download={`${collection.slug || collection._id}-qr-code.png`}
-                className="inline-flex h-11 items-center justify-center bg-[#22bda7] px-7 text-sm font-bold text-white"
+                className="inline-flex h-11 items-center justify-center bg-[#6337d8] px-7 text-sm font-bold text-white"
               >
                 Download
               </a>
@@ -13267,12 +13305,12 @@ function CollectionDetailView({
               </button>
             </div>
             <div className="mt-8 border-b">
-              <span className="inline-flex border-b-2 border-[#22bda7] pb-3 text-sm font-bold">Upload</span>
+              <span className="inline-flex border-b-2 border-[#6337d8] pb-3 text-sm font-bold">Upload</span>
             </div>
             <label
               className={cn(
                 "mt-5 flex min-h-[360px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center",
-                draggingUpload && "border-[#22bda7] bg-[#f2fffd]",
+                draggingUpload && "border-[#6337d8] bg-[#f2fffd]",
                 uploading && "pointer-events-none opacity-70",
               )}
               onDragOver={handleUploadDragOver}
@@ -13291,7 +13329,7 @@ function CollectionDetailView({
                 void handleImageUpload(mediaFiles);
               }}
             >
-              {uploading ? <Loader2 className="size-12 animate-spin text-[#22bda7]" /> : <Upload className="size-12 text-[#c7c7c7]" />}
+              {uploading ? <Loader2 className="size-12 animate-spin text-[#6337d8]" /> : <Upload className="size-12 text-[#c7c7c7]" />}
               <p className="mt-6 text-lg font-bold">
                 {uploading ? `${uploadProgress.currentPercent}% uploaded` : replaceImageId ? "Drag one replacement photo here" : "Drag photos and videos here to upload"}
               </p>
@@ -13327,7 +13365,7 @@ function CollectionDetailView({
           <Input value={imageRenameValue} onChange={(event) => setImageRenameValue(event.target.value)} className="h-12 rounded-none" placeholder="Filename" />
           <DialogFooter>
             <Button variant="outline" className="rounded-none" onClick={() => setImageRenameOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#22bda7] text-white" disabled={updateImage.isPending} onClick={saveImageRename}>
+            <Button className="rounded-none bg-[#6337d8] text-white" disabled={updateImage.isPending} onClick={saveImageRename}>
               {updateImage.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
@@ -13345,7 +13383,7 @@ function CollectionDetailView({
               <FieldLabel className="font-bold">Action</FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 {(["copy", "move"] as const).map((mode) => (
-                  <button key={mode} type="button" className={cn("h-11 border text-sm font-bold capitalize", imageMoveMode === mode && "border-[#22bda7] bg-[#eefaf8] text-[#008f81]")} onClick={() => setImageMoveMode(mode)}>
+                  <button key={mode} type="button" className={cn("h-11 border text-sm font-bold capitalize", imageMoveMode === mode && "border-[#6337d8] bg-[#eefaf8] text-[#5a2fc5]")} onClick={() => setImageMoveMode(mode)}>
                     {mode}
                   </button>
                 ))}
@@ -13378,7 +13416,7 @@ function CollectionDetailView({
           </FieldGroup>
           <DialogFooter>
             <Button variant="outline" className="rounded-none" onClick={() => setImageMoveOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#22bda7] text-white" disabled={copyMoveImage.isPending || !imageTargetCollectionId} onClick={saveImageMove}>
+            <Button className="rounded-none bg-[#6337d8] text-white" disabled={copyMoveImage.isPending || !imageTargetCollectionId} onClick={saveImageMove}>
               {copyMoveImage.isPending ? "Working..." : imageMoveMode === "move" ? "Move Photo" : "Copy Photo"}
             </Button>
           </DialogFooter>
@@ -13400,7 +13438,7 @@ function CollectionDetailView({
           </select>
           <DialogFooter>
             <Button variant="outline" className="rounded-none" onClick={() => setImageWatermarkOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#22bda7] text-white" disabled={updateImage.isPending} onClick={saveImageWatermark}>
+            <Button className="rounded-none bg-[#6337d8] text-white" disabled={updateImage.isPending} onClick={saveImageWatermark}>
               {updateImage.isPending ? "Saving..." : "Save Watermark"}
             </Button>
           </DialogFooter>
@@ -13425,7 +13463,7 @@ function CollectionDetailView({
           </div>
           <DialogFooter>
             <Button variant="outline" className="rounded-none" onClick={() => setImageShareOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#22bda7] text-white" onClick={() => void copyImageQuickShare()}>
+            <Button className="rounded-none bg-[#6337d8] text-white" onClick={() => void copyImageQuickShare()}>
               Copy Link
             </Button>
           </DialogFooter>
@@ -13458,7 +13496,7 @@ function CollectionDetailView({
             </p>
             <div className="mt-3 h-2 overflow-hidden bg-[#d3f2ee]">
               <div
-                className="h-full bg-[#22bda7] transition-all duration-300"
+                className="h-full bg-[#6337d8] transition-all duration-300"
                 style={{ width: `${uploadPercent}%` }}
               />
             </div>
@@ -13513,7 +13551,7 @@ function CollectionDetailView({
                 key={String(tab)}
                 className={cn(
                   "flex h-14 items-center justify-center border-b-2 border-transparent",
-                  activeTab === tab && "border-[#22bda7] text-[#00a997]",
+                  activeTab === tab && "border-[#6337d8] text-[#6337d8]",
                 )}
                 onClick={() => setActiveTab(tab as typeof activeTab)}
                 aria-label={String(tab)}
@@ -13527,7 +13565,7 @@ function CollectionDetailView({
               <div className="mb-4 flex items-center justify-between px-1">
                 <p className="text-xs font-bold uppercase tracking-wide text-[#777]">Photos</p>
                 <button
-                  className="inline-flex items-center gap-1 text-sm font-bold text-[#00a997]"
+                  className="inline-flex items-center gap-1 text-sm font-bold text-[#6337d8]"
                   onClick={() => setAddSetOpen(true)}
                 >
                   <PlusCircle className="size-4" />
@@ -13640,7 +13678,7 @@ function CollectionDetailView({
                       Cancel
                     </Button>
                     <Button
-                      className="rounded-none bg-[#22bda7] text-white"
+                      className="rounded-none bg-[#6337d8] text-white"
                       disabled={!newSetName.trim()}
                       onClick={createSet}
                     >
@@ -13813,10 +13851,10 @@ function CollectionDetailView({
                   <DropdownMenuContent align="end" className="w-64 rounded-none p-3">
                     <p className="px-3 pb-2 pt-1 text-xs font-medium text-[#888]">Sort by</p>
                     {([
-                      ["uploaded-new-old", "Uploaded: New → Old"],
-                      ["uploaded-old-new", "Uploaded: Old → New"],
-                      ["taken-new-old", "Date Taken: New → Old"],
-                      ["taken-old-new", "Date Taken: Old → New"],
+                      ["uploaded-new-old", "Uploaded: New â†’ Old"],
+                      ["uploaded-old-new", "Uploaded: Old â†’ New"],
+                      ["taken-new-old", "Date Taken: New â†’ Old"],
+                      ["taken-old-new", "Date Taken: Old â†’ New"],
                       ["name-az", "Name: A-Z"],
                       ["name-za", "Name: Z-A"],
                       ["random", "Random"],
@@ -13862,7 +13900,7 @@ function CollectionDetailView({
                 <button
                   type="button"
                   className={cn(
-                    "inline-flex items-center gap-2 text-sm font-bold text-[#00a997]",
+                    "inline-flex items-center gap-2 text-sm font-bold text-[#6337d8]",
                     uploading && "pointer-events-none opacity-60",
                   )}
                   onClick={() => setAddMediaOpen(true)}
@@ -13880,7 +13918,7 @@ function CollectionDetailView({
               <label
                 className={cn(
                   "flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center transition",
-                  draggingUpload && "border-[#22bda7] bg-[#f2fffd]",
+                  draggingUpload && "border-[#6337d8] bg-[#f2fffd]",
                   uploading && "pointer-events-none opacity-75",
                 )}
                 onDragOver={handleUploadDragOver}
@@ -13889,7 +13927,7 @@ function CollectionDetailView({
                 onDrop={handleUploadDrop}
               >
                 {uploading ? (
-                  <Loader2 className="size-10 animate-spin text-[#22bda7]" />
+                  <Loader2 className="size-10 animate-spin text-[#6337d8]" />
                 ) : (
                   <Upload className="size-10 text-[#bbb]" />
                 )}
@@ -13898,13 +13936,13 @@ function CollectionDetailView({
                     ? `Image ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} / ${uploadProgress.currentPercent}%`
                     : "Drag photos and videos here to upload"}
                 </p>
-                <p className="mt-3 text-sm text-[#00a997]">
+                <p className="mt-3 text-sm text-[#6337d8]">
                   {uploading ? `${uploadsLeft} left` : "or Browse files"}
                 </p>
                 {uploading && (
                   <div className="mt-5 h-2 w-full max-w-sm overflow-hidden bg-[#d3f2ee]">
                     <div
-                      className="h-full bg-[#22bda7] transition-all duration-300"
+                      className="h-full bg-[#6337d8] transition-all duration-300"
                       style={{ width: `${uploadPercent}%` }}
                     />
                   </div>
@@ -13926,7 +13964,7 @@ function CollectionDetailView({
                 className={cn(
                   "relative min-h-[420px] transition",
                   draggingUpload &&
-                    "outline outline-2 outline-[#22bda7] outline-offset-4",
+                    "outline outline-2 outline-[#6337d8] outline-offset-4",
                 )}
                 onDragOver={handleUploadDragOver}
                 onDragEnter={handleUploadDragOver}
@@ -13934,7 +13972,7 @@ function CollectionDetailView({
                 onDrop={handleUploadDrop}
               >
                 {draggingUpload && (
-                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border border-dashed border-[#22bda7] bg-white/80 text-sm font-bold text-[#00a997]">
+                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border border-dashed border-[#6337d8] bg-white/80 text-sm font-bold text-[#6337d8]">
                     Drop media to upload
                   </div>
                 )}
@@ -13981,7 +14019,7 @@ function CollectionDetailView({
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-[#999]">
-                  ⌘/Ctrl + A selects all · Delete removes selected · Esc clears
+                  âŒ˜/Ctrl + A selects all Â· Delete removes selected Â· Esc clears
                 </p>
                 {deletingImages && (
                   <div className="mb-4 flex items-center gap-3 border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -13998,9 +14036,9 @@ function CollectionDetailView({
                           className="relative flex aspect-square animate-in fade-in zoom-in-95 items-center justify-center overflow-hidden bg-[#eef9f7] duration-300"
                         >
                           <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-[#d3f2ee]">
-                            <div className="h-full w-1/2 animate-pulse bg-[#22bda7]" />
+                            <div className="h-full w-1/2 animate-pulse bg-[#6337d8]" />
                           </div>
-                          <Loader2 className="size-6 animate-spin text-[#22bda7]" />
+                          <Loader2 className="size-6 animate-spin text-[#6337d8]" />
                         </div>
                       ),
                     )}
@@ -14032,7 +14070,7 @@ function CollectionDetailView({
                       className={cn(
                         "group relative animate-in fade-in zoom-in-95 bg-[#fafafa] p-2 text-left transition-all duration-300 ease-out",
                         activeImage?._id === image._id &&
-                          "outline outline-2 outline-[#22bda7]",
+                          "outline outline-2 outline-[#6337d8]",
                         selectedImageIds.includes(image._id) &&
                           "outline outline-2 outline-red-500",
                         deletingImages && "pointer-events-none opacity-55",
@@ -14098,7 +14136,7 @@ function CollectionDetailView({
                         )}
                       </button>
                       <button
-                        className="absolute right-12 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#00a997] group-hover:flex"
+                        className="absolute right-12 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#6337d8] group-hover:flex"
                         disabled={deletingImages}
                         onClick={() =>
                           starImage.mutate({
@@ -14113,13 +14151,13 @@ function CollectionDetailView({
                           className={cn(
                             "size-4",
                             image.metadata?.starred === true &&
-                              "fill-[#00a997] text-[#00a997]",
+                              "fill-[#6337d8] text-[#6337d8]",
                           )}
                         />
                       </button>
                       <button
                         className={cn(
-                          "absolute right-2 top-2 size-9 items-center justify-center bg-white/95 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#00a997]",
+                          "absolute right-2 top-2 size-9 items-center justify-center bg-white/95 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#6337d8]",
                           imageMenuId === image._id ? "flex" : "hidden group-hover:flex",
                         )}
                         disabled={deletingImages}
@@ -14160,7 +14198,7 @@ function CollectionDetailView({
                       )}
                       <button
                         className={cn(
-                          "absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#00a997] group-hover:block",
+                          "absolute bottom-2 left-2 hidden bg-white/90 px-3 py-2 text-xs font-bold text-[#333] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:text-[#6337d8] group-hover:block",
                           coverImageAccess.locked &&
                             "cursor-not-allowed opacity-60",
                         )}
@@ -14555,7 +14593,7 @@ function CollectionDetailView({
                       </div>
                       <Link
                         href="/dashboard/client-gallery/marketing/settings"
-                        className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#00a997]"
+                        className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#6337d8]"
                       >
                         Configure subscription form and opt-in locations
                         <ArrowRight className="size-4" />
@@ -14739,7 +14777,7 @@ function CollectionDetailView({
 
               {activeSettingsPanel !== "store" && (
                 <Button
-                  className="mt-8 h-11 rounded-none bg-[#22bda7] px-8 text-white"
+                  className="mt-8 h-11 rounded-none bg-[#6337d8] px-8 text-white"
                   disabled={updateCollection.isPending}
                   onClick={saveCollection}
                 >
@@ -15272,19 +15310,19 @@ function CollectionActivityPanel({
     return (
       <section className="flex min-h-[70dvh] items-center justify-center bg-[#f7fbfa] p-6">
         <div className="w-full max-w-[620px] border bg-white p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
-          <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#00a997]">
+          <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#6337d8]">
             Preparing export
           </p>
           <h2 className="mt-4 text-3xl font-medium">{collectionName}</h2>
           <p className="mt-2 text-sm text-[#666]">{exportJob.title}</p>
           <div className="mx-auto mt-10 flex size-40 items-center justify-center rounded-full border border-[#d9f4ef] bg-[#eefdfa]">
-            <div className="flex size-28 animate-pulse items-center justify-center rounded-full bg-[#22bda7] text-3xl font-bold text-white">
+            <div className="flex size-28 animate-pulse items-center justify-center rounded-full bg-[#6337d8] text-3xl font-bold text-white">
               {exportJob.percent}%
             </div>
           </div>
           <div className="mt-10 h-3 overflow-hidden bg-[#e4f4f1]">
             <div
-              className="h-full bg-[#22bda7] transition-all duration-300"
+              className="h-full bg-[#6337d8] transition-all duration-300"
               style={{ width: `${exportJob.percent}%` }}
             />
           </div>
@@ -15341,7 +15379,7 @@ function CollectionActivityPanel({
                 </FieldGroup>
                 <div className="mt-3 flex justify-end">
                   <Button
-                    className="h-10 rounded-none bg-[#22bda7] text-white"
+                    className="h-10 rounded-none bg-[#6337d8] text-white"
                     onClick={() => void addAllowedEmails()}
                   >
                     Add emails
@@ -15388,7 +15426,7 @@ function CollectionActivityPanel({
                             (isAllowed ? "allowed" : "pending")}
                         </TableCell>
                         <TableCell className="max-w-80 whitespace-normal text-[#666]">
-                          {request?.reason || "—"}
+                          {request?.reason || "â€”"}
                         </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
@@ -15585,7 +15623,7 @@ function CollectionActivityPanel({
                   Download all
                 </button>
                 <button
-                  className="inline-flex h-9 items-center gap-2 border bg-white px-3 text-sm font-bold text-[#00a997] disabled:opacity-50"
+                  className="inline-flex h-9 items-center gap-2 border bg-white px-3 text-sm font-bold text-[#6337d8] disabled:opacity-50"
                   type="button"
                   onClick={() => exportFavoriteList()}
                   disabled={!favoriteLists.length}
@@ -15602,7 +15640,7 @@ function CollectionActivityPanel({
                 </button>
                 <span className="h-5 w-px bg-[#ddd]" />
                 <button
-                  className="inline-flex items-center gap-2 text-sm font-bold text-[#00a997]"
+                  className="inline-flex items-center gap-2 text-sm font-bold text-[#6337d8]"
                   type="button"
                 >
                   <PlusCircle className="size-4" />
@@ -15801,7 +15839,7 @@ function CollectionActivityPanel({
                   />
                 </Field>
                 <Button
-                  className="h-10 w-fit rounded-none bg-[#22bda7] text-white"
+                  className="h-10 w-fit rounded-none bg-[#6337d8] text-white"
                   onClick={() => void saveFavoriteListRules()}
                 >
                   Save Favorite Rules
@@ -15918,7 +15956,7 @@ function CollectionActivityPanel({
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-[#22bda7] text-white"
+              className="rounded-none bg-[#6337d8] text-white"
               disabled={!emailTemplates.length}
               onClick={() => void sendAsDownload()}
             >
@@ -16479,7 +16517,7 @@ function GetStartedPanel({
         {active.heading}
       </h1>
       <Button
-        className="mt-6 h-10 rounded-none bg-[#22bda7] px-7 text-sm font-bold text-white hover:bg-[#19a995]"
+        className="mt-6 h-10 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white hover:bg-[#542bc2]"
         onClick={onStart}
       >
         {active.cta}
@@ -16621,7 +16659,7 @@ function CollectionWizard() {
           </FieldGroup>
         </div>
         <Button
-          className="mt-6 h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+          className="mt-6 h-10 rounded-none bg-[#6337d8] px-8 text-sm font-bold text-white hover:bg-[#542bc2]"
           onClick={() => setWizardStep(2)}
         >
           Next
@@ -16640,7 +16678,7 @@ function CollectionWizard() {
             className="flex min-h-[250px] w-full flex-col items-center justify-center border border-dashed border-[#cfcfcf] bg-white text-center"
             onClick={addSamplePhotos}
           >
-            <Upload className="size-9 text-[#22bda7]" />
+            <Upload className="size-9 text-[#6337d8]" />
             <span className="mt-5 text-base font-semibold">
               Upload sample photos
             </span>
@@ -16670,7 +16708,7 @@ function CollectionWizard() {
             Back
           </Button>
           <Button
-            className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+            className="h-10 rounded-none bg-[#6337d8] px-8 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={() => {
               if (!photos.length) addSamplePhotos();
               setWizardStep(3);
@@ -16720,7 +16758,7 @@ function CollectionWizard() {
                 className={cn(
                   "relative block border p-1",
                   coverDesign === design.name &&
-                    "border-[#22bda7] ring-2 ring-[#22bda7]",
+                    "border-[#6337d8] ring-2 ring-[#6337d8]",
                 )}
               >
                 <img
@@ -16729,7 +16767,7 @@ function CollectionWizard() {
                   className="aspect-[1.6] w-full object-cover"
                 />
                 {coverDesign === design.name && (
-                  <Check className="absolute right-2 top-2 size-4 bg-[#22bda7] text-white" />
+                  <Check className="absolute right-2 top-2 size-4 bg-[#6337d8] text-white" />
                 )}
               </span>
               <span className="mt-3 block text-sm text-[#555]">
@@ -16748,7 +16786,7 @@ function CollectionWizard() {
           Back
         </Button>
         <Button
-          className="h-10 rounded-none bg-[#22bda7] px-8 text-sm font-bold text-white hover:bg-[#19a995]"
+          className="h-10 rounded-none bg-[#6337d8] px-8 text-sm font-bold text-white hover:bg-[#542bc2]"
           onClick={resetWizard}
         >
           Create Gallery
@@ -16757,3 +16795,5 @@ function CollectionWizard() {
     </div>
   );
 }
+
+

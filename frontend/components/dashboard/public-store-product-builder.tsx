@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Check, ChevronDown, ImageIcon, Minus, Plus, RotateCcw, RotateCw, X } from "lucide-react";
@@ -211,8 +211,8 @@ export function PublicStoreProductBuilder({
                         className={cn(
                           "flex min-h-12 items-center justify-between border px-4 py-3 text-left text-sm transition",
                           selectedVariant?.id === variant.id
-                            ? "border-[#222] bg-[#f7f7f5]"
-                            : "border-[#dedede] hover:border-[#8b8b8b]",
+                            ? "border-[#6337d8] bg-[#f3efff] text-[#4f2bb7] ring-1 ring-[#6337d8]/15"
+                            : "border-[#ded8eb] hover:border-[#8a64e8]",
                         )}
                       >
                         <span>{variant.label}</span>
@@ -226,7 +226,7 @@ export function PublicStoreProductBuilder({
               {!product.limitOnePerCheckout && (
                 <div className="mt-8">
                   <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#777]">Quantity</p>
-                  <div className="inline-flex h-12 items-center border">
+                  <div className="inline-flex h-12 items-center rounded-[7px] border border-[#ded8eb] bg-white">
                     <button className="flex size-12 items-center justify-center" onClick={() => setQuantity((value) => Math.max(1, value - 1))}>
                       <Minus className="size-4" />
                     </button>
@@ -239,7 +239,7 @@ export function PublicStoreProductBuilder({
               )}
 
               <button
-                className="mt-9 h-12 w-full bg-[#2f2f2f] px-6 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-45"
+                className="mt-9 h-12 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(99,55,216,.2)] transition hover:opacity-95 disabled:opacity-45"
                 disabled={variants.length > 0 && !selectedVariant}
                 onClick={startAdd}
               >
@@ -277,7 +277,7 @@ export function PublicStoreProductBuilder({
               </div>
               <div className="flex shrink-0 gap-2 sm:gap-3">
                 <button className="h-10 border px-4 text-sm sm:px-5" onClick={() => setStep("product")}>Back</button>
-                <button className="h-10 bg-[#2f2f2f] px-4 text-sm font-semibold text-white disabled:opacity-40 sm:px-6" disabled={!selectedImageIds.length} onClick={continueFromPhotos}>
+                <button className="h-10 rounded-[6px] bg-gradient-to-r from-[#5527c9] to-[#7436db] px-4 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(99,55,216,.18)] disabled:opacity-40 sm:px-6" disabled={!selectedImageIds.length} onClick={continueFromPhotos}>
                   Continue
                 </button>
               </div>
@@ -289,11 +289,11 @@ export function PublicStoreProductBuilder({
                   <button
                     key={image._id}
                     type="button"
-                    className={cn("group relative aspect-square overflow-hidden bg-[#eee]", selected && "ring-2 ring-[#27b9a4] ring-offset-2")}
+                    className={cn("group relative aspect-square overflow-hidden bg-[#eee]", selected && "ring-2 ring-[#6337d8] ring-offset-2")}
                     onClick={() => choosePhoto(image._id)}
                   >
                     <img src={publicImageSrc(image.thumbnailUrl || image.url)} alt={image.originalName || "Collection photo"} className="h-full w-full object-cover" />
-                    <span className={cn("absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border bg-white/95", selected ? "border-[#27b9a4] bg-[#27b9a4] text-white" : "border-white text-transparent") }>
+                    <span className={cn("absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border bg-white/95", selected ? "border-[#6337d8] bg-[#6337d8] text-white" : "border-white text-transparent") }>
                       <Check className="size-4" />
                     </span>
                   </button>
@@ -310,7 +310,7 @@ export function PublicStoreProductBuilder({
               {selectedImages.length > 1 && (
                 <div className="mt-4 flex max-w-[720px] gap-2 overflow-x-auto">
                   {selectedImages.map((image, index) => (
-                    <button key={image._id} className={cn("size-14 shrink-0 border bg-white p-1", image._id === activeCropImage._id && "border-[#222]")} onClick={() => {
+                    <button key={image._id} className={cn("size-14 shrink-0 border bg-white p-1", image._id === activeCropImage._id && "border-[#6337d8] ring-1 ring-[#6337d8]/20")} onClick={() => {
                       const next = saveActiveCrop();
                       setActiveCropImageId(image._id);
                       setCrop(next[image._id] ?? defaultCrop(aspectLabel(selectedVariant?.label)));
@@ -342,7 +342,7 @@ export function PublicStoreProductBuilder({
               </div>
               <div className="mt-9 flex gap-3">
                 <button className="h-12 flex-1 border text-sm" onClick={() => setStep("product")}>Back</button>
-                <button className="h-12 flex-[1.4] bg-[#2f2f2f] text-sm font-semibold text-white" onClick={nextCropPhoto}>
+                <button className="h-12 flex-[1.4] rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-sm font-semibold text-white shadow-[0_10px_24px_rgba(99,55,216,.18)]" onClick={nextCropPhoto}>
                   {selectedImages.length > 1 && activeCropIndex < selectedImages.length - 1 ? "Next Photo" : "Add to Cart"}
                 </button>
               </div>
@@ -378,7 +378,7 @@ function ProductPreview({
       {previews.length > 1 && (
         <div className="mt-5 flex justify-center gap-2 overflow-x-auto">
           {previews.map((image, index) => (
-            <button key={`${image}-${index}`} className={cn("size-16 shrink-0 border bg-white p-1", active === index && "border-[#222]")} onClick={() => setActive(index)}>
+            <button key={`${image}-${index}`} className={cn("size-16 shrink-0 border bg-white p-1", active === index && "border-[#6337d8] ring-1 ring-[#6337d8]/20")} onClick={() => setActive(index)}>
               <img src={publicImageSrc(image)} alt="" className="h-full w-full object-cover" />
             </button>
           ))}
@@ -392,7 +392,7 @@ function CropSlider({ label, min, max, step, value, onChange }: { label: string;
   return (
     <label className="mt-7 block">
       <span className="flex items-center justify-between text-xs font-medium"><span>{label}</span><span className="text-[#777]">{Number(value).toFixed(step < 1 ? 2 : 0)}</span></span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-3 w-full accent-[#2f2f2f]" />
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-3 w-full accent-[#6337d8]" />
     </label>
   );
 }
@@ -462,3 +462,4 @@ function cropAspectNumber(value: string) {
 function defaultCrop(aspectRatio: string): StoreCrop {
   return { x: 0, y: 0, width: 100, height: 100, zoom: 1, rotation: 0, aspectRatio, fit: "contain" };
 }
+

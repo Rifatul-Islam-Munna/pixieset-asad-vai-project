@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
@@ -896,7 +896,7 @@ export function PublicGallery({
               className="mt-7 h-12 w-full border bg-white px-4 text-sm outline-none"
               autoFocus
             />
-            <button className="mt-5 h-11 w-full bg-[#333] text-xs font-bold uppercase tracking-[0.18em] text-white disabled:opacity-50" disabled={!popupEmail.includes("@")} onClick={submitMarketingPopup} type="button">
+            <button className="mt-5 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-xs font-bold uppercase tracking-[0.18em] text-white shadow-[0_10px_24px_rgba(99,55,216,.18)] disabled:opacity-50" disabled={!popupEmail.includes("@")} onClick={submitMarketingPopup} type="button">
               {marketingPopup.button || "Subscribe"}
             </button>
             <p className="mt-7 text-xs leading-5 text-[#777]">
@@ -908,7 +908,7 @@ export function PublicGallery({
       {emailAccessLocked ? (
       <main className="relative flex min-h-screen items-center justify-center bg-[#f6f6f4] p-6">
         <section className="w-full max-w-md bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.14)]">
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#00a997]">Email registration</p>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#6337d8]">Email registration</p>
           <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
           <p className="mt-3 text-sm leading-6 text-[#666]">
             Enter your email address to view this collection.
@@ -936,7 +936,7 @@ export function PublicGallery({
             </label>
           )}
           <Button
-            className="mt-5 h-11 w-full rounded-none bg-[#22bda7] text-white"
+            className="mt-5 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-white shadow-[0_10px_24px_rgba(99,55,216,.18)]"
             disabled={accessBusy || !accessEmail.includes("@")}
             onClick={() => void verifyAccessEmail()}
           >
@@ -971,8 +971,8 @@ export function PublicGallery({
               <button
                 key={set.id}
                 className={cn(
-                  "shrink-0 transition hover:text-black",
-                  activeSetId === set.id ? "text-black" : "text-black/45",
+                  "shrink-0 transition hover:text-[#6337d8]",
+                  activeSetId === set.id ? "text-[#6337d8]" : "text-black/45",
                 )}
                 onClick={() => setActiveSetId(set.id)}
                 type="button"
@@ -984,32 +984,32 @@ export function PublicGallery({
           <div className="flex min-w-0 items-center justify-end gap-2">
             {storeStatus && <span data-print-store-nav-host="true" />}
             <span data-public-store-cart-host="true" />
-            <button className="inline-flex size-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-black" onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Favorite" aria-label="My Favorite">
+            <button className="inline-flex size-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-[#6337d8]" onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Favorite" aria-label="My Favorite">
               <Heart className={cn("size-5", favoritesPanelOpen && "fill-current text-red-500")} />
             </button>
             {canDownloadAll && (
-              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-black disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
+              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8] disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
                 {zipDownloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
               </button>
             )}
             {socialSharingEnabled && (
-              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-black" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
+              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
                 <Share2 className="size-5" />
               </button>
             )}
             {slideshowEnabled && (
-              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-black" onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
+              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]" onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
                 <Play className="size-5" />
               </button>
             )}
-            <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center text-black/70 transition hover:text-black" title={faceBusy ? "Searching" : "Find me"} aria-label="Find me">
+            <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center text-black/70 transition hover:text-[#6337d8]" title={faceBusy ? "Searching" : "Find me"} aria-label="Find me">
               {faceBusy ? <Search className="size-5 animate-pulse" /> : <Camera className="size-5" />}
               <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
                 void searchByFace(event.target.files?.[0]);
                 event.target.value = "";
               }} />
             </label>
-            <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-black" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
+            <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
               <Search className="size-5" />
             </button>
             {faceResults && (
@@ -1018,7 +1018,7 @@ export function PublicGallery({
               </button>
             )}
             {pinRequired && !pinOk && (
-              <button className="inline-flex h-10 shrink-0 items-center gap-2 bg-[#202326] px-4 text-sm font-bold text-white transition hover:opacity-90" onClick={() => setPinDialogOpen(true)} type="button">
+              <button className="inline-flex h-10 shrink-0 items-center gap-2 bg-[#6337d8] px-4 text-sm font-bold text-white transition hover:opacity-90" onClick={() => setPinDialogOpen(true)} type="button">
                 <Lock className="size-4" />
                 Unlock
               </button>
@@ -1076,7 +1076,7 @@ export function PublicGallery({
               </label>
             )}
             <button
-              className="h-10 shrink-0 bg-[#202326] px-4 text-sm font-bold text-white disabled:opacity-45"
+              className="h-10 shrink-0 rounded-[6px] bg-gradient-to-r from-[#5527c9] to-[#7436db] px-4 text-sm font-bold text-white disabled:opacity-45"
               disabled={!visitorEmail.includes("@")}
               onClick={() => setVisitorEmailSaved(true)}
               type="button"
@@ -1172,14 +1172,14 @@ export function PublicGallery({
       {zipDownloading && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-white p-7 text-center text-[#202326] shadow-[0_28px_90px_rgba(0,0,0,0.32)]">
-            <div className="relative mx-auto flex size-20 items-center justify-center rounded-full bg-[#eef8f6] text-[#009b8c]">
+            <div className="relative mx-auto flex size-20 items-center justify-center rounded-full bg-[#f2edff] text-[#6337d8]">
               <Download className="size-7 animate-bounce" />
-              <span className="absolute inset-0 animate-ping rounded-full border border-[#19bda8]/30" />
+              <span className="absolute inset-0 animate-ping rounded-full border border-[#7d55e7]/30" />
             </div>
             <h2 className="mt-6 text-xl font-semibold">Preparing ZIP download</h2>
             <p className="mt-2 text-sm text-[#666]">{zipStage}</p>
             <div className="mx-auto mt-6 flex w-28 items-end justify-center gap-1.5">
-              {[0, 1, 2, 3, 4].map((index) => <span key={index} className="h-2 w-3 animate-pulse rounded-full bg-[#18bfa6]" style={{ animationDelay: `${index * 120}ms` }} />)}
+              {[0, 1, 2, 3, 4].map((index) => <span key={index} className="h-2 w-3 animate-pulse rounded-full bg-[#6337d8]" style={{ animationDelay: `${index * 120}ms` }} />)}
             </div>
           </div>
         </div>
@@ -1213,7 +1213,7 @@ export function PublicGallery({
               </label>
             )}
             <button
-              className="mt-5 h-11 w-full bg-[#202326] text-sm font-bold text-white disabled:opacity-50"
+              className="mt-5 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-sm font-bold text-white disabled:opacity-50"
               onClick={submitDownloadEmail}
               disabled={!downloadEmailDraft.includes("@")}
               type="button"
@@ -1249,7 +1249,7 @@ export function PublicGallery({
               <p className="mt-3 text-xs font-semibold text-red-600">PIN does not match.</p>
             )}
             <button
-              className="mt-5 h-11 w-full bg-[#202326] text-sm font-bold text-white disabled:opacity-50"
+              className="mt-5 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-sm font-bold text-white disabled:opacity-50"
               onClick={unlockDownloads}
               disabled={!pinDraft.trim()}
               type="button"
@@ -1522,7 +1522,7 @@ function GalleryTile({
             title={privatePhoto ? "Hide request pending" : "Request hide"}
             type="button"
           >
-            <EyeOff className={cn("size-4", privatePhoto && "text-[#00a997]")} />
+            <EyeOff className={cn("size-4", privatePhoto && "text-[#6337d8]")} />
           </button>
         )}
         <button className="polished-icon-button size-9 sm:size-10" onClick={() => onPreview(photo)} aria-label="View image" title="View">
@@ -1640,3 +1640,4 @@ function formatPublicDate(value: string) {
     year: "numeric",
   });
 }
+

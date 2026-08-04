@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
@@ -84,19 +84,19 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
 
         <header className="mt-10 flex flex-wrap items-end justify-between gap-5 border-b pb-7">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#0a9c8b]">Pricing</p>
+            <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#6337d8]">Pricing</p>
             <h1 className="mt-3 text-4xl font-medium">Choose your plan</h1>
           </div>
-          <div className="flex h-11 w-full max-w-[360px] items-center border bg-white px-3">
+          <div className="flex h-11 w-full max-w-[360px] items-center rounded-[8px] border border-[#ded9ea] bg-white px-3 shadow-sm focus-within:border-[#6337d8] focus-within:ring-2 focus-within:ring-[#6337d8]/10">
             <Search className="mr-2 size-4 text-[#777]" />
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plans" className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0" />
           </div>
         </header>
 
         <div className="mt-6 flex justify-center">
-          <div className="inline-flex border bg-white p-1" aria-label="Billing frequency">
-            <button type="button" onClick={() => setBillingInterval("month")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "month" ? "bg-[#111] text-white" : "text-[#555]")}>Monthly</button>
-            <button type="button" onClick={() => setBillingInterval("year")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "year" ? "bg-[#111] text-white" : "text-[#555]")}>Yearly</button>
+          <div className="inline-flex rounded-[8px] border border-[#ded9ea] bg-white p-1 shadow-sm" aria-label="Billing frequency">
+            <button type="button" onClick={() => setBillingInterval("month")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "month" ? "rounded-[6px] bg-[#6337d8] text-white" : "rounded-[6px] text-[#555] hover:bg-[#f5f1ff]")}>Monthly</button>
+            <button type="button" onClick={() => setBillingInterval("year")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "year" ? "rounded-[6px] bg-[#6337d8] text-white" : "rounded-[6px] text-[#555] hover:bg-[#f5f1ff]")}>Yearly</button>
           </div>
         </div>
 
@@ -110,14 +110,14 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
           <div className="mt-8 border bg-white p-8 text-sm font-semibold text-[#777]">No plans found.</div>
         ) : (
           <>
-          <div className="mt-8 grid gap-4 md:hidden">
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 md:hidden">
             {filtered.map((plan) => {
               const recommended = plan._id === recommendedId;
               const yearlyAvailable = Boolean(plan.yearlyEnabled) && Number(plan.priceYearly ?? 0) > 0;
               const price = billingInterval === "year" ? yearlyAvailable ? Number(plan.priceYearly ?? 0) / 12 : 0 : Number(plan.priceMonthly ?? 0);
               return (
-                <article key={plan._id} className={cn("border p-5", recommended ? "bg-[#f1faf8]" : "bg-white")}>
-                  <div className="h-5 text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">
+                <article key={plan._id} className={cn("rounded-[12px] border border-[#e8e3ef] p-5 shadow-[0_10px_30px_rgba(39,25,85,.05)]", recommended ? "bg-[#f3efff] ring-1 ring-[#6337d8]/20" : "bg-white")}>
+                  <div className="h-5 text-xs font-bold uppercase tracking-[0.18em] text-[#6337d8]">
                     {recommended ? "Recommended" : ""}
                   </div>
                   <div className="mt-3 flex items-start justify-between gap-3">
@@ -128,7 +128,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                         <span className="pb-2 text-sm">/mo</span>
                       </p>
                     </div>
-                    <span className="rounded-full bg-[#22bda7] px-3 py-1 text-xs font-bold text-white">
+                    <span className="rounded-full bg-gradient-to-r from-[#5527c9] to-[#7436db] px-3 py-1 text-xs font-bold text-white">
                       {Number(plan.storageGb ?? 0).toLocaleString()} GB
                     </span>
                   </div>
@@ -144,11 +144,11 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                     {Object.entries(featureLabels).map(([key, label]) => (
                       <p key={key} className={cn("flex items-center justify-between gap-4 text-sm", plan.features?.[key] ? "text-[#222]" : "text-[#999]")}>
                         <span>{label}</span>
-                        {plan.features?.[key] ? <Check className="size-5 text-[#20a786]" /> : <span className="text-[#c9c9c9]">-</span>}
+                        {plan.features?.[key] ? <Check className="size-5 text-[#6337d8]" /> : <span className="text-[#c9c9c9]">-</span>}
                       </p>
                     ))}
                   </div>
-                  <Button className="mt-6 h-11 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
+                  <Button className="mt-6 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-sm font-bold text-white shadow-[0_10px_24px_rgba(99,55,216,.18)] hover:opacity-95" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
                     {pending && pendingId === plan._id ? <Loader2 className="size-4 animate-spin" /> : price > 0 ? "Start Plan" : "Start Free"}
                   </Button>
                 </article>
@@ -167,8 +167,8 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                 const yearlyAvailable = Boolean(plan.yearlyEnabled) && Number(plan.priceYearly ?? 0) > 0;
                 const price = billingInterval === "year" ? yearlyAvailable ? Number(plan.priceYearly ?? 0) / 12 : 0 : Number(plan.priceMonthly ?? 0);
                 return (
-                  <div key={plan._id} className={cn("border-b border-r p-5", recommended ? "bg-[#f1faf8]" : "bg-white")}>
-                    <div className="h-6 text-xs font-bold uppercase tracking-[0.18em] text-[#0a9c8b]">
+                  <div key={plan._id} className={cn("border-b border-r p-5", recommended ? "bg-[#f3efff] ring-1 ring-inset ring-[#6337d8]/15" : "bg-white")}>
+                    <div className="h-6 text-xs font-bold uppercase tracking-[0.18em] text-[#6337d8]">
                       {recommended ? "Recommended" : ""}
                     </div>
                     <h2 className="mt-3 text-xl font-medium">{plan.name}</h2>
@@ -179,7 +179,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                     <p className="mt-6 min-h-5 text-xs font-semibold text-[#aaa]">
                       {billingInterval === "year" ? yearlyAvailable ? `€${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : price > 0 ? "Billed monthly" : "Billed Never"}
                     </p>
-                    <Button className="mt-9 h-11 w-full rounded-none bg-[#22bda7] text-sm font-bold text-white hover:bg-[#19a995]" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
+                    <Button className="mt-9 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-sm font-bold text-white shadow-[0_10px_24px_rgba(99,55,216,.18)] hover:opacity-95" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
                       {pending && pendingId === plan._id ? <Loader2 className="size-4 animate-spin" /> : price > 0 ? "Start Plan" : "Start Free"}
                     </Button>
                   </div>
@@ -235,7 +235,7 @@ function Row({ plans, recommendedId, label, featureKey }: {
 function SectionCell({ title }: { title: string }) {
   return (
     <div className="flex h-20 items-center gap-3 border-b border-r bg-white px-5 text-lg font-semibold">
-      <span className="size-8 rounded-full bg-[#22bda7]" />
+      <span className="size-8 rounded-full bg-gradient-to-br from-[#5527c9] to-[#8a5cf0] shadow-[0_6px_16px_rgba(99,55,216,.22)]" />
       {title}
     </div>
   );
@@ -246,7 +246,7 @@ function LabelCell({ label }: { label: string }) {
 }
 
 function BlankCell({ recommended }: { recommended: boolean }) {
-  return <div className={cn("border-b border-r", recommended ? "bg-[#f1faf8]" : "bg-white")} />;
+  return <div className={cn("border-b border-r", recommended ? "bg-[#f3efff]" : "bg-white")} />;
 }
 
 function ValueCell({ primary, secondary, recommended }: {
@@ -255,7 +255,7 @@ function ValueCell({ primary, secondary, recommended }: {
   recommended: boolean;
 }) {
   return (
-    <div className={cn("flex min-h-20 flex-col items-center justify-center border-b border-r px-4 text-center", recommended ? "bg-[#f1faf8]" : "bg-white")}>
+    <div className={cn("flex min-h-20 flex-col items-center justify-center border-b border-r px-4 text-center", recommended ? "bg-[#f3efff]" : "bg-white")}>
       <b className="text-sm">{primary}</b>
       <span className="mt-1 text-sm text-[#555]">{secondary}</span>
     </div>
@@ -264,8 +264,9 @@ function ValueCell({ primary, secondary, recommended }: {
 
 function CheckCell({ active, recommended }: { active: boolean; recommended: boolean }) {
   return (
-    <div className={cn("flex min-h-20 items-center justify-center border-b border-r px-4", recommended ? "bg-[#f1faf8]" : "bg-white")}>
-      {active ? <Check className="size-5 text-[#20a786]" /> : <span className="text-lg text-[#c9c9c9]">-</span>}
+    <div className={cn("flex min-h-20 items-center justify-center border-b border-r px-4", recommended ? "bg-[#f3efff]" : "bg-white")}>
+      {active ? <Check className="size-5 text-[#6337d8]" /> : <span className="text-lg text-[#c9c9c9]">-</span>}
     </div>
   );
 }
+
