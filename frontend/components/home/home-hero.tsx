@@ -1,9 +1,35 @@
 ﻿"use client";
 
-import { ArrowRight, Play, Sparkles, Star } from "lucide-react";
+import { ArrowRight, Play, Sparkles, Star, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { SiteNav } from "@/components/home/site-nav";
 import { useHomeCms } from "@/api-hooks/use-home-cms";
 import type { HomeCmsData, HomeLanguage } from "@/lib/home-cms";
+
+function getVideoEmbed(url: string) {
+  const value = url.trim();
+  if (!value) return { kind: "empty" as const, src: "" };
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      const id = parsed.pathname.split("/").filter(Boolean)[0];
+      return { kind: "iframe" as const, src: `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` };
+    }
+    if (host.includes("youtube.com")) {
+      const id = parsed.searchParams.get("v") || parsed.pathname.split("/").filter(Boolean).pop();
+      return { kind: "iframe" as const, src: `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` };
+    }
+    if (host.includes("vimeo.com")) {
+      const id = parsed.pathname.split("/").filter(Boolean).pop();
+      return { kind: "iframe" as const, src: `https://player.vimeo.com/video/${id}?autoplay=1` };
+    }
+    if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(value)) return { kind: "video" as const, src: value };
+    return { kind: "iframe" as const, src: value };
+  } catch {
+    return { kind: "empty" as const, src: "" };
+  }
+}
 
 export function HomeHero({ initialCms, requestedLanguage, dashboardHref }: { initialCms: HomeCmsData; requestedLanguage?: string; dashboardHref?: string }) {
   const cms = useHomeCms(initialCms);
@@ -11,6 +37,22 @@ export function HomeHero({ initialCms, requestedLanguage, dashboardHref }: { ini
   const t = cms.content[lang] ?? cms.content.en;
   const images = [...t.workflow.tabs.map((item) => item.image), ...t.gallery.tabs.map((item) => item.image), ...t.cta.images].filter(Boolean);
   const hero = cms.media.heroMediaUrl || images[0];
+  const [videoOpen, setVideoOpen] = useState(false);
+  const video = useMemo(() => getVideoEmbed(t.hero.videoUrl), [t.hero.videoUrl]);
+
+  useEffect(() => {
+    if (!videoOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setVideoOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [videoOpen]);
 
   return (
     <section className="relative overflow-hidden bg-white">
@@ -27,7 +69,7 @@ export function HomeHero({ initialCms, requestedLanguage, dashboardHref }: { ini
           <p className="mt-6 max-w-[470px] whitespace-pre-line text-[15px] leading-7 text-[#5f5f67] sm:mt-7 sm:text-[16px] sm:leading-8">{t.hero.subtitle}</p>
           <div className="mt-7 grid gap-3 sm:flex sm:flex-wrap sm:gap-4">
             <a href={dashboardHref ?? "/register"} className="inline-flex h-[50px] w-full items-center justify-center gap-3 rounded-[6px] bg-[#5e36d6] px-6 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(94,54,214,.22)] sm:h-[52px] sm:w-auto sm:px-7">{t.hero.cta}<ArrowRight className="size-4" /></a>
-            <a href="/pricing" className="inline-flex h-[50px] w-full items-center justify-center gap-3 rounded-[6px] border border-[#dad7e5] bg-white px-6 text-sm font-semibold text-[#222] sm:h-[52px] sm:w-auto sm:px-7"><span className="grid size-6 place-items-center rounded-full border border-[#222]"><Play className="ml-px size-3" /></span>{t.hero.secondaryCta}</a>
+            <button type="button" onClick={() => setVideoOpen(true)} className="inline-flex h-[50px] w-full items-center justify-center gap-3 rounded-[6px] border border-[#dad7e5] bg-white px-6 text-sm font-semibold text-[#222] transition hover:border-[#6337d8] hover:text-[#6337d8] sm:h-[52px] sm:w-auto sm:px-7"><span className="grid size-6 place-items-center rounded-full border border-current"><Play className="ml-px size-3" /></span>{t.hero.secondaryCta}</button>
           </div>
           <div className="mt-7 flex flex-wrap items-center gap-3 sm:mt-8">
             <div className="flex -space-x-2">{t.hero.avatarImages.filter(Boolean).slice(0,6).map((src,i)=><img key={`${src}-${i}`} src={src} alt={`Reviewer ${i + 1}`} className="size-9 rounded-full border-2 border-white object-cover" />)}</div>
@@ -48,6 +90,19 @@ export function HomeHero({ initialCms, requestedLanguage, dashboardHref }: { ini
           <div className="absolute -bottom-4 left-16 h-16 w-[70%] rounded-full bg-[#7657f5]/30 blur-2xl" />
         </div>
       </div>
+
+      {videoOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target) setVideoOpen(false); }}>
+          <div className="relative w-full max-w-5xl overflow-hidden rounded-[14px] bg-black shadow-[0_30px_90px_rgba(0,0,0,.45)]">
+            <button type="button" onClick={() => setVideoOpen(false)} className="absolute right-3 top-3 z-10 grid size-10 place-items-center rounded-full bg-black/60 text-white transition hover:bg-[#6337d8]" aria-label="Close video"><X className="size-5" /></button>
+            <div className="aspect-video w-full bg-black">
+              {video.kind === "iframe" && <iframe key={video.src} src={video.src} title={t.hero.secondaryCta} className="h-full w-full" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />}
+              {video.kind === "video" && <video key={video.src} src={video.src} className="h-full w-full" controls autoPlay playsInline />}
+              {video.kind === "empty" && <div className="grid h-full place-items-center px-6 text-center text-white"><div><Play className="mx-auto size-12 text-[#8b63ee]" /><p className="mt-4 text-lg font-semibold">Video is not configured yet.</p><p className="mt-2 text-sm text-white/65">Add a YouTube, Vimeo, MP4, WebM, or OGG URL in Admin → Homepage CMS → Hero section.</p></div></div>}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

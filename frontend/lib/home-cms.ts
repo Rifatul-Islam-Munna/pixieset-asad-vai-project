@@ -90,7 +90,7 @@ export type AuthCms = {
 
 export type HomeContent = {
   nav: { brand: string; products: string; examples: string; pricing: string; login: string; cta: string };
-  hero: { eyebrow: string; title: string; accentTitle: string; endingTitle: string; subtitle: string; cta: string; secondaryCta: string; ratingText: string; avatarImages: string[] };
+  hero: { eyebrow: string; title: string; accentTitle: string; endingTitle: string; subtitle: string; cta: string; secondaryCta: string; videoUrl: string; ratingText: string; avatarImages: string[] };
   gallery: { title: string; subtitle: string; tabs: GalleryTab[]; productTabs: string[]; cartLabel: string };
   products: { title: string; price: string; description?: string; href?: string }[];
   featureCards: FeatureCard[];
@@ -176,6 +176,7 @@ export const defaultHomeCms: HomeCmsData = {
         subtitle: "Industry-leading photo galleries, website and business tools to streamline your workflow and grow your photography business.",
         cta: "Get Started",
         secondaryCta: "Watch Video",
+        videoUrl: "",
         ratingText: "Loved by 2,000+ photographers worldwide",
         avatarImages: [
           "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80",

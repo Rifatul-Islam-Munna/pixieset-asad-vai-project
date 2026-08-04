@@ -1211,6 +1211,7 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
             <CmsTextarea label="Description (normal paragraph text)" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
             <CmsInput label="Primary button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
             <CmsInput label="Secondary button" value={content.hero.secondaryCta} onChange={(secondaryCta) => patchObject("hero", { secondaryCta })} />
+            <CmsInput label="Video URL (YouTube, Vimeo, or direct MP4/WebM)" value={content.hero.videoUrl} onChange={(videoUrl) => patchObject("hero", { videoUrl })} />
             <CmsInput label="Review text" value={content.hero.ratingText} onChange={(ratingText) => patchObject("hero", { ratingText })} />
           </CmsRepeater>
           <CmsRepeater title="Hero media">
