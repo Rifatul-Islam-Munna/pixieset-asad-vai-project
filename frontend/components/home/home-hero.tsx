@@ -58,10 +58,16 @@ export function HomeHero({
       ? requestedLanguage
       : cms.defaultLanguage;
   const t = cms.content[lang] ?? cms.content.en;
+  const workflowTabs = Array.isArray(t?.workflow?.tabs) ? t.workflow.tabs : [];
+  const galleryTabs = Array.isArray(t?.gallery?.tabs) ? t.gallery.tabs : [];
+  const ctaImages = Array.isArray(t?.cta?.images) ? t.cta.images : [];
+  const avatarImages = Array.isArray(t?.hero?.avatarImages)
+    ? t.hero.avatarImages
+    : [];
   const images = [
-    ...t.workflow.tabs.map((item) => item.image),
-    ...t.gallery.tabs.map((item) => item.image),
-    ...t.cta.images,
+    ...workflowTabs.map((item) => item?.image),
+    ...galleryTabs.map((item) => item?.image),
+    ...ctaImages,
   ].filter(Boolean);
   const hero = cms.media.heroMediaUrl || images[0];
   const [videoOpen, setVideoOpen] = useState(false);
@@ -132,7 +138,7 @@ export function HomeHero({
           </div>
           <div className="mt-7 flex flex-wrap items-center gap-3 sm:mt-8">
             <div className="flex -space-x-2">
-              {t.hero.avatarImages
+              {avatarImages
                 .filter(Boolean)
                 .slice(0, 6)
                 .map((src, i) => (
