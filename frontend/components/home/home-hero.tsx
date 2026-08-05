@@ -119,10 +119,10 @@ export function HomeHero({
           </p>
           <div className="mt-7 grid gap-3 sm:flex sm:flex-wrap sm:gap-4">
             <a
-              href={dashboardHref ?? "/register"}
+              href={dashboardHref ?? "/login"}
               className="inline-flex h-[50px] w-full items-center justify-center gap-3 rounded-[6px] bg-[#5e36d6] px-6 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(94,54,214,.22)] sm:h-[52px] sm:w-auto sm:px-7"
             >
-              {t.hero.cta}
+              {dashboardHref ? "Dashboard" : t.hero.cta}
               <ArrowRight className="size-4" />
             </a>
             <button

@@ -171,7 +171,7 @@ export class CollectionsService {
       this.emailRegistrationModel
         .find({ ownerId: userId })
         .sort({ createdAt: -1 })
-        .limit(30)
+        .limit(8)
         .lean(),
       this.userModel
         .findById(userId)
@@ -183,7 +183,7 @@ export class CollectionsService {
       this.downloadActivityModel
         .find({ collectionId: { $in: ids } })
         .sort({ createdAt: -1 })
-        .limit(50)
+        .limit(8)
         .lean(),
       this.viewModel.aggregate([
         { $match: { ownerId: userId } },
