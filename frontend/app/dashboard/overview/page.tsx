@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
@@ -18,7 +18,9 @@ import { getBillingOverview, getPurchaseHistory } from "@/actions/billing";
 export const dynamic = "force-dynamic";
 
 const baseUrl =
-  process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  process.env.BASE_URL ??
+  process.env.NEXT_PUBLIC_BASE_URL ??
+  "http://localhost:4000";
 
 type ListResponse<T> = { data: T };
 
@@ -51,7 +53,9 @@ async function authedOverviewRequest<T>(path: string, fallback: T): Promise<T> {
   }).catch(() => null);
   if (response?.status === 401 || response?.status === 403) redirect("/login");
   if (!response?.ok) return fallback;
-  const payload = (await response.json().catch(() => null)) as ListResponse<T> | null;
+  const payload = (await response
+    .json()
+    .catch(() => null)) as ListResponse<T> | null;
   return payload?.data ?? fallback;
 }
 
@@ -111,7 +115,11 @@ function formatDate(value?: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? ""
-    : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    : date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
 }
 
 export default async function DashboardOverviewPage() {
@@ -150,7 +158,9 @@ export default async function DashboardOverviewPage() {
           <div className="mt-9 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
             {products.map((product) => (
               <div key={product.title} className="min-w-0">
-                <span className={`mx-auto flex size-14 items-center justify-center rounded-full text-white ${product.color}`}>
+                <span
+                  className={`mx-auto flex size-14 items-center justify-center rounded-full text-white ${product.color}`}
+                >
                   <product.icon className="size-6" />
                 </span>
                 <h2 className="mt-5 truncate text-center text-base font-bold">
@@ -159,7 +169,11 @@ export default async function DashboardOverviewPage() {
                 <div className="mt-4 border-t pt-4">
                   <div className="grid gap-3 text-sm text-[#5f6670]">
                     {product.links.map(([label, href]) => (
-                      <Link key={label} href={href} className="transition hover:text-black">
+                      <Link
+                        key={label}
+                        href={href}
+                        className="transition hover:text-black"
+                      >
                         {label}
                       </Link>
                     ))}
@@ -181,7 +195,10 @@ export default async function DashboardOverviewPage() {
                   <Images className="size-4 text-[#09bfb4]" />
                   Recent Galleries
                 </h2>
-                <Link href="/dashboard/client-gallery" aria-label="Open galleries">
+                <Link
+                  href="/dashboard/client-gallery"
+                  aria-label="Open galleries"
+                >
                   <LayoutGrid className="size-4 text-[#777]" />
                 </Link>
               </div>
@@ -194,22 +211,32 @@ export default async function DashboardOverviewPage() {
                       className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-4 bg-white p-3 text-sm transition hover:bg-[#fbfbfb]"
                     >
                       {collection.coverImage ? (
-                        <img src={assetSrc(collection.coverImage)} alt="" className="size-[72px] object-cover" />
+                        <img
+                          src={assetSrc(collection.coverImage)}
+                          alt=""
+                          className="size-[72px] object-cover"
+                        />
                       ) : (
                         <span className="flex size-[72px] items-center justify-center bg-[#efefec]">
                           <Images className="size-5 text-[#777]" />
                         </span>
                       )}
                       <span className="min-w-0">
-                        <b className="block truncate uppercase">{collection.name}</b>
+                        <b className="block truncate uppercase">
+                          {collection.name}
+                        </b>
                         <span className="mt-1 block text-xs text-[#777]">
-                          {formatDate(collection.eventDate || collection.createdAt)}
+                          {formatDate(
+                            collection.eventDate || collection.createdAt,
+                          )}
                         </span>
                         <span className="mt-2 block text-xs text-[#555]">
                           {collection.imageCount ?? 0} photos
                         </span>
                       </span>
-                      <span className="text-xs capitalize text-[#777]">{collection.status ?? "draft"}</span>
+                      <span className="text-xs capitalize text-[#777]">
+                        {collection.status ?? "draft"}
+                      </span>
                     </Link>
                   ))
                 ) : (
@@ -226,7 +253,10 @@ export default async function DashboardOverviewPage() {
                   <Store className="size-4 text-[#fb4857]" />
                   Recent Orders
                 </h2>
-                <Link href="/dashboard/store-gallery/orders" aria-label="Open orders">
+                <Link
+                  href="/dashboard/store-gallery/orders"
+                  aria-label="Open orders"
+                >
                   <LayoutGrid className="size-4 text-[#777]" />
                 </Link>
               </div>
@@ -241,15 +271,20 @@ export default async function DashboardOverviewPage() {
                       <span className="min-w-0">
                         <b className="block truncate">{order.orderNumber}</b>
                         <span className="mt-1 block truncate text-xs text-[#777]">
-                          {order.customer?.name || order.customer?.email || "Customer"}
+                          {order.customer?.name ||
+                            order.customer?.email ||
+                            "Customer"}
                         </span>
                         <span className="mt-2 block text-xs capitalize text-[#555]">
-                          {order.status ?? "pending"} / {order.paymentStatus ?? "unpaid"}
+                          {order.status ?? "pending"} /{" "}
+                          {order.paymentStatus ?? "unpaid"}
                         </span>
                       </span>
                       <span className="text-right">
                         <b>{Number(order.total ?? 0).toFixed(2)}</b>
-                        <span className="mt-1 block text-xs text-[#777]">{formatDate(order.createdAt)}</span>
+                        <span className="mt-1 block text-xs text-[#777]">
+                          {formatDate(order.createdAt)}
+                        </span>
                       </span>
                     </Link>
                   ))
@@ -272,7 +307,10 @@ export default async function DashboardOverviewPage() {
             {purchases.length ? (
               <div className="mt-5 divide-y bg-white">
                 {purchases.slice(0, 5).map((purchase) => (
-                  <div key={purchase._id} className="flex items-center justify-between gap-4 px-4 py-4 text-sm">
+                  <div
+                    key={purchase._id}
+                    className="flex items-center justify-between gap-4 px-4 py-4 text-sm"
+                  >
                     <div>
                       <b>{purchase.planName}</b>
                       <p className="mt-1 text-xs capitalize text-[#888]">
@@ -304,19 +342,31 @@ export default async function DashboardOverviewPage() {
               <p>
                 <b>{user.planName || "Free"}</b> plan
               </p>
-              <Link href="/dashboard/client-gallery/storage" className="inline-flex items-center gap-2 font-semibold text-[#555] hover:text-black">
+              <Link
+                href="/dashboard/client-gallery/storage"
+                className="inline-flex items-center gap-2 font-semibold text-[#555] hover:text-black"
+              >
                 <CreditCard className="size-4" />
                 Billing & storage
               </Link>
-              <Link href="/dashboard/client-gallery/settings/branding" className="inline-flex items-center gap-2 font-semibold text-[#555] hover:text-black">
+              <Link
+                href="/dashboard/client-gallery/settings/branding"
+                className="inline-flex items-center gap-2 font-semibold text-[#555] hover:text-black"
+              >
                 <Palette className="size-4" />
                 Branding
               </Link>
-              <Link href="/dashboard/client-gallery/settings/preferences" className="inline-flex items-center gap-2 font-semibold text-[#555] hover:text-black">
+              <Link
+                href="/dashboard/client-gallery/settings/preferences"
+                className="inline-flex items-center gap-2 font-semibold text-[#555] hover:text-black"
+              >
                 <Settings className="size-4" />
                 Preferences
               </Link>
-              <Link href="/dashboard/client-gallery/marketing/settings" className="inline-flex items-center gap-2 font-semibold text-[#555] hover:text-black">
+              <Link
+                href="/dashboard/client-gallery/marketing/settings"
+                className="inline-flex items-center gap-2 font-semibold text-[#555] hover:text-black"
+              >
                 <Mail className="size-4" />
                 Email settings
               </Link>

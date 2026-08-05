@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   createElement,
@@ -88,8 +88,22 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -137,7 +151,16 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   useCollectionDetail,
   useCollectionActivity,
@@ -214,6 +237,7 @@ import type {
   HomeCmsData,
 } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
+import { ClientGalleryOverview } from "@/components/dashboard/client-gallery-overview";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 import {
   PlanFeatureLock,
@@ -473,8 +497,8 @@ export function ClientDashboard({
   const activeNav =
     page === "dashboard"
       ? "Dashboard"
-      : sidebarItems[section].find((item) => item.page === page)?.label ??
-        (page === "marketing" ? "Marketing" : "Storage");
+      : (sidebarItems[section].find((item) => item.page === page)?.label ??
+        (page === "marketing" ? "Marketing" : "Storage"));
   const isCollectionIndex =
     page === "collections" ||
     (section === "store-gallery" && page === "products");
@@ -506,7 +530,9 @@ export function ClientDashboard({
       window.removeEventListener("storage-usage-changed", onStorageChanged);
     };
   }, []);
-  const hasPaidPlan = Boolean(billingUser?.planName && !/free|starter/i.test(billingUser.planName));
+  const hasPaidPlan = Boolean(
+    billingUser?.planName && !/free|starter/i.test(billingUser.planName),
+  );
   const showUpgradeCard = Boolean(billingUser && !hasPaidPlan);
   const sidebarUsedGb = bytesToGb(billingUser?.storageUsedBytes ?? 0);
   const sidebarLimitGb = Math.max(0, Number(billingUser?.storageLimitGb ?? 0));
@@ -541,12 +567,30 @@ export function ClientDashboard({
             collapsed ? "w-[84px]" : "w-[268px]",
           )}
         >
-          <div className={cn("flex h-[72px] items-center border-b border-[#f1f1f1]", collapsed ? "justify-center px-2" : "justify-between px-4")}>
+          <div
+            className={cn(
+              "flex h-[72px] items-center border-b border-[#f1f1f1]",
+              collapsed ? "justify-center px-2" : "justify-between px-4",
+            )}
+          >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className={cn("flex h-11 items-center rounded-md text-sm font-bold outline-none hover:bg-[#f5f7f7]", collapsed ? "w-11 justify-center" : "gap-3 px-2")} title={collapsed ? active.title : undefined}>
-                  <span className={cn("grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", activeSwitcher?.accent)}>
-                    {createElement(activeSwitcher?.icon ?? Images, { className: "size-4" })}
+                <button
+                  className={cn(
+                    "flex h-11 items-center rounded-md text-sm font-bold outline-none hover:bg-[#f5f7f7]",
+                    collapsed ? "w-11 justify-center" : "gap-3 px-2",
+                  )}
+                  title={collapsed ? active.title : undefined}
+                >
+                  <span
+                    className={cn(
+                      "grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white",
+                      activeSwitcher?.accent,
+                    )}
+                  >
+                    {createElement(activeSwitcher?.icon ?? Images, {
+                      className: "size-4",
+                    })}
                   </span>
                   {!collapsed && active.title}
                   {!collapsed && <ChevronDown className="size-3 text-[#777]" />}
@@ -560,7 +604,12 @@ export function ClientDashboard({
                         href={item.href}
                         className="flex gap-4 rounded-none px-2 py-4"
                       >
-                        <span className={cn("mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", item.accent)}>
+                        <span
+                          className={cn(
+                            "mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white",
+                            item.accent,
+                          )}
+                        >
                           {createElement(item.icon, { className: "size-5" })}
                         </span>
                         <span className="flex flex-col gap-1">
@@ -577,11 +626,11 @@ export function ClientDashboard({
                 </DropdownMenuGroup>
                 <div className="bg-[#f7f7f7] p-5 text-center">
                   <Link
-                    href="/dashboard/client-gallery/dashboard"
+                    href="/dashboard/overview"
                     className="inline-flex items-center gap-2 text-sm text-[#333]"
                   >
                     <LayoutGrid className="size-4 text-[#999]" />
-                    View Dashboard
+                    View Overview
                   </Link>
                 </div>
               </DropdownMenuContent>
@@ -591,15 +640,38 @@ export function ClientDashboard({
               className={cn("flex items-center gap-4", collapsed && "hidden")}
             >
               {section === "client-gallery" && <DashboardNotifications />}
-              <DashboardProfileMenu billingUser={billingUser} logoutPending={logoutPending} onLogout={logout} />
+              <DashboardProfileMenu
+                billingUser={billingUser}
+                logoutPending={logoutPending}
+                onLogout={logout}
+              />
             </div>
           </div>
 
-          <nav className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto py-5", collapsed ? "px-2" : "px-3")}>
+          <nav
+            className={cn(
+              "flex min-h-0 flex-1 flex-col overflow-y-auto py-5",
+              collapsed ? "px-2" : "px-3",
+            )}
+          >
             <div className="flex flex-col gap-2">
               {section === "client-gallery" && (
-                <Link href="/dashboard/client-gallery/dashboard" className={cn("group flex h-12 items-center rounded-md text-sm transition hover:bg-[#e9e1ff]", collapsed ? "justify-center px-0" : "gap-4 px-3", page === "dashboard" ? "bg-[#f0ebff] font-semibold text-[#6337d8]" : "text-[#333]")}>
-                  <LayoutGrid className={cn("size-5", page === "dashboard" ? "text-[#6337d8]" : "text-[#333]")} />
+                <Link
+                  href="/dashboard/client-gallery/dashboard"
+                  className={cn(
+                    "group flex h-12 items-center rounded-md text-sm transition hover:bg-[#e9e1ff]",
+                    collapsed ? "justify-center px-0" : "gap-4 px-3",
+                    page === "dashboard"
+                      ? "bg-[#f0ebff] font-semibold text-[#6337d8]"
+                      : "text-[#333]",
+                  )}
+                >
+                  <LayoutGrid
+                    className={cn(
+                      "size-5",
+                      page === "dashboard" ? "text-[#6337d8]" : "text-[#333]",
+                    )}
+                  />
                   {!collapsed && "Dashboard"}
                 </Link>
               )}
@@ -614,7 +686,8 @@ export function ClientDashboard({
                   className={cn(
                     "group flex h-12 items-center rounded-md text-left text-sm text-[#333] transition-colors hover:bg-[#f5f7f7]",
                     collapsed ? "justify-center px-0" : "gap-4 px-3",
-                    activeNav === item.label && "bg-[#f0ebff] font-semibold text-[#6337d8]",
+                    activeNav === item.label &&
+                      "bg-[#f0ebff] font-semibold text-[#6337d8]",
                   )}
                   title={collapsed ? item.label : undefined}
                 >
@@ -637,7 +710,8 @@ export function ClientDashboard({
                   className={cn(
                     "flex h-12 items-center rounded-md text-left text-sm text-[#333] transition-colors hover:bg-[#f5f7f7]",
                     collapsed ? "justify-center px-0" : "gap-4 px-3",
-                    page === "marketing" && "bg-[#f0ebff] font-semibold text-[#6337d8]",
+                    page === "marketing" &&
+                      "bg-[#f0ebff] font-semibold text-[#6337d8]",
                   )}
                   title={collapsed ? "Marketing" : undefined}
                 >
@@ -649,24 +723,30 @@ export function ClientDashboard({
                   />
                   {!collapsed && "Marketing"}
                 </Link>
-                <div className={cn(collapsed ? "flex flex-col gap-2" : "ml-5 flex flex-col border-l border-[#e8e8e8] pl-3")}>
-                    {marketingSidebarItems.map((item) => (
-                      <Link
-                        key={item.slug}
-                        href={`/dashboard/${section}/marketing/${item.slug}`}
-                        className={cn(
-                          "flex h-11 items-center rounded-md text-sm text-[#333] hover:bg-[#f7f7f7]",
-                          collapsed ? "justify-center px-0" : "gap-3 px-3",
-                          marketingPage === item.slug &&
-                            "bg-[#f3f3f3] font-medium",
-                        )}
-                        title={collapsed ? item.label : undefined}
-                      >
-                        <item.icon className="size-5" />
-                        {!collapsed && item.label}
-                      </Link>
-                    ))}
-                  </div>
+                <div
+                  className={cn(
+                    collapsed
+                      ? "flex flex-col gap-2"
+                      : "ml-5 flex flex-col border-l border-[#e8e8e8] pl-3",
+                  )}
+                >
+                  {marketingSidebarItems.map((item) => (
+                    <Link
+                      key={item.slug}
+                      href={`/dashboard/${section}/marketing/${item.slug}`}
+                      className={cn(
+                        "flex h-11 items-center rounded-md text-sm text-[#333] hover:bg-[#f7f7f7]",
+                        collapsed ? "justify-center px-0" : "gap-3 px-3",
+                        marketingPage === item.slug &&
+                          "bg-[#f3f3f3] font-medium",
+                      )}
+                      title={collapsed ? item.label : undefined}
+                    >
+                      <item.icon className="size-5" />
+                      {!collapsed && item.label}
+                    </Link>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -674,8 +754,15 @@ export function ClientDashboard({
               <div className="mb-5 mt-auto rounded-[10px] bg-gradient-to-br from-[#f4efff] to-[#eee5ff] p-5 shadow-[0_12px_30px_rgba(99,55,216,.08)]">
                 <Star className="size-7 text-[#6337d8]" />
                 <h3 className="mt-4 text-base font-bold">Upgrade to Plus</h3>
-                <p className="mt-2 text-xs leading-5 text-[#6f6a79]">Unlock premium features and grow your business.</p>
-                <Link href="/pricing" className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] bg-gradient-to-r from-[#5527c9] to-[#7135dc] text-sm font-semibold text-white">Upgrade Now <ArrowRight className="size-4" /></Link>
+                <p className="mt-2 text-xs leading-5 text-[#6f6a79]">
+                  Unlock premium features and grow your business.
+                </p>
+                <Link
+                  href="/pricing"
+                  className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[6px] bg-gradient-to-r from-[#5527c9] to-[#7135dc] text-sm font-semibold text-white"
+                >
+                  Upgrade Now <ArrowRight className="size-4" />
+                </Link>
               </div>
             )}
             <div className="grid gap-2 border-t border-[#eeeeee] pt-4">
@@ -726,11 +813,21 @@ export function ClientDashboard({
                 </Link>
               )}
               {section === "client-gallery" && collapsed && (
-                <div className="flex h-11 items-center justify-center" title="Notifications">
+                <div
+                  className="flex h-11 items-center justify-center"
+                  title="Notifications"
+                >
                   <DashboardNotifications />
                 </div>
               )}
-              {collapsed && <DashboardProfileMenu billingUser={billingUser} logoutPending={logoutPending} onLogout={logout} collapsed />}
+              {collapsed && (
+                <DashboardProfileMenu
+                  billingUser={billingUser}
+                  logoutPending={logoutPending}
+                  onLogout={logout}
+                  collapsed
+                />
+              )}
               <button
                 className={cn(
                   "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold text-[#555] hover:bg-red-50 hover:text-red-600 disabled:opacity-50",
@@ -753,9 +850,14 @@ export function ClientDashboard({
                 aria-label="Toggle sidebar"
               >
                 <ChevronsLeft
-                  className={cn("size-5 transition-transform", collapsed && "rotate-180")}
+                  className={cn(
+                    "size-5 transition-transform",
+                    collapsed && "rotate-180",
+                  )}
                 />
-                {!collapsed && <span className="text-sm font-medium">Collapse</span>}
+                {!collapsed && (
+                  <span className="text-sm font-medium">Collapse</span>
+                )}
               </button>
             </div>
           </nav>
@@ -817,8 +919,15 @@ export function ClientDashboard({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 text-sm font-bold outline-none">
-                      <span className={cn("grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", activeSwitcher?.accent)}>
-                        {createElement(activeSwitcher?.icon ?? Images, { className: "size-4" })}
+                      <span
+                        className={cn(
+                          "grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white",
+                          activeSwitcher?.accent,
+                        )}
+                      >
+                        {createElement(activeSwitcher?.icon ?? Images, {
+                          className: "size-4",
+                        })}
                       </span>
                       {active.title}
                       <ChevronDown className="size-3" />
@@ -837,8 +946,15 @@ export function ClientDashboard({
                             onClick={() => setMobileMenuOpen(false)}
                             className="flex gap-4 px-4 py-4"
                           >
-                            <span className={cn("mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", item.accent)}>
-                              {createElement(item.icon, { className: "size-5" })}
+                            <span
+                              className={cn(
+                                "mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white",
+                                item.accent,
+                              )}
+                            >
+                              {createElement(item.icon, {
+                                className: "size-5",
+                              })}
                             </span>
                             <span className="flex flex-col gap-1">
                               <span className="font-bold text-[#151515]">
@@ -854,12 +970,12 @@ export function ClientDashboard({
                     </DropdownMenuGroup>
                     <div className="bg-[#f7f7f7] p-4 text-center">
                       <Link
-                        href="/dashboard/client-gallery/dashboard"
+                        href="/dashboard/overview"
                         onClick={() => setMobileMenuOpen(false)}
                         className="inline-flex items-center gap-2 text-sm text-[#333]"
                       >
                         <LayoutGrid className="size-4 text-[#999]" />
-                        View Dashboard
+                        View Overview
                       </Link>
                     </div>
                   </DropdownMenuContent>
@@ -875,7 +991,11 @@ export function ClientDashboard({
 
               <nav className="mt-7 grid gap-5">
                 {section === "client-gallery" && (
-                  <Link href="/dashboard/client-gallery/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 font-semibold text-[#6337d8]">
+                  <Link
+                    href="/dashboard/client-gallery/dashboard"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-4 font-semibold text-[#6337d8]"
+                  >
                     <LayoutGrid className="size-5" /> Dashboard
                   </Link>
                 )}
@@ -984,7 +1104,7 @@ export function ClientDashboard({
             "mx-auto min-h-screen",
             campaignBuilderOpen
               ? ""
-              : isCollectionDetail || isPriceSheetDetail
+              : isCollectionDetail || isPriceSheetDetail || page === "dashboard"
                 ? "max-w-none px-0 py-0"
                 : storeTopNavOpen
                   ? "max-w-[1220px] px-4 py-10 sm:px-5 md:py-14"
@@ -1014,7 +1134,11 @@ export function ClientDashboard({
             ) : section === "store-gallery" && page === "settings" ? (
               <StoreSettingsPanel />
             ) : page === "settings" ? (
-              <SettingsPanel section={section} settingsPage={settingsPage} emailTemplateId={emailTemplateId} />
+              <SettingsPanel
+                section={section}
+                settingsPage={settingsPage}
+                emailTemplateId={emailTemplateId}
+              />
             ) : page === "homepage" ? (
               <HomepageSettings />
             ) : page === "storage" ? (
@@ -1077,49 +1201,12 @@ export function ClientDashboard({
   );
 }
 
-function ClientGalleryDashboardPanel({ billingUser }: { billingUser: BillingUser | null }) {
-  const products = [
-    { title: "Client Gallery", icon: Images, href: "/dashboard/client-gallery", links: ["Manage Collections", "Create Collection", "View Homepage", "Settings"] },
-    { title: "Store", icon: Store, href: "/dashboard/store-gallery", links: ["View Orders", "Products", "Settings"] },
-    { title: "Mobile Gallery App", icon: Smartphone, href: "/dashboard/mobile-gallery", links: ["Manage Apps", "Create New App", "Settings"] },
-    { title: "Profile & Account", icon: CircleUserRound, href: "/dashboard/client-gallery/account", links: ["Profile", "Account", "Billing", "Preferences"] },
-  ];
-
-  return (
-    <div className="mx-auto w-full max-w-[1380px] px-5 py-8 sm:px-8 lg:px-10">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-[-.03em]">Dashboard</h1>
-          <p className="mt-2 text-sm text-[#6d6a73]">Welcome back{billingUser?.name ? `, ${billingUser.name}` : ""} ðŸ‘‹</p>
-        </div>
-        <Link href="/dashboard/client-gallery/account" className="inline-flex h-11 items-center gap-2 rounded-[7px] border border-[#dedbe8] bg-white px-4 text-sm font-semibold shadow-sm"><CircleUserRound className="size-4" /> Profile & Account</Link>
-      </div>
-
-      <p className="mt-10 text-xs font-bold uppercase tracking-[.18em] text-[#8a8791]">Products</p>
-      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {products.map((item, index) => {
-          const Icon = item.icon;
-          const accents = ["from-[#22c7b8] to-[#0db7a7]", "from-[#ff4960] to-[#f22d4a]", "from-[#ffcb20] to-[#ffb500]", "from-[#ec3aa6] to-[#df1b8d]"];
-          return <Link key={item.title} href={item.href} className="rounded-[10px] border border-[#eceaf1] bg-white p-5 shadow-[0_10px_30px_rgba(30,20,60,.04)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(30,20,60,.08)]">
-            <div className="flex items-center gap-4 border-b border-[#efedf3] pb-4"><span className={`grid size-12 place-items-center rounded-full bg-gradient-to-br ${accents[index]} text-white`}><Icon className="size-5" /></span><h2 className="text-base font-semibold">{item.title}</h2></div>
-            <div className="mt-4 grid gap-3 text-sm text-[#5e5b64]">{item.links.map((link) => <span key={link}>{link}</span>)}</div>
-          </Link>;
-        })}
-      </div>
-
-      <p className="mt-8 text-xs font-bold uppercase tracking-[.18em] text-[#8a8791]">Quick access</p>
-      <div className="mt-4 grid gap-5 xl:grid-cols-2">
-        <div className="rounded-[10px] border border-[#eceaf1] bg-white shadow-[0_10px_30px_rgba(30,20,60,.04)]">
-          <div className="flex items-center justify-between border-b border-[#efedf3] px-5 py-4"><div className="flex items-center gap-3"><Images className="size-5 text-[#20b9a8]"/><h3 className="font-semibold">Recent Collections</h3></div><Link href="/dashboard/client-gallery" className="rounded-[6px] border px-3 py-2 text-xs font-semibold">View All</Link></div>
-          <div className="grid min-h-[220px] place-items-center px-6 py-10 text-center"><div><div className="mx-auto grid size-14 place-items-center rounded-full bg-[#f7f5fb]"><Images className="size-6 text-[#8d8799]"/></div><p className="mt-4 font-medium">Your recent galleries will appear here.</p><Link href="/dashboard/client-gallery/collection-new" className="mt-4 inline-flex h-10 items-center rounded-[6px] bg-[#6337d8] px-4 text-sm font-semibold text-white">Create Gallery</Link></div></div>
-        </div>
-        <div className="rounded-[10px] border border-[#eceaf1] bg-white shadow-[0_10px_30px_rgba(30,20,60,.04)]">
-          <div className="flex items-center justify-between border-b border-[#efedf3] px-5 py-4"><div className="flex items-center gap-3"><Store className="size-5 text-[#ef3a64]"/><h3 className="font-semibold">Recent Orders</h3></div><Link href="/dashboard/store-gallery/orders" className="rounded-[6px] border px-3 py-2 text-xs font-semibold">View All</Link></div>
-          <div className="grid min-h-[220px] place-items-center px-6 py-10 text-center"><div><div className="mx-auto grid size-14 place-items-center rounded-full bg-[#f7f5fb]"><ShoppingBag className="size-6 text-[#8d8799]"/></div><p className="mt-4 font-medium">No orders yet.</p><p className="mt-2 text-sm text-[#77727f]">Once you receive orders, they will appear here.</p></div></div>
-        </div>
-      </div>
-    </div>
-  );
+function ClientGalleryDashboardPanel({
+  billingUser,
+}: {
+  billingUser: BillingUser | null;
+}) {
+  return <ClientGalleryOverview billingUser={billingUser} />;
 }
 
 function AccountPanel() {
@@ -1195,7 +1282,9 @@ function AccountPanel() {
       toast.success("Profile image uploaded");
     } catch (error) {
       setForm((current) => ({ ...current, avatar: previousAvatar }));
-      toast.error(error instanceof Error ? error.message : "Profile image upload failed");
+      toast.error(
+        error instanceof Error ? error.message : "Profile image upload failed",
+      );
     } finally {
       URL.revokeObjectURL(previewUrl);
       setAvatarUploading(false);
@@ -1280,11 +1369,17 @@ function AccountPanel() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold">Profile image</p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <label className={cn(
-                  "inline-flex h-11 cursor-pointer items-center gap-2 bg-[#202326] px-5 text-sm font-bold text-white",
-                  avatarUploading && "pointer-events-none opacity-60",
-                )}>
-                  {avatarUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                <label
+                  className={cn(
+                    "inline-flex h-11 cursor-pointer items-center gap-2 bg-[#202326] px-5 text-sm font-bold text-white",
+                    avatarUploading && "pointer-events-none opacity-60",
+                  )}
+                >
+                  {avatarUploading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Upload className="size-4" />
+                  )}
                   {avatarUploading ? "Uploading..." : "Upload image"}
                   <input
                     type="file"
@@ -1310,7 +1405,8 @@ function AccountPanel() {
                 )}
               </div>
               <p className="mt-3 text-xs leading-5 text-[#888]">
-                Upload a JPG, PNG, WEBP, or AVIF image up to 10 MB. Square images work best.
+                Upload a JPG, PNG, WEBP, or AVIF image up to 10 MB. Square
+                images work best.
               </p>
             </div>
           </div>
@@ -1385,7 +1481,7 @@ function AccountPanel() {
                     : "text-red-600",
               )}
             >
-              {usernameState === "checking" ? "Checkingâ€¦" : usernameMessage}
+              {usernameState === "checking" ? "Checking…" : usernameMessage}
             </p>
           )}
           <FieldInput
@@ -1419,11 +1515,11 @@ function AccountPanel() {
                   <div>
                     <b>{purchase.planName}</b>
                     <p className="mt-1 text-xs capitalize text-[#888]">
-                      {purchase.source} Â· {purchase.status}
+                      {purchase.source} · {purchase.status}
                     </p>
                   </div>
                   <div className="text-right">
-                    <b>â‚¬{Number(purchase.amount).toFixed(2)}</b>
+                    <b>€{Number(purchase.amount).toFixed(2)}</b>
                     <p className="mt-1 text-xs text-[#888]">
                       {new Date(purchase.createdAt).toLocaleDateString()}
                     </p>
@@ -1524,7 +1620,12 @@ function StoreTopNavigation({
                         href={item.href}
                         className="flex gap-4 rounded-none px-2 py-4"
                       >
-                        <span className={cn("mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white", item.accent)}>
+                        <span
+                          className={cn(
+                            "mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br text-white",
+                            item.accent,
+                          )}
+                        >
                           {createElement(item.icon, { className: "size-5" })}
                         </span>
                         <span className="flex flex-col gap-1">
@@ -1541,11 +1642,11 @@ function StoreTopNavigation({
                 </DropdownMenuGroup>
                 <div className="bg-[#f7f7f7] p-5 text-center">
                   <Link
-                    href="/dashboard/client-gallery/dashboard"
+                    href="/dashboard/overview"
                     className="inline-flex items-center gap-2 text-sm text-[#333]"
                   >
                     <LayoutGrid className="size-4 text-[#999]" />
-                    View Dashboard
+                    View Overview
                   </Link>
                 </div>
               </DropdownMenuContent>
@@ -1837,7 +1938,7 @@ function StoragePlanPanel() {
                 <div className="flex justify-between">
                   <span>Price</span>
                   <b>
-                    â‚¬{monthlyEquivalent.toFixed(2)}{" "}
+                    €{monthlyEquivalent.toFixed(2)}{" "}
                     {billingInterval === "year" ? "/yearly" : "/month"}
                   </b>
                 </div>
@@ -1846,7 +1947,7 @@ function StoragePlanPanel() {
                     <span>Billed</span>
                     <b>
                       {yearlyAvailable
-                        ? `â‚¬${Number(plan.priceYearly).toFixed(2)} yearly`
+                        ? `€${Number(plan.priceYearly).toFixed(2)} yearly`
                         : "Unavailable"}
                     </b>
                   </div>
@@ -2129,7 +2230,10 @@ function DashboardProfileMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className={cn("flex items-center justify-center rounded-md outline-none hover:bg-[#f5f7f7]", collapsed ? "h-11 w-full" : "size-9")}
+          className={cn(
+            "flex items-center justify-center rounded-md outline-none hover:bg-[#f5f7f7]",
+            collapsed ? "h-11 w-full" : "size-9",
+          )}
           aria-label="Account menu"
           title={collapsed ? "Account" : undefined}
         >
@@ -2154,13 +2258,36 @@ function DashboardProfileMenu({
         </div>
         <DropdownMenuGroup className="p-2">
           {[
-            { label: "Profile", href: "/dashboard/client-gallery/account", icon: CircleUserRound },
-            { label: "Billing", href: "/dashboard/client-gallery/storage", icon: CreditCard },
-            { label: "Advanced Settings", href: "/dashboard/client-gallery/settings/preferences", icon: Settings },
-            { label: "Account", href: "/dashboard/client-gallery/account", icon: Wrench },
+            {
+              label: "Profile",
+              href: "/dashboard/client-gallery/account",
+              icon: CircleUserRound,
+            },
+            {
+              label: "Billing",
+              href: "/dashboard/client-gallery/storage",
+              icon: CreditCard,
+            },
+            {
+              label: "Advanced Settings",
+              href: "/dashboard/client-gallery/settings/preferences",
+              icon: Settings,
+            },
+            {
+              label: "Account",
+              href: "/dashboard/client-gallery/account",
+              icon: Wrench,
+            },
           ].map((item) => (
-            <DropdownMenuItem key={item.label} asChild className="rounded-none p-0">
-              <Link href={item.href} className="flex h-11 items-center gap-3 px-4 text-sm text-[#222]">
+            <DropdownMenuItem
+              key={item.label}
+              asChild
+              className="rounded-none p-0"
+            >
+              <Link
+                href={item.href}
+                className="flex h-11 items-center gap-3 px-4 text-sm text-[#222]"
+              >
                 <item.icon className="size-4 text-[#555]" />
                 {item.label}
               </Link>
@@ -2232,14 +2359,18 @@ function optimiseMarketingPopupImage(file: File) {
     image.onload = () => {
       try {
         const maxSide = 1400;
-        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const scale = Math.min(
+          1,
+          maxSide / Math.max(image.width, image.height),
+        );
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(image.width * scale));
         canvas.height = Math.max(1, Math.round(image.height * scale));
         const context = canvas.getContext("2d");
         if (!context) throw new Error("Image could not be processed");
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+        const outputType =
+          file.type === "image/png" ? "image/png" : "image/jpeg";
         resolve(canvas.toDataURL(outputType, 0.84));
       } catch (error) {
         reject(error);
@@ -2339,8 +2470,8 @@ function MarketingSettingsPanel({
   saveSetting: any;
 }) {
   const saved =
-    query.data?.data?.find((item) => item.localId === "gallery-marketing")?.data ??
-    defaultMarketingSettings;
+    query.data?.data?.find((item) => item.localId === "gallery-marketing")
+      ?.data ?? defaultMarketingSettings;
   const [form, setForm] = useState<MarketingSettings>(saved);
   const [popupImageUploading, setPopupImageUploading] = useState(false);
 
@@ -2382,7 +2513,9 @@ function MarketingSettingsPanel({
       updatePopup("imageUrl", imageUrl);
       toast.success("Pop-up image ready. Save changes to publish it.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Image upload failed");
+      toast.error(
+        error instanceof Error ? error.message : "Image upload failed",
+      );
     } finally {
       setPopupImageUploading(false);
     }
@@ -2430,10 +2563,13 @@ function MarketingSettingsPanel({
                     <MailCheck className="size-5" />
                   </span>
                   <div>
-                    <h2 className="text-lg font-bold">Email registration subscription</h2>
+                    <h2 className="text-lg font-bold">
+                      Email registration subscription
+                    </h2>
                     <p className="mt-2 text-sm leading-6 text-[#5d6b68]">
-                      Show an optional â€œSubscribe to updates and special offersâ€
-                      checkbox inside the collection email-registration modal.
+                      Show an optional â€œSubscribe to updates and special
+                      offersâ€ checkbox inside the collection email-registration
+                      modal.
                     </p>
                   </div>
                 </div>
@@ -2446,7 +2582,8 @@ function MarketingSettingsPanel({
               </div>
             </div>
             <div className="mt-5 border-l-2 border-[#6337d8] pl-4 text-sm leading-6 text-[#666]">
-              This appears only when both <strong>Email Registration</strong> and
+              This appears only when both <strong>Email Registration</strong>{" "}
+              and
               <strong> Marketing Subscription</strong> are enabled in that
               collectionâ€™s Privacy settings.
             </div>
@@ -2459,7 +2596,9 @@ function MarketingSettingsPanel({
                   <Megaphone className="size-5" />
                 </span>
                 <div>
-                  <h2 className="text-lg font-bold">Gallery subscription pop-up</h2>
+                  <h2 className="text-lg font-bold">
+                    Gallery subscription pop-up
+                  </h2>
                   <p className="mt-2 max-w-xl text-sm leading-6 text-[#666]">
                     Invite collection visitors to subscribe with a clean pop-up
                     form. Each collection can enable or disable marketing
@@ -2498,7 +2637,9 @@ function MarketingSettingsPanel({
                 <FieldLabel className="font-bold">Button label</FieldLabel>
                 <Input
                   value={form.popup.button}
-                  onChange={(event) => updatePopup("button", event.target.value)}
+                  onChange={(event) =>
+                    updatePopup("button", event.target.value)
+                  }
                   className="h-12 rounded-none bg-white"
                 />
               </Field>
@@ -2506,9 +2647,19 @@ function MarketingSettingsPanel({
                 <FieldLabel className="font-bold">Pop-up image</FieldLabel>
                 <div className="mt-2 grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
                   <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center border border-dashed border-[#cfcfcf] bg-[#fafafa] px-5 py-5 text-center transition hover:border-[#6337d8] hover:bg-[#f4fbf9]">
-                    {popupImageUploading ? <Loader2 className="size-6 animate-spin text-[#6337d8]" /> : <Upload className="size-6 text-[#777]" />}
-                    <span className="mt-3 text-sm font-bold text-[#222]">{popupImageUploading ? "Processing image..." : "Upload image"}</span>
-                    <span className="mt-1 text-xs text-[#888]">JPG, PNG, or WebP up to 10 MB</span>
+                    {popupImageUploading ? (
+                      <Loader2 className="size-6 animate-spin text-[#6337d8]" />
+                    ) : (
+                      <Upload className="size-6 text-[#777]" />
+                    )}
+                    <span className="mt-3 text-sm font-bold text-[#222]">
+                      {popupImageUploading
+                        ? "Processing image..."
+                        : "Upload image"}
+                    </span>
+                    <span className="mt-1 text-xs text-[#888]">
+                      JPG, PNG, or WebP up to 10 MB
+                    </span>
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
@@ -2523,21 +2674,30 @@ function MarketingSettingsPanel({
                   <div className="relative min-h-28 overflow-hidden border bg-[#f4f4f4]">
                     {form.popup.imageUrl ? (
                       <>
-                        <img src={form.popup.imageUrl} alt="Subscription pop-up preview" className="h-full min-h-28 w-full object-cover" />
-                        <button type="button" onClick={() => updatePopup("imageUrl", "")} className="absolute right-2 top-2 flex size-8 items-center justify-center bg-white/95 text-[#444] shadow hover:text-red-600" aria-label="Remove pop-up image">
+                        <img
+                          src={form.popup.imageUrl}
+                          alt="Subscription pop-up preview"
+                          className="h-full min-h-28 w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updatePopup("imageUrl", "")}
+                          className="absolute right-2 top-2 flex size-8 items-center justify-center bg-white/95 text-[#444] shadow hover:text-red-600"
+                          aria-label="Remove pop-up image"
+                        >
                           <Trash2 className="size-4" />
                         </button>
                       </>
                     ) : (
-                      <div className="flex h-full min-h-28 items-center justify-center px-4 text-center text-xs text-[#999]">Image preview</div>
+                      <div className="flex h-full min-h-28 items-center justify-center px-4 text-center text-xs text-[#999]">
+                        Image preview
+                      </div>
                     )}
                   </div>
                 </div>
               </Field>
             </div>
           </section>
-
-
         </div>
 
         <div className="xl:sticky xl:top-6 xl:self-start">
@@ -2561,10 +2721,21 @@ function MarketingSettingsPanel({
   );
 }
 
-function MarketingCheck({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+function MarketingCheck({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
   return (
     <label className="flex items-center gap-3 text-sm">
-      <Checkbox checked={checked} onCheckedChange={(value) => onChange(Boolean(value))} />
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(value) => onChange(Boolean(value))}
+      />
       <span>{label}</span>
     </label>
   );
@@ -2574,15 +2745,33 @@ function MarketingPopupPreview({ settings }: { settings: MarketingSettings }) {
   return (
     <aside className="border border-[#e7e7e7] bg-[#f7f7f7] p-6">
       <div className="mx-auto max-w-[450px] border border-[#ededed] bg-white p-8 shadow-[0_14px_40px_rgba(0,0,0,0.06)]">
-        {settings.popup.imageUrl && <img src={settings.popup.imageUrl} alt="" className="mb-7 h-40 w-full object-cover" />}
-        <h3 className="text-3xl font-bold uppercase tracking-[0.12em] text-[#202326]">{settings.popup.title}</h3>
-        <p className="mt-7 whitespace-pre-line text-sm leading-6 text-[#111]">{settings.popup.body}</p>
-        <Input placeholder="Your email" className="mt-7 h-12 rounded-none bg-white" readOnly />
-        <button className="mt-5 h-11 w-full bg-[#333] text-xs font-bold uppercase tracking-[0.18em] text-white" type="button">
+        {settings.popup.imageUrl && (
+          <img
+            src={settings.popup.imageUrl}
+            alt=""
+            className="mb-7 h-40 w-full object-cover"
+          />
+        )}
+        <h3 className="text-3xl font-bold uppercase tracking-[0.12em] text-[#202326]">
+          {settings.popup.title}
+        </h3>
+        <p className="mt-7 whitespace-pre-line text-sm leading-6 text-[#111]">
+          {settings.popup.body}
+        </p>
+        <Input
+          placeholder="Your email"
+          className="mt-7 h-12 rounded-none bg-white"
+          readOnly
+        />
+        <button
+          className="mt-5 h-11 w-full bg-[#333] text-xs font-bold uppercase tracking-[0.18em] text-white"
+          type="button"
+        >
           {settings.popup.button}
         </button>
         <p className="mt-7 text-xs leading-5 text-[#777]">
-          By signing up, you agree to receive promotional emails and updates. You can unsubscribe anytime.
+          By signing up, you agree to receive promotional emails and updates.
+          You can unsubscribe anytime.
         </p>
       </div>
     </aside>
@@ -2815,7 +3004,9 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
   const recipientCategories = [
     ...new Set(
       contacts
-        .map((contact) => contact.collectionName || contact.source || "Contacts")
+        .map(
+          (contact) => contact.collectionName || contact.source || "Contacts",
+        )
         .filter(Boolean),
     ),
   ];
@@ -3170,7 +3361,9 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                         >
                           <Checkbox
                             checked={selectedRecipients.includes(contact.email)}
-                            onCheckedChange={() => toggleRecipient(contact.email)}
+                            onCheckedChange={() =>
+                              toggleRecipient(contact.email)
+                            }
                           />
                           <span className="min-w-0">
                             <span className="block break-all font-bold">
@@ -3185,7 +3378,8 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
                     })
                   ) : (
                     <div className="px-5 py-12 text-center text-sm text-[#777]">
-                      No contacts found. Add manual contacts or upload CSV first.
+                      No contacts found. Add manual contacts or upload CSV
+                      first.
                     </div>
                   )}
                 </div>
@@ -3241,8 +3435,10 @@ function CampaignPreview({
 }) {
   const headline = template?.trim() || "Untitled Template";
   const safeSubject = subject?.trim() || "Your gallery is ready";
-  const safePreview = previewText?.trim() || "A short preview line will appear here.";
-  const safeMessage = message?.trim() || "Write a polished note for your client here.";
+  const safePreview =
+    previewText?.trim() || "A short preview line will appear here.";
+  const safeMessage =
+    message?.trim() || "Write a polished note for your client here.";
   const safeButton = buttonText?.trim() || "Open Gallery";
   const safeFooter = footerText?.trim() || "";
   const safeEyebrow = eyebrowText?.trim() || "Client Gallery";
@@ -3277,7 +3473,9 @@ function CampaignPreview({
             {safeSubject}
           </p>
           <p className="mt-2 text-sm text-[#777]">{safePreview}</p>
-          <div className="mt-7 whitespace-pre-line text-[#222]">{safeMessage}</div>
+          <div className="mt-7 whitespace-pre-line text-[#222]">
+            {safeMessage}
+          </div>
           <div className="mt-9 text-center">
             <a
               href={buttonLink === "Collection URL" ? "#" : buttonLink}
@@ -4133,7 +4331,8 @@ const defaultPreferenceSettings: PreferenceSettings = {
 };
 
 function PreferencesPanel() {
-  const { query, saveSetting } = useDashboardSettings<PreferenceSettings>("preference");
+  const { query, saveSetting } =
+    useDashboardSettings<PreferenceSettings>("preference");
   const saved =
     (query.data?.data?.[0]?.data as PreferenceSettings | undefined) ??
     defaultPreferenceSettings;
@@ -4170,7 +4369,9 @@ function PreferencesPanel() {
           </FieldLabel>
           <select
             value={form.defaultLanguage}
-            onChange={(event) => setForm({ ...form, defaultLanguage: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, defaultLanguage: event.target.value })
+            }
             className="h-12 rounded-none border bg-white px-4 text-sm"
           >
             <option>English</option>
@@ -4186,7 +4387,13 @@ function PreferencesPanel() {
           <FieldLabel className="font-bold">Filename Display</FieldLabel>
           <select
             value={form.filenameDisplay}
-            onChange={(event) => setForm({ ...form, filenameDisplay: event.target.value as PreferenceSettings["filenameDisplay"] })}
+            onChange={(event) =>
+              setForm({
+                ...form,
+                filenameDisplay: event.target
+                  .value as PreferenceSettings["filenameDisplay"],
+              })
+            }
             className="h-12 rounded-none border bg-white px-4 text-sm"
           >
             <option value="show">Show</option>
@@ -4202,7 +4409,13 @@ function PreferencesPanel() {
           </FieldLabel>
           <select
             value={form.searchEngineVisibility}
-            onChange={(event) => setForm({ ...form, searchEngineVisibility: event.target.value as PreferenceSettings["searchEngineVisibility"] })}
+            onChange={(event) =>
+              setForm({
+                ...form,
+                searchEngineVisibility: event.target
+                  .value as PreferenceSettings["searchEngineVisibility"],
+              })
+            }
             className="h-12 rounded-none border bg-white px-4 text-sm"
           >
             <option value="homepage">Homepage Only</option>
@@ -4217,7 +4430,13 @@ function PreferencesPanel() {
           <FieldLabel className="font-bold">Sharpening Level</FieldLabel>
           <select
             value={form.sharpeningLevel}
-            onChange={(event) => setForm({ ...form, sharpeningLevel: event.target.value as PreferenceSettings["sharpeningLevel"] })}
+            onChange={(event) =>
+              setForm({
+                ...form,
+                sharpeningLevel: event.target
+                  .value as PreferenceSettings["sharpeningLevel"],
+              })
+            }
             className="h-12 rounded-none border bg-white px-4 text-sm"
           >
             <option value="optimal">Optimal</option>
@@ -4231,7 +4450,9 @@ function PreferencesPanel() {
         <SettingSwitch
           label="RAW Photo Support"
           checked={form.rawPhotoSupport}
-          onCheckedChange={(value) => setForm({ ...form, rawPhotoSupport: value })}
+          onCheckedChange={(value) =>
+            setForm({ ...form, rawPhotoSupport: value })
+          }
           text="Enable RAW photos to be included alongside other file formats."
         />
       </FieldGroup>
@@ -4241,7 +4462,9 @@ function PreferencesPanel() {
           <FieldLabel className="font-bold">Terms of Service</FieldLabel>
           <Textarea
             value={form.termsOfService}
-            onChange={(event) => setForm({ ...form, termsOfService: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, termsOfService: event.target.value })
+            }
             className="min-h-36 rounded-none border bg-white p-4 text-sm"
             placeholder="Terms shown on gallery pages"
           />
@@ -4250,7 +4473,9 @@ function PreferencesPanel() {
           <FieldLabel className="font-bold">Privacy Policy</FieldLabel>
           <Textarea
             value={form.privacyPolicy}
-            onChange={(event) => setForm({ ...form, privacyPolicy: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, privacyPolicy: event.target.value })
+            }
             className="min-h-36 rounded-none border bg-white p-4 text-sm"
             placeholder="Privacy policy shown on gallery pages"
           />
@@ -4283,9 +4508,11 @@ function cleanGaId(value: string) {
 }
 
 function IntegrationsPanel() {
-  const { query, saveSetting } = useDashboardSettings<GoogleAnalyticsSettings>("integration");
+  const { query, saveSetting } =
+    useDashboardSettings<GoogleAnalyticsSettings>("integration");
   const saved =
-    (query.data?.data?.find((item) => item.localId === "google-analytics")?.data as GoogleAnalyticsSettings | undefined) ??
+    (query.data?.data?.find((item) => item.localId === "google-analytics")
+      ?.data as GoogleAnalyticsSettings | undefined) ??
     defaultGoogleAnalyticsSettings;
   const [form, setForm] = useState<GoogleAnalyticsSettings>(saved);
 
@@ -4326,10 +4553,19 @@ function IntegrationsPanel() {
             </span>
             <div>
               <h2 className="text-lg font-bold">Google Analytics</h2>
-              <p className="mt-1 text-sm text-[#666]">Public homepage and gallery page tracking.</p>
+              <p className="mt-1 text-sm text-[#666]">
+                Public homepage and gallery page tracking.
+              </p>
             </div>
           </div>
-          <span className={cn("w-fit px-3 py-1 text-xs font-bold uppercase", form.enabled ? "bg-[#eee8ff] text-[#5a2fc5]" : "bg-[#eeeeee] text-[#777]")}>
+          <span
+            className={cn(
+              "w-fit px-3 py-1 text-xs font-bold uppercase",
+              form.enabled
+                ? "bg-[#eee8ff] text-[#5a2fc5]"
+                : "bg-[#eeeeee] text-[#777]",
+            )}
+          >
             {form.enabled ? "Enabled" : "Off"}
           </span>
         </div>
@@ -4345,7 +4581,9 @@ function IntegrationsPanel() {
               <FieldLabel className="font-bold">GA4 Measurement ID</FieldLabel>
               <Input
                 value={form.measurementId}
-                onChange={(event) => setForm({ ...form, measurementId: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, measurementId: event.target.value })
+                }
                 placeholder="G-XXXXXXXXXX"
                 className="h-12 rounded-none border bg-white px-4 text-sm"
               />
@@ -4362,7 +4600,9 @@ function IntegrationsPanel() {
             </Button>
           </div>
           <div className="border bg-[#f7f8f8] p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#777]">Scope</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#777]">
+              Scope
+            </p>
             <div className="mt-5 grid gap-4 text-sm">
               <div className="flex items-center gap-3">
                 <Check className="size-4 text-[#6337d8]" />
@@ -4608,7 +4848,9 @@ function EmailTemplatesPanel({
       data: { ...activeTemplate, updatedAt },
     });
     if (editorId === "new") {
-      router.replace(`/dashboard/${section}/settings/email-templates/${encodeURIComponent(activeTemplate.id)}`);
+      router.replace(
+        `/dashboard/${section}/settings/email-templates/${encodeURIComponent(activeTemplate.id)}`,
+      );
     }
   };
   const deleteActiveTemplate = () => {
@@ -4621,7 +4863,9 @@ function EmailTemplatesPanel({
     router.push(`/dashboard/${section}/settings/email-templates/new`);
   };
   const editTemplate = (id: string) => {
-    router.push(`/dashboard/${section}/settings/email-templates/${encodeURIComponent(id)}`);
+    router.push(
+      `/dashboard/${section}/settings/email-templates/${encodeURIComponent(id)}`,
+    );
   };
 
   if (!editorOpen) {
@@ -4721,7 +4965,9 @@ function EmailTemplatesPanel({
       <div className="sticky top-0 z-20 flex min-h-[76px] items-center justify-between gap-4 border-b border-[#e5e1da] bg-white/95 px-5 backdrop-blur">
         <div className="flex min-w-0 items-center gap-4">
           <button
-            onClick={() => router.push(`/dashboard/${section}/settings/email-templates`)}
+            onClick={() =>
+              router.push(`/dashboard/${section}/settings/email-templates`)
+            }
             aria-label="Back to templates"
             className="flex size-10 items-center justify-center rounded-full hover:bg-[#f4f4f1]"
           >
@@ -5269,7 +5515,9 @@ function SlideshowAdditionalOptions({
         aria-expanded={open}
       >
         Additional options
-        <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+        <ChevronDown
+          className={cn("size-4 transition-transform", open && "rotate-180")}
+        />
       </button>
       {open && (
         <div className="grid gap-6 border-l-2 border-[#e8e8e8] pl-5">
@@ -5277,7 +5525,10 @@ function SlideshowAdditionalOptions({
             <p className="text-sm font-bold">Slideshow Speed</p>
             <div className="mt-4 grid gap-4">
               {(["slow", "regular", "fast"] as const).map((value) => (
-                <label key={value} className="flex cursor-pointer items-center gap-3 text-sm capitalize">
+                <label
+                  key={value}
+                  className="flex cursor-pointer items-center gap-3 text-sm capitalize"
+                >
                   <input
                     type="radio"
                     name="slideshow-speed"
@@ -5295,7 +5546,9 @@ function SlideshowAdditionalOptions({
             <div className="mt-3 flex items-center gap-3">
               <Switch
                 checked={autoLoop}
-                onCheckedChange={(value) => onChange({ slideshowAutoLoop: value })}
+                onCheckedChange={(value) =>
+                  onChange({ slideshowAutoLoop: value })
+                }
               />
               <span>{autoLoop ? "On" : "Off"}</span>
             </div>
@@ -5593,8 +5846,8 @@ function PresetStorePanel({
               <option>Portrait Price Sheet</option>
             </select>
             <p className="text-sm leading-6 text-[#666]">
-              Set which products are for sale in galleries. Manage price
-              sheets in <span className="text-[#6337d8]">Store</span>
+              Set which products are for sale in galleries. Manage price sheets
+              in <span className="text-[#6337d8]">Store</span>
             </p>
           </Field>
 
@@ -6395,37 +6648,64 @@ function PresetDownloadPanel({
             aria-expanded={downloadOptionsOpen}
           >
             Additional options
-            <ChevronDown className={cn("size-4 transition-transform", downloadOptionsOpen && "rotate-180")} />
+            <ChevronDown
+              className={cn(
+                "size-4 transition-transform",
+                downloadOptionsOpen && "rotate-180",
+              )}
+            />
           </button>
           {downloadOptionsOpen && download.photoDownload && (
             <div className="mt-2 grid gap-4 border-l-2 border-[#e8e8e8] pl-5">
               <label className="flex cursor-pointer items-center gap-3 text-sm">
                 <Checkbox
                   checked={download.galleryDownload !== false}
-                  onCheckedChange={(value) => onChange({ galleryDownload: Boolean(value) })}
+                  onCheckedChange={(value) =>
+                    onChange({ galleryDownload: Boolean(value) })
+                  }
                 />
                 Gallery Download
               </label>
               <label className="flex cursor-pointer items-center gap-3 text-sm">
                 <Checkbox
                   checked={singlePhotoDownload}
-                  onCheckedChange={(value) => onChange({ singlePhotoDownload: Boolean(value) })}
+                  onCheckedChange={(value) =>
+                    onChange({ singlePhotoDownload: Boolean(value) })
+                  }
                 />
                 Single Photo Download
               </label>
-              <label className={cn("flex items-center gap-3 text-sm", !singlePhotoDownload && "opacity-45")}>
+              <label
+                className={cn(
+                  "flex items-center gap-3 text-sm",
+                  !singlePhotoDownload && "opacity-45",
+                )}
+              >
                 <Checkbox
                   checked={download.singlePhotoDownloadEmailTracking !== false}
                   disabled={!singlePhotoDownload}
-                  onCheckedChange={(value) => onChange({ singlePhotoDownloadEmailTracking: Boolean(value) })}
+                  onCheckedChange={(value) =>
+                    onChange({
+                      singlePhotoDownloadEmailTracking: Boolean(value),
+                    })
+                  }
                 />
                 Single Photo Download Email Tracking
               </label>
-              <label className={cn("flex items-center gap-3 text-sm", !singlePhotoDownload && "opacity-45")}>
+              <label
+                className={cn(
+                  "flex items-center gap-3 text-sm",
+                  !singlePhotoDownload && "opacity-45",
+                )}
+              >
                 <Checkbox
                   checked={Boolean(download.restrictedSinglePhotoDownloadSize)}
                   disabled={!singlePhotoDownload}
-                  onCheckedChange={(value) => onChange({ restrictedSinglePhotoDownloadSize: Boolean(value) })}
+                  onCheckedChange={(value) =>
+                    onChange({
+                      restrictedSinglePhotoDownloadSize: Boolean(value),
+                    })
+                  }
                 />
                 Restricted Single Photo Download Size
               </label>
@@ -7160,28 +7440,76 @@ function StoreDashboardPanel() {
   const currency = settingsQuery.data?.data?.currency ?? "EUR";
   const data = dashboardQuery.data?.data;
   const recentOrders = data?.recentOrders ?? [];
-  const totalStatuses = Math.max(1, Object.values(data?.statusCounts ?? {}).reduce((sum, value) => sum + Number(value || 0), 0));
+  const totalStatuses = Math.max(
+    1,
+    Object.values(data?.statusCounts ?? {}).reduce(
+      (sum, value) => sum + Number(value || 0),
+      0,
+    ),
+  );
   const metricCards = [
-    { label: "Total Revenue", value: money(data?.revenue ?? 0, currency), icon: CircleDollarSign, accent: "from-[#6d36df] to-[#8d56f0]" },
-    { label: "Total Orders", value: String(data?.orderCount ?? 0), icon: Package, accent: "from-[#7550ec] to-[#9b7cff]" },
-    { label: "Total Customers", value: String(data?.customerCount ?? 0), icon: Users, accent: "from-[#7a42e8] to-[#aa78f8]" },
-    { label: "Pending Orders", value: String(data?.pending ?? 0), icon: Clock3, accent: "from-[#8c4de9] to-[#bc87f7]" },
-    { label: "Products", value: String(data?.productCount ?? 0), icon: ShoppingBag, accent: "from-[#5c2acb] to-[#7d4be4]" },
+    {
+      label: "Total Revenue",
+      value: money(data?.revenue ?? 0, currency),
+      icon: CircleDollarSign,
+      accent: "from-[#6d36df] to-[#8d56f0]",
+    },
+    {
+      label: "Total Orders",
+      value: String(data?.orderCount ?? 0),
+      icon: Package,
+      accent: "from-[#7550ec] to-[#9b7cff]",
+    },
+    {
+      label: "Total Customers",
+      value: String(data?.customerCount ?? 0),
+      icon: Users,
+      accent: "from-[#7a42e8] to-[#aa78f8]",
+    },
+    {
+      label: "Pending Orders",
+      value: String(data?.pending ?? 0),
+      icon: Clock3,
+      accent: "from-[#8c4de9] to-[#bc87f7]",
+    },
+    {
+      label: "Products",
+      value: String(data?.productCount ?? 0),
+      icon: ShoppingBag,
+      accent: "from-[#5c2acb] to-[#7d4be4]",
+    },
   ];
-  const salesChartData = recentOrders.slice().reverse().map((order, index) => ({
-    label: order.createdAt ? new Date(order.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `Order ${index + 1}`,
-    revenue: Number(order.total || 0),
-  }));
-  const statusChartData = orderStatuses.map((status, index) => ({
-    status,
-    count: Number(data?.statusCounts?.[status] ?? 0),
-    fill: ["#5b2bc8", "#6d3bd5", "#8050df", "#9568e8", "#ad85ef", "#c8aaf6"][index % 6],
-  })).filter((item) => item.count > 0);
+  const salesChartData = recentOrders
+    .slice()
+    .reverse()
+    .map((order, index) => ({
+      label: order.createdAt
+        ? new Date(order.createdAt).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          })
+        : `Order ${index + 1}`,
+      revenue: Number(order.total || 0),
+    }));
+  const statusChartData = orderStatuses
+    .map((status, index) => ({
+      status,
+      count: Number(data?.statusCounts?.[status] ?? 0),
+      fill: ["#5b2bc8", "#6d3bd5", "#8050df", "#9568e8", "#ad85ef", "#c8aaf6"][
+        index % 6
+      ],
+    }))
+    .filter((item) => item.count > 0);
   const salesChartConfig = {
     revenue: { label: "Revenue", color: "#6734db" },
   } satisfies ChartConfig;
   const statusChartConfig = orderStatuses.reduce((config, status, index) => {
-    config[status] = { label: status.charAt(0).toUpperCase() + status.slice(1), color: ["#5b2bc8", "#6d3bd5", "#8050df", "#9568e8", "#ad85ef", "#c8aaf6"][index % 6] };
+    config[status] = {
+      label: status.charAt(0).toUpperCase() + status.slice(1),
+      color: ["#5b2bc8", "#6d3bd5", "#8050df", "#9568e8", "#ad85ef", "#c8aaf6"][
+        index % 6
+      ],
+    };
     return config;
   }, {} as ChartConfig);
 
@@ -7189,67 +7517,274 @@ function StoreDashboardPanel() {
     <div className="mx-auto w-full max-w-[1480px] px-4 py-7 sm:px-7 lg:px-9 lg:py-9">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-[-.03em]">Store Dashboard 👋</h1>
-          <p className="mt-2 text-sm text-[#716c7b]">Overview of your store performance and key metrics.</p>
+          <h1 className="text-3xl font-semibold tracking-[-.03em]">
+            Store Dashboard 👋
+          </h1>
+          <p className="mt-2 text-sm text-[#716c7b]">
+            Overview of your store performance and key metrics.
+          </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link href="/dashboard/store-gallery/orders" className="inline-flex h-11 items-center gap-2 rounded-[7px] border border-[#dfdbe9] bg-white px-4 text-sm font-semibold"><CalendarDays className="size-4" /> View Orders</Link>
-          <button className="inline-flex h-11 items-center gap-2 rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] px-5 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(95,53,200,.2)]"><Download className="size-4" /> Export Report</button>
+          <Link
+            href="/dashboard/store-gallery/orders"
+            className="inline-flex h-11 items-center gap-2 rounded-[7px] border border-[#dfdbe9] bg-white px-4 text-sm font-semibold"
+          >
+            <CalendarDays className="size-4" /> View Orders
+          </Link>
+          <button className="inline-flex h-11 items-center gap-2 rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] px-5 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(95,53,200,.2)]">
+            <Download className="size-4" /> Export Report
+          </button>
         </div>
       </div>
 
       <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {metricCards.map((card) => {
           const Icon = card.icon;
-          return <div key={card.label} className="rounded-[12px] border border-[#ebe7f2] bg-white p-5 shadow-[0_10px_30px_rgba(39,25,85,.05)]">
-            <div className="flex items-center gap-4"><span className={`grid size-12 place-items-center rounded-full bg-gradient-to-br ${card.accent} text-white`}><Icon className="size-5" /></span><div><p className="text-xs font-medium text-[#787381]">{card.label}</p><p className="mt-1 text-2xl font-bold tracking-[-.03em]">{card.value}</p></div></div>
-            <div className="mt-5 flex h-10 items-end gap-1">{[24,42,30,52,38,66,45,78,56,84,62,90].map((height,index)=><span key={index} className="flex-1 rounded-t bg-gradient-to-t from-[#ece4ff] to-[#6b35dd]" style={{height:`${height}%`}} />)}</div>
-          </div>;
+          return (
+            <div
+              key={card.label}
+              className="rounded-[12px] border border-[#ebe7f2] bg-white p-5 shadow-[0_10px_30px_rgba(39,25,85,.05)]"
+            >
+              <div className="flex items-center gap-4">
+                <span
+                  className={`grid size-12 place-items-center rounded-full bg-gradient-to-br ${card.accent} text-white`}
+                >
+                  <Icon className="size-5" />
+                </span>
+                <div>
+                  <p className="text-xs font-medium text-[#787381]">
+                    {card.label}
+                  </p>
+                  <p className="mt-1 text-2xl font-bold tracking-[-.03em]">
+                    {card.value}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex h-10 items-end gap-1">
+                {[24, 42, 30, 52, 38, 66, 45, 78, 56, 84, 62, 90].map(
+                  (height, index) => (
+                    <span
+                      key={index}
+                      className="flex-1 rounded-t bg-gradient-to-t from-[#ece4ff] to-[#6b35dd]"
+                      style={{ height: `${height}%` }}
+                    />
+                  ),
+                )}
+              </div>
+            </div>
+          );
         })}
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_.75fr]">
         <section className="overflow-hidden rounded-[12px] border border-[#ebe7f2] bg-white shadow-[0_10px_30px_rgba(39,25,85,.05)]">
-          <div className="flex items-center justify-between border-b border-[#eeeaf3] px-5 py-4"><h2 className="font-semibold">Recent Orders</h2><Link href="/dashboard/store-gallery/orders" className="rounded-[6px] border border-[#dfdbe8] px-3 py-2 text-xs font-semibold">View All Orders</Link></div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-[#faf9fd] text-xs uppercase tracking-wide text-[#817b89]"><tr><th className="px-5 py-4">Order</th><th className="px-5 py-4">Customer</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Total</th><th className="px-5 py-4">Date</th></tr></thead><tbody>{recentOrders.slice(0,6).map((order)=><tr key={order._id} className="border-t border-[#f0edf4]"><td className="px-5 py-4 font-semibold">{order.orderNumber}</td><td className="px-5 py-4">{order.customer?.name ?? "Customer"}</td><td className="px-5 py-4"><StatusBadge value={order.status} /></td><td className="px-5 py-4 font-semibold">{money(order.total,currency)}</td><td className="px-5 py-4 text-[#77727f]">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "—"}</td></tr>)}</tbody></table>
+          <div className="flex items-center justify-between border-b border-[#eeeaf3] px-5 py-4">
+            <h2 className="font-semibold">Recent Orders</h2>
+            <Link
+              href="/dashboard/store-gallery/orders"
+              className="rounded-[6px] border border-[#dfdbe8] px-3 py-2 text-xs font-semibold"
+            >
+              View All Orders
+            </Link>
           </div>
-          {!recentOrders.length && <div className="grid min-h-[220px] place-items-center text-sm text-[#777]">No orders yet.</div>}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-left text-sm">
+              <thead className="bg-[#faf9fd] text-xs uppercase tracking-wide text-[#817b89]">
+                <tr>
+                  <th className="px-5 py-4">Order</th>
+                  <th className="px-5 py-4">Customer</th>
+                  <th className="px-5 py-4">Status</th>
+                  <th className="px-5 py-4">Total</th>
+                  <th className="px-5 py-4">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentOrders.slice(0, 6).map((order) => (
+                  <tr key={order._id} className="border-t border-[#f0edf4]">
+                    <td className="px-5 py-4 font-semibold">
+                      {order.orderNumber}
+                    </td>
+                    <td className="px-5 py-4">
+                      {order.customer?.name ?? "Customer"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <StatusBadge value={order.status} />
+                    </td>
+                    <td className="px-5 py-4 font-semibold">
+                      {money(order.total, currency)}
+                    </td>
+                    <td className="px-5 py-4 text-[#77727f]">
+                      {order.createdAt
+                        ? new Date(order.createdAt).toLocaleDateString()
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!recentOrders.length && (
+            <div className="grid min-h-[220px] place-items-center text-sm text-[#777]">
+              No orders yet.
+            </div>
+          )}
         </section>
 
         <section className="rounded-[12px] border border-[#ebe7f2] bg-white p-4 shadow-[0_10px_30px_rgba(39,25,85,.05)] sm:p-5">
           <h2 className="font-semibold">Status Breakdown</h2>
           <div className="mt-5 grid items-center gap-6 sm:grid-cols-[220px_1fr] xl:grid-cols-1 2xl:grid-cols-[220px_1fr]">
-            <ChartContainer config={statusChartConfig} className="mx-auto h-[220px] w-full max-w-[240px] aspect-auto">
+            <ChartContainer
+              config={statusChartConfig}
+              className="mx-auto h-[220px] w-full max-w-[240px] aspect-auto"
+            >
               <PieChart>
-                <ChartTooltip content={<ChartTooltipContent nameKey="status" />} />
-                <Pie data={statusChartData.length ? statusChartData : [{ status: "No orders", count: 1, fill: "#eee6ff" }]} dataKey="count" nameKey="status" innerRadius={62} outerRadius={88} paddingAngle={2} strokeWidth={0}>
-                  {(statusChartData.length ? statusChartData : [{ fill: "#eee6ff" }]).map((item, index) => <Cell key={index} fill={item.fill} />)}
+                <ChartTooltip
+                  content={<ChartTooltipContent nameKey="status" />}
+                />
+                <Pie
+                  data={
+                    statusChartData.length
+                      ? statusChartData
+                      : [{ status: "No orders", count: 1, fill: "#eee6ff" }]
+                  }
+                  dataKey="count"
+                  nameKey="status"
+                  innerRadius={62}
+                  outerRadius={88}
+                  paddingAngle={2}
+                  strokeWidth={0}
+                >
+                  {(statusChartData.length
+                    ? statusChartData
+                    : [{ fill: "#eee6ff" }]
+                  ).map((item, index) => (
+                    <Cell key={index} fill={item.fill} />
+                  ))}
                 </Pie>
               </PieChart>
             </ChartContainer>
-            <div className="grid content-center gap-3">{orderStatuses.map((status,index)=>{const count=data?.statusCounts?.[status]??0;return <div key={status} className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-2 capitalize text-[#66616f]"><span className="size-2.5 rounded-full" style={{backgroundColor:["#5b2bc8", "#6d3bd5", "#8050df", "#9568e8", "#ad85ef", "#c8aaf6"][index%6]}} />{status}</span><span className="font-semibold">{count} <span className="text-xs font-normal text-[#999]">({Math.round((count/totalStatuses)*100)}%)</span></span></div>})}</div>
+            <div className="grid content-center gap-3">
+              {orderStatuses.map((status, index) => {
+                const count = data?.statusCounts?.[status] ?? 0;
+                return (
+                  <div
+                    key={status}
+                    className="flex items-center justify-between gap-4 text-sm"
+                  >
+                    <span className="flex items-center gap-2 capitalize text-[#66616f]">
+                      <span
+                        className="size-2.5 rounded-full"
+                        style={{
+                          backgroundColor: [
+                            "#5b2bc8",
+                            "#6d3bd5",
+                            "#8050df",
+                            "#9568e8",
+                            "#ad85ef",
+                            "#c8aaf6",
+                          ][index % 6],
+                        }}
+                      />
+                      {status}
+                    </span>
+                    <span className="font-semibold">
+                      {count}{" "}
+                      <span className="text-xs font-normal text-[#999]">
+                        ({Math.round((count / totalStatuses) * 100)}%)
+                      </span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1.35fr_.65fr]">
         <section className="rounded-[12px] border border-[#ebe7f2] bg-white p-4 shadow-[0_10px_30px_rgba(39,25,85,.05)] sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">Sales Overview</h2><span className="rounded-[6px] border border-[#e1ddec] px-3 py-2 text-xs">Recent orders</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-semibold">Sales Overview</h2>
+            <span className="rounded-[6px] border border-[#e1ddec] px-3 py-2 text-xs">
+              Recent orders
+            </span>
+          </div>
           {salesChartData.length ? (
-            <ChartContainer config={salesChartConfig} className="mt-5 h-[260px] w-full aspect-auto">
-              <AreaChart data={salesChartData} margin={{ left: 0, right: 12, top: 12, bottom: 0 }}>
-                <defs><linearGradient id="storeRevenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6734db" stopOpacity={0.35}/><stop offset="95%" stopColor="#6734db" stopOpacity={0.03}/></linearGradient></defs>
+            <ChartContainer
+              config={salesChartConfig}
+              className="mt-5 h-[260px] w-full aspect-auto"
+            >
+              <AreaChart
+                data={salesChartData}
+                margin={{ left: 0, right: 12, top: 12, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient
+                    id="storeRevenueFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="5%" stopColor="#6734db" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#6734db" stopOpacity={0.03} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid vertical={false} stroke="#eee9f7" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} minTickGap={18} />
-                <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(value) => Number(value).toLocaleString()} />
-                <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
-                <Area type="monotone" dataKey="revenue" stroke="#6734db" strokeWidth={3} fill="url(#storeRevenueFill)" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={10}
+                  minTickGap={18}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                  tickFormatter={(value) => Number(value).toLocaleString()}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent indicator="line" />}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#6734db"
+                  strokeWidth={3}
+                  fill="url(#storeRevenueFill)"
+                />
               </AreaChart>
             </ChartContainer>
-          ) : <div className="grid h-[260px] place-items-center text-sm text-[#888]">Sales data will appear after orders are created.</div>}
+          ) : (
+            <div className="grid h-[260px] place-items-center text-sm text-[#888]">
+              Sales data will appear after orders are created.
+            </div>
+          )}
         </section>
-        <section className="rounded-[12px] border border-[#ebe7f2] bg-white p-5 shadow-[0_10px_30px_rgba(39,25,85,.05)]"><h2 className="font-semibold">Store Performance</h2><div className="mt-5 grid gap-4">{[["Average Order Value",money(data?.averageOrderValue??0,currency)],["Customers",String(data?.customerCount??0)],["Products",String(data?.productCount??0)],["Coupons",String(data?.couponCount??0)]].map(([label,value])=><div key={label} className="flex items-center justify-between rounded-[8px] bg-[#faf8ff] px-4 py-4"><span className="text-sm text-[#6f6978]">{label}</span><span className="font-semibold text-[#5e2fd4]">{value}</span></div>)}</div></section>
+        <section className="rounded-[12px] border border-[#ebe7f2] bg-white p-5 shadow-[0_10px_30px_rgba(39,25,85,.05)]">
+          <h2 className="font-semibold">Store Performance</h2>
+          <div className="mt-5 grid gap-4">
+            {[
+              [
+                "Average Order Value",
+                money(data?.averageOrderValue ?? 0, currency),
+              ],
+              ["Customers", String(data?.customerCount ?? 0)],
+              ["Products", String(data?.productCount ?? 0)],
+              ["Coupons", String(data?.couponCount ?? 0)],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="flex items-center justify-between rounded-[8px] bg-[#faf8ff] px-4 py-4"
+              >
+                <span className="text-sm text-[#6f6978]">{label}</span>
+                <span className="font-semibold text-[#5e2fd4]">{value}</span>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -8917,7 +9452,7 @@ function money(value: number, currency = "EUR") {
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   } catch {
-    return `â‚¬${Number(value || 0).toFixed(2)}`;
+    return `€${Number(value || 0).toFixed(2)}`;
   }
 }
 
@@ -9015,7 +9550,7 @@ function StorePricingPanel() {
           ? "Digital Downloads"
           : product.type === "package"
             ? "Packages"
-          : product.category || "Prints";
+            : product.category || "Prints";
       groups[key] = [...(groups[key] ?? []), product];
       return groups;
     },
@@ -9027,7 +9562,9 @@ function StorePricingPanel() {
     ),
     ...Object.keys(groupedProducts).filter(
       (category) =>
-        !["Prints", "Wall Art", "Packages", "Digital Downloads"].includes(category),
+        !["Prints", "Wall Art", "Packages", "Digital Downloads"].includes(
+          category,
+        ),
     ),
   ];
 
@@ -9517,8 +10054,8 @@ function StoreProductsPanel() {
               value="advanced"
               className="mt-7 text-sm leading-6 text-[#666]"
             >
-              Galleries use the Store Gallery Pricing defaults unless changed
-              by store settings.
+              Galleries use the Store Gallery Pricing defaults unless changed by
+              store settings.
             </TabsContent>
           </Tabs>
           <DialogFooter>
@@ -9592,7 +10129,7 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
           ? "Digital Downloads"
           : product.type === "package"
             ? "Packages"
-          : product.category || "Prints";
+            : product.category || "Prints";
       groups[key] = [...(groups[key] ?? []), product];
       return groups;
     },
@@ -10015,7 +10552,7 @@ function ProductTile({
           </p>
           <p className="mt-1 text-xs text-[#999]">
             {productTypeLabels[product.type]}
-            {product.active === false ? " Ã¢â‚¬Â¢ Hidden" : ""}
+            {product.active === false ? " Ã¢€Â¢ Hidden" : ""}
           </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#6337d8]" />
@@ -10271,7 +10808,9 @@ function ProductEditorDialog({
           product.category ??
           (type === "digital-download"
             ? "Digital Downloads"
-            : type === "package" ? "Packages" : "Prints"),
+            : type === "package"
+              ? "Packages"
+              : "Prints"),
         images: product.images ?? [],
         downloadType: product.downloadType ?? "single-photo",
         downloadSize:
@@ -10301,7 +10840,12 @@ function ProductEditorDialog({
       description: "",
       price: "",
       extraShipping: "0",
-      category: type === "digital-download" ? "Digital Downloads" : type === "package" ? "Packages" : "Prints",
+      category:
+        type === "digital-download"
+          ? "Digital Downloads"
+          : type === "package"
+            ? "Packages"
+            : "Prints",
       images: [],
       downloadType: "single-photo",
       downloadSize: "High Resolution Original (Full res)",
@@ -10355,7 +10899,8 @@ function ProductEditorDialog({
       packageItems: type === "package" ? form.packageItems : [],
       estimatedCost: type === "package" ? Number(form.estimatedCost) || 0 : 0,
       labCost: type === "package" ? Number(form.labCost) || 0 : 0,
-      singleImageRestriction: type === "package" ? form.singleImageRestriction : false,
+      singleImageRestriction:
+        type === "package" ? form.singleImageRestriction : false,
     });
   };
   const packageSourceProducts = products
@@ -10402,7 +10947,9 @@ function ProductEditorDialog({
               ? "Edit Product"
               : type === "digital-download"
                 ? "Add Digital Download"
-                : type === "package" ? "Add Package" : "Add Product"}
+                : type === "package"
+                  ? "Add Package"
+                  : "Add Product"}
           </DialogTitle>
           <DialogDescription>{productTypeLabels[type]}</DialogDescription>
         </DialogHeader>
@@ -10664,7 +11211,8 @@ function ProductEditorDialog({
                       <option key={item._id} value={item._id}>
                         {item.type === "digital-download"
                           ? "Digital"
-                          : item.category || "Prints"} - {item.name}
+                          : item.category || "Prints"}{" "}
+                        - {item.name}
                       </option>
                     ))}
                   </select>
@@ -10980,14 +11528,17 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
   const router = useRouter();
   const collections = collectionsQuery.data?.data ?? [];
   const [quickEdit, setQuickEdit] = useState<CollectionRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<CollectionRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CollectionRecord | null>(
+    null,
+  );
   const [quickForm, setQuickForm] = useState({
     name: "",
     eventDate: "",
     status: "draft" as "draft" | "published",
   });
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
-  const [publishConfirmCollection, setPublishConfirmCollection] = useState<CollectionRecord | null>(null);
+  const [publishConfirmCollection, setPublishConfirmCollection] =
+    useState<CollectionRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -11317,20 +11868,31 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       <DeleteConfirmDialog
         open={Boolean(deleteTarget)}
         title="Delete gallery"
-        description={deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
+        description={
+          deleteTarget
+            ? `Delete "${deleteTarget.name}"? This cannot be undone.`
+            : ""
+        }
         pending={deleteCollection.isPending}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmRemoveCollection}
       />
-      <AlertDialog open={publishConfirmOpen} onOpenChange={setPublishConfirmOpen}>
+      <AlertDialog
+        open={publishConfirmOpen}
+        onOpenChange={setPublishConfirmOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Publish gallery?</AlertDialogTitle>
-            <AlertDialogDescription>This gallery is a Draft. Publish it and open Preview?</AlertDialogDescription>
+            <AlertDialogDescription>
+              This gallery is a Draft. Publish it and open Preview?
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmPublishPreview}>Continue</AlertDialogAction>
+            <AlertDialogAction onClick={confirmPublishPreview}>
+              Continue
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -11349,7 +11911,8 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             />
           </label>
           <p className="hidden">
-            Manage your collections Ã¢â‚¬â€ create, view, and organize your photos.
+            Manage your collections Ã¢€â€ create, view, and organize your
+            photos.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-5">
@@ -11482,9 +12045,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
         <div className="mt-10 flex min-h-[360px] flex-col items-center justify-center border border-[#E8E5E1] bg-[#FFFFFF] p-8 text-center shadow-[0_18px_50px_rgba(21,21,21,0.04)]">
           <Images className="size-10 text-[#999]" />
           <p className="mt-5 font-bold">
-            {collections.length
-              ? "No matching galleries"
-              : "No galleries yet"}
+            {collections.length ? "No matching galleries" : "No galleries yet"}
           </p>
           <p className="mt-2 text-sm leading-6 text-[#666]">
             {collections.length
@@ -11781,7 +12342,8 @@ function CollectionFilterSelect({
 function CollectionNewPanel({ section }: { section: DashboardSection }) {
   const router = useRouter();
   const presetSettings = useDashboardSettings("preset").query;
-  const preferenceSettings = useDashboardSettings<PreferenceSettings>("preference").query;
+  const preferenceSettings =
+    useDashboardSettings<PreferenceSettings>("preference").query;
   const { hydrateDashboardSettings, presetItems } = useDashboardStore();
   const { createCollection } = useCollections();
   const [form, setForm] = useState({
@@ -11817,8 +12379,8 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
       ),
     };
     const savedPreferences =
-      (preferenceSettings.data?.data?.[0]?.data as PreferenceSettings | undefined) ??
-      defaultPreferenceSettings;
+      (preferenceSettings.data?.data?.[0]?.data as
+        PreferenceSettings | undefined) ?? defaultPreferenceSettings;
     const generalSettings = preset?.general ?? {
       ...collectionDefaultGeneral,
       language: savedPreferences.defaultLanguage,
@@ -12022,7 +12584,8 @@ function CollectionDetailView({
     (state) => state.watermarkItems,
   );
   const { starImage } = useImageActions();
-  const { collectionsQuery, duplicateCollection, deleteCollection } = useCollections();
+  const { collectionsQuery, duplicateCollection, deleteCollection } =
+    useCollections();
   const homepageQuery = useHomepageSettings().query;
   const { ordersQuery } = useStoreOrders();
   const {
@@ -12043,8 +12606,7 @@ function CollectionDetailView({
     collections.find((item) => item._id === collectionId);
   const savedPreferences = collectionPreferencesFromGlobal(
     preferenceSettings.data?.data?.[0]?.data as
-      | Partial<PreferenceSettings>
-      | undefined,
+      Partial<PreferenceSettings> | undefined,
   );
   const detail = collectionQuery.data?.data;
   const imagesLoading = collectionQuery.isLoading && !detail;
@@ -12083,7 +12645,8 @@ function CollectionDetailView({
   const [qrOpen, setQrOpen] = useState(false);
   const [addMediaOpen, setAddMediaOpen] = useState(false);
   const [replaceImageId, setReplaceImageId] = useState("");
-  const [deleteCollectionConfirmOpen, setDeleteCollectionConfirmOpen] = useState(false);
+  const [deleteCollectionConfirmOpen, setDeleteCollectionConfirmOpen] =
+    useState(false);
   const [shareTemplateSearch, setShareTemplateSearch] = useState("");
   const [selectedShareTemplateId, setSelectedShareTemplateId] = useState("");
   const [shareRecipient, setShareRecipient] = useState("");
@@ -12102,7 +12665,9 @@ function CollectionDetailView({
     | "name-za"
     | "random"
   >("uploaded-new-old");
-  const [collectionGridSize, setCollectionGridSize] = useState<"small" | "large">("small");
+  const [collectionGridSize, setCollectionGridSize] = useState<
+    "small" | "large"
+  >("small");
   const [showCollectionFilenames, setShowCollectionFilenames] = useState(true);
   const randomPhotoRanksRef = useRef(new Map<string, number>());
   const [imagePage, setImagePage] = useState(1);
@@ -12147,16 +12712,12 @@ function CollectionDetailView({
           (setting) => setting.data as EmailTemplateItem,
         )
       : [];
-    const local = Array.isArray(storeEmailTemplates)
-      ? storeEmailTemplates
-      : [];
+    const local = Array.isArray(storeEmailTemplates) ? storeEmailTemplates : [];
     return remote.length ? remote : local;
   }, [emailTemplateSettings.data?.data, storeEmailTemplates]);
   const presetItems = useMemo(() => {
     const remote = Array.isArray(presetSettings.data?.data)
-      ? presetSettings.data.data.map(
-          (setting) => setting.data as PresetItem,
-        )
+      ? presetSettings.data.data.map((setting) => setting.data as PresetItem)
       : [];
     const local = Array.isArray(storePresetItems) ? storePresetItems : [];
     return remote.length ? remote : local;
@@ -12167,9 +12728,7 @@ function CollectionDetailView({
           (setting) => setting.data as WatermarkItem,
         )
       : [];
-    const local = Array.isArray(storeWatermarkItems)
-      ? storeWatermarkItems
-      : [];
+    const local = Array.isArray(storeWatermarkItems) ? storeWatermarkItems : [];
     return remote.length ? remote : local;
   }, [storeWatermarkItems, watermarkSettings.data?.data]);
   const branding =
@@ -12221,7 +12780,9 @@ function CollectionDetailView({
       return Number.isFinite(time) ? time : uploadedTime(image);
     };
     const name = (image: CollectionImageRecord) =>
-      String(image.originalName ?? image.metadata?.filename ?? "").toLowerCase();
+      String(
+        image.originalName ?? image.metadata?.filename ?? "",
+      ).toLowerCase();
 
     if (photoSort === "uploaded-new-old") return next;
     if (photoSort === "uploaded-old-new") return next.reverse();
@@ -12283,10 +12844,9 @@ function CollectionDetailView({
   const selectedTargetCollection = collections.find(
     (item) => item._id === imageTargetCollectionId,
   );
-  const selectedTargetSets =
-    selectedTargetCollection?.sets?.length
-      ? selectedTargetCollection.sets
-      : [{ id: "highlights", name: "Highlights" }];
+  const selectedTargetSets = selectedTargetCollection?.sets?.length
+    ? selectedTargetCollection.sets
+    : [{ id: "highlights", name: "Highlights" }];
   const imageQuickShareLink = activeImage
     ? `${publicLink}?photo=${encodeURIComponent(activeImage._id)}&download=${imageShareAllowDownload ? "1" : "0"}`
     : publicLink;
@@ -12301,11 +12861,17 @@ function CollectionDetailView({
   };
   const openRenameImage = (image: CollectionImageRecord) => {
     setActiveImageId(image._id);
-    setImageRenameValue(image.originalName || String(image.metadata?.filename ?? ""));
+    setImageRenameValue(
+      image.originalName || String(image.metadata?.filename ?? ""),
+    );
     setImageRenameOpen(true);
   };
-  const openMoveImage = (image: CollectionImageRecord, mode: "copy" | "move" = "copy") => {
-    const target = collections.find((item) => item._id !== image.collectionId) ?? collection;
+  const openMoveImage = (
+    image: CollectionImageRecord,
+    mode: "copy" | "move" = "copy",
+  ) => {
+    const target =
+      collections.find((item) => item._id !== image.collectionId) ?? collection;
     setActiveImageId(image._id);
     setImageMoveMode(mode);
     setImageTargetCollectionId(target?._id ?? "");
@@ -12314,7 +12880,9 @@ function CollectionDetailView({
   };
   const openWatermarkImage = (image: CollectionImageRecord) => {
     setActiveImageId(image._id);
-    setImageWatermarkId(String(image.metadata?.watermarkId ?? uploadWatermarkId ?? ""));
+    setImageWatermarkId(
+      String(image.metadata?.watermarkId ?? uploadWatermarkId ?? ""),
+    );
     setImageWatermarkOpen(true);
   };
   const openQuickShareImage = (image: CollectionImageRecord) => {
@@ -12349,7 +12917,9 @@ function CollectionDetailView({
       },
       {
         onSuccess: () => {
-          toast.success(imageMoveMode === "move" ? "Photo moved" : "Photo copied");
+          toast.success(
+            imageMoveMode === "move" ? "Photo moved" : "Photo copied",
+          );
           setImageMoveOpen(false);
           void collectionQuery.refetch();
         },
@@ -12493,7 +13063,10 @@ function CollectionDetailView({
       slug: form.slug.trim() || undefined,
       presetId: form.presetId || undefined,
       coverImage: form.coverImage || undefined,
-      sets: syncSetsFromPhotoSets(uniqueCollectionSets(form.sets), form.general.photoSets),
+      sets: syncSetsFromPhotoSets(
+        uniqueCollectionSets(form.sets),
+        form.general.photoSets,
+      ),
       tags: form.general.collectionTags
         .split(",")
         .map((tag) => tag.trim())
@@ -12644,15 +13217,20 @@ function CollectionDetailView({
   const applyShareTemplate = (template?: EmailTemplateItem) => {
     setSelectedShareTemplateId(template?.id ?? "");
     setShareSubject(
-      template?.subject?.trim() || `Photos for ${collection?.name ?? "your gallery"} are ready`,
+      template?.subject?.trim() ||
+        `Photos for ${collection?.name ?? "your gallery"} are ready`,
     );
-    setShareHeading(template?.title?.trim() || (collection?.name ?? "Your photos are ready"));
+    setShareHeading(
+      template?.title?.trim() || (collection?.name ?? "Your photos are ready"),
+    );
     setShareMessage(
       cleanTemplateText(template?.message) ||
         "Your photos are ready. Use the button below to view the gallery.",
     );
     setShareButtonText(template?.buttonText?.trim() || "View Gallery");
-    setShareFooterText(template?.footerText?.trim() || branding.brandText || "");
+    setShareFooterText(
+      template?.footerText?.trim() || branding.brandText || "",
+    );
   };
   const openShareComposer = () => {
     router.push(`/dashboard/${section}/collections/${collectionId}/share`);
@@ -12683,7 +13261,8 @@ function CollectionDetailView({
       images.find((image) => image.mediaType !== "video")?.url ||
       "";
     const logo = branding.logoUrl || branding.brandImageUrl || "";
-    const accent = selectedShareTemplate?.buttonColor || branding.accentColor || "#333333";
+    const accent =
+      selectedShareTemplate?.buttonColor || branding.accentColor || "#333333";
     const html = `
       <div style="margin:0;background:#f5f5f5;padding:36px 16px;font-family:Arial,sans-serif;color:#222">
         <div style="max-width:640px;margin:0 auto;background:#fff;text-align:center">
@@ -12709,10 +13288,14 @@ function CollectionDetailView({
         html,
       });
       await recordEmailUsage(recipients.length).catch(() => null);
-      toast.success(`Gallery shared with ${recipients.length} recipient${recipients.length === 1 ? "" : "s"}`);
+      toast.success(
+        `Gallery shared with ${recipients.length} recipient${recipients.length === 1 ? "" : "s"}`,
+      );
       setShareOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Email could not be sent");
+      toast.error(
+        error instanceof Error ? error.message : "Email could not be sent",
+      );
     } finally {
       setShareSending(false);
     }
@@ -12720,11 +13303,16 @@ function CollectionDetailView({
   const isFileDrag = (event: DragEvent<HTMLElement>) =>
     Array.from(event.dataTransfer.types).includes("Files");
   const droppedMediaFiles = (files: FileList) =>
-    Array.from(files).filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"));
+    Array.from(files).filter(
+      (file) =>
+        file.type.startsWith("image/") || file.type.startsWith("video/"),
+    );
   const handleImageUpload = async (files: FileList | File[] | null) => {
     if (!files?.length || uploadImages.isPending || uploadProgress.active)
       return;
-    const selectedFiles = replaceImageId ? Array.from(files).slice(0, 1) : Array.from(files);
+    const selectedFiles = replaceImageId
+      ? Array.from(files).slice(0, 1)
+      : Array.from(files);
     setUploadProgress({
       active: true,
       total: selectedFiles.length,
@@ -12922,17 +13510,27 @@ function CollectionDetailView({
     });
   };
   const changeCollectionStatus = (nextStatus: "draft" | "published") => {
-    if (!collection || nextStatus === collectionStatus || updateCollection.isPending)
+    if (
+      !collection ||
+      nextStatus === collectionStatus ||
+      updateCollection.isPending
+    )
       return;
     setCollectionStatus(nextStatus);
     updateCollection.mutate(
       { status: nextStatus },
       {
         onSuccess: () =>
-          toast.success(nextStatus === "published" ? "Gallery published" : "Gallery hidden"),
+          toast.success(
+            nextStatus === "published" ? "Gallery published" : "Gallery hidden",
+          ),
         onError: (error) => {
-          setCollectionStatus(collection.status === "published" ? "published" : "draft");
-          toast.error(error instanceof Error ? error.message : "Status update failed");
+          setCollectionStatus(
+            collection.status === "published" ? "published" : "draft",
+          );
+          toast.error(
+            error instanceof Error ? error.message : "Status update failed",
+          );
         },
       },
     );
@@ -12947,7 +13545,9 @@ function CollectionDetailView({
           router.push(`/dashboard/${section}/collections/${duplicatedId}`);
       },
       onError: (error) =>
-        toast.error(error instanceof Error ? error.message : "Duplicate failed"),
+        toast.error(
+          error instanceof Error ? error.message : "Duplicate failed",
+        ),
     });
   };
   const deleteCurrentCollection = () => {
@@ -13003,37 +13603,56 @@ function CollectionDetailView({
                     <ChevronDown className="size-3" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-52 rounded-none p-2">
+                <DropdownMenuContent
+                  align="start"
+                  className="w-52 rounded-none p-2"
+                >
                   <DropdownMenuItem
                     className="h-11 rounded-none"
                     onSelect={() => changeCollectionStatus("published")}
                   >
                     <span className="flex-1">Published</span>
-                    {collectionStatus === "published" && <Check className="size-4" />}
+                    {collectionStatus === "published" && (
+                      <Check className="size-4" />
+                    )}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="h-11 rounded-none"
                     onSelect={() => changeCollectionStatus("draft")}
                   >
                     <span className="flex-1">Hidden</span>
-                    {collectionStatus === "draft" && <Check className="size-4" />}
+                    {collectionStatus === "draft" && (
+                      <Check className="size-4" />
+                    )}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <p className="mt-2 text-sm text-[#777]">{formatDate(collection.eventDate)}</p>
+            <p className="mt-2 text-sm text-[#777]">
+              {formatDate(collection.eventDate)}
+            </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-8 text-sm">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center gap-2 font-medium text-[#222]" type="button">
+              <button
+                className="inline-flex items-center gap-2 font-medium text-[#222]"
+                type="button"
+              >
                 More
                 <ChevronDown className="size-4" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60 rounded-none p-2">
-              <DropdownMenuItem className="h-11 rounded-none" onSelect={() => void copyPublicLink().then(() => toast.success("Direct link copied"))}>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                onSelect={() =>
+                  void copyPublicLink().then(() =>
+                    toast.success("Direct link copied"),
+                  )
+                }
+              >
                 <Link2 className="size-4" />
                 Get direct link
               </DropdownMenuItem>
@@ -13049,7 +13668,9 @@ function CollectionDetailView({
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="h-11 rounded-none"
-                onSelect={() => router.push(`/dashboard/${section}/settings/presets`)}
+                onSelect={() =>
+                  router.push(`/dashboard/${section}/settings/presets`)
+                }
               >
                 <Settings className="size-4" />
                 Manage presets
@@ -13074,14 +13695,19 @@ function CollectionDetailView({
           </DropdownMenu>
           <button
             className="font-medium text-[#222]"
-            onClick={() => window.open(publicLink, "_blank", "noopener,noreferrer")}
+            onClick={() =>
+              window.open(publicLink, "_blank", "noopener,noreferrer")
+            }
             type="button"
           >
             Preview
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex h-10 items-center bg-[#6337d8] font-bold text-white hover:bg-[#542bc2]" type="button">
+              <button
+                className="inline-flex h-10 items-center bg-[#6337d8] font-bold text-white hover:bg-[#542bc2]"
+                type="button"
+              >
                 <span className="px-7">Share</span>
                 <span className="flex h-6 items-center border-l border-white/30 px-4">
                   <ChevronDown className="size-4" />
@@ -13089,15 +13715,28 @@ function CollectionDetailView({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52 rounded-none p-2">
-              <DropdownMenuItem className="h-11 rounded-none" onSelect={openShareComposer}>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                onSelect={openShareComposer}
+              >
                 <Mail className="size-4" />
                 Share by email
               </DropdownMenuItem>
-              <DropdownMenuItem className="h-11 rounded-none" onSelect={() => void copyPublicLink().then(() => toast.success("Direct link copied"))}>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                onSelect={() =>
+                  void copyPublicLink().then(() =>
+                    toast.success("Direct link copied"),
+                  )
+                }
+              >
                 <Link2 className="size-4" />
                 Get direct link
               </DropdownMenuItem>
-              <DropdownMenuItem className="h-11 rounded-none" onSelect={() => setQrOpen(true)}>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                onSelect={() => setQrOpen(true)}
+              >
                 <QrCode className="size-4" />
                 Get QR code
               </DropdownMenuItem>
@@ -13111,13 +13750,24 @@ function CollectionDetailView({
           <div className="flex h-full min-h-0 flex-col bg-white">
             <header className="flex h-16 shrink-0 items-center justify-between border-b px-7">
               <div className="flex items-center gap-5">
-                <button type="button" onClick={() => setShareOpen(false)} aria-label="Close email composer">
+                <button
+                  type="button"
+                  onClick={() => setShareOpen(false)}
+                  aria-label="Close email composer"
+                >
                   <X className="size-5 text-[#777]" />
                 </button>
                 <h2 className="font-medium">Share Gallery</h2>
               </div>
               <div className="flex items-center gap-8 text-sm font-medium">
-                <button type="button" onClick={() => void copyPublicLink().then(() => toast.success("Direct link copied"))}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void copyPublicLink().then(() =>
+                      toast.success("Direct link copied"),
+                    )
+                  }
+                >
                   Get direct link
                 </button>
               </div>
@@ -13127,56 +13777,82 @@ function CollectionDetailView({
                 <div className="min-h-0 flex-1 overflow-y-auto px-7 py-7">
                   <FieldGroup className="gap-6">
                     <Field>
-                      <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">To</FieldLabel>
+                      <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                        To
+                      </FieldLabel>
                       <Input
                         type="text"
                         value={shareRecipient}
-                        onChange={(event) => setShareRecipient(event.target.value)}
+                        onChange={(event) =>
+                          setShareRecipient(event.target.value)
+                        }
                         placeholder="guest@email.com"
                         className="h-11 rounded-none border-x-0 border-t-0 px-0 focus-visible:ring-0"
                       />
-                      <p className="text-xs text-[#888]">Separate multiple email addresses with commas.</p>
+                      <p className="text-xs text-[#888]">
+                        Separate multiple email addresses with commas.
+                      </p>
                     </Field>
                     <Field>
-                      <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">Subject</FieldLabel>
+                      <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                        Subject
+                      </FieldLabel>
                       <Input
                         value={shareSubject}
-                        onChange={(event) => setShareSubject(event.target.value)}
+                        onChange={(event) =>
+                          setShareSubject(event.target.value)
+                        }
                         placeholder={`Photos for ${collection.name} are ready`}
                         className="h-11 rounded-none"
                       />
                     </Field>
                     <Field>
-                      <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">Email heading</FieldLabel>
+                      <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                        Email heading
+                      </FieldLabel>
                       <Input
                         value={shareHeading}
-                        onChange={(event) => setShareHeading(event.target.value)}
+                        onChange={(event) =>
+                          setShareHeading(event.target.value)
+                        }
                         className="h-11 rounded-none"
                       />
                     </Field>
                     <Field>
-                      <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">Description</FieldLabel>
+                      <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                        Description
+                      </FieldLabel>
                       <Textarea
                         value={shareMessage}
-                        onChange={(event) => setShareMessage(event.target.value)}
+                        onChange={(event) =>
+                          setShareMessage(event.target.value)
+                        }
                         placeholder="Enter your text here"
                         className="min-h-40 rounded-none resize-y"
                       />
                     </Field>
                     <div className="grid gap-5 md:grid-cols-2">
                       <Field>
-                        <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">Button text</FieldLabel>
+                        <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                          Button text
+                        </FieldLabel>
                         <Input
                           value={shareButtonText}
-                          onChange={(event) => setShareButtonText(event.target.value)}
+                          onChange={(event) =>
+                            setShareButtonText(event.target.value)
+                          }
                           className="h-11 rounded-none"
                         />
                       </Field>
                       <Field>
-                        <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">Footer</FieldLabel>
+                        <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                          Footer
+                        </FieldLabel>
                         <Input
                           value={shareFooterText}
-                          onChange={(event) => setShareFooterText(event.target.value)}
+                          onChange={(event) =>
+                            setShareFooterText(event.target.value)
+                          }
                           className="h-11 rounded-none"
                         />
                       </Field>
@@ -13184,17 +13860,25 @@ function CollectionDetailView({
                   </FieldGroup>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button type="button" className="mt-8 inline-flex items-center gap-2 text-sm font-bold text-[#6337d8]">
+                      <button
+                        type="button"
+                        className="mt-8 inline-flex items-center gap-2 text-sm font-bold text-[#6337d8]"
+                      >
                         <FileUp className="size-4" />
                         Insert Email Template
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-[340px] rounded-none p-3">
+                    <DropdownMenuContent
+                      align="start"
+                      className="w-[340px] rounded-none p-3"
+                    >
                       <div className="mb-3 flex h-10 items-center gap-2 border px-3">
                         <Search className="size-4 text-[#888]" />
                         <Input
                           value={shareTemplateSearch}
-                          onChange={(event) => setShareTemplateSearch(event.target.value)}
+                          onChange={(event) =>
+                            setShareTemplateSearch(event.target.value)
+                          }
                           placeholder="Find template"
                           className="h-9 rounded-none border-0 px-0 focus-visible:ring-0"
                           onKeyDown={(event) => event.stopPropagation()}
@@ -13207,12 +13891,18 @@ function CollectionDetailView({
                             className="block h-auto rounded-none px-3 py-3"
                             onSelect={() => applyShareTemplate(template)}
                           >
-                            <span className="block truncate font-bold">{template.name || "Untitled Template"}</span>
-                            <span className="mt-1 block truncate text-xs text-[#777]">{template.subject || "No subject"}</span>
+                            <span className="block truncate font-bold">
+                              {template.name || "Untitled Template"}
+                            </span>
+                            <span className="mt-1 block truncate text-xs text-[#777]">
+                              {template.subject || "No subject"}
+                            </span>
                           </DropdownMenuItem>
                         ))}
                         {!filteredShareTemplates.length && (
-                          <p className="px-3 py-7 text-center text-sm text-[#777]">No templates found.</p>
+                          <p className="px-3 py-7 text-center text-sm text-[#777]">
+                            No templates found.
+                          </p>
                         )}
                       </div>
                     </DropdownMenuContent>
@@ -13221,10 +13911,18 @@ function CollectionDetailView({
                 <footer className="flex shrink-0 items-center justify-end border-t px-7 py-4">
                   <Button
                     className="h-11 min-w-32 rounded-none bg-[#6337d8] text-white hover:bg-[#542bc2]"
-                    disabled={shareSending || !shareRecipient.trim() || !shareSubject.trim()}
+                    disabled={
+                      shareSending ||
+                      !shareRecipient.trim() ||
+                      !shareSubject.trim()
+                    }
                     onClick={() => void sendShareEmail()}
                   >
-                    {shareSending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                    {shareSending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Send className="size-4" />
+                    )}
                     {shareSending ? "Sending..." : "Send"}
                   </Button>
                 </footer>
@@ -13240,26 +13938,50 @@ function CollectionDetailView({
                       />
                     )}
                     {branding.brandText && (
-                      <p className="mt-5 text-[10px] uppercase tracking-[0.22em] text-[#555]">{branding.brandText}</p>
+                      <p className="mt-5 text-[10px] uppercase tracking-[0.22em] text-[#555]">
+                        {branding.brandText}
+                      </p>
                     )}
-                    <h3 className="mt-8 text-2xl font-medium uppercase tracking-[0.18em]">{shareHeading || collection.name}</h3>
+                    <h3 className="mt-8 text-2xl font-medium uppercase tracking-[0.18em]">
+                      {shareHeading || collection.name}
+                    </h3>
                   </div>
-                  {(selectedShareTemplate?.image || form.coverImage || images.find((image) => image.mediaType !== "video")?.url) && (
+                  {(selectedShareTemplate?.image ||
+                    form.coverImage ||
+                    images.find((image) => image.mediaType !== "video")
+                      ?.url) && (
                     <img
-                      src={imageSrc(selectedShareTemplate?.image || form.coverImage || images.find((image) => image.mediaType !== "video")?.url || "")}
+                      src={imageSrc(
+                        selectedShareTemplate?.image ||
+                          form.coverImage ||
+                          images.find((image) => image.mediaType !== "video")
+                            ?.url ||
+                          "",
+                      )}
                       alt=""
                       className="max-h-[430px] w-full object-cover"
                     />
                   )}
                   <div className="px-10 py-10">
-                    <p className="whitespace-pre-line text-sm leading-7 text-[#666]">{shareMessage}</p>
+                    <p className="whitespace-pre-line text-sm leading-7 text-[#666]">
+                      {shareMessage}
+                    </p>
                     <span
                       className="mt-8 inline-flex min-h-11 items-center justify-center px-8 text-xs font-bold uppercase tracking-[0.13em] text-white"
-                      style={{ backgroundColor: selectedShareTemplate?.buttonColor || branding.accentColor || "#444" }}
+                      style={{
+                        backgroundColor:
+                          selectedShareTemplate?.buttonColor ||
+                          branding.accentColor ||
+                          "#444",
+                      }}
                     >
                       {shareButtonText || "View Gallery"}
                     </span>
-                    {shareFooterText && <p className="mt-8 text-xs leading-6 text-[#777]">{shareFooterText}</p>}
+                    {shareFooterText && (
+                      <p className="mt-8 text-xs leading-6 text-[#777]">
+                        {shareFooterText}
+                      </p>
+                    )}
                   </div>
                 </div>
               </aside>
@@ -13272,17 +13994,35 @@ function CollectionDetailView({
         <DialogContent className="rounded-none p-0 sm:max-w-[520px]">
           <div className="p-10">
             <div className="flex items-center justify-between">
-              <DialogTitle className="text-base font-bold uppercase tracking-[0.16em]">QR Code</DialogTitle>
-              <button type="button" onClick={() => setQrOpen(false)} aria-label="Close QR code">
+              <DialogTitle className="text-base font-bold uppercase tracking-[0.16em]">
+                QR Code
+              </DialogTitle>
+              <button
+                type="button"
+                onClick={() => setQrOpen(false)}
+                aria-label="Close QR code"
+              >
                 <X className="size-5 text-[#777]" />
               </button>
             </div>
             <div className="mt-9 flex justify-center">
-              <img src={qrCodeUrl} alt={`QR code for ${collection.name}`} className="size-[250px]" />
+              <img
+                src={qrCodeUrl}
+                alt={`QR code for ${collection.name}`}
+                className="size-[250px]"
+              />
             </div>
-            <p className="mt-8 break-all text-center text-xs text-[#777]">{publicLink}</p>
+            <p className="mt-8 break-all text-center text-xs text-[#777]">
+              {publicLink}
+            </p>
             <div className="mt-9 flex items-center justify-end gap-5">
-              <Button variant="ghost" className="rounded-none" onClick={() => setQrOpen(false)}>Cancel</Button>
+              <Button
+                variant="ghost"
+                className="rounded-none"
+                onClick={() => setQrOpen(false)}
+              >
+                Cancel
+              </Button>
               <a
                 href={qrCodeUrl}
                 download={`${collection.slug || collection._id}-qr-code.png`}
@@ -13295,17 +14035,31 @@ function CollectionDetailView({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={addMediaOpen} onOpenChange={(open) => { setAddMediaOpen(open); if (!open && !uploading) setReplaceImageId(""); }}>
+      <Dialog
+        open={addMediaOpen}
+        onOpenChange={(open) => {
+          setAddMediaOpen(open);
+          if (!open && !uploading) setReplaceImageId("");
+        }}
+      >
         <DialogContent className="rounded-none p-0 sm:max-w-[720px]">
           <div className="p-8 sm:p-12">
             <div className="flex items-center justify-between">
-              <DialogTitle className="text-base font-bold uppercase tracking-[0.13em]">{replaceImageId ? "Replace Photo" : "Add Media"}</DialogTitle>
-              <button type="button" onClick={() => setAddMediaOpen(false)} aria-label="Close media uploader">
+              <DialogTitle className="text-base font-bold uppercase tracking-[0.13em]">
+                {replaceImageId ? "Replace Photo" : "Add Media"}
+              </DialogTitle>
+              <button
+                type="button"
+                onClick={() => setAddMediaOpen(false)}
+                aria-label="Close media uploader"
+              >
                 <X className="size-5 text-[#777]" />
               </button>
             </div>
             <div className="mt-8 border-b">
-              <span className="inline-flex border-b-2 border-[#6337d8] pb-3 text-sm font-bold">Upload</span>
+              <span className="inline-flex border-b-2 border-[#6337d8] pb-3 text-sm font-bold">
+                Upload
+              </span>
             </div>
             <label
               className={cn(
@@ -13329,9 +14083,17 @@ function CollectionDetailView({
                 void handleImageUpload(mediaFiles);
               }}
             >
-              {uploading ? <Loader2 className="size-12 animate-spin text-[#6337d8]" /> : <Upload className="size-12 text-[#c7c7c7]" />}
+              {uploading ? (
+                <Loader2 className="size-12 animate-spin text-[#6337d8]" />
+              ) : (
+                <Upload className="size-12 text-[#c7c7c7]" />
+              )}
               <p className="mt-6 text-lg font-bold">
-                {uploading ? `${uploadProgress.currentPercent}% uploaded` : replaceImageId ? "Drag one replacement photo here" : "Drag photos and videos here to upload"}
+                {uploading
+                  ? `${uploadProgress.currentPercent}% uploaded`
+                  : replaceImageId
+                    ? "Drag one replacement photo here"
+                    : "Drag photos and videos here to upload"}
               </p>
               <p className="mt-5 text-sm text-[#555]">or upload files from:</p>
               <span className="mt-5 inline-flex h-11 min-w-44 items-center justify-center gap-2 bg-[#f2f2f2] px-6 text-sm font-bold">
@@ -13360,12 +14122,29 @@ function CollectionDetailView({
         <DialogContent className="max-w-md rounded-none">
           <DialogHeader>
             <DialogTitle>Rename Photo</DialogTitle>
-            <DialogDescription>Update photo filename shown in this gallery.</DialogDescription>
+            <DialogDescription>
+              Update photo filename shown in this gallery.
+            </DialogDescription>
           </DialogHeader>
-          <Input value={imageRenameValue} onChange={(event) => setImageRenameValue(event.target.value)} className="h-12 rounded-none" placeholder="Filename" />
+          <Input
+            value={imageRenameValue}
+            onChange={(event) => setImageRenameValue(event.target.value)}
+            className="h-12 rounded-none"
+            placeholder="Filename"
+          />
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setImageRenameOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#6337d8] text-white" disabled={updateImage.isPending} onClick={saveImageRename}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setImageRenameOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#6337d8] text-white"
+              disabled={updateImage.isPending}
+              onClick={saveImageRename}
+            >
               {updateImage.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
@@ -13376,14 +14155,25 @@ function CollectionDetailView({
         <DialogContent className="max-w-lg rounded-none">
           <DialogHeader>
             <DialogTitle>Move / Copy Photo</DialogTitle>
-            <DialogDescription>Send this photo to another gallery or set.</DialogDescription>
+            <DialogDescription>
+              Send this photo to another gallery or set.
+            </DialogDescription>
           </DialogHeader>
           <FieldGroup className="gap-5">
             <Field>
               <FieldLabel className="font-bold">Action</FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 {(["copy", "move"] as const).map((mode) => (
-                  <button key={mode} type="button" className={cn("h-11 border text-sm font-bold capitalize", imageMoveMode === mode && "border-[#6337d8] bg-[#eefaf8] text-[#5a2fc5]")} onClick={() => setImageMoveMode(mode)}>
+                  <button
+                    key={mode}
+                    type="button"
+                    className={cn(
+                      "h-11 border text-sm font-bold capitalize",
+                      imageMoveMode === mode &&
+                        "border-[#6337d8] bg-[#eefaf8] text-[#5a2fc5]",
+                    )}
+                    onClick={() => setImageMoveMode(mode)}
+                  >
                     {mode}
                   </button>
                 ))}
@@ -13394,30 +14184,56 @@ function CollectionDetailView({
               <select
                 value={imageTargetCollectionId}
                 onChange={(event) => {
-                  const nextCollection = collections.find((item) => item._id === event.target.value);
+                  const nextCollection = collections.find(
+                    (item) => item._id === event.target.value,
+                  );
                   setImageTargetCollectionId(event.target.value);
-                  setImageTargetSetId(nextCollection?.sets?.[0]?.id ?? "highlights");
+                  setImageTargetSetId(
+                    nextCollection?.sets?.[0]?.id ?? "highlights",
+                  );
                 }}
                 className="h-12 w-full rounded-none border bg-white px-4"
               >
                 {collections.map((item) => (
-                  <option key={item._id} value={item._id}>{item.name}</option>
+                  <option key={item._id} value={item._id}>
+                    {item.name}
+                  </option>
                 ))}
               </select>
             </Field>
             <Field>
               <FieldLabel className="font-bold">Set</FieldLabel>
-              <select value={imageTargetSetId} onChange={(event) => setImageTargetSetId(event.target.value)} className="h-12 w-full rounded-none border bg-white px-4">
+              <select
+                value={imageTargetSetId}
+                onChange={(event) => setImageTargetSetId(event.target.value)}
+                className="h-12 w-full rounded-none border bg-white px-4"
+              >
                 {selectedTargetSets.map((set) => (
-                  <option key={set.id} value={set.id}>{set.name}</option>
+                  <option key={set.id} value={set.id}>
+                    {set.name}
+                  </option>
                 ))}
               </select>
             </Field>
           </FieldGroup>
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setImageMoveOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#6337d8] text-white" disabled={copyMoveImage.isPending || !imageTargetCollectionId} onClick={saveImageMove}>
-              {copyMoveImage.isPending ? "Working..." : imageMoveMode === "move" ? "Move Photo" : "Copy Photo"}
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setImageMoveOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#6337d8] text-white"
+              disabled={copyMoveImage.isPending || !imageTargetCollectionId}
+              onClick={saveImageMove}
+            >
+              {copyMoveImage.isPending
+                ? "Working..."
+                : imageMoveMode === "move"
+                  ? "Move Photo"
+                  : "Copy Photo"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -13427,18 +14243,36 @@ function CollectionDetailView({
         <DialogContent className="max-w-md rounded-none">
           <DialogHeader>
             <DialogTitle>Photo Watermark</DialogTitle>
-            <DialogDescription>Choose watermark overlay for this photo.</DialogDescription>
+            <DialogDescription>
+              Choose watermark overlay for this photo.
+            </DialogDescription>
           </DialogHeader>
-          <select value={imageWatermarkId} onChange={(event) => setImageWatermarkId(event.target.value)} className="h-12 w-full rounded-none border bg-white px-4">
+          <select
+            value={imageWatermarkId}
+            onChange={(event) => setImageWatermarkId(event.target.value)}
+            className="h-12 w-full rounded-none border bg-white px-4"
+          >
             <option value="">Use set/default watermark</option>
             <option value="No watermark">No watermark</option>
             {watermarkItems.map((watermark) => (
-              <option key={watermark.id} value={watermark.id}>{watermark.name}</option>
+              <option key={watermark.id} value={watermark.id}>
+                {watermark.name}
+              </option>
             ))}
           </select>
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setImageWatermarkOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#6337d8] text-white" disabled={updateImage.isPending} onClick={saveImageWatermark}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setImageWatermarkOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#6337d8] text-white"
+              disabled={updateImage.isPending}
+              onClick={saveImageWatermark}
+            >
               {updateImage.isPending ? "Saving..." : "Save Watermark"}
             </Button>
           </DialogFooter>
@@ -13449,21 +14283,41 @@ function CollectionDetailView({
         <DialogContent className="max-w-lg rounded-none">
           <DialogHeader>
             <DialogTitle>Quick Share Link</DialogTitle>
-            <DialogDescription>Copy one-photo share link with download preference.</DialogDescription>
+            <DialogDescription>
+              Copy one-photo share link with download preference.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-5">
             <div className="flex items-center justify-between border bg-[#fafafa] px-4 py-3">
               <div>
                 <p className="text-sm font-bold">Allow download</p>
-                <p className="mt-1 text-xs text-[#666]">Marks this link as download allowed.</p>
+                <p className="mt-1 text-xs text-[#666]">
+                  Marks this link as download allowed.
+                </p>
               </div>
-              <Switch checked={imageShareAllowDownload} onCheckedChange={setImageShareAllowDownload} />
+              <Switch
+                checked={imageShareAllowDownload}
+                onCheckedChange={setImageShareAllowDownload}
+              />
             </div>
-            <Input value={imageQuickShareLink} readOnly className="h-12 rounded-none bg-white" />
+            <Input
+              value={imageQuickShareLink}
+              readOnly
+              className="h-12 rounded-none bg-white"
+            />
           </div>
           <DialogFooter>
-            <Button variant="outline" className="rounded-none" onClick={() => setImageShareOpen(false)}>Cancel</Button>
-            <Button className="rounded-none bg-[#6337d8] text-white" onClick={() => void copyImageQuickShare()}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setImageShareOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#6337d8] text-white"
+              onClick={() => void copyImageQuickShare()}
+            >
               Copy Link
             </Button>
           </DialogFooter>
@@ -13520,9 +14374,15 @@ function CollectionDetailView({
         <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-[#fafafa] transition-colors duration-300">
           {!detailCollapsed && (
             <div className="h-[208px] shrink-0 bg-[#e8e8e8]">
-              {form.coverImage || images.find((image) => image.mediaType !== "video")?.url ? (
+              {form.coverImage ||
+              images.find((image) => image.mediaType !== "video")?.url ? (
                 <img
-                  src={imageSrc(form.coverImage || images.find((image) => image.mediaType !== "video")?.url || "")}
+                  src={imageSrc(
+                    form.coverImage ||
+                      images.find((image) => image.mediaType !== "video")
+                        ?.url ||
+                      "",
+                  )}
                   alt=""
                   className="h-full w-full object-cover"
                 />
@@ -13563,7 +14423,9 @@ function CollectionDetailView({
           {activeTab === "photos" && !detailCollapsed && (
             <div className="min-h-0 overflow-y-auto p-4">
               <div className="mb-4 flex items-center justify-between px-1">
-                <p className="text-xs font-bold uppercase tracking-wide text-[#777]">Photos</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                  Photos
+                </p>
                 <button
                   className="inline-flex items-center gap-1 text-sm font-bold text-[#6337d8]"
                   onClick={() => setAddSetOpen(true)}
@@ -13726,9 +14588,24 @@ function CollectionDetailView({
                 [
                   ["general", Wrench, "General", ""],
                   ["privacy", Lock, "Privacy", ""],
-                  ["download", Download, "Download", form.download.photoDownload ? "On" : "Off"],
-                  ["favorite", Heart, "Favorite", form.favorite.favoritePhotos ? "On" : "Off"],
-                  ["store", ShoppingCart, "Store", form.store.storeStatus ? "On" : "Off"],
+                  [
+                    "download",
+                    Download,
+                    "Download",
+                    form.download.photoDownload ? "On" : "Off",
+                  ],
+                  [
+                    "favorite",
+                    Heart,
+                    "Favorite",
+                    form.favorite.favoritePhotos ? "On" : "Off",
+                  ],
+                  [
+                    "store",
+                    ShoppingCart,
+                    "Store",
+                    form.store.storeStatus ? "On" : "Off",
+                  ],
                 ] as const
               ).map(([panel, Icon, label, status]) => (
                 <button
@@ -13844,21 +14721,32 @@ function CollectionDetailView({
               <div className="flex items-center gap-5 text-[#777]">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button type="button" className="flex size-9 items-center justify-center hover:bg-[#f3f3f3]" aria-label="Sort photos">
+                    <button
+                      type="button"
+                      className="flex size-9 items-center justify-center hover:bg-[#f3f3f3]"
+                      aria-label="Sort photos"
+                    >
                       <ListFilter className="size-5" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64 rounded-none p-3">
-                    <p className="px-3 pb-2 pt-1 text-xs font-medium text-[#888]">Sort by</p>
-                    {([
-                      ["uploaded-new-old", "Uploaded: New â†’ Old"],
-                      ["uploaded-old-new", "Uploaded: Old â†’ New"],
-                      ["taken-new-old", "Date Taken: New â†’ Old"],
-                      ["taken-old-new", "Date Taken: Old â†’ New"],
-                      ["name-az", "Name: A-Z"],
-                      ["name-za", "Name: Z-A"],
-                      ["random", "Random"],
-                    ] as const).map(([value, label]) => (
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-64 rounded-none p-3"
+                  >
+                    <p className="px-3 pb-2 pt-1 text-xs font-medium text-[#888]">
+                      Sort by
+                    </p>
+                    {(
+                      [
+                        ["uploaded-new-old", "Uploaded: New â†’ Old"],
+                        ["uploaded-old-new", "Uploaded: Old â†’ New"],
+                        ["taken-new-old", "Date Taken: New â†’ Old"],
+                        ["taken-old-new", "Date Taken: Old â†’ New"],
+                        ["name-az", "Name: A-Z"],
+                        ["name-za", "Name: Z-A"],
+                        ["random", "Random"],
+                      ] as const
+                    ).map(([value, label]) => (
                       <DropdownMenuItem
                         key={value}
                         className="h-11 rounded-none"
@@ -13872,27 +14760,51 @@ function CollectionDetailView({
                 </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button type="button" className="flex size-9 items-center justify-center hover:bg-[#f3f3f3]" aria-label="Grid options">
+                    <button
+                      type="button"
+                      className="flex size-9 items-center justify-center hover:bg-[#f3f3f3]"
+                      aria-label="Grid options"
+                    >
                       <LayoutGrid className="size-5" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52 rounded-none p-3">
-                    <p className="px-3 pb-2 pt-1 text-xs font-medium text-[#888]">Grid Size</p>
-                    <DropdownMenuItem className="h-11 rounded-none" onSelect={() => setCollectionGridSize("small")}>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-52 rounded-none p-3"
+                  >
+                    <p className="px-3 pb-2 pt-1 text-xs font-medium text-[#888]">
+                      Grid Size
+                    </p>
+                    <DropdownMenuItem
+                      className="h-11 rounded-none"
+                      onSelect={() => setCollectionGridSize("small")}
+                    >
                       <span className="flex-1">Small</span>
-                      {collectionGridSize === "small" && <Check className="size-4" />}
+                      {collectionGridSize === "small" && (
+                        <Check className="size-4" />
+                      )}
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="h-11 rounded-none" onSelect={() => setCollectionGridSize("large")}>
+                    <DropdownMenuItem
+                      className="h-11 rounded-none"
+                      onSelect={() => setCollectionGridSize("large")}
+                    >
                       <span className="flex-1">Large</span>
-                      {collectionGridSize === "large" && <Check className="size-4" />}
+                      {collectionGridSize === "large" && (
+                        <Check className="size-4" />
+                      )}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <div className="flex items-center justify-between px-3 py-3">
                       <div>
                         <p className="text-xs text-[#888]">Show</p>
-                        <p className="mt-2 text-sm font-medium text-[#222]">Filename</p>
+                        <p className="mt-2 text-sm font-medium text-[#222]">
+                          Filename
+                        </p>
                       </div>
-                      <Switch checked={showCollectionFilenames} onCheckedChange={setShowCollectionFilenames} />
+                      <Switch
+                        checked={showCollectionFilenames}
+                        onCheckedChange={setShowCollectionFilenames}
+                      />
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -13905,8 +14817,14 @@ function CollectionDetailView({
                   )}
                   onClick={() => setAddMediaOpen(true)}
                 >
-                  {uploading ? <Loader2 className="size-4 animate-spin" /> : <PlusCircle className="size-4" />}
-                  {uploading ? `${uploadProgress.currentPercent}%` : "Add Media"}
+                  {uploading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <PlusCircle className="size-4" />
+                  )}
+                  {uploading
+                    ? `${uploadProgress.currentPercent}%`
+                    : "Add Media"}
                 </button>
               </div>
             </div>
@@ -14019,7 +14937,8 @@ function CollectionDetailView({
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-[#999]">
-                  âŒ˜/Ctrl + A selects all Â· Delete removes selected Â· Esc clears
+                  âŒ˜/Ctrl + A selects all · Delete removes selected · Esc
+                  clears
                 </p>
                 {deletingImages && (
                   <div className="mb-4 flex items-center gap-3 border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -14101,7 +15020,9 @@ function CollectionDetailView({
                           />
                         )}
                         {!image.watermarked && imageWatermarkFor(image) && (
-                          <WatermarkOverlay watermark={imageWatermarkFor(image)!} />
+                          <WatermarkOverlay
+                            watermark={imageWatermarkFor(image)!}
+                          />
                         )}
                       </button>
                       <button
@@ -14158,7 +15079,9 @@ function CollectionDetailView({
                       <button
                         className={cn(
                           "absolute right-2 top-2 size-9 items-center justify-center bg-white/95 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#6337d8]",
-                          imageMenuId === image._id ? "flex" : "hidden group-hover:flex",
+                          imageMenuId === image._id
+                            ? "flex"
+                            : "hidden group-hover:flex",
                         )}
                         disabled={deletingImages}
                         aria-label="Photo options"
@@ -14173,15 +15096,84 @@ function CollectionDetailView({
                       </button>
                       {imageMenuId === image._id && (
                         <div className="absolute right-2 top-12 z-40 w-56 border bg-white p-2 text-sm shadow-[0_18px_45px_rgba(0,0,0,0.16)]">
-                          <PhotoMenuItem icon={Eye} label="Open" onClick={() => { setImageMenuId(""); setActiveImageId(image._id); setPreviewOpen(true); }} />
-                          <PhotoMenuItem icon={Link2} label="Quick share" onClick={() => { setImageMenuId(""); openQuickShareImage(image); }} />
-                          <PhotoMenuItem icon={Download} label="Download" onClick={() => { setImageMenuId(""); downloadImageFile(image); }} />
-                          <PhotoMenuItem icon={ArrowRight} label="Move/Copy" onClick={() => { setImageMenuId(""); openMoveImage(image); }} />
-                          <PhotoMenuItem icon={Copy} label="Copy filename" onClick={() => { setImageMenuId(""); void copyImageFilename(image); }} />
-                          <PhotoMenuItem icon={Images} label="Set as cover" disabled={coverImageAccess.locked || image.mediaType === "video"} onClick={() => { setImageMenuId(""); setCollectionCoverImage(image); }} />
-                          <PhotoMenuItem icon={Pencil} label="Rename" onClick={() => { setImageMenuId(""); openRenameImage(image); }} />
-                          <PhotoMenuItem icon={RefreshCw} label="Replace photo" onClick={() => { setImageMenuId(""); setReplaceImageId(image._id); setAddMediaOpen(true); }} />
-                          <PhotoMenuItem icon={Palette} label="Watermark" onClick={() => { setImageMenuId(""); openWatermarkImage(image); }} />
+                          <PhotoMenuItem
+                            icon={Eye}
+                            label="Open"
+                            onClick={() => {
+                              setImageMenuId("");
+                              setActiveImageId(image._id);
+                              setPreviewOpen(true);
+                            }}
+                          />
+                          <PhotoMenuItem
+                            icon={Link2}
+                            label="Quick share"
+                            onClick={() => {
+                              setImageMenuId("");
+                              openQuickShareImage(image);
+                            }}
+                          />
+                          <PhotoMenuItem
+                            icon={Download}
+                            label="Download"
+                            onClick={() => {
+                              setImageMenuId("");
+                              downloadImageFile(image);
+                            }}
+                          />
+                          <PhotoMenuItem
+                            icon={ArrowRight}
+                            label="Move/Copy"
+                            onClick={() => {
+                              setImageMenuId("");
+                              openMoveImage(image);
+                            }}
+                          />
+                          <PhotoMenuItem
+                            icon={Copy}
+                            label="Copy filename"
+                            onClick={() => {
+                              setImageMenuId("");
+                              void copyImageFilename(image);
+                            }}
+                          />
+                          <PhotoMenuItem
+                            icon={Images}
+                            label="Set as cover"
+                            disabled={
+                              coverImageAccess.locked ||
+                              image.mediaType === "video"
+                            }
+                            onClick={() => {
+                              setImageMenuId("");
+                              setCollectionCoverImage(image);
+                            }}
+                          />
+                          <PhotoMenuItem
+                            icon={Pencil}
+                            label="Rename"
+                            onClick={() => {
+                              setImageMenuId("");
+                              openRenameImage(image);
+                            }}
+                          />
+                          <PhotoMenuItem
+                            icon={RefreshCw}
+                            label="Replace photo"
+                            onClick={() => {
+                              setImageMenuId("");
+                              setReplaceImageId(image._id);
+                              setAddMediaOpen(true);
+                            }}
+                          />
+                          <PhotoMenuItem
+                            icon={Palette}
+                            label="Watermark"
+                            onClick={() => {
+                              setImageMenuId("");
+                              openWatermarkImage(image);
+                            }}
+                          />
                           <div className="my-2 border-t" />
                           <button
                             type="button"
@@ -14202,22 +15194,29 @@ function CollectionDetailView({
                           coverImageAccess.locked &&
                             "cursor-not-allowed opacity-60",
                         )}
-                        disabled={deletingImages || coverImageAccess.locked || image.mediaType === "video"}
+                        disabled={
+                          deletingImages ||
+                          coverImageAccess.locked ||
+                          image.mediaType === "video"
+                        }
                         title={
                           image.mediaType === "video"
                             ? "Videos cannot be gallery covers"
-                            :
-                          coverImageAccess.locked
-                            ? "Cover image is not included in your current plan"
-                            : "Make gallery cover"
+                            : coverImageAccess.locked
+                              ? "Cover image is not included in your current plan"
+                              : "Make gallery cover"
                         }
                         onClick={() => setCollectionCoverImage(image)}
                       >
                         Make Cover
                       </button>
                       {showCollectionFilenames && (
-                        <p className="mt-2 truncate px-1 text-xs text-[#777]" title={image.originalName ?? ""}>
-                          {image.originalName || String(image.metadata?.filename ?? "Untitled")}
+                        <p
+                          className="mt-2 truncate px-1 text-xs text-[#777]"
+                          title={image.originalName ?? ""}
+                        >
+                          {image.originalName ||
+                            String(image.metadata?.filename ?? "Untitled")}
                         </p>
                       )}
                     </div>
@@ -14393,7 +15392,10 @@ function CollectionDetailView({
                     ? formatDate(collection.eventDate)
                     : form.design.coverDate
                 }
-                coverImage={form.coverImage || images.find((image) => image.mediaType !== "video")?.url}
+                coverImage={
+                  form.coverImage ||
+                  images.find((image) => image.mediaType !== "video")?.url
+                }
                 images={images}
                 sets={form.sets}
                 favoriteEnabled={form.favorite.favoritePhotos !== false}
@@ -14410,7 +15412,9 @@ function CollectionDetailView({
                   <h2 className="text-2xl font-medium">General Settings</h2>
                   <FieldGroup className="mt-8 gap-7">
                     <Field>
-                      <FieldLabel className="font-bold">Gallery Name</FieldLabel>
+                      <FieldLabel className="font-bold">
+                        Gallery Name
+                      </FieldLabel>
                       <Input
                         value={form.name}
                         onChange={(event) =>
@@ -14434,16 +15438,24 @@ function CollectionDetailView({
                         }
                         className="h-12 rounded-none bg-white"
                       />
-                      <p className="text-sm leading-6 text-[#666]">Choose a unique URL slug for visitors to access your gallery.</p>
+                      <p className="text-sm leading-6 text-[#666]">
+                        Choose a unique URL slug for visitors to access your
+                        gallery.
+                      </p>
                     </Field>
                     <Field>
-                      <FieldLabel className="font-bold">Category Tags</FieldLabel>
+                      <FieldLabel className="font-bold">
+                        Category Tags
+                      </FieldLabel>
                       <Input
                         value={form.general.collectionTags}
                         onChange={(event) =>
                           setForm((value) => ({
                             ...value,
-                            general: { ...value.general, collectionTags: event.target.value },
+                            general: {
+                              ...value.general,
+                              collectionTags: event.target.value,
+                            },
                           }))
                         }
                         placeholder="Select or enter tags"
@@ -14451,20 +15463,27 @@ function CollectionDetailView({
                       />
                     </Field>
                     <Field>
-                      <FieldLabel className="font-bold">Default Watermark</FieldLabel>
+                      <FieldLabel className="font-bold">
+                        Default Watermark
+                      </FieldLabel>
                       <select
                         value={form.general.defaultWatermark}
                         onChange={(event) =>
                           setForm((value) => ({
                             ...value,
-                            general: { ...value.general, defaultWatermark: event.target.value },
+                            general: {
+                              ...value.general,
+                              defaultWatermark: event.target.value,
+                            },
                           }))
                         }
                         className="h-12 w-full rounded-none border bg-white px-5"
                       >
                         <option>No watermark</option>
                         {watermarkItems.map((watermark) => (
-                          <option key={watermark.id} value={watermark.id}>{watermark.name}</option>
+                          <option key={watermark.id} value={watermark.id}>
+                            {watermark.name}
+                          </option>
                         ))}
                       </select>
                     </Field>
@@ -14523,7 +15542,10 @@ function CollectionDetailView({
                         onChange={(event) =>
                           setForm((value) => ({
                             ...value,
-                            general: { ...value.general, language: event.target.value },
+                            general: {
+                              ...value.general,
+                              language: event.target.value,
+                            },
                           }))
                         }
                         className="h-12 w-full rounded-none border bg-white px-5"
@@ -14543,19 +15565,28 @@ function CollectionDetailView({
                   <h2 className="text-2xl font-medium">Privacy Settings</h2>
                   <FieldGroup className="mt-8 gap-10">
                     <Field>
-                      <FieldLabel htmlFor="collection-status" className="font-bold">Gallery Status</FieldLabel>
+                      <FieldLabel
+                        htmlFor="collection-status"
+                        className="font-bold"
+                      >
+                        Gallery Status
+                      </FieldLabel>
                       <select
                         id="collection-status"
                         value={collectionStatus}
                         onChange={(event) =>
-                          setCollectionStatus(event.target.value as "draft" | "published")
+                          setCollectionStatus(
+                            event.target.value as "draft" | "published",
+                          )
                         }
                         className="h-12 w-full border bg-white px-3 text-sm outline-none"
                       >
                         <option value="draft">Draft</option>
                         <option value="published">Published</option>
                       </select>
-                      <p className="text-sm leading-6 text-[#666]">Only published galleries are visible on public URLs.</p>
+                      <p className="text-sm leading-6 text-[#666]">
+                        Only published galleries are visible on public URLs.
+                      </p>
                     </Field>
                     <SettingSwitch
                       label="Email Registration"
@@ -14563,7 +15594,10 @@ function CollectionDetailView({
                       onCheckedChange={(value) =>
                         setForm((current) => ({
                           ...current,
-                          general: { ...current.general, emailRegistration: value },
+                          general: {
+                            ...current.general,
+                            emailRegistration: value,
+                          },
                         }))
                       }
                       text="Require visitors to enter email before viewing photos."
@@ -14613,11 +15647,14 @@ function CollectionDetailView({
                     <div className="border-t pt-8">
                       <h3 className="text-lg font-bold">Gallery Preferences</h3>
                       <p className="mt-2 text-sm leading-6 text-[#666]">
-                        Defaults come from Preferences. Changes here stay with this gallery.
+                        Defaults come from Preferences. Changes here stay with
+                        this gallery.
                       </p>
                       <FieldGroup className="mt-6 gap-7">
                         <Field>
-                          <FieldLabel className="font-bold">Filename Display</FieldLabel>
+                          <FieldLabel className="font-bold">
+                            Filename Display
+                          </FieldLabel>
                           <select
                             value={form.preferences.filenameDisplay}
                             onChange={(event) =>
@@ -14625,7 +15662,8 @@ function CollectionDetailView({
                                 ...current,
                                 preferences: {
                                   ...current.preferences,
-                                  filenameDisplay: event.target.value as PreferenceSettings["filenameDisplay"],
+                                  filenameDisplay: event.target
+                                    .value as PreferenceSettings["filenameDisplay"],
                                 },
                               }))
                             }
@@ -14636,7 +15674,9 @@ function CollectionDetailView({
                           </select>
                         </Field>
                         <Field>
-                          <FieldLabel className="font-bold">Search Engine Visibility</FieldLabel>
+                          <FieldLabel className="font-bold">
+                            Search Engine Visibility
+                          </FieldLabel>
                           <select
                             value={form.preferences.searchEngineVisibility}
                             onChange={(event) =>
@@ -14644,7 +15684,8 @@ function CollectionDetailView({
                                 ...current,
                                 preferences: {
                                   ...current.preferences,
-                                  searchEngineVisibility: event.target.value as PreferenceSettings["searchEngineVisibility"],
+                                  searchEngineVisibility: event.target
+                                    .value as PreferenceSettings["searchEngineVisibility"],
                                 },
                               }))
                             }
@@ -14656,7 +15697,9 @@ function CollectionDetailView({
                           </select>
                         </Field>
                         <Field>
-                          <FieldLabel className="font-bold">Sharpening Level</FieldLabel>
+                          <FieldLabel className="font-bold">
+                            Sharpening Level
+                          </FieldLabel>
                           <select
                             value={form.preferences.sharpeningLevel}
                             onChange={(event) =>
@@ -14664,7 +15707,8 @@ function CollectionDetailView({
                                 ...current,
                                 preferences: {
                                   ...current.preferences,
-                                  sharpeningLevel: event.target.value as PreferenceSettings["sharpeningLevel"],
+                                  sharpeningLevel: event.target
+                                    .value as PreferenceSettings["sharpeningLevel"],
                                 },
                               }))
                             }
@@ -14690,7 +15734,9 @@ function CollectionDetailView({
                           text="Allow RAW files inside this gallery."
                         />
                         <Field>
-                          <FieldLabel className="font-bold">Terms of Service</FieldLabel>
+                          <FieldLabel className="font-bold">
+                            Terms of Service
+                          </FieldLabel>
                           <Textarea
                             value={form.preferences.termsOfService}
                             onChange={(event) =>
@@ -14706,7 +15752,9 @@ function CollectionDetailView({
                           />
                         </Field>
                         <Field>
-                          <FieldLabel className="font-bold">Privacy Policy</FieldLabel>
+                          <FieldLabel className="font-bold">
+                            Privacy Policy
+                          </FieldLabel>
                           <Textarea
                             value={form.preferences.privacyPolicy}
                             onChange={(event) =>
@@ -14760,14 +15808,19 @@ function CollectionDetailView({
                   busy={collectionStoreAdmin.busy}
                   priceSheets={collectionStorePriceSheetsQuery.data?.data ?? []}
                   onChange={(patch) => {
-                    collectionStoreAdmin.setForm((value) => ({ ...value, ...patch }));
+                    collectionStoreAdmin.setForm((value) => ({
+                      ...value,
+                      ...patch,
+                    }));
                     setForm((value) => ({
                       ...value,
                       store: {
                         ...value.store,
                         storeStatus: patch.enabled ?? value.store.storeStatus,
-                        priceSheet: patch.priceSheetId ?? value.store.priceSheet,
-                        productPreview: patch.allowBulkBuy ?? value.store.productPreview,
+                        priceSheet:
+                          patch.priceSheetId ?? value.store.priceSheet,
+                        productPreview:
+                          patch.allowBulkBuy ?? value.store.productPreview,
                       },
                     }));
                   }}
@@ -14819,8 +15872,7 @@ function CollectionDetailView({
               favoriteSettings={form.favorite}
               accessSettings={
                 (collection.settings?.access as
-                  | CollectionAccessSettings
-                  | undefined) ?? {}
+                  CollectionAccessSettings | undefined) ?? {}
               }
               saveFavoriteSettings={async (favorite) => {
                 const nextFavorite = { ...form.favorite, ...favorite };
@@ -14961,7 +16013,8 @@ function CollectionActivityPanel({
   collectionName: string;
   collectionImages: CollectionImageRecord[];
   publicLink: string;
-  activityPage: "download" | "favorite" | "orders" | "email" | "contacts" | "private";
+  activityPage:
+    "download" | "favorite" | "orders" | "email" | "contacts" | "private";
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
   accessSettings: CollectionAccessSettings;
@@ -15254,10 +16307,8 @@ function CollectionActivityPanel({
   };
   const copyToCollection = async (list: CollectionFavoriteActivityRecord) => {
     const name =
-      window.prompt(
-        "New gallery name",
-        `${collectionName} - ${list.name}`,
-      ) || "";
+      window.prompt("New gallery name", `${collectionName} - ${list.name}`) ||
+      "";
     if (!name.trim()) return;
     setCopyingListId(list.id);
     try {
@@ -15426,7 +16477,7 @@ function CollectionActivityPanel({
                             (isAllowed ? "allowed" : "pending")}
                         </TableCell>
                         <TableCell className="max-w-80 whitespace-normal text-[#666]">
-                          {request?.reason || "â€”"}
+                          {request?.reason || "—"}
                         </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
@@ -15484,21 +16535,21 @@ function CollectionActivityPanel({
             </section>
           </div>
         ) : activityPage === "contacts" ? (
-        <CollectionRegistrationActivity
-          mode="contacts"
-          registrations={emailRegistrations}
-          privatePhotos={privatePhotos}
-          collectionName={collectionName}
-        />
-      ) : activityPage === "private" ? (
-        <CollectionRegistrationActivity
-          mode="private"
-          registrations={emailRegistrations}
-          privatePhotos={privatePhotos}
-          collectionName={collectionName}
-          updatePrivatePhotoRequest={updatePrivatePhotoRequest}
-          deletePrivatePhotoRequest={deletePrivatePhotoRequest}
-        />
+          <CollectionRegistrationActivity
+            mode="contacts"
+            registrations={emailRegistrations}
+            privatePhotos={privatePhotos}
+            collectionName={collectionName}
+          />
+        ) : activityPage === "private" ? (
+          <CollectionRegistrationActivity
+            mode="private"
+            registrations={emailRegistrations}
+            privatePhotos={privatePhotos}
+            collectionName={collectionName}
+            updatePrivatePhotoRequest={updatePrivatePhotoRequest}
+            deletePrivatePhotoRequest={deletePrivatePhotoRequest}
+          />
         ) : activityPage === "download" ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -15529,9 +16580,7 @@ function CollectionActivityPanel({
                     <tr key={item._id} className="border-b">
                       <td className="px-1 py-5 font-semibold">{item.email}</td>
                       <td className="px-1 py-5">
-                        {item.imageName ||
-                          item.imageId ||
-                          "Gallery download"}
+                        {item.imageName || item.imageId || "Gallery download"}
                       </td>
                       <td className="px-1 py-5 capitalize">
                         {item.downloadType}
@@ -16190,32 +17239,27 @@ function collectionForm(
       defaultWatermark:
         collection?.watermarkId ?? collectionDefaultGeneral.defaultWatermark,
       ...((collection?.settings?.general as
-        | Partial<PresetGeneralSettings>
-        | undefined) ?? {}),
+        Partial<PresetGeneralSettings> | undefined) ?? {}),
     },
     download: {
       ...collectionDefaultDownload,
       ...((collection?.settings?.download as
-        | Partial<PresetDownloadSettings>
-        | undefined) ?? {}),
+        Partial<PresetDownloadSettings> | undefined) ?? {}),
     },
     favorite: {
       ...collectionDefaultFavorite,
       ...((collection?.settings?.favorite as
-        | Partial<PresetFavoriteSettings>
-        | undefined) ?? {}),
+        Partial<PresetFavoriteSettings> | undefined) ?? {}),
     },
     store: {
       ...collectionDefaultStore,
       ...((collection?.settings?.store as
-        | Partial<PresetStoreSettings>
-        | undefined) ?? {}),
+        Partial<PresetStoreSettings> | undefined) ?? {}),
     },
     preferences: {
       ...preferenceDefaults,
       ...((collection?.settings?.preferences as
-        | Partial<PreferenceSettings>
-        | undefined) ?? {}),
+        Partial<PreferenceSettings> | undefined) ?? {}),
     },
   };
 }
@@ -16795,5 +17839,3 @@ function CollectionWizard() {
     </div>
   );
 }
-
-

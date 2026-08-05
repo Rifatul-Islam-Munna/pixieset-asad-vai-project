@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { existsSync } from 'fs';
@@ -10,19 +14,55 @@ import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
 import { MinioService } from 'src/lib/minio.service';
 import { FaceSearchService } from 'src/face-search/face-search.service';
-import { MobileGalleryImage, MobileGalleryImageDocument } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
-import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
+import {
+  MobileGalleryImage,
+  MobileGalleryImageDocument,
+} from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
+import {
+  DashboardSetting,
+  DashboardSettingDocument,
+  DashboardSettingType,
+} from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
-import { Homepage, HomepageDocument } from 'src/homepage/entities/homepage.entity';
+import {
+  Homepage,
+  HomepageDocument,
+} from 'src/homepage/entities/homepage.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { Collection, CollectionDocument } from './entities/collection.entity';
-import { CollectionImage, CollectionImageDocument } from './entities/collection-image.entity';
-import { CollectionFavorite, CollectionFavoriteDocument } from './entities/collection-favorite.entity';
-import { CollectionImageFavorite, CollectionImageFavoriteDocument } from './entities/collection-image-favorite.entity';
-import { CollectionDownloadActivity, CollectionDownloadActivityDocument } from './entities/collection-download-activity.entity';
-import { CollectionEmailRegistration, CollectionEmailRegistrationDocument } from './entities/collection-email-registration.entity';
-import { CollectionPrivatePhoto, CollectionPrivatePhotoDocument } from './entities/collection-private-photo.entity';
+import {
+  CollectionImage,
+  CollectionImageDocument,
+} from './entities/collection-image.entity';
+import {
+  CollectionFavorite,
+  CollectionFavoriteDocument,
+} from './entities/collection-favorite.entity';
+import {
+  CollectionImageFavorite,
+  CollectionImageFavoriteDocument,
+} from './entities/collection-image-favorite.entity';
+import {
+  CollectionDownloadActivity,
+  CollectionDownloadActivityDocument,
+} from './entities/collection-download-activity.entity';
+import {
+  CollectionEmailRegistration,
+  CollectionEmailRegistrationDocument,
+} from './entities/collection-email-registration.entity';
+import {
+  CollectionPrivatePhoto,
+  CollectionPrivatePhotoDocument,
+} from './entities/collection-private-photo.entity';
+import {
+  CollectionView,
+  CollectionViewDocument,
+} from './entities/collection-view.entity';
+import {
+  StoreOrder,
+  StoreOrderDocument,
+} from 'src/store/entities/store-order.entity';
 
 type WatermarkData = {
   id: string;
@@ -51,17 +91,31 @@ type DirectUploadFile = {
 @Injectable()
 export class CollectionsService {
   constructor(
-    @InjectModel(Collection.name) private readonly collectionModel: Model<CollectionDocument>,
-    @InjectModel(CollectionImage.name) private readonly imageModel: Model<CollectionImageDocument>,
-    @InjectModel(CollectionFavorite.name) private readonly favoriteModel: Model<CollectionFavoriteDocument>,
-    @InjectModel(CollectionImageFavorite.name) private readonly imageFavoriteModel: Model<CollectionImageFavoriteDocument>,
-    @InjectModel(CollectionDownloadActivity.name) private readonly downloadActivityModel: Model<CollectionDownloadActivityDocument>,
-    @InjectModel(CollectionEmailRegistration.name) private readonly emailRegistrationModel: Model<CollectionEmailRegistrationDocument>,
-    @InjectModel(CollectionPrivatePhoto.name) private readonly privatePhotoModel: Model<CollectionPrivatePhotoDocument>,
-    @InjectModel(DashboardSetting.name) private readonly settingModel: Model<DashboardSettingDocument>,
+    @InjectModel(Collection.name)
+    private readonly collectionModel: Model<CollectionDocument>,
+    @InjectModel(CollectionImage.name)
+    private readonly imageModel: Model<CollectionImageDocument>,
+    @InjectModel(CollectionFavorite.name)
+    private readonly favoriteModel: Model<CollectionFavoriteDocument>,
+    @InjectModel(CollectionImageFavorite.name)
+    private readonly imageFavoriteModel: Model<CollectionImageFavoriteDocument>,
+    @InjectModel(CollectionDownloadActivity.name)
+    private readonly downloadActivityModel: Model<CollectionDownloadActivityDocument>,
+    @InjectModel(CollectionEmailRegistration.name)
+    private readonly emailRegistrationModel: Model<CollectionEmailRegistrationDocument>,
+    @InjectModel(CollectionPrivatePhoto.name)
+    private readonly privatePhotoModel: Model<CollectionPrivatePhotoDocument>,
+    @InjectModel(CollectionView.name)
+    private readonly viewModel: Model<CollectionViewDocument>,
+    @InjectModel(StoreOrder.name)
+    private readonly orderModel: Model<StoreOrderDocument>,
+    @InjectModel(DashboardSetting.name)
+    private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
-    @InjectModel(MobileGalleryImage.name) private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
-    @InjectModel(Homepage.name) private readonly homepageModel: Model<HomepageDocument>,
+    @InjectModel(MobileGalleryImage.name)
+    private readonly mobileGalleryImageModel: Model<MobileGalleryImageDocument>,
+    @InjectModel(Homepage.name)
+    private readonly homepageModel: Model<HomepageDocument>,
     private readonly minioService: MinioService,
     private readonly faceSearchService: FaceSearchService,
     private readonly configService: ConfigService,
@@ -85,6 +139,182 @@ export class CollectionsService {
     return collection.toObject();
   }
 
+  async dashboardOverview(userId: string) {
+    const now = new Date();
+    const periodStart = new Date(now.getTime() - 30 * 86400000);
+    const previousStart = new Date(now.getTime() - 60 * 86400000);
+    const [
+      collections,
+      views,
+      previousViews,
+      orders,
+      previousOrders,
+      registrations,
+      user,
+    ] = await Promise.all([
+      this.collectionModel.find({ userId }).sort({ createdAt: -1 }).lean(),
+      this.viewModel
+        .find({ ownerId: userId, createdAt: { $gte: periodStart } })
+        .sort({ createdAt: -1 })
+        .lean(),
+      this.viewModel.countDocuments({
+        ownerId: userId,
+        createdAt: { $gte: previousStart, $lt: periodStart },
+      }),
+      this.orderModel
+        .find({ userId, createdAt: { $gte: periodStart } })
+        .sort({ createdAt: -1 })
+        .lean(),
+      this.orderModel
+        .find({ userId, createdAt: { $gte: previousStart, $lt: periodStart } })
+        .lean(),
+      this.emailRegistrationModel
+        .find({ ownerId: userId })
+        .sort({ createdAt: -1 })
+        .limit(30)
+        .lean(),
+      this.userModel
+        .findById(userId)
+        .select('name businessName storageUsedBytes storageLimitGb')
+        .lean(),
+    ]);
+    const ids = collections.map((item) => item._id.toString());
+    const [allDownloads, viewGroups, salesGroups] = await Promise.all([
+      this.downloadActivityModel
+        .find({ collectionId: { $in: ids } })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean(),
+      this.viewModel.aggregate([
+        { $match: { ownerId: userId } },
+        { $group: { _id: '$collectionId', views: { $sum: 1 } } },
+      ]),
+      this.orderModel.aggregate([
+        {
+          $match: {
+            userId,
+            paymentStatus: 'paid',
+            status: { $ne: 'cancelled' },
+          },
+        },
+        { $unwind: '$items' },
+        { $match: { 'items.collectionId': { $in: ids } } },
+        {
+          $group: {
+            _id: '$items.collectionId',
+            sales: { $sum: '$items.total' },
+          },
+        },
+      ]),
+    ]);
+    const paid = orders.filter(
+      (o) => o.paymentStatus === 'paid' && o.status !== 'cancelled',
+    );
+    const previousPaid = previousOrders.filter(
+      (o) => o.paymentStatus === 'paid' && o.status !== 'cancelled',
+    );
+    const revenue = paid.reduce((sum, o) => sum + Number(o.total || 0), 0);
+    const previousRevenue = previousPaid.reduce(
+      (sum, o) => sum + Number(o.total || 0),
+      0,
+    );
+    const conversionRate = views.length
+      ? (paid.length / views.length) * 100
+      : 0;
+    const previousConversionRate = previousViews
+      ? (previousPaid.length / previousViews) * 100
+      : 0;
+    const change = (value: number, previous: number) =>
+      previous > 0
+        ? ((value - previous) / previous) * 100
+        : value > 0
+          ? 100
+          : 0;
+    const viewMap = new Map(
+      viewGroups.map((x: any) => [String(x._id), Number(x.views || 0)]),
+    );
+    const salesMap = new Map(
+      salesGroups.map((x: any) => [String(x._id), Number(x.sales || 0)]),
+    );
+    const dayKeys = Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(now.getTime() - (13 - i) * 86400000);
+      return d.toISOString().slice(0, 10);
+    });
+    const series = dayKeys.map((date) => ({
+      date,
+      views: views.filter(
+        (v: any) => new Date(v.createdAt).toISOString().slice(0, 10) === date,
+      ).length,
+      orders: orders.filter(
+        (o: any) => new Date(o.createdAt).toISOString().slice(0, 10) === date,
+      ).length,
+      revenue: paid
+        .filter(
+          (o: any) => new Date(o.createdAt).toISOString().slice(0, 10) === date,
+        )
+        .reduce((sum: number, o: any) => sum + Number(o.total || 0), 0),
+    }));
+    const recentGalleries = collections.slice(0, 6).map((c: any) => ({
+      _id: c._id,
+      name: c.name,
+      slug: c.slug,
+      coverImage: c.coverImage,
+      imageCount: c.imageCount || 0,
+      status: c.status || 'draft',
+      views: viewMap.get(c._id.toString()) || 0,
+      sales: salesMap.get(c._id.toString()) || 0,
+      updatedAt: c.updatedAt || c.createdAt,
+    }));
+    const activity: any[] = [
+      ...orders.slice(0, 10).map((o: any) => ({
+        type: o.paymentStatus === 'paid' ? 'payment' : 'order',
+        title:
+          o.paymentStatus === 'paid'
+            ? 'Payment received'
+            : 'New order received',
+        detail: `${o.orderNumber} · €${Number(o.total || 0).toFixed(2)}`,
+        createdAt: o.createdAt,
+      })),
+      ...allDownloads.slice(0, 10).map((d: any) => ({
+        type: 'download',
+        title: 'Photos downloaded',
+        detail: d.imageName || 'Gallery download',
+        createdAt: d.updatedAt || d.createdAt,
+      })),
+      ...registrations.slice(0, 10).map((r: any) => ({
+        type: 'client',
+        title: 'New client registered',
+        detail: r.email,
+        createdAt: r.updatedAt || r.createdAt,
+      })),
+    ]
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+      .slice(0, 8);
+    return {
+      user: {
+        name: (user as any)?.businessName || (user as any)?.name || 'there',
+        storageUsedBytes: Number((user as any)?.storageUsedBytes || 0),
+        storageLimitGb: Number((user as any)?.storageLimitGb || 0),
+      },
+      metrics: {
+        revenue,
+        revenueChange: change(revenue, previousRevenue),
+        orders: orders.length,
+        ordersChange: change(orders.length, previousOrders.length),
+        views: views.length,
+        viewsChange: change(views.length, previousViews),
+        conversionRate,
+        conversionChange: change(conversionRate, previousConversionRate),
+      },
+      recentGalleries,
+      activity,
+      series,
+      topGalleries: [...recentGalleries]
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 5),
+    };
+  }
+
   async findAll(userId: string) {
     const collections = await this.collectionModel
       .find({ userId })
@@ -100,12 +330,15 @@ export class CollectionsService {
 
     return collections.map((collection) => ({
       ...collection,
-      imageCount: countMap.get(collection._id.toString()) ?? collection.imageCount ?? 0,
+      imageCount:
+        countMap.get(collection._id.toString()) ?? collection.imageCount ?? 0,
     }));
   }
 
   async findOne(userId: string, id: string, limit?: string, offset?: string) {
-    const collection = await this.collectionModel.findOne({ _id: id, userId }).lean();
+    const collection = await this.collectionModel
+      .findOne({ _id: id, userId })
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
 
     const imagesPage = await this.findImages(userId, id, limit, offset);
@@ -114,9 +347,19 @@ export class CollectionsService {
     return { ...collection, images: imagesPage.items, imagesPage };
   }
 
-  async findPublic(identifier: string, email?: string, limit?: string, offset?: string, siteSlug?: string) {
-    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
+  async findPublic(
+    identifier: string,
+    email?: string,
+    limit?: string,
+    offset?: string,
+    siteSlug?: string,
+  ) {
+    const collection = await this.findCollectionByIdentifier(
+      identifier,
+      siteSlug,
+    );
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
     const preset = collection.presetId
       ? await this.settingModel
           .findOne({
@@ -136,12 +379,24 @@ export class CollectionsService {
     };
     const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
     if (emailAccess.required && emailAccess.authorized && emailAccess.email) {
-      await this.saveEmailRegistration(collection, emailAccess.email, false, 'email-registration');
+      await this.saveEmailRegistration(
+        collection,
+        emailAccess.email,
+        false,
+        'email-registration',
+      );
     }
     const imagesPage = emailAccess.authorized
       ? await this.findPublicImages(identifier, email, limit, offset, siteSlug)
-      : { items: [], total: 0, limit: this.pageLimit(limit), offset: this.pageOffset(offset), hasMore: false };
-    if (emailAccess.authorized) void this.ensureCollectionPreviews(collection._id.toString());
+      : {
+          items: [],
+          total: 0,
+          limit: this.pageLimit(limit),
+          offset: this.pageOffset(offset),
+          hasMore: false,
+        };
+    if (emailAccess.authorized)
+      void this.ensureCollectionPreviews(collection._id.toString());
     const branding = await this.settingModel
       .findOne({
         userId: collection.userId,
@@ -217,17 +472,88 @@ export class CollectionsService {
     };
   }
 
-  async findImages(userId: string, id: string, limit?: string, offset?: string) {
-    const collection = await this.collectionModel.findOne({ _id: id, userId }).select('_id').lean();
+  async recordPublicView(
+    identifier: string,
+    body: { viewToken?: string; source?: string },
+    siteSlug?: string,
+  ) {
+    const collection = await this.findCollectionByIdentifier(
+      identifier,
+      siteSlug,
+    );
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
+
+    const viewToken = String(body?.viewToken ?? '')
+      .trim()
+      .slice(0, 120);
+    if (!viewToken) throw new BadRequestException('View token is required');
+
+    try {
+      const result = await this.viewModel.updateOne(
+        { viewToken },
+        {
+          $setOnInsert: {
+            collectionId: collection._id.toString(),
+            ownerId: collection.userId,
+            visitorKey: '',
+            source: String(body?.source ?? 'gallery').slice(0, 50),
+            viewToken,
+          },
+        },
+        { upsert: true },
+      );
+
+      return {
+        recorded: Boolean(result.upsertedCount),
+        collectionId: collection._id.toString(),
+      };
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return {
+          recorded: false,
+          collectionId: collection._id.toString(),
+        };
+      }
+      throw error;
+    }
+  }
+
+  async findImages(
+    userId: string,
+    id: string,
+    limit?: string,
+    offset?: string,
+  ) {
+    const collection = await this.collectionModel
+      .findOne({ _id: id, userId })
+      .select('_id')
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
     return this.findImagesPage({ collectionId: id, userId }, limit, offset);
   }
 
-  async findPublicImages(identifier: string, email?: string, limit?: string, offset?: string, siteSlug?: string) {
-    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
+  async findPublicImages(
+    identifier: string,
+    email?: string,
+    limit?: string,
+    offset?: string,
+    siteSlug?: string,
+  ) {
+    const collection = await this.findCollectionByIdentifier(
+      identifier,
+      siteSlug,
+    );
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
     const preset = collection.presetId
-      ? await this.settingModel.findOne({ userId: collection.userId, type: DashboardSettingType.PRESET, localId: collection.presetId }).lean()
+      ? await this.settingModel
+          .findOne({
+            userId: collection.userId,
+            type: DashboardSettingType.PRESET,
+            localId: collection.presetId,
+          })
+          .lean()
       : null;
     const presetData = preset?.data as any;
     const accessSourceSettings = {
@@ -239,7 +565,13 @@ export class CollectionsService {
     };
     const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
     if (!emailAccess.authorized) {
-      return { items: [], total: 0, limit: this.pageLimit(limit), offset: this.pageOffset(offset), hasMore: false };
+      return {
+        items: [],
+        total: 0,
+        limit: this.pageLimit(limit),
+        offset: this.pageOffset(offset),
+        hasMore: false,
+      };
     }
     void this.ensureCollectionPreviews(collection._id.toString());
     const privateRows = await this.privatePhotoModel
@@ -247,35 +579,62 @@ export class CollectionsService {
       .select('imageId')
       .lean();
     const hiddenImageIds = privateRows.map((row) => row.imageId);
-    const query: Record<string, unknown> = { collectionId: collection._id.toString() };
+    const query: Record<string, unknown> = {
+      collectionId: collection._id.toString(),
+    };
     if (hiddenImageIds.length) query._id = { $nin: hiddenImageIds };
     return this.findImagesPage(query, limit, offset);
   }
 
-  async requestPublicAccess(identifier: string, body: { email?: string; reason?: string }, siteSlug?: string) {
-    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
+  async requestPublicAccess(
+    identifier: string,
+    body: { email?: string; reason?: string },
+    siteSlug?: string,
+  ) {
+    const collection = await this.findCollectionByIdentifier(
+      identifier,
+      siteSlug,
+    );
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
     const email = this.cleanEmail(body.email);
     if (!email) throw new BadRequestException('Email is required');
-    const reason = String(body.reason ?? '').trim().slice(0, 1000);
+    const reason = String(body.reason ?? '')
+      .trim()
+      .slice(0, 1000);
     const settings = (collection.settings as any) ?? {};
     const access = settings.access ?? {};
     const requests = Array.isArray(access.requests) ? access.requests : [];
-    const existingIndex = requests.findIndex((request: any) => this.cleanEmail(request.email) === email);
+    const existingIndex = requests.findIndex(
+      (request: any) => this.cleanEmail(request.email) === email,
+    );
     const nextRequest = {
       id: existingIndex >= 0 ? requests[existingIndex].id : `req-${Date.now()}`,
       email,
       reason,
       status: 'pending',
-      createdAt: existingIndex >= 0 ? requests[existingIndex].createdAt : new Date().toISOString(),
+      createdAt:
+        existingIndex >= 0
+          ? requests[existingIndex].createdAt
+          : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    const nextRequests = existingIndex >= 0
-      ? requests.map((request: any, index: number) => index === existingIndex ? nextRequest : request)
-      : [nextRequest, ...requests];
+    const nextRequests =
+      existingIndex >= 0
+        ? requests.map((request: any, index: number) =>
+            index === existingIndex ? nextRequest : request,
+          )
+        : [nextRequest, ...requests];
     await this.collectionModel.updateOne(
       { _id: collection._id },
-      { $set: { settings: { ...settings, access: { ...access, requests: nextRequests } } } },
+      {
+        $set: {
+          settings: {
+            ...settings,
+            access: { ...access, requests: nextRequests },
+          },
+        },
+      },
     );
     return { requested: true, email };
   }
@@ -285,12 +644,21 @@ export class CollectionsService {
     body: { email?: string; marketingOptIn?: boolean; source?: string },
     siteSlug?: string,
   ) {
-    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
+    const collection = await this.findCollectionByIdentifier(
+      identifier,
+      siteSlug,
+    );
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
     const email = this.cleanEmail(body.email);
     if (!email) throw new BadRequestException('Email is required');
     const source = this.registrationSource(body.source);
-    await this.saveEmailRegistration(collection, email, Boolean(body.marketingOptIn), source);
+    await this.saveEmailRegistration(
+      collection,
+      email,
+      Boolean(body.marketingOptIn),
+      source,
+    );
     return {
       registered: true,
       authorized: true,
@@ -305,26 +673,60 @@ export class CollectionsService {
     body: { email?: string },
     siteSlug?: string,
   ) {
-    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
+    const collection = await this.findCollectionByIdentifier(
+      identifier,
+      siteSlug,
+    );
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
     const email = this.cleanEmail(body.email);
     if (!email) throw new BadRequestException('Email is required');
-    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
+    if (!Types.ObjectId.isValid(imageId))
+      throw new BadRequestException('Photo is required');
     const collectionId = collection._id.toString();
-    const image = await this.imageModel.findOne({ _id: imageId, collectionId }).select('_id').lean();
+    const image = await this.imageModel
+      .findOne({ _id: imageId, collectionId })
+      .select('_id')
+      .lean();
     if (!image) throw new NotFoundException('Image not found');
 
-    const existing = await this.privatePhotoModel.findOne({ collectionId, email, imageId }).lean();
+    const existing = await this.privatePhotoModel
+      .findOne({ collectionId, email, imageId })
+      .lean();
     if (existing) {
       if (existing.status === 'pending') {
         await this.privatePhotoModel.deleteOne({ _id: existing._id });
-        return { private: false, requested: false, status: 'cancelled', collectionId, imageId, email };
+        return {
+          private: false,
+          requested: false,
+          status: 'cancelled',
+          collectionId,
+          imageId,
+          email,
+        };
       }
       if (existing.status === 'approved') {
-        return { private: true, requested: true, status: 'approved', collectionId, imageId, email };
+        return {
+          private: true,
+          requested: true,
+          status: 'approved',
+          collectionId,
+          imageId,
+          email,
+        };
       }
-      await this.privatePhotoModel.updateOne({ _id: existing._id }, { $set: { status: 'pending' } });
-      return { private: false, requested: true, status: 'pending', collectionId, imageId, email };
+      await this.privatePhotoModel.updateOne(
+        { _id: existing._id },
+        { $set: { status: 'pending' } },
+      );
+      return {
+        private: false,
+        requested: true,
+        status: 'pending',
+        collectionId,
+        imageId,
+        email,
+      };
     }
 
     await this.privatePhotoModel.updateOne(
@@ -332,7 +734,14 @@ export class CollectionsService {
       { $setOnInsert: { collectionId, email, imageId, status: 'pending' } },
       { upsert: true },
     );
-    return { private: false, requested: true, status: 'pending', collectionId, imageId, email };
+    return {
+      private: false,
+      requested: true,
+      status: 'pending',
+      collectionId,
+      imageId,
+      email,
+    };
   }
 
   async listMarketingContacts(userId: string) {
@@ -356,22 +765,36 @@ export class CollectionsService {
 
   async addMarketingContacts(
     userId: string,
-    body: { email?: string; category?: string; contacts?: { email?: string; category?: string }[] },
+    body: {
+      email?: string;
+      category?: string;
+      contacts?: { email?: string; category?: string }[];
+    },
   ) {
-    const incoming = Array.isArray(body.contacts) && body.contacts.length
-      ? body.contacts
-      : [{ email: body.email, category: body.category }];
+    const incoming =
+      Array.isArray(body.contacts) && body.contacts.length
+        ? body.contacts
+        : [{ email: body.email, category: body.category }];
     const clean = incoming
       .map((item) => ({
-        email: String(item.email ?? '').trim().toLowerCase(),
-        category: String(item.category ?? 'Manual Contacts').trim() || 'Manual Contacts',
+        email: String(item.email ?? '')
+          .trim()
+          .toLowerCase(),
+        category:
+          String(item.category ?? 'Manual Contacts').trim() ||
+          'Manual Contacts',
       }))
       .filter((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.email));
     if (!clean.length) throw new BadRequestException('Valid email is required');
 
     let added = 0;
     for (const item of clean) {
-      const source = `manual-${item.category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'contacts'}`;
+      const source = `manual-${
+        item.category
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') || 'contacts'
+      }`;
       await this.emailRegistrationModel.updateOne(
         { collectionId: source, email: item.email },
         {
@@ -393,12 +816,17 @@ export class CollectionsService {
   }
 
   async listFavoriteCollections(userId: string) {
-    const favorites = await this.favoriteModel.find({ userId }).sort({ createdAt: -1 }).lean();
+    const favorites = await this.favoriteModel
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .lean();
     const collectionIds = favorites.map((favorite) => favorite.collectionId);
     const collections = collectionIds.length
       ? await this.collectionModel.find({ _id: { $in: collectionIds } }).lean()
       : [];
-    const collectionMap = new Map(collections.map((collection) => [collection._id.toString(), collection]));
+    const collectionMap = new Map(
+      collections.map((collection) => [collection._id.toString(), collection]),
+    );
 
     return favorites
       .map((favorite) => {
@@ -419,17 +847,29 @@ export class CollectionsService {
   }
 
   async listFavoriteImages(userId: string) {
-    const favorites = await this.imageFavoriteModel.find({ userId }).sort({ createdAt: -1 }).lean();
+    const favorites = await this.imageFavoriteModel
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .lean();
     const imageIds = favorites.map((favorite) => favorite.imageId);
     const images = imageIds.length
       ? await this.imageModel.find({ _id: { $in: imageIds } }).lean()
       : [];
-    const imageMap = new Map(images.map((image) => [image._id.toString(), image]));
-    const collectionIds = [...new Set(images.map((image) => image.collectionId))];
+    const imageMap = new Map(
+      images.map((image) => [image._id.toString(), image]),
+    );
+    const collectionIds = [
+      ...new Set(images.map((image) => image.collectionId)),
+    ];
     const collections = collectionIds.length
-      ? await this.collectionModel.find({ _id: { $in: collectionIds } }).select('_id name slug').lean()
+      ? await this.collectionModel
+          .find({ _id: { $in: collectionIds } })
+          .select('_id name slug')
+          .lean()
       : [];
-    const collectionMap = new Map(collections.map((collection) => [collection._id.toString(), collection]));
+    const collectionMap = new Map(
+      collections.map((collection) => [collection._id.toString(), collection]),
+    );
 
     return favorites
       .map((favorite) => {
@@ -458,7 +898,9 @@ export class CollectionsService {
   async toggleFavoriteCollection(userId: string, identifier: string) {
     const collection = await this.findCollectionByIdentifier(identifier);
     const collectionId = collection._id.toString();
-    const existing = await this.favoriteModel.findOne({ userId, collectionId }).lean();
+    const existing = await this.favoriteModel
+      .findOne({ userId, collectionId })
+      .lean();
     if (existing) {
       await this.favoriteModel.deleteOne({ _id: existing._id });
       return { favorited: false, collectionId };
@@ -473,24 +915,34 @@ export class CollectionsService {
   }
 
   async toggleFavoriteImage(userId: string, imageId: string) {
-    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
+    if (!Types.ObjectId.isValid(imageId))
+      throw new BadRequestException('Photo is required');
     const image = await this.imageModel.findOne({ _id: imageId }).lean();
     if (!image) throw new NotFoundException('Image not found');
-    const existing = await this.imageFavoriteModel.findOne({ userId, imageId }).lean();
+    const existing = await this.imageFavoriteModel
+      .findOne({ userId, imageId })
+      .lean();
     if (existing) {
       await this.imageFavoriteModel.deleteOne({ _id: existing._id });
       return { favorited: false, imageId, collectionId: image.collectionId };
     }
 
-    const collection = await this.collectionModel.findById(image.collectionId).select('settings').lean();
-    const maxFavorites = Number((collection?.settings as any)?.favorite?.maxFavorites || 0);
+    const collection = await this.collectionModel
+      .findById(image.collectionId)
+      .select('settings')
+      .lean();
+    const maxFavorites = Number(
+      (collection?.settings as any)?.favorite?.maxFavorites || 0,
+    );
     if (maxFavorites > 0) {
       const currentCount = await this.imageFavoriteModel.countDocuments({
         userId,
         collectionId: image.collectionId,
       });
       if (currentCount >= maxFavorites) {
-        throw new BadRequestException(`Favorite limit reached (${maxFavorites})`);
+        throw new BadRequestException(
+          `Favorite limit reached (${maxFavorites})`,
+        );
       }
     }
 
@@ -510,13 +962,23 @@ export class CollectionsService {
   ) {
     const email = this.cleanEmail(body?.email);
     if (!email) throw new BadRequestException('Email is required');
-    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
-    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
+    if (!Types.ObjectId.isValid(imageId))
+      throw new BadRequestException('Photo is required');
+    const collection = await this.findCollectionByIdentifier(
+      identifier,
+      siteSlug,
+    );
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
     const collectionId = collection._id.toString();
-    const image = await this.imageModel.findOne({ _id: imageId, collectionId }).select('_id collectionId').lean();
+    const image = await this.imageModel
+      .findOne({ _id: imageId, collectionId })
+      .select('_id collectionId')
+      .lean();
     if (!image) throw new NotFoundException('Image not found');
-    const existing = await this.imageFavoriteModel.findOne({ userId: email, imageId }).lean();
+    const existing = await this.imageFavoriteModel
+      .findOne({ userId: email, imageId })
+      .lean();
     if (existing) {
       await this.imageFavoriteModel.deleteOne({ _id: existing._id });
       return { favorited: false, imageId, collectionId };
@@ -530,7 +992,9 @@ export class CollectionsService {
         collectionId,
       });
       if (currentCount >= maxFavorites) {
-        throw new BadRequestException(`Favorite limit reached (${maxFavorites})`);
+        throw new BadRequestException(
+          `Favorite limit reached (${maxFavorites})`,
+        );
       }
     }
 
@@ -543,29 +1007,59 @@ export class CollectionsService {
   }
 
   async getCollectionActivity(userId: string, collectionId: string) {
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
 
-    const [collectionFavorites, imageFavorites, downloads, images, emailRegistrations, privatePhotos] =
-      await Promise.all([
-        this.favoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
-        this.imageFavoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
-        this.downloadActivityModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
-        this.imageModel.find({ collectionId }).select('_id originalName url thumbnailUrl').lean(),
-        this.emailRegistrationModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
-        this.privatePhotoModel.find({ collectionId }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
-      ]);
+    const [
+      collectionFavorites,
+      imageFavorites,
+      downloads,
+      images,
+      emailRegistrations,
+      privatePhotos,
+    ] = await Promise.all([
+      this.favoriteModel.find({ collectionId }).sort({ createdAt: -1 }).lean(),
+      this.imageFavoriteModel
+        .find({ collectionId })
+        .sort({ createdAt: -1 })
+        .lean(),
+      this.downloadActivityModel
+        .find({ collectionId })
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .lean(),
+      this.imageModel
+        .find({ collectionId })
+        .select('_id originalName url thumbnailUrl')
+        .lean(),
+      this.emailRegistrationModel
+        .find({ collectionId })
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .lean(),
+      this.privatePhotoModel
+        .find({ collectionId })
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .lean(),
+    ]);
 
-    const userIds = [...new Set([
-      ...collectionFavorites.map((favorite) => favorite.userId),
-      ...imageFavorites.map((favorite) => favorite.userId),
-    ])];
+    const userIds = [
+      ...new Set([
+        ...collectionFavorites.map((favorite) => favorite.userId),
+        ...imageFavorites.map((favorite) => favorite.userId),
+      ]),
+    ];
     const accountUserIds = userIds.filter((id) => Types.ObjectId.isValid(id));
     const users = accountUserIds.length
-      ? await this.userModel.find({ _id: { $in: accountUserIds } }).select('_id email name').lean()
+      ? await this.userModel
+          .find({ _id: { $in: accountUserIds } })
+          .select('_id email name')
+          .lean()
       : [];
     const userMap = new Map(users.map((user) => [user._id.toString(), user]));
-    const imageMap = new Map(images.map((image) => [image._id.toString(), image]));
+    const imageMap = new Map(
+      images.map((image) => [image._id.toString(), image]),
+    );
     const imageFavoritesByUser = new Map<string, any[]>();
 
     for (const favorite of imageFavorites) {
@@ -575,23 +1069,36 @@ export class CollectionsService {
       ]);
     }
 
-    const favoriteUserIds = [...new Set([
-      ...collectionFavorites.map((favorite) => favorite.userId),
-      ...imageFavorites.map((favorite) => favorite.userId),
-    ])];
+    const favoriteUserIds = [
+      ...new Set([
+        ...collectionFavorites.map((favorite) => favorite.userId),
+        ...imageFavorites.map((favorite) => favorite.userId),
+      ]),
+    ];
     const favoriteLists = favoriteUserIds.map((favoriteUserId) => {
       const user = userMap.get(favoriteUserId);
       const listImages = imageFavoritesByUser.get(favoriteUserId) ?? [];
-      const collectionFavorite = collectionFavorites.find((favorite) => favorite.userId === favoriteUserId);
-      const createdDates = [collectionFavorite?.createdAt, ...listImages.map((favorite) => favorite.createdAt)].filter(Boolean) as Date[];
-      const updatedDates = [collectionFavorite?.updatedAt, ...listImages.map((favorite: any) => favorite.updatedAt)].filter(Boolean) as Date[];
+      const collectionFavorite = collectionFavorites.find(
+        (favorite) => favorite.userId === favoriteUserId,
+      );
+      const createdDates = [
+        collectionFavorite?.createdAt,
+        ...listImages.map((favorite) => favorite.createdAt),
+      ].filter(Boolean) as Date[];
+      const updatedDates = [
+        collectionFavorite?.updatedAt,
+        ...listImages.map((favorite: any) => favorite.updatedAt),
+      ].filter(Boolean) as Date[];
 
       return {
         id: favoriteUserId,
         email: user?.email || user?.name || favoriteUserId,
         name: 'My Favorites',
         photos: listImages.length,
-        filenames: listImages.map((favorite) => imageMap.get(favorite.imageId)?.originalName || favorite.imageId),
+        filenames: listImages.map(
+          (favorite) =>
+            imageMap.get(favorite.imageId)?.originalName || favorite.imageId,
+        ),
         images: listImages.map((favorite) => {
           const image = imageMap.get(favorite.imageId);
           return {
@@ -647,20 +1154,39 @@ export class CollectionsService {
 
   async recordPublicDownloadActivity(
     identifier: string,
-    body: { email?: string; items?: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>; downloadType?: 'single' | 'all' },
+    body: {
+      email?: string;
+      items?: Array<{
+        imageId?: string;
+        imageName?: string;
+        imageUrl?: string;
+      }>;
+      downloadType?: 'single' | 'all';
+    },
     siteSlug?: string,
   ) {
-    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
-    if (!this.isPublicCollectionVisible(collection)) throw new NotFoundException('Collection not found');
-    const email = String(body?.email ?? '').trim().toLowerCase();
-    if (!email || !email.includes('@')) throw new BadRequestException('Email is required');
+    const collection = await this.findCollectionByIdentifier(
+      identifier,
+      siteSlug,
+    );
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
+    const email = String(body?.email ?? '')
+      .trim()
+      .toLowerCase();
+    if (!email || !email.includes('@'))
+      throw new BadRequestException('Email is required');
     const items = Array.isArray(body?.items) ? body.items.slice(0, 250) : [];
-    if (!items.length) throw new BadRequestException('Download item is required');
+    if (!items.length)
+      throw new BadRequestException('Download item is required');
     const downloadType = body.downloadType === 'all' ? 'all' : 'single';
     const collectionId = collection._id.toString();
 
     for (const item of items) {
-      const imageId = item.imageId && Types.ObjectId.isValid(item.imageId) ? item.imageId : '';
+      const imageId =
+        item.imageId && Types.ObjectId.isValid(item.imageId)
+          ? item.imageId
+          : '';
       await this.downloadActivityModel.updateOne(
         {
           collectionId,
@@ -687,22 +1213,40 @@ export class CollectionsService {
     return { saved: items.length };
   }
 
-  async deleteFavoriteInfo(userId: string, collectionId: string, favoriteUserId: string) {
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+  async deleteFavoriteInfo(
+    userId: string,
+    collectionId: string,
+    favoriteUserId: string,
+  ) {
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
     const [collectionResult, imageResult] = await Promise.all([
       this.favoriteModel.deleteMany({ collectionId, userId: favoriteUserId }),
-      this.imageFavoriteModel.deleteMany({ collectionId, userId: favoriteUserId }),
+      this.imageFavoriteModel.deleteMany({
+        collectionId,
+        userId: favoriteUserId,
+      }),
     ]);
     return {
-      deleted: (collectionResult.deletedCount ?? 0) + (imageResult.deletedCount ?? 0),
+      deleted:
+        (collectionResult.deletedCount ?? 0) + (imageResult.deletedCount ?? 0),
     };
   }
 
-  async deleteFavoriteImageInfo(userId: string, collectionId: string, favoriteUserId: string, imageId: string) {
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+  async deleteFavoriteImageInfo(
+    userId: string,
+    collectionId: string,
+    favoriteUserId: string,
+    imageId: string,
+  ) {
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
-    if (!Types.ObjectId.isValid(imageId)) throw new BadRequestException('Photo is required');
+    if (!Types.ObjectId.isValid(imageId))
+      throw new BadRequestException('Photo is required');
     const result = await this.imageFavoriteModel.deleteOne({
       collectionId,
       userId: favoriteUserId,
@@ -717,31 +1261,65 @@ export class CollectionsService {
     privatePhotoId: string,
     status: 'pending' | 'approved' | 'declined',
   ) {
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).select('_id').lean();
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .select('_id')
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
-    if (!Types.ObjectId.isValid(privatePhotoId)) throw new BadRequestException('Private photo request is required');
-    const record = await this.privatePhotoModel.findOneAndUpdate(
-      { _id: privatePhotoId, collectionId },
-      { $set: { status } },
-      { new: true },
-    ).lean();
+    if (!Types.ObjectId.isValid(privatePhotoId))
+      throw new BadRequestException('Private photo request is required');
+    const record = await this.privatePhotoModel
+      .findOneAndUpdate(
+        { _id: privatePhotoId, collectionId },
+        { $set: { status } },
+        { new: true },
+      )
+      .lean();
     if (!record) throw new NotFoundException('Private photo request not found');
-    return { _id: record._id, status: record.status, imageId: record.imageId, email: record.email };
+    return {
+      _id: record._id,
+      status: record.status,
+      imageId: record.imageId,
+      email: record.email,
+    };
   }
 
-  async deletePrivatePhotoRequest(userId: string, collectionId: string, privatePhotoId: string) {
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).select('_id').lean();
+  async deletePrivatePhotoRequest(
+    userId: string,
+    collectionId: string,
+    privatePhotoId: string,
+  ) {
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .select('_id')
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
-    if (!Types.ObjectId.isValid(privatePhotoId)) throw new BadRequestException('Private photo request is required');
-    const result = await this.privatePhotoModel.deleteOne({ _id: privatePhotoId, collectionId });
+    if (!Types.ObjectId.isValid(privatePhotoId))
+      throw new BadRequestException('Private photo request is required');
+    const result = await this.privatePhotoModel.deleteOne({
+      _id: privatePhotoId,
+      collectionId,
+    });
     return { deleted: result.deletedCount ?? 0 };
   }
 
-  async copyFavoriteListToSet(userId: string, collectionId: string, favoriteUserId: string, name?: string) {
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId });
+  async copyFavoriteListToSet(
+    userId: string,
+    collectionId: string,
+    favoriteUserId: string,
+    name?: string,
+  ) {
+    const collection = await this.collectionModel.findOne({
+      _id: collectionId,
+      userId,
+    });
     if (!collection) throw new NotFoundException('Collection not found');
-    const images = await this.favoriteImagesForUser(collectionId, favoriteUserId);
-    if (!images.length) throw new BadRequestException('No favorite photos to copy');
+    const images = await this.favoriteImagesForUser(
+      collectionId,
+      favoriteUserId,
+    );
+    if (!images.length)
+      throw new BadRequestException('No favorite photos to copy');
 
     const set = {
       id: `set-${Date.now()}`,
@@ -767,24 +1345,44 @@ export class CollectionsService {
     collection.sets = [...(collection.sets ?? []), set];
     collection.imageCount = (collection.imageCount ?? 0) + copies.length;
     await collection.save();
-    const copiedBytes = copies.reduce((sum, c) => sum + Math.max(0, Number(c.sizeBytes ?? 0)), 0);
+    const copiedBytes = copies.reduce(
+      (sum, c) => sum + Math.max(0, Number(c.sizeBytes ?? 0)),
+      0,
+    );
     if (copiedBytes > 0) {
-      await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: copiedBytes } });
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $inc: { storageUsedBytes: copiedBytes } },
+      );
     }
     return { set, copied: copies.length };
   }
 
-  async copyFavoriteListToCollection(userId: string, collectionId: string, favoriteUserId: string, name?: string) {
-    const source = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+  async copyFavoriteListToCollection(
+    userId: string,
+    collectionId: string,
+    favoriteUserId: string,
+    name?: string,
+  ) {
+    const source = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .lean();
     if (!source) throw new NotFoundException('Collection not found');
-    const images = await this.favoriteImagesForUser(collectionId, favoriteUserId);
-    if (!images.length) throw new BadRequestException('No favorite photos to copy');
+    const images = await this.favoriteImagesForUser(
+      collectionId,
+      favoriteUserId,
+    );
+    if (!images.length)
+      throw new BadRequestException('No favorite photos to copy');
 
     const set = { id: 'highlights', name: 'Highlights', createdAt: new Date() };
     const collection = await this.collectionModel.create({
       userId,
       name: name?.trim() || `${source.name} Favorites`,
-      slug: await this.uniqueSlug(userId, name?.trim() || `${source.name} Favorites`),
+      slug: await this.uniqueSlug(
+        userId,
+        name?.trim() || `${source.name} Favorites`,
+      ),
       eventDate: source.eventDate,
       presetId: source.presetId,
       coverImage: images[0]?.url,
@@ -811,18 +1409,33 @@ export class CollectionsService {
       metadata: image.metadata ?? {},
     }));
     await this.imageModel.insertMany(imageRecords);
-    const copiedBytes = imageRecords.reduce((sum, r) => sum + Math.max(0, Number(r.sizeBytes ?? 0)), 0);
+    const copiedBytes = imageRecords.reduce(
+      (sum, r) => sum + Math.max(0, Number(r.sizeBytes ?? 0)),
+      0,
+    );
     if (copiedBytes > 0) {
-      await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: copiedBytes } });
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $inc: { storageUsedBytes: copiedBytes } },
+      );
     }
     return { collection: collection.toObject(), copied: images.length };
   }
 
-  private async favoriteImagesForUser(collectionId: string, favoriteUserId: string) {
-    const favorites = await this.imageFavoriteModel.find({ collectionId, userId: favoriteUserId }).lean();
-    const imageIds = favorites.map((favorite) => favorite.imageId).filter((id) => Types.ObjectId.isValid(id));
+  private async favoriteImagesForUser(
+    collectionId: string,
+    favoriteUserId: string,
+  ) {
+    const favorites = await this.imageFavoriteModel
+      .find({ collectionId, userId: favoriteUserId })
+      .lean();
+    const imageIds = favorites
+      .map((favorite) => favorite.imageId)
+      .filter((id) => Types.ObjectId.isValid(id));
     if (!imageIds.length) return [];
-    return this.imageModel.find({ collectionId, _id: { $in: imageIds } }).lean();
+    return this.imageModel
+      .find({ collectionId, _id: { $in: imageIds } })
+      .lean();
   }
 
   async findAllImages(userId: string) {
@@ -830,7 +1443,9 @@ export class CollectionsService {
       .find({ userId })
       .sort({ createdAt: -1 })
       .lean();
-    const collectionIds = [...new Set(images.map((image) => image.collectionId))];
+    const collectionIds = [
+      ...new Set(images.map((image) => image.collectionId)),
+    ];
     const collections = await this.collectionModel
       .find({ userId, _id: { $in: collectionIds } })
       .select('_id name sets')
@@ -863,9 +1478,12 @@ export class CollectionsService {
     if (dto.slug !== undefined) {
       collection.slug = await this.uniqueSlug(userId, dto.slug, id);
     }
-    if (dto.eventDate !== undefined) collection.eventDate = new Date(dto.eventDate);
-    if (dto.presetId !== undefined) collection.presetId = dto.presetId || undefined;
-    if (dto.coverImage !== undefined) collection.coverImage = dto.coverImage || undefined;
+    if (dto.eventDate !== undefined)
+      collection.eventDate = new Date(dto.eventDate);
+    if (dto.presetId !== undefined)
+      collection.presetId = dto.presetId || undefined;
+    if (dto.coverImage !== undefined)
+      collection.coverImage = dto.coverImage || undefined;
     if (dto.sets !== undefined) {
       const nextSets = dto.sets.map((set) => ({
         id: set.id,
@@ -879,11 +1497,15 @@ export class CollectionsService {
         { userId, collectionId: id, setId: { $nin: nextSetIds } },
         { $set: { setId: fallbackSetId } },
       );
-      collection.sets = nextSets.length ? nextSets : [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }];
+      collection.sets = nextSets.length
+        ? nextSets
+        : [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }];
     }
     if (dto.tags !== undefined) collection.tags = dto.tags;
-    if (dto.watermarkId !== undefined) collection.watermarkId = dto.watermarkId || undefined;
-    if (dto.expiresAt !== undefined) collection.expiresAt = this.expiryDate(dto.expiresAt);
+    if (dto.watermarkId !== undefined)
+      collection.watermarkId = dto.watermarkId || undefined;
+    if (dto.expiresAt !== undefined)
+      collection.expiresAt = this.expiryDate(dto.expiresAt);
     if (dto.status !== undefined) collection.status = dto.status;
     if (dto.design !== undefined) collection.design = dto.design;
     if (dto.settings !== undefined) collection.settings = dto.settings;
@@ -893,7 +1515,9 @@ export class CollectionsService {
   }
 
   async duplicate(userId: string, id: string) {
-    const source = await this.collectionModel.findOne({ _id: id, userId }).lean();
+    const source = await this.collectionModel
+      .findOne({ _id: id, userId })
+      .lean();
     if (!source) throw new NotFoundException('Collection not found');
 
     const images = await this.imageModel
@@ -908,7 +1532,9 @@ export class CollectionsService {
       eventDate: source.eventDate,
       presetId: source.presetId,
       coverImage: source.coverImage,
-      sets: source.sets ?? [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],
+      sets: source.sets ?? [
+        { id: 'highlights', name: 'Highlights', createdAt: new Date() },
+      ],
       tags: source.tags ?? [],
       watermarkId: source.watermarkId,
       expiresAt: source.expiresAt,
@@ -919,24 +1545,32 @@ export class CollectionsService {
     });
 
     if (images.length) {
-      await this.imageModel.insertMany(images.map((image) => ({
-        userId,
-        collectionId: collection._id.toString(),
-        setId: image.setId,
-        url: image.url,
-        thumbnailUrl: image.thumbnailUrl,
-        blurDataUrl: image.blurDataUrl,
-        originalName: image.originalName,
-        filename: image.filename,
-        mimetype: image.mimetype,
-        sizeBytes: image.sizeBytes,
-        watermarked: image.watermarked,
-        metadata: image.metadata ?? {},
-        order: image.order,
-      })));
-      const duplicatedBytes = images.reduce((sum, img) => sum + Math.max(0, Number(img.sizeBytes ?? 0)), 0);
+      await this.imageModel.insertMany(
+        images.map((image) => ({
+          userId,
+          collectionId: collection._id.toString(),
+          setId: image.setId,
+          url: image.url,
+          thumbnailUrl: image.thumbnailUrl,
+          blurDataUrl: image.blurDataUrl,
+          originalName: image.originalName,
+          filename: image.filename,
+          mimetype: image.mimetype,
+          sizeBytes: image.sizeBytes,
+          watermarked: image.watermarked,
+          metadata: image.metadata ?? {},
+          order: image.order,
+        })),
+      );
+      const duplicatedBytes = images.reduce(
+        (sum, img) => sum + Math.max(0, Number(img.sizeBytes ?? 0)),
+        0,
+      );
       if (duplicatedBytes > 0) {
-        await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: duplicatedBytes } });
+        await this.userModel.updateOne(
+          { _id: userId },
+          { $inc: { storageUsedBytes: duplicatedBytes } },
+        );
       }
     }
 
@@ -949,7 +1583,8 @@ export class CollectionsService {
 
     const images = await this.imageModel.find({ collectionId: id, userId });
     let reclaimedBytes = 0;
-    for (const image of images) reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
+    for (const image of images)
+      reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
 
     await Promise.all([
       this.imageModel.deleteMany({ collectionId: id, userId }),
@@ -974,7 +1609,10 @@ export class CollectionsService {
     const trimmed = name?.trim();
     if (!trimmed) throw new BadRequestException('Set name is required');
 
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId });
+    const collection = await this.collectionModel.findOne({
+      _id: collectionId,
+      userId,
+    });
     if (!collection) throw new NotFoundException('Collection not found');
 
     const set = {
@@ -987,11 +1625,17 @@ export class CollectionsService {
     return set;
   }
 
-  async reorderImages(userId: string, collectionId: string, imageIds: string[]) {
+  async reorderImages(
+    userId: string,
+    collectionId: string,
+    imageIds: string[],
+  ) {
     if (!Array.isArray(imageIds) || !imageIds.length) {
       throw new BadRequestException('Image order is required');
     }
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
 
     const images = await this.imageModel
@@ -1000,7 +1644,8 @@ export class CollectionsService {
       .lean();
     const validIds = new Set(images.map((image) => image._id.toString()));
     const orderedIds = imageIds.filter((id) => validIds.has(id));
-    if (!orderedIds.length) throw new BadRequestException('No valid images to reorder');
+    if (!orderedIds.length)
+      throw new BadRequestException('No valid images to reorder');
 
     await this.imageModel.bulkWrite(
       orderedIds.map((imageId, index) => ({
@@ -1014,12 +1659,23 @@ export class CollectionsService {
     return { updated: orderedIds.length };
   }
 
-  async uploadImages(userId: string, collectionId: string, files: Express.Multer.File[], setId?: string, uploadWatermarkId?: string) {
+  async uploadImages(
+    userId: string,
+    collectionId: string,
+    files: Express.Multer.File[],
+    setId?: string,
+    uploadWatermarkId?: string,
+  ) {
     if (!files?.length) throw new BadRequestException('Files are required');
     this.assertImageFiles(files);
-    await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + (file.size ?? 0), 0));
+    await this.ensureStorageAvailable(
+      userId,
+      files.reduce((sum, file) => sum + (file.size ?? 0), 0),
+    );
 
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
     const resolvedSetId = setId || collection.sets?.[0]?.id || 'highlights';
 
@@ -1043,7 +1699,15 @@ export class CollectionsService {
     const uploaded = await this.mapWithConcurrency(
       files,
       this.imageProcessingConcurrency(),
-      (file, index) => this.processAndSaveImage(userId, collectionId, file, watermark, resolvedSetId, nextOrder + index + 1),
+      (file, index) =>
+        this.processAndSaveImage(
+          userId,
+          collectionId,
+          file,
+          watermark,
+          resolvedSetId,
+          nextOrder + index + 1,
+        ),
     );
 
     await this.collectionModel.updateOne(
@@ -1060,13 +1724,33 @@ export class CollectionsService {
     return uploaded;
   }
 
-  async createDirectUploads(userId: string, collectionId: string, files: Array<{ name: string; type: string; size: number; durationSeconds?: number; width?: number; height?: number }>) {
-    if (!Array.isArray(files) || !files.length || files.length > 100) throw new BadRequestException('1 to 100 files are required');
-    const collection = await this.collectionModel.exists({ _id: collectionId, userId });
+  async createDirectUploads(
+    userId: string,
+    collectionId: string,
+    files: Array<{
+      name: string;
+      type: string;
+      size: number;
+      durationSeconds?: number;
+      width?: number;
+      height?: number;
+    }>,
+  ) {
+    if (!Array.isArray(files) || !files.length || files.length > 100)
+      throw new BadRequestException('1 to 100 files are required');
+    const collection = await this.collectionModel.exists({
+      _id: collectionId,
+      userId,
+    });
     if (!collection) throw new NotFoundException('Collection not found');
-    await this.ensureStorageAvailable(userId, files.reduce((sum, file) => sum + Math.max(0, Number(file.size)), 0));
+    await this.ensureStorageAvailable(
+      userId,
+      files.reduce((sum, file) => sum + Math.max(0, Number(file.size)), 0),
+    );
     await this.ensureVideoPlanAvailable(userId, files);
-    return Promise.all(files.map((file) => this.minioService.createDirectUpload(userId, file)));
+    return Promise.all(
+      files.map((file) => this.minioService.createDirectUpload(userId, file)),
+    );
   }
 
   async completeDirectUploads(
@@ -1076,17 +1760,31 @@ export class CollectionsService {
     setId?: string,
     watermarkId?: string,
   ) {
-    if (!Array.isArray(files) || !files.length || files.length > 10) throw new BadRequestException('1 to 10 completed files are required');
+    if (!Array.isArray(files) || !files.length || files.length > 10)
+      throw new BadRequestException('1 to 10 completed files are required');
     const verified: Array<DirectUploadFile & { url: string }> = [];
-    for (const file of files) verified.push({ ...file, ...(await this.minioService.verifyDirectUpload(userId, file)) });
-    await this.ensureStorageAvailable(userId, verified.reduce((sum, file) => sum + file.size, 0));
+    for (const file of files)
+      verified.push({
+        ...file,
+        ...(await this.minioService.verifyDirectUpload(userId, file)),
+      });
+    await this.ensureStorageAvailable(
+      userId,
+      verified.reduce((sum, file) => sum + file.size, 0),
+    );
     await this.ensureVideoPlanAvailable(userId, verified);
     const savedVideos: any[] = [];
     if (verified.some((file) => this.mediaType(file.type) === 'video')) {
-      const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+      const collection = await this.collectionModel
+        .findOne({ _id: collectionId, userId })
+        .lean();
       if (!collection) throw new NotFoundException('Collection not found');
       const resolvedSetId = setId || collection.sets?.[0]?.id || 'highlights';
-      const lastImage = await this.imageModel.findOne({ collectionId, userId }).sort({ order: -1, createdAt: -1 }).select('order').lean();
+      const lastImage = await this.imageModel
+        .findOne({ collectionId, userId })
+        .sort({ order: -1, createdAt: -1 })
+        .select('order')
+        .lean();
       const startOrder = Math.max(0, Number(lastImage?.order ?? 0));
       for (const [index, file] of verified.entries()) {
         if (this.mediaType(file.type) === 'image') continue;
@@ -1107,30 +1805,58 @@ export class CollectionsService {
           height: this.safeDimension(file.height),
           watermarked: false,
           order: startOrder + index + 1,
-          metadata: { videoQuality: this.videoQuality(file.width, file.height) },
+          metadata: {
+            videoQuality: this.videoQuality(file.width, file.height),
+          },
         });
-        await this.userModel.updateOne({ _id: userId }, { $inc: { storageUsedBytes: file.size } });
+        await this.userModel.updateOne(
+          { _id: userId },
+          { $inc: { storageUsedBytes: file.size } },
+        );
         savedVideos.push(image.toObject());
       }
       await this.collectionModel.updateOne(
         { _id: collectionId, userId },
         { $inc: { imageCount: savedVideos.length } },
       );
-      const imageFiles = verified.filter((file) => this.mediaType(file.type) === 'image');
+      const imageFiles = verified.filter(
+        (file) => this.mediaType(file.type) === 'image',
+      );
       if (!imageFiles.length) return savedVideos;
     }
     const localFiles: Express.Multer.File[] = [];
     try {
-      for (const file of verified.filter((item) => this.mediaType(item.type) === 'image')) localFiles.push(await this.minioService.downloadDirectUpload(userId, file));
-      const savedImages = await this.uploadImages(userId, collectionId, localFiles, setId, watermarkId);
+      for (const file of verified.filter(
+        (item) => this.mediaType(item.type) === 'image',
+      ))
+        localFiles.push(
+          await this.minioService.downloadDirectUpload(userId, file),
+        );
+      const savedImages = await this.uploadImages(
+        userId,
+        collectionId,
+        localFiles,
+        setId,
+        watermarkId,
+      );
       return [...savedVideos, ...savedImages];
     } finally {
-      await Promise.all(verified.filter((item) => this.mediaType(item.type) === 'image').map((file) => this.minioService.deleteDirectUpload(userId, file.objectKey).catch(() => null)));
+      await Promise.all(
+        verified
+          .filter((item) => this.mediaType(item.type) === 'image')
+          .map((file) =>
+            this.minioService
+              .deleteDirectUpload(userId, file.objectKey)
+              .catch(() => null),
+          ),
+      );
       await Promise.all(localFiles.map((file) => this.safeUnlink(file.path)));
     }
   }
 
-  private async indexFacesInBackground(images: Array<CollectionImage & { _id?: unknown }>) {
+  private async indexFacesInBackground(
+    images: Array<CollectionImage & { _id?: unknown }>,
+  ) {
     for (const image of images) {
       await this.faceSearchService.indexImage(image).catch((error) => {
         console.warn('Face indexing failed:', error?.message ?? error);
@@ -1140,9 +1866,15 @@ export class CollectionsService {
   }
 
   async removeImage(userId: string, collectionId: string, imageId: string) {
-    const image = await this.imageModel.findOne({ _id: imageId, userId, collectionId });
+    const image = await this.imageModel.findOne({
+      _id: imageId,
+      userId,
+      collectionId,
+    });
     if (!image) throw new NotFoundException('Image not found');
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).lean();
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .lean();
 
     await this.deleteStoredImageFiles(image);
     await this.imageModel.deleteOne({ _id: imageId, userId, collectionId });
@@ -1169,12 +1901,21 @@ export class CollectionsService {
     imageId: string,
     dto: { originalName?: string; setId?: string; watermarkId?: string },
   ) {
-    const image = await this.imageModel.findOne({ _id: imageId, userId, collectionId });
+    const image = await this.imageModel.findOne({
+      _id: imageId,
+      userId,
+      collectionId,
+    });
     if (!image) throw new NotFoundException('Image not found');
-    const collection = await this.collectionModel.findOne({ _id: collectionId, userId }).select('sets').lean();
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .select('sets')
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
     if (dto.originalName !== undefined) {
-      const name = String(dto.originalName ?? '').trim().slice(0, 240);
+      const name = String(dto.originalName ?? '')
+        .trim()
+        .slice(0, 240);
       if (!name) throw new BadRequestException('Filename is required');
       image.originalName = name;
       image.metadata = { ...(image.metadata ?? {}), filename: name };
@@ -1188,7 +1929,8 @@ export class CollectionsService {
     }
     if (dto.watermarkId !== undefined) {
       const watermarkId = String(dto.watermarkId ?? '').trim();
-      if (watermarkId && watermarkId !== 'No watermark') await this.resolveWatermarkById(userId, watermarkId);
+      if (watermarkId && watermarkId !== 'No watermark')
+        await this.resolveWatermarkById(userId, watermarkId);
       image.metadata = { ...(image.metadata ?? {}), watermarkId };
       image.watermarked = false;
     }
@@ -1200,16 +1942,32 @@ export class CollectionsService {
     userId: string,
     collectionId: string,
     imageId: string,
-    dto: { mode?: 'copy' | 'move'; targetCollectionId?: string; targetSetId?: string },
+    dto: {
+      mode?: 'copy' | 'move';
+      targetCollectionId?: string;
+      targetSetId?: string;
+    },
   ) {
-    const image = await this.imageModel.findOne({ _id: imageId, userId, collectionId }).lean();
+    const image = await this.imageModel
+      .findOne({ _id: imageId, userId, collectionId })
+      .lean();
     if (!image) throw new NotFoundException('Image not found');
     const targetCollectionId = String(dto.targetCollectionId ?? '').trim();
-    if (!Types.ObjectId.isValid(targetCollectionId)) throw new BadRequestException('Target collection is required');
-    const targetCollection = await this.collectionModel.findOne({ _id: targetCollectionId, userId }).lean();
-    if (!targetCollection) throw new NotFoundException('Target collection not found');
-    const targetSetId = String(dto.targetSetId ?? '').trim() || targetCollection.sets?.[0]?.id || 'highlights';
-    if (targetSetId && !targetCollection.sets?.some((set) => set.id === targetSetId)) {
+    if (!Types.ObjectId.isValid(targetCollectionId))
+      throw new BadRequestException('Target collection is required');
+    const targetCollection = await this.collectionModel
+      .findOne({ _id: targetCollectionId, userId })
+      .lean();
+    if (!targetCollection)
+      throw new NotFoundException('Target collection not found');
+    const targetSetId =
+      String(dto.targetSetId ?? '').trim() ||
+      targetCollection.sets?.[0]?.id ||
+      'highlights';
+    if (
+      targetSetId &&
+      !targetCollection.sets?.some((set) => set.id === targetSetId)
+    ) {
       throw new BadRequestException('Target set not found');
     }
     if (dto.mode === 'move') {
@@ -1217,7 +1975,10 @@ export class CollectionsService {
         { _id: imageId, userId, collectionId },
         { $set: { collectionId: targetCollectionId, setId: targetSetId } },
       );
-      await this.collectionModel.updateOne({ _id: collectionId, userId }, { $inc: { imageCount: -1 } });
+      await this.collectionModel.updateOne(
+        { _id: collectionId, userId },
+        { $inc: { imageCount: -1 } },
+      );
       await this.collectionModel.updateOne(
         { _id: targetCollectionId, userId },
         {
@@ -1251,11 +2012,25 @@ export class CollectionsService {
         $set: { coverImage: targetCollection.coverImage ?? image.url },
       },
     );
-    return { copied: true, image: copy.toObject(), targetCollectionId, targetSetId };
+    return {
+      copied: true,
+      image: copy.toObject(),
+      targetCollectionId,
+      targetSetId,
+    };
   }
 
-  async starImage(userId: string, collectionId: string, imageId: string, starred: boolean) {
-    const image = await this.imageModel.findOne({ _id: imageId, userId, collectionId });
+  async starImage(
+    userId: string,
+    collectionId: string,
+    imageId: string,
+    starred: boolean,
+  ) {
+    const image = await this.imageModel.findOne({
+      _id: imageId,
+      userId,
+      collectionId,
+    });
     if (!image) throw new NotFoundException('Image not found');
 
     image.metadata = {
@@ -1287,7 +2062,11 @@ export class CollectionsService {
       const processed = await this.applyWatermark(file, watermark);
       if (processed) {
         processedPath = processed.path;
-        uploadFile = { ...file, path: processed.path, filename: processed.filename };
+        uploadFile = {
+          ...file,
+          path: processed.path,
+          filename: processed.filename,
+        };
         watermarked = true;
       }
     }
@@ -1330,20 +2109,41 @@ export class CollectionsService {
     });
     await this.userModel.updateOne(
       { _id: userId },
-      { $inc: { storageUsedBytes: Math.max(0, Number(image.sizeBytes ?? uploadFile.size ?? file.size ?? 0)) } },
+      {
+        $inc: {
+          storageUsedBytes: Math.max(
+            0,
+            Number(image.sizeBytes ?? uploadFile.size ?? file.size ?? 0),
+          ),
+        },
+      },
     );
 
     return image.toObject();
   }
 
   private imageProcessingConcurrency() {
-    const configured = Number(this.configService.get<string>('IMAGE_UPLOAD_PROCESSING_CONCURRENCY') ?? 2);
-    return Math.max(1, Math.min(4, Number.isFinite(configured) ? Math.floor(configured) : 2));
+    const configured = Number(
+      this.configService.get<string>('IMAGE_UPLOAD_PROCESSING_CONCURRENCY') ??
+        2,
+    );
+    return Math.max(
+      1,
+      Math.min(4, Number.isFinite(configured) ? Math.floor(configured) : 2),
+    );
   }
 
   private assertImageFiles(files: Express.Multer.File[]) {
-    const invalid = files.find((file) => !String(file.mimetype || '').toLowerCase().startsWith('image/'));
-    if (invalid) throw new BadRequestException(`${invalid.originalname || 'File'} is not supported by this upload endpoint`);
+    const invalid = files.find(
+      (file) =>
+        !String(file.mimetype || '')
+          .toLowerCase()
+          .startsWith('image/'),
+    );
+    if (invalid)
+      throw new BadRequestException(
+        `${invalid.originalname || 'File'} is not supported by this upload endpoint`,
+      );
   }
 
   private async mapWithConcurrency<T, R>(
@@ -1373,7 +2173,9 @@ export class CollectionsService {
     return results;
   }
 
-  private sortImagesForGallery<T extends { order?: number; createdAt?: Date | string; _id?: unknown }>(images: T[]) {
+  private sortImagesForGallery<
+    T extends { order?: number; createdAt?: Date | string; _id?: unknown },
+  >(images: T[]) {
     return [...images].sort((a, b) => {
       const aOrder = Number(a.order);
       const bOrder = Number(b.order);
@@ -1382,11 +2184,18 @@ export class CollectionsService {
       if (aHasOrder && bHasOrder) return aOrder - bOrder;
       if (aHasOrder) return -1;
       if (bHasOrder) return 1;
-      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+      return (
+        new Date(b.createdAt ?? 0).getTime() -
+        new Date(a.createdAt ?? 0).getTime()
+      );
     });
   }
 
-  private async findImagesPage(query: Record<string, unknown>, limitValue?: string, offsetValue?: string) {
+  private async findImagesPage(
+    query: Record<string, unknown>,
+    limitValue?: string,
+    offsetValue?: string,
+  ) {
     const limit = this.pageLimit(limitValue);
     const offset = this.pageOffset(offsetValue);
     const [items, total] = await Promise.all([
@@ -1428,14 +2237,24 @@ export class CollectionsService {
     const outputPath = join(cwd(), 'uploads', filename);
     const blurDataUrl = await image
       .clone()
-      .resize({ width: 24, height: 24, fit: 'inside', withoutEnlargement: true })
+      .resize({
+        width: 24,
+        height: 24,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
       .jpeg({ quality: 35 })
       .toBuffer()
       .then((buffer) => `data:image/jpeg;base64,${buffer.toString('base64')}`)
       .catch(() => '');
 
     await image
-      .resize({ width: 900, height: 900, fit: 'inside', withoutEnlargement: true })
+      .resize({
+        width: 900,
+        height: 900,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
       .jpeg({ quality: 74, mozjpeg: true })
       .toFile(outputPath);
 
@@ -1444,7 +2263,11 @@ export class CollectionsService {
 
   private async ensureCollectionPreviews(collectionId: string) {
     const images = await this.imageModel
-      .find({ collectionId, mediaType: { $ne: 'video' }, thumbnailUrl: { $in: [null, ''] } })
+      .find({
+        collectionId,
+        mediaType: { $ne: 'video' },
+        thumbnailUrl: { $in: [null, ''] },
+      })
       .limit(30)
       .lean()
       .catch(() => []);
@@ -1454,7 +2277,9 @@ export class CollectionsService {
       if (!buffer) continue;
       let previewPath = '';
       try {
-        const preview = await this.createImagePreviewFromSharp(sharp(buffer).rotate());
+        const preview = await this.createImagePreviewFromSharp(
+          sharp(buffer).rotate(),
+        );
         previewPath = preview.path;
         const thumbnailUrl = await this.minioService.uploadFile({
           path: preview.path,
@@ -1486,7 +2311,9 @@ export class CollectionsService {
   }
 
   private async extractMetadata(file: Express.Multer.File) {
-    const sharpMeta: Partial<Metadata> = await sharp(file.path).metadata().catch(() => ({}));
+    const sharpMeta: Partial<Metadata> = await sharp(file.path)
+      .metadata()
+      .catch(() => ({}));
     const exif = await exifr
       .parse(file.path, { exif: true, iptc: true, xmp: true })
       .catch(() => null);
@@ -1516,9 +2343,14 @@ export class CollectionsService {
       software: exif?.Software,
       artist: exif?.Artist,
       copyright: exif?.Copyright,
-      gps: exif?.latitude && exif?.longitude
-        ? { latitude: exif.latitude, longitude: exif.longitude, altitude: exif?.GPSAltitude }
-        : undefined,
+      gps:
+        exif?.latitude && exif?.longitude
+          ? {
+              latitude: exif.latitude,
+              longitude: exif.longitude,
+              altitude: exif?.GPSAltitude,
+            }
+          : undefined,
       title: exif?.title ?? '',
       caption: exif?.description ?? '',
       headline: exif?.Headline ?? '',
@@ -1536,7 +2368,8 @@ export class CollectionsService {
       .lean();
     const presetData = preset?.data as any;
     const defaultWatermark =
-      presetData?.general?.defaultWatermark ?? presetData?.presetGeneral?.defaultWatermark;
+      presetData?.general?.defaultWatermark ??
+      presetData?.presetGeneral?.defaultWatermark;
 
     if (!defaultWatermark || defaultWatermark === 'No watermark') return null;
 
@@ -1573,7 +2406,10 @@ export class CollectionsService {
     return (watermark?.data as WatermarkData) ?? null;
   }
 
-  private async applyWatermark(file: Express.Multer.File, watermark: WatermarkData) {
+  private async applyWatermark(
+    file: Express.Multer.File,
+    watermark: WatermarkData,
+  ) {
     const image = sharp(file.path).rotate();
     const meta = await image.metadata();
     const width = meta.width ?? 1200;
@@ -1587,7 +2423,8 @@ export class CollectionsService {
       const text = this.escapeSvg(watermark.text || 'Watermark');
       const fontFamily = this.watermarkFontFamily(watermark.font);
       const fontSize = this.watermarkTextSize(width, watermark.scale);
-      const estimatedTextWidth = (watermark.text || 'Watermark').length * fontSize * 0.55;
+      const estimatedTextWidth =
+        (watermark.text || 'Watermark').length * fontSize * 0.55;
       const padX = Math.min(45, Math.max(5, (estimatedTextWidth / width) * 50));
       const padY = Math.min(45, Math.max(5, (fontSize / height) * 60));
       const position = {
@@ -1609,7 +2446,9 @@ export class CollectionsService {
         </svg>
       `);
 
-      await image.composite([{ input: svg, left: 0, top: 0 }]).toFile(outputPath);
+      await image
+        .composite([{ input: svg, left: 0, top: 0 }])
+        .toFile(outputPath);
       return { path: outputPath, filename: outputFilename };
     }
 
@@ -1624,13 +2463,25 @@ export class CollectionsService {
     const overlayMeta = await sharp(overlayBuffer).metadata();
     const overlayHeight = overlayMeta.height ?? overlayWidth;
     const position = {
-      x: this.clampPercent(rawPosition.x, ((overlayMeta.width ?? overlayWidth) / width) * 50, 100 - ((overlayMeta.width ?? overlayWidth) / width) * 50),
-      y: this.clampPercent(rawPosition.y, (overlayHeight / height) * 50, 100 - (overlayHeight / height) * 50),
+      x: this.clampPercent(
+        rawPosition.x,
+        ((overlayMeta.width ?? overlayWidth) / width) * 50,
+        100 - ((overlayMeta.width ?? overlayWidth) / width) * 50,
+      ),
+      y: this.clampPercent(
+        rawPosition.y,
+        (overlayHeight / height) * 50,
+        100 - (overlayHeight / height) * 50,
+      ),
     };
-    const left = Math.round((position.x / 100) * width - (overlayMeta.width ?? overlayWidth) / 2);
+    const left = Math.round(
+      (position.x / 100) * width - (overlayMeta.width ?? overlayWidth) / 2,
+    );
     const top = Math.round((position.y / 100) * height - overlayHeight / 2);
 
-    await image.composite([{ input: overlayBuffer, left, top }]).toFile(outputPath);
+    await image
+      .composite([{ input: overlayBuffer, left, top }])
+      .toFile(outputPath);
     return { path: outputPath, filename: outputFilename };
   }
 
@@ -1657,11 +2508,9 @@ export class CollectionsService {
   }
 
   private async deleteStoredImageFiles(image: CollectionImageDocument) {
-    const references = [
-      image.url,
-      image.thumbnailUrl,
-      image.filename,
-    ].filter(Boolean) as string[];
+    const references = [image.url, image.thumbnailUrl, image.filename].filter(
+      Boolean,
+    ) as string[];
 
     for (const reference of [...new Set(references)]) {
       await this.minioService.deleteService(reference);
@@ -1696,11 +2545,20 @@ export class CollectionsService {
     return `${base}-${Date.now().toString(36)}-${this.randomSlugSuffix()}`;
   }
 
-  private async findCollectionByIdentifier(identifier: string, siteSlug?: string) {
-    const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];
+  private async findCollectionByIdentifier(
+    identifier: string,
+    siteSlug?: string,
+  ) {
+    const query: Record<string, string>[] = [
+      { slug: identifier },
+      { name: identifier },
+    ];
     if (identifier.match(/^[a-f\d]{24}$/i)) query.unshift({ _id: identifier });
     const owner = siteSlug
-      ? await this.homepageModel.findOne({ slug: siteSlug.toLowerCase(), enabled: true }).select('userId').lean()
+      ? await this.homepageModel
+          .findOne({ slug: siteSlug.toLowerCase(), enabled: true })
+          .select('userId')
+          .lean()
       : null;
     if (siteSlug && !owner) throw new NotFoundException('Collection not found');
     const collection = await this.collectionModel
@@ -1711,7 +2569,10 @@ export class CollectionsService {
     return collection;
   }
 
-  private isPublicCollectionVisible(collection: { status?: string; expiresAt?: Date | string | null }) {
+  private isPublicCollectionVisible(collection: {
+    status?: string;
+    expiresAt?: Date | string | null;
+  }) {
     if (collection.status !== 'published') return false;
     if (!collection.expiresAt) return true;
     const expiresAt = new Date(collection.expiresAt);
@@ -1744,12 +2605,25 @@ export class CollectionsService {
       'DejaVu Sans',
       'Liberation Sans',
       'sans-serif',
-    ].map((family) => family.includes(' ') ? `"${this.escapeCssString(family)}"` : this.escapeCssString(family)).join(', ');
+    ]
+      .map((family) =>
+        family.includes(' ')
+          ? `"${this.escapeCssString(family)}"`
+          : this.escapeCssString(family),
+      )
+      .join(', ');
   }
 
   private serverWatermarkFont(font?: string) {
-    const value = String(font || '').trim().toLowerCase();
-    if (value.includes('times') || value.includes('georgia') || value.includes('playfair')) return 'Noto Serif';
+    const value = String(font || '')
+      .trim()
+      .toLowerCase();
+    if (
+      value.includes('times') ||
+      value.includes('georgia') ||
+      value.includes('playfair')
+    )
+      return 'Noto Serif';
     if (value.includes('courier')) return 'DejaVu Sans Mono';
     return 'Noto Sans';
   }
@@ -1775,7 +2649,9 @@ export class CollectionsService {
     if (!value || typeof value !== 'object') return {};
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
-        .filter(([, item]) => item !== undefined && item !== null && item !== '')
+        .filter(
+          ([, item]) => item !== undefined && item !== null && item !== '',
+        )
         .map(([key, item]) => [
           key,
           item instanceof Date ? item.toISOString() : item,
@@ -1784,28 +2660,55 @@ export class CollectionsService {
   }
 
   private async ensureStorageAvailable(userId: string, incomingBytes: number) {
-    const user = await this.userModel.findById(userId).select('planName storageLimitGb storageUsedBytes planExpiresAt').lean();
+    const user = await this.userModel
+      .findById(userId)
+      .select('planName storageLimitGb storageUsedBytes planExpiresAt')
+      .lean();
     if (user?.planExpiresAt && user.planExpiresAt <= new Date()) {
-      throw new BadRequestException('Plan expired. Purchase a plan to continue uploading images.');
+      throw new BadRequestException(
+        'Plan expired. Purchase a plan to continue uploading images.',
+      );
     }
     const limitGb = Math.max(0, Number(user?.storageLimitGb ?? 0));
     const limitBytes = limitGb * 1024 * 1024 * 1024;
     const used = Number(user?.storageUsedBytes ?? 0);
     if (used + incomingBytes > limitBytes) {
-      throw new BadRequestException('Storage limit exceeded. Upgrade plan to upload more images.');
+      throw new BadRequestException(
+        'Storage limit exceeded. Upgrade plan to upload more images.',
+      );
     }
   }
 
-  private async ensureVideoPlanAvailable(userId: string, files: Array<{ type?: string; durationSeconds?: number; width?: number; height?: number }>) {
-    const incomingVideos = files.filter((file) => this.mediaType(file.type) === 'video');
+  private async ensureVideoPlanAvailable(
+    userId: string,
+    files: Array<{
+      type?: string;
+      durationSeconds?: number;
+      width?: number;
+      height?: number;
+    }>,
+  ) {
+    const incomingVideos = files.filter(
+      (file) => this.mediaType(file.type) === 'video',
+    );
     if (!incomingVideos.length) return;
-    const user = await this.userModel.findById(userId).select('videoUploadLimitMinutes videoUploadQuality planExpiresAt').lean();
+    const user = await this.userModel
+      .findById(userId)
+      .select('videoUploadLimitMinutes videoUploadQuality planExpiresAt')
+      .lean();
     if (user?.planExpiresAt && user.planExpiresAt <= new Date()) {
-      throw new BadRequestException('Plan expired. Purchase a plan to continue uploading videos.');
+      throw new BadRequestException(
+        'Plan expired. Purchase a plan to continue uploading videos.',
+      );
     }
-    const limitSeconds = Math.max(0, Number(user?.videoUploadLimitMinutes ?? 0)) * 60;
-    const incomingSeconds = incomingVideos.reduce((sum, file) => sum + this.safeSeconds(file.durationSeconds), 0);
-    if (incomingSeconds <= 0) throw new BadRequestException('Video duration metadata is required.');
+    const limitSeconds =
+      Math.max(0, Number(user?.videoUploadLimitMinutes ?? 0)) * 60;
+    const incomingSeconds = incomingVideos.reduce(
+      (sum, file) => sum + this.safeSeconds(file.durationSeconds),
+      0,
+    );
+    if (incomingSeconds <= 0)
+      throw new BadRequestException('Video duration metadata is required.');
     const current = await Promise.all([
       this.imageModel.aggregate([
         { $match: { userId, mediaType: 'video' } },
@@ -1816,23 +2719,36 @@ export class CollectionsService {
         { $group: { _id: null, total: { $sum: '$durationSeconds' } } },
       ]),
     ]);
-    const usedSeconds = Number(current[0][0]?.total ?? 0) + Number(current[1][0]?.total ?? 0);
+    const usedSeconds =
+      Number(current[0][0]?.total ?? 0) + Number(current[1][0]?.total ?? 0);
     if (limitSeconds <= 0 || usedSeconds + incomingSeconds > limitSeconds) {
-      throw new BadRequestException('Video minute limit exceeded. Upgrade plan to upload more video.');
+      throw new BadRequestException(
+        'Video minute limit exceeded. Upgrade plan to upload more video.',
+      );
     }
     const allowedQuality = user?.videoUploadQuality === '4k' ? '4k' : 'hd';
     for (const file of incomingVideos) {
       const quality = this.videoQuality(file.width, file.height);
-      if (quality === 'unknown') throw new BadRequestException('Video resolution metadata is required.');
-      if (quality === 'over-4k') throw new BadRequestException('Videos larger than 4K are not supported.');
+      if (quality === 'unknown')
+        throw new BadRequestException('Video resolution metadata is required.');
+      if (quality === 'over-4k')
+        throw new BadRequestException(
+          'Videos larger than 4K are not supported.',
+        );
       if (allowedQuality === 'hd' && quality !== 'hd') {
-        throw new BadRequestException('Your plan only allows HD video uploads.');
+        throw new BadRequestException(
+          'Your plan only allows HD video uploads.',
+        );
       }
     }
   }
 
   private mediaType(type?: string) {
-    return String(type || '').toLowerCase().startsWith('video/') ? 'video' : 'image';
+    return String(type || '')
+      .toLowerCase()
+      .startsWith('video/')
+      ? 'video'
+      : 'image';
   }
 
   private safeSeconds(value: unknown) {
@@ -1842,10 +2758,15 @@ export class CollectionsService {
 
   private safeDimension(value: unknown) {
     const dimension = Number(value);
-    return Number.isFinite(dimension) && dimension > 0 ? Math.round(dimension) : 0;
+    return Number.isFinite(dimension) && dimension > 0
+      ? Math.round(dimension)
+      : 0;
   }
 
-  private videoQuality(width?: number, height?: number): 'hd' | '4k' | 'over-4k' | 'unknown' {
+  private videoQuality(
+    width?: number,
+    height?: number,
+  ): 'hd' | '4k' | 'over-4k' | 'unknown' {
     const w = this.safeDimension(width);
     const h = this.safeDimension(height);
     if (!w || !h) return 'unknown';
@@ -1859,9 +2780,18 @@ export class CollectionsService {
   private async decrementStorageUsedBytes(userId: string, bytes: number) {
     const safeBytes = Math.max(0, Number(bytes ?? 0));
     if (safeBytes > 0) {
-      const user = await this.userModel.findById(userId).select('storageUsedBytes').lean();
-      const nextUsedBytes = Math.max(0, Number(user?.storageUsedBytes ?? 0) - safeBytes);
-      await this.userModel.updateOne({ _id: userId }, { $set: { storageUsedBytes: nextUsedBytes } });
+      const user = await this.userModel
+        .findById(userId)
+        .select('storageUsedBytes')
+        .lean();
+      const nextUsedBytes = Math.max(
+        0,
+        Number(user?.storageUsedBytes ?? 0) - safeBytes,
+      );
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $set: { storageUsedBytes: nextUsedBytes } },
+      );
     }
     await this.clearStorageIfNoImages(userId);
   }
@@ -1872,18 +2802,31 @@ export class CollectionsService {
       this.mobileGalleryImageModel.exists({ userId }),
     ]);
     if (!collectionImages && !mobileImages) {
-      await this.userModel.updateOne({ _id: userId }, { $set: { storageUsedBytes: 0 } });
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $set: { storageUsedBytes: 0 } },
+      );
     }
   }
 
   private cleanEmail(value?: string) {
-    const email = String(value ?? '').trim().toLowerCase();
+    const email = String(value ?? '')
+      .trim()
+      .toLowerCase();
     return /^\S+@\S+\.\S+$/.test(email) ? email : '';
   }
 
   private registrationSource(value?: string) {
-    const source = String(value ?? 'email-registration').trim().toLowerCase();
-    return ['email-registration', 'popup', 'download', 'favorite', 'store-checkout'].includes(source)
+    const source = String(value ?? 'email-registration')
+      .trim()
+      .toLowerCase();
+    return [
+      'email-registration',
+      'popup',
+      'download',
+      'favorite',
+      'store-checkout',
+    ].includes(source)
       ? source
       : 'email-registration';
   }
@@ -1919,9 +2862,16 @@ export class CollectionsService {
   private resolveEmailAccess(settings: any, email?: string) {
     const general = settings?.general ?? {};
     const required = this.boolSetting(general.emailRegistration);
-    if (!required) return { required: false, authorized: true, status: 'open', email: '' };
+    if (!required)
+      return { required: false, authorized: true, status: 'open', email: '' };
     const clean = this.cleanEmail(email);
-    if (!clean) return { required: true, authorized: false, status: 'required', email: '' };
+    if (!clean)
+      return {
+        required: true,
+        authorized: false,
+        status: 'required',
+        email: '',
+      };
     return {
       required: true,
       authorized: true,
@@ -1936,15 +2886,23 @@ export class CollectionsService {
     return ['true', 'on', 'yes', '1', 'enabled'].includes(text);
   }
 
-  private async sanitizeCollectionCapabilities<T extends CreateCollectionDto | UpdateCollectionDto>(userId: string, dto: T): Promise<T> {
-    const user = await this.userModel.findById(userId).select('planFeatures').lean();
+  private async sanitizeCollectionCapabilities<
+    T extends CreateCollectionDto | UpdateCollectionDto,
+  >(userId: string, dto: T): Promise<T> {
+    const user = await this.userModel
+      .findById(userId)
+      .select('planFeatures')
+      .lean();
     const features = user?.planFeatures ?? {};
     const next: any = { ...dto };
     const settings = { ...((next.settings ?? {}) as any) };
     const download = { ...(settings.download ?? {}) };
     const store = { ...(settings.store ?? {}) };
 
-    if ((download.limitDownloads || download.restrictDownloads) && !features.downloadLimit) {
+    if (
+      (download.limitDownloads || download.restrictDownloads) &&
+      !features.downloadLimit
+    ) {
       download.limitDownloads = false;
       download.restrictDownloads = false;
       download.limitPinUsage = '';
@@ -1967,10 +2925,14 @@ export class CollectionsService {
 
 function minDate(values: Date[]) {
   if (!values.length) return undefined;
-  return new Date(Math.min(...values.map((value) => new Date(value).getTime())));
+  return new Date(
+    Math.min(...values.map((value) => new Date(value).getTime())),
+  );
 }
 
 function maxDate(values: Date[]) {
   if (!values.length) return undefined;
-  return new Date(Math.max(...values.map((value) => new Date(value).getTime())));
+  return new Date(
+    Math.max(...values.map((value) => new Date(value).getTime())),
+  );
 }

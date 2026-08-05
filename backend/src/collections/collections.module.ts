@@ -5,7 +5,10 @@ import {
   DashboardSetting,
   DashboardSettingSchema,
 } from 'src/settings/entities/dashboard-setting.entity';
-import { CollectionsController, PublicCollectionsController } from './collections.controller';
+import {
+  CollectionsController,
+  PublicCollectionsController,
+} from './collections.controller';
 import { CollectionsService } from './collections.service';
 import { Collection, CollectionSchema } from './entities/collection.entity';
 import {
@@ -32,10 +35,24 @@ import {
   CollectionPrivatePhoto,
   CollectionPrivatePhotoSchema,
 } from './entities/collection-private-photo.entity';
+import {
+  CollectionView,
+  CollectionViewSchema,
+} from './entities/collection-view.entity';
+import {
+  StoreOrder,
+  StoreOrderSchema,
+} from 'src/store/entities/store-order.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
-import { MobileGalleryImage, MobileGalleryImageSchema } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
-import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity';
+import {
+  MobileGalleryImage,
+  MobileGalleryImageSchema,
+} from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
+import {
+  Homepage,
+  HomepageSchema,
+} from 'src/homepage/entities/homepage.entity';
 
 @Module({
   imports: [
@@ -43,10 +60,24 @@ import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity'
       { name: Collection.name, schema: CollectionSchema },
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: CollectionFavorite.name, schema: CollectionFavoriteSchema },
-      { name: CollectionImageFavorite.name, schema: CollectionImageFavoriteSchema },
-      { name: CollectionDownloadActivity.name, schema: CollectionDownloadActivitySchema },
-      { name: CollectionEmailRegistration.name, schema: CollectionEmailRegistrationSchema },
-      { name: CollectionPrivatePhoto.name, schema: CollectionPrivatePhotoSchema },
+      {
+        name: CollectionImageFavorite.name,
+        schema: CollectionImageFavoriteSchema,
+      },
+      {
+        name: CollectionDownloadActivity.name,
+        schema: CollectionDownloadActivitySchema,
+      },
+      {
+        name: CollectionEmailRegistration.name,
+        schema: CollectionEmailRegistrationSchema,
+      },
+      {
+        name: CollectionPrivatePhoto.name,
+        schema: CollectionPrivatePhotoSchema,
+      },
+      { name: CollectionView.name, schema: CollectionViewSchema },
+      { name: StoreOrder.name, schema: StoreOrderSchema },
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: User.name, schema: UserSchema },
       { name: MobileGalleryImage.name, schema: MobileGalleryImageSchema },

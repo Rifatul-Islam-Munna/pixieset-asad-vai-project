@@ -242,7 +242,7 @@ function ProfileSettingsPage() {
           <label className="sm:col-span-2 text-sm font-semibold">Biography<textarea value={form.biography || ""} onChange={(event) => set("biography", event.target.value)} rows={5} className="mt-2 w-full border p-4 font-normal outline-none focus:border-[#18bfa6]" /></label>
           {(["facebook", "instagram", "youtube", "linkedin"] as const).map((network) => <Field key={network} label={`${network[0].toUpperCase()}${network.slice(1)} URL`} value={form.socialLinks?.[network] || ""} onChange={(value) => set("socialLinks", { ...(form.socialLinks || {}), [network]: value })} />)}
         </div>
-        <button disabled={updateProfile.isPending} className="mt-8 bg-[#18bfa6] px-7 py-3 font-semibold text-white">{updateProfile.isPending ? "Savingâ€¦" : "Save Settings"}</button>
+        <button disabled={updateProfile.isPending} className="mt-8 bg-[#18bfa6] px-7 py-3 font-semibold text-white">{updateProfile.isPending ? "Saving…" : "Save Settings"}</button>
       </form>
     </main>
   );
@@ -259,7 +259,7 @@ function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
   const [imagesLoadingMore, setImagesLoadingMore] = useState(false);
   useEffect(() => setImages(app?.images || []), [app?.images]);
   useEffect(() => setImagesHasMore(Boolean(app?.imagesPage?.hasMore)), [app?.imagesPage?.hasMore]);
-  if (appQuery.isLoading || !app) return <div className="flex min-h-screen items-center justify-center text-sm text-[#777]">Loading mobile galleryâ€¦</div>;
+  if (appQuery.isLoading || !app) return <div className="flex min-h-screen items-center justify-center text-sm text-[#777]">Loading mobile gallery…</div>;
   if (view === "preview") return <MobileGalleryPreviewScreen app={app} profile={profile} />;
   if (view === "share") return <MobileGalleryShareScreen app={app} profile={profile} />;
 
@@ -361,7 +361,7 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
           <div className="flex items-center gap-3">
             <Loader2 className="size-5 shrink-0 animate-spin" />
             <div className="min-w-0 flex-1">
-              <p className="font-semibold">Image {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of {uploadProgress.total || "selected"} Â· {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.</p>
+              <p className="font-semibold">Image {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of {uploadProgress.total || "selected"} · {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.</p>
               <p className="mt-1 truncate text-xs text-[#3f8179]">{uploadProgress.currentName || "Processing photo"}</p>
             </div>
           </div>
@@ -374,7 +374,7 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
         {images.map((image: MobileGalleryImage) => <article key={image._id} className="group relative cursor-grab border bg-white p-1 shadow-sm active:cursor-grabbing">{image.mediaType === "video" ? <video src={image.url} className="aspect-square w-full object-cover" preload="metadata" muted /> : <img src={image.thumbnailUrl || image.url} alt="" className="aspect-square w-full object-cover" />}<div className="absolute inset-x-2 bottom-2 flex justify-between opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">{image.mediaType !== "video" && <button onClick={() => updateApp.mutate({ coverImage: image.url })} className="bg-white/95 px-2 py-1 text-[10px] font-semibold">Set Cover</button>}<button onClick={() => deleteImage.mutate(image._id)} className="ml-auto bg-white/95 p-1 text-red-500"><Trash2 className="size-4" /></button></div>{image.mediaType === "video" && <span className="absolute right-2 top-2 bg-black/75 px-2 py-1 text-[9px] font-semibold uppercase text-white">Video</span>}{app.coverImage === image.url && <span className="absolute left-2 top-2 bg-[#18bfa6] px-2 py-1 text-[9px] font-semibold uppercase text-white">Cover</span>}</article>)}
       </ReactSortable>
       {imagesHasMore && <div ref={loaderRef} className="flex h-20 items-center justify-center text-sm text-[#777]">{imagesLoadingMore ? "Loading photos..." : ""}</div>}
-      {!images.length && <label className={`mt-8 flex min-h-72 cursor-pointer flex-col items-center justify-center border border-dashed px-5 text-center text-[#888]${dropClass}`}><Upload className="size-8" /><span className="mt-3 text-sm">{uploading ? `File ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} Â· ${uploadProgress.currentPercent}%` : "Drop photos or videos here or browse"}</span><input type="file" accept="image/*,video/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label>}
+      {!images.length && <label className={`mt-8 flex min-h-72 cursor-pointer flex-col items-center justify-center border border-dashed px-5 text-center text-[#888]${dropClass}`}><Upload className="size-8" /><span className="mt-3 text-sm">{uploading ? `File ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} · ${uploadProgress.currentPercent}%` : "Drop photos or videos here or browse"}</span><input type="file" accept="image/*,video/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label>}
     </section>
   );
 }
@@ -391,7 +391,7 @@ function AppSettingsEditor({ app, updateApp }: { app: MobileGalleryApp; updateAp
       <Toggle label="Status" description="You can take the gallery app online or offline quickly. Unpublished gallery apps can only be seen by you." enabled={form.status !== "draft"} onChange={(enabled) => setForm((current) => ({ ...current, status: enabled ? "published" : "draft" }))} enabledText="Published" disabledText="Unpublished" />
       <Toggle label="Call to Action Button" description="Add a call-to-action button to the end of the photo section to bring clients to your website or another page." enabled={cta.enabled !== false} onChange={(enabled) => setForm((current) => ({ ...current, settings: { ...current.settings, callToAction: { ...cta, enabled } } }))} />
       {cta.enabled !== false && <div className="ml-3 grid gap-5 border-l-2 border-dotted pl-5 sm:ml-6 sm:pl-6"><Field label="Button Label" value={cta.label || "Visit Website"} onChange={(label) => setForm((current) => ({ ...current, settings: { ...current.settings, callToAction: { ...cta, label } } }))} /><Field label="Link URL" value={cta.url || ""} onChange={(url) => setForm((current) => ({ ...current, settings: { ...current.settings, callToAction: { ...cta, url } } }))} /></div>}
-      <button disabled={updateApp.isPending} className="bg-[#18bfa6] px-7 py-3 font-semibold text-white">{updateApp.isPending ? "Savingâ€¦" : "Save Settings"}</button>
+      <button disabled={updateApp.isPending} className="bg-[#18bfa6] px-7 py-3 font-semibold text-white">{updateApp.isPending ? "Saving…" : "Save Settings"}</button>
     </form>
   );
 }

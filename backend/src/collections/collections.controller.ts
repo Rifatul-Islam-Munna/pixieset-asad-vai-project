@@ -51,8 +51,28 @@ export class PublicCollectionsController {
     @Query('offset') offset?: string,
     @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.findPublic(identifier, email, limit, offset, siteSlug);
+    const data = await this.collectionsService.findPublic(
+      identifier,
+      email,
+      limit,
+      offset,
+      siteSlug,
+    );
     return { data };
+  }
+
+  @Post(':identifier/view')
+  async recordView(
+    @Param('identifier') identifier: string,
+    @Body() body: { viewToken?: string; source?: string },
+    @Query('siteSlug') siteSlug?: string,
+  ) {
+    const data = await this.collectionsService.recordPublicView(
+      identifier,
+      body,
+      siteSlug,
+    );
+    return { message: 'Gallery view recorded', data };
   }
 
   @Get(':identifier/images')
@@ -63,7 +83,13 @@ export class PublicCollectionsController {
     @Query('offset') offset?: string,
     @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.findPublicImages(identifier, email, limit, offset, siteSlug);
+    const data = await this.collectionsService.findPublicImages(
+      identifier,
+      email,
+      limit,
+      offset,
+      siteSlug,
+    );
     return { data };
   }
 
@@ -73,7 +99,11 @@ export class PublicCollectionsController {
     @Body() body: { email?: string; reason?: string },
     @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.requestPublicAccess(identifier, body, siteSlug);
+    const data = await this.collectionsService.requestPublicAccess(
+      identifier,
+      body,
+      siteSlug,
+    );
     return { message: 'Access request sent', data };
   }
 
@@ -83,7 +113,11 @@ export class PublicCollectionsController {
     @Body() body: { email?: string; marketingOptIn?: boolean; source?: string },
     @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.recordPublicEmailRegistration(identifier, body, siteSlug);
+    const data = await this.collectionsService.recordPublicEmailRegistration(
+      identifier,
+      body,
+      siteSlug,
+    );
     return { message: 'Email registration saved', data };
   }
 
@@ -94,17 +128,40 @@ export class PublicCollectionsController {
     @Body() body: { email?: string },
     @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.togglePublicPrivateImage(identifier, imageId, body, siteSlug);
-    return { message: data.requested ? 'Private photo request sent' : 'Private photo request cancelled', data };
+    const data = await this.collectionsService.togglePublicPrivateImage(
+      identifier,
+      imageId,
+      body,
+      siteSlug,
+    );
+    return {
+      message: data.requested
+        ? 'Private photo request sent'
+        : 'Private photo request cancelled',
+      data,
+    };
   }
 
   @Post(':identifier/download-activity')
   async recordDownloadActivity(
     @Param('identifier') identifier: string,
-    @Body() body: { email?: string; items?: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>; downloadType?: 'single' | 'all' },
+    @Body()
+    body: {
+      email?: string;
+      items?: Array<{
+        imageId?: string;
+        imageName?: string;
+        imageUrl?: string;
+      }>;
+      downloadType?: 'single' | 'all';
+    },
     @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.recordPublicDownloadActivity(identifier, body, siteSlug);
+    const data = await this.collectionsService.recordPublicDownloadActivity(
+      identifier,
+      body,
+      siteSlug,
+    );
     return { message: 'Download activity saved', data };
   }
 
@@ -115,8 +172,16 @@ export class PublicCollectionsController {
     @Body() body: { email?: string },
     @Query('siteSlug') siteSlug?: string,
   ) {
-    const data = await this.collectionsService.togglePublicFavoriteImage(identifier, imageId, body, siteSlug);
-    return { message: data.favorited ? 'Photo favorited' : 'Photo unfavorited', data };
+    const data = await this.collectionsService.togglePublicFavoriteImage(
+      identifier,
+      imageId,
+      body,
+      siteSlug,
+    );
+    return {
+      message: data.favorited ? 'Photo favorited' : 'Photo unfavorited',
+      data,
+    };
   }
 }
 
@@ -137,6 +202,13 @@ export class CollectionsController {
     return { data };
   }
 
+  @Get('dashboard-overview')
+  async dashboardOverview(@Req() req: ExpressRequest) {
+    return {
+      data: await this.collectionsService.dashboardOverview(req.user.id),
+    };
+  }
+
   @Get('images')
   async findAllImages(@Req() req: ExpressRequest) {
     const data = await this.collectionsService.findAllImages(req.user.id);
@@ -145,7 +217,9 @@ export class CollectionsController {
 
   @Get('favorites')
   async favorites(@Req() req: ExpressRequest) {
-    const data = await this.collectionsService.listFavoriteCollections(req.user.id);
+    const data = await this.collectionsService.listFavoriteCollections(
+      req.user.id,
+    );
     return { data };
   }
 
@@ -157,22 +231,38 @@ export class CollectionsController {
 
   @Get('marketing-contacts')
   async marketingContacts(@Req() req: ExpressRequest) {
-    const data = await this.collectionsService.listMarketingContacts(req.user.id);
+    const data = await this.collectionsService.listMarketingContacts(
+      req.user.id,
+    );
     return { data };
   }
 
   @Post('marketing-contacts')
   async addMarketingContacts(
     @Req() req: ExpressRequest,
-    @Body() body: { email?: string; category?: string; contacts?: { email?: string; category?: string }[] },
+    @Body()
+    body: {
+      email?: string;
+      category?: string;
+      contacts?: { email?: string; category?: string }[];
+    },
   ) {
-    const data = await this.collectionsService.addMarketingContacts(req.user.id, body);
+    const data = await this.collectionsService.addMarketingContacts(
+      req.user.id,
+      body,
+    );
     return { data, message: 'Marketing contacts added' };
   }
 
   @Get(':id/activity')
-  async collectionActivity(@Param('id') id: string, @Req() req: ExpressRequest) {
-    const data = await this.collectionsService.getCollectionActivity(req.user.id, id);
+  async collectionActivity(
+    @Param('id') id: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.getCollectionActivity(
+      req.user.id,
+      id,
+    );
     return { data };
   }
 
@@ -182,7 +272,11 @@ export class CollectionsController {
     @Param('favoriteUserId') favoriteUserId: string,
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.deleteFavoriteInfo(req.user.id, id, favoriteUserId);
+    const data = await this.collectionsService.deleteFavoriteInfo(
+      req.user.id,
+      id,
+      favoriteUserId,
+    );
     return { message: 'Favorite info deleted', data };
   }
 
@@ -193,7 +287,12 @@ export class CollectionsController {
     @Param('imageId') imageId: string,
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.deleteFavoriteImageInfo(req.user.id, id, favoriteUserId, imageId);
+    const data = await this.collectionsService.deleteFavoriteImageInfo(
+      req.user.id,
+      id,
+      favoriteUserId,
+      imageId,
+    );
     return { message: 'Favorite image deleted', data };
   }
 
@@ -204,9 +303,24 @@ export class CollectionsController {
     @Body('status') status: 'pending' | 'approved' | 'declined',
     @Req() req: ExpressRequest,
   ) {
-    const nextStatus = ['pending', 'approved', 'declined'].includes(status) ? status : 'pending';
-    const data = await this.collectionsService.updatePrivatePhotoRequest(req.user.id, id, privatePhotoId, nextStatus);
-    return { message: nextStatus === 'approved' ? 'Private photo approved' : nextStatus === 'declined' ? 'Private photo declined' : 'Private photo request updated', data };
+    const nextStatus = ['pending', 'approved', 'declined'].includes(status)
+      ? status
+      : 'pending';
+    const data = await this.collectionsService.updatePrivatePhotoRequest(
+      req.user.id,
+      id,
+      privatePhotoId,
+      nextStatus,
+    );
+    return {
+      message:
+        nextStatus === 'approved'
+          ? 'Private photo approved'
+          : nextStatus === 'declined'
+            ? 'Private photo declined'
+            : 'Private photo request updated',
+      data,
+    };
   }
 
   @Delete(':id/activity/private-photos/:privatePhotoId')
@@ -215,7 +329,11 @@ export class CollectionsController {
     @Param('privatePhotoId') privatePhotoId: string,
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.deletePrivatePhotoRequest(req.user.id, id, privatePhotoId);
+    const data = await this.collectionsService.deletePrivatePhotoRequest(
+      req.user.id,
+      id,
+      privatePhotoId,
+    );
     return { message: 'Private photo made public', data };
   }
 
@@ -226,7 +344,12 @@ export class CollectionsController {
     @Body('name') name: string | undefined,
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.copyFavoriteListToSet(req.user.id, id, favoriteUserId, name);
+    const data = await this.collectionsService.copyFavoriteListToSet(
+      req.user.id,
+      id,
+      favoriteUserId,
+      name,
+    );
     return { message: 'Favorite list copied to set', data };
   }
 
@@ -237,20 +360,45 @@ export class CollectionsController {
     @Body('name') name: string | undefined,
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.copyFavoriteListToCollection(req.user.id, id, favoriteUserId, name);
+    const data = await this.collectionsService.copyFavoriteListToCollection(
+      req.user.id,
+      id,
+      favoriteUserId,
+      name,
+    );
     return { message: 'Favorite list copied to collection', data };
   }
 
   @Post('favorites/:identifier')
-  async favorite(@Param('identifier') identifier: string, @Req() req: ExpressRequest) {
-    const data = await this.collectionsService.toggleFavoriteCollection(req.user.id, identifier);
-    return { message: data.favorited ? 'Collection favorited' : 'Collection unfavorited', data };
+  async favorite(
+    @Param('identifier') identifier: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.toggleFavoriteCollection(
+      req.user.id,
+      identifier,
+    );
+    return {
+      message: data.favorited
+        ? 'Collection favorited'
+        : 'Collection unfavorited',
+      data,
+    };
   }
 
   @Post('image-favorites/:imageId')
-  async favoriteImage(@Param('imageId') imageId: string, @Req() req: ExpressRequest) {
-    const data = await this.collectionsService.toggleFavoriteImage(req.user.id, imageId);
-    return { message: data.favorited ? 'Photo favorited' : 'Photo unfavorited', data };
+  async favoriteImage(
+    @Param('imageId') imageId: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.toggleFavoriteImage(
+      req.user.id,
+      imageId,
+    );
+    return {
+      message: data.favorited ? 'Photo favorited' : 'Photo unfavorited',
+      data,
+    };
   }
 
   @Get(':id')
@@ -260,7 +408,12 @@ export class CollectionsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    const data = await this.collectionsService.findOne(req.user.id, id, limit, offset);
+    const data = await this.collectionsService.findOne(
+      req.user.id,
+      id,
+      limit,
+      offset,
+    );
     return { data };
   }
 
@@ -271,7 +424,12 @@ export class CollectionsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    const data = await this.collectionsService.findImages(req.user.id, id, limit, offset);
+    const data = await this.collectionsService.findImages(
+      req.user.id,
+      id,
+      limit,
+      offset,
+    );
     return { data };
   }
 
@@ -317,7 +475,13 @@ export class CollectionsController {
     @UploadedFiles() files: Express.Multer.File[],
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.uploadImages(req.user.id, id, files, setId, watermarkId);
+    const data = await this.collectionsService.uploadImages(
+      req.user.id,
+      id,
+      files,
+      setId,
+      watermarkId,
+    );
     return { message: 'Images uploaded', data };
   }
 
@@ -327,16 +491,41 @@ export class CollectionsController {
     @Body('files') files: Array<{ name: string; type: string; size: number }>,
     @Req() req: ExpressRequest,
   ) {
-    return { data: await this.collectionsService.createDirectUploads(req.user.id, id, files) };
+    return {
+      data: await this.collectionsService.createDirectUploads(
+        req.user.id,
+        id,
+        files,
+      ),
+    };
   }
 
   @Post(':id/images/direct-upload/complete')
   async completeDirectUploads(
     @Param('id') id: string,
-    @Body() body: { files: Array<{ objectKey: string; name: string; type: string; size: number }>; setId?: string; watermarkId?: string },
+    @Body()
+    body: {
+      files: Array<{
+        objectKey: string;
+        name: string;
+        type: string;
+        size: number;
+      }>;
+      setId?: string;
+      watermarkId?: string;
+    },
     @Req() req: ExpressRequest,
   ) {
-    return { message: 'Images uploaded', data: await this.collectionsService.completeDirectUploads(req.user.id, id, body.files, body.setId, body.watermarkId) };
+    return {
+      message: 'Images uploaded',
+      data: await this.collectionsService.completeDirectUploads(
+        req.user.id,
+        id,
+        body.files,
+        body.setId,
+        body.watermarkId,
+      ),
+    };
   }
 
   @Patch(':id/images/reorder')
@@ -345,7 +534,11 @@ export class CollectionsController {
     @Body('imageIds') imageIds: string[],
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.reorderImages(req.user.id, id, imageIds);
+    const data = await this.collectionsService.reorderImages(
+      req.user.id,
+      id,
+      imageIds,
+    );
     return { message: 'Images reordered', data };
   }
 
@@ -355,7 +548,11 @@ export class CollectionsController {
     @Param('imageId') imageId: string,
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.removeImage(req.user.id, id, imageId);
+    const data = await this.collectionsService.removeImage(
+      req.user.id,
+      id,
+      imageId,
+    );
     return { message: 'Image deleted', data };
   }
 
@@ -363,10 +560,16 @@ export class CollectionsController {
   async updateImage(
     @Param('id') id: string,
     @Param('imageId') imageId: string,
-    @Body() dto: { originalName?: string; setId?: string; watermarkId?: string },
+    @Body()
+    dto: { originalName?: string; setId?: string; watermarkId?: string },
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.updateImage(req.user.id, id, imageId, dto);
+    const data = await this.collectionsService.updateImage(
+      req.user.id,
+      id,
+      imageId,
+      dto,
+    );
     return { message: 'Image updated', data };
   }
 
@@ -374,11 +577,24 @@ export class CollectionsController {
   async copyMoveImage(
     @Param('id') id: string,
     @Param('imageId') imageId: string,
-    @Body() dto: { mode?: 'copy' | 'move'; targetCollectionId?: string; targetSetId?: string },
+    @Body()
+    dto: {
+      mode?: 'copy' | 'move';
+      targetCollectionId?: string;
+      targetSetId?: string;
+    },
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.copyMoveImage(req.user.id, id, imageId, dto);
-    return { message: dto.mode === 'move' ? 'Image moved' : 'Image copied', data };
+    const data = await this.collectionsService.copyMoveImage(
+      req.user.id,
+      id,
+      imageId,
+      dto,
+    );
+    return {
+      message: dto.mode === 'move' ? 'Image moved' : 'Image copied',
+      data,
+    };
   }
 
   @Patch(':id/images/:imageId/star')
@@ -388,7 +604,12 @@ export class CollectionsController {
     @Body('starred') starred: boolean,
     @Req() req: ExpressRequest,
   ) {
-    const data = await this.collectionsService.starImage(req.user.id, id, imageId, starred);
+    const data = await this.collectionsService.starImage(
+      req.user.id,
+      id,
+      imageId,
+      starred,
+    );
     return { message: 'Image updated', data };
   }
 }

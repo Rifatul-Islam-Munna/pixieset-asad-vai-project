@@ -1,8 +1,13 @@
-import { ClientDashboard, type DashboardPage, type DashboardSection } from "@/components/dashboard/client-dashboard";
+import {
+  ClientDashboard,
+  type DashboardPage,
+  type DashboardSection,
+} from "@/components/dashboard/client-dashboard";
 import { notFound, redirect } from "next/navigation";
 
 const sections = ["client-gallery", "store-gallery"];
 const pages = [
+  "dashboard",
   "collections",
   "collection-new",
   "library",
@@ -41,5 +46,10 @@ export default async function DashboardSectionPage({
     redirect("/dashboard/store-gallery/products");
   }
 
-  return <ClientDashboard section={section as DashboardSection} page={page as DashboardPage} />;
+  return (
+    <ClientDashboard
+      section={section as DashboardSection}
+      page={page as DashboardPage}
+    />
+  );
 }
