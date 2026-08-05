@@ -7,7 +7,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import QueryClint from "@/lib/queryclient";
 import { Toaster } from "@/components/ui/sonner";
 import { getHomeCms } from "@/lib/home-cms-server";
-import { JsonLdScript, collectSeoText, defaultOrganizationJsonLd, parseJsonLd, siteMetadata } from "@/lib/seo";
+import {
+  JsonLdScript,
+  collectSeoText,
+  defaultOrganizationJsonLd,
+  parseJsonLd,
+  siteMetadata,
+} from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -32,7 +38,10 @@ const geistMono = Geist_Mono({
 
 export async function generateMetadata(): Promise<Metadata> {
   const cms = await getHomeCms();
-  return siteMetadata(cms.seo, collectSeoText({ auth: cms.auth, content: cms.content, media: cms.media }));
+  return siteMetadata(
+    cms.seo,
+    collectSeoText({ auth: cms.auth, content: cms.content, media: cms.media }),
+  );
 }
 
 export default async function RootLayout({
@@ -41,8 +50,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cms = await getHomeCms();
-  const jsonLd = parseJsonLd(cms.seo.jsonLd) ?? defaultOrganizationJsonLd(cms.seo);
-  const gtmId = cms.seo.googleTagManagerId.trim().match(/^GTM[-_][A-Z0-9]+$/i)?.[0] ?? "";
+  const jsonLd =
+    parseJsonLd(cms.seo.jsonLd) ?? defaultOrganizationJsonLd(cms.seo);
+  const gtmId =
+    String(cms.seo.googleTagManagerId ?? "")
+      .trim()
+      .match(/^GTM[-_][A-Z0-9]+$/i)?.[0] ?? "";
 
   return (
     <html
@@ -58,11 +71,38 @@ export default async function RootLayout({
       )}
     >
       <head>
-        {cms.seo.extraMetaTags.map((tag, index) => {
-          if (!tag.key.trim() || !tag.value.trim()) return null;
-          if (tag.type === "property") return <meta key={`${tag.key}-${index}`} property={tag.key} content={tag.value} />;
-          if (tag.type === "httpEquiv") return <meta key={`${tag.key}-${index}`} httpEquiv={tag.key} content={tag.value} />;
-          return <meta key={`${tag.key}-${index}`} name={tag.key} content={tag.value} />;
+        {(Array.isArray(cms.seo.extraMetaTags)
+          ? cms.seo.extraMetaTags
+          : []
+        ).map((tag, index) => {
+          if (
+            !String(tag?.key ?? "").trim() ||
+            !String(tag?.value ?? "").trim()
+          )
+            return null;
+          if (tag.type === "property")
+            return (
+              <meta
+                key={`${tag.key}-${index}`}
+                property={tag.key}
+                content={tag.value}
+              />
+            );
+          if (tag.type === "httpEquiv")
+            return (
+              <meta
+                key={`${tag.key}-${index}`}
+                httpEquiv={tag.key}
+                content={tag.value}
+              />
+            );
+          return (
+            <meta
+              key={`${tag.key}-${index}`}
+              name={tag.key}
+              content={tag.value}
+            />
+          );
         })}
         <JsonLdScript data={jsonLd} id="site-json-ld" />
       </head>

@@ -1,16 +1,25 @@
 import type { Metadata } from "next";
 import type { SiteSeo } from "@/lib/home-cms";
 
-const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL ?? process.env.FRONTEND_URL ?? "http://localhost:3000";
+const frontendUrl =
+  process.env.NEXT_PUBLIC_FRONTEND_URL ??
+  process.env.FRONTEND_URL ??
+  "http://localhost:3000";
 
 export function absoluteUrl(pathOrUrl?: string) {
   if (!pathOrUrl) return undefined;
   if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  return new URL(pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`, frontendUrl).toString();
+  return new URL(
+    pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`,
+    frontendUrl,
+  ).toString();
 }
 
 export function splitKeywords(value?: string) {
-  return (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export function collectSeoText(value: unknown): string {
@@ -42,7 +51,24 @@ export function autoDescription(text: string, fallback: string) {
 export function autoKeywords(text: string, fallback?: string) {
   const manual = splitKeywords(fallback);
   if (manual.length) return manual;
-  const stop = new Set(["and", "the", "for", "with", "from", "your", "you", "are", "this", "that", "into", "our", "all", "page", "photo", "photos"]);
+  const stop = new Set([
+    "and",
+    "the",
+    "for",
+    "with",
+    "from",
+    "your",
+    "you",
+    "are",
+    "this",
+    "that",
+    "into",
+    "our",
+    "all",
+    "page",
+    "photo",
+    "photos",
+  ]);
   const counts = plainSeoText(text)
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -83,7 +109,9 @@ export function parseRobots(value?: string): Metadata["robots"] {
 export function siteMetadata(seo: SiteSeo, autoText = ""): Metadata {
   const image = absoluteUrl(seo.siteImageUrl);
   const canonical = absoluteUrl(seo.siteCanonicalUrl);
-  const description = seo.siteDescription.trim() || autoDescription(autoText, seo.siteTitle);
+  const description =
+    String(seo.siteDescription ?? "").trim() ||
+    autoDescription(autoText, String(seo.siteTitle ?? ""));
   return {
     metadataBase: new URL(frontendUrl),
     title: {
@@ -104,10 +132,18 @@ export function siteMetadata(seo: SiteSeo, autoText = ""): Metadata {
     formatDetection: {
       telephone: false,
     },
-    icons: seo.faviconUrl.trim()
+    icons: String(seo.faviconUrl ?? "").trim()
       ? {
-          icon: [{ url: seo.faviconUrl.trim(), type: "image/png" }],
-          apple: [{ url: `/api/pwa-icon?size=180`, sizes: "180x180", type: "image/png" }],
+          icon: [
+            { url: String(seo.faviconUrl ?? "").trim(), type: "image/png" },
+          ],
+          apple: [
+            {
+              url: `/api/pwa-icon?size=180`,
+              sizes: "180x180",
+              type: "image/png",
+            },
+          ],
         }
       : undefined,
     openGraph: {
@@ -148,12 +184,18 @@ export function pageMetadata({
 }): Metadata {
   const url = absoluteUrl(path);
   const ogImage = absoluteUrl(image || seo.siteImageUrl);
-  const nextDescription = description.trim() || autoDescription(autoText, seo.siteDescription);
+  const nextDescription =
+    description.trim() || autoDescription(autoText, seo.siteDescription);
   return {
     title: { absolute: title },
-    manifest: path ? `/manifest.webmanifest?start=${encodeURIComponent(path)}` : "/manifest.webmanifest",
+    manifest: path
+      ? `/manifest.webmanifest?start=${encodeURIComponent(path)}`
+      : "/manifest.webmanifest",
     description: nextDescription,
-    keywords: autoKeywords(`${title} ${description} ${autoText}`, keywords || seo.siteKeywords),
+    keywords: autoKeywords(
+      `${title} ${description} ${autoText}`,
+      keywords || seo.siteKeywords,
+    ),
     robots: parseRobots(seo.robots),
     alternates: url ? { canonical: url } : undefined,
     openGraph: {
@@ -182,13 +224,21 @@ export function parseJsonLd(value?: string) {
   }
 }
 
-export function JsonLdScript({ data, id = "json-ld" }: { data: unknown; id?: string }) {
+export function JsonLdScript({
+  data,
+  id = "json-ld",
+}: {
+  data: unknown;
+  id?: string;
+}) {
   if (!data) return null;
   return (
     <script
       id={id}
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, "\\u003c") }}
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(data).replace(/</g, "\\u003c"),
+      }}
     />
   );
 }
