@@ -680,7 +680,7 @@ export function ClientDashboard({
                   key={item.label}
                   href={
                     item.page === "collections"
-                      ? `/dashboard/${section}`
+                      ? `/dashboard/${section}/collections`
                       : `/dashboard/${section}/${item.page}`
                   }
                   className={cn(
@@ -1004,7 +1004,7 @@ export function ClientDashboard({
                     key={item.label}
                     href={
                       item.page === "collections"
-                        ? `/dashboard/${section}`
+                        ? `/dashboard/${section}/collections`
                         : `/dashboard/${section}/${item.page}`
                     }
                     onClick={() => setMobileMenuOpen(false)}
@@ -12403,7 +12403,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
       },
       {
         onSuccess: () => {
-          router.push(`/dashboard/${section}`);
+          router.push(`/dashboard/${section}/collections`);
         },
       },
     );
@@ -12413,7 +12413,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
     <div className="mx-auto max-w-[686px]">
       <button
         className="mb-8 inline-flex items-center gap-2 text-sm text-[#666] hover:text-[#222]"
-        onClick={() => router.push(`/dashboard/${section}`)}
+        onClick={() => router.push(`/dashboard/${section}/collections`)}
       >
         <ArrowLeft className="size-4" />
         Back to Galleries
