@@ -10,6 +10,7 @@ export type BillingUser = {
   _id: string;
   name?: string;
   avatar?: string;
+  planId?: string;
   planName?: string;
   storageLimitGb?: number;
   monthlyEmailLimit?: number;
@@ -33,6 +34,7 @@ function normalizePlans(value: unknown): AdminPlan[] {
     yearlyEnabled: Boolean(plan?.yearlyEnabled),
     priceYearly: Number(plan?.priceYearly ?? 0),
     features: plan?.features ?? {},
+    recommended: Boolean(plan?.recommended),
     active: plan?.active ?? true,
     createdAt: plan?.createdAt,
   }));

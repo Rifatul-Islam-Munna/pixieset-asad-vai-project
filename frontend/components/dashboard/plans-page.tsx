@@ -30,6 +30,7 @@ function safePlan(plan: Partial<AdminPlan> | null | undefined, index: number): A
     yearlyEnabled: Boolean(plan?.yearlyEnabled),
     priceYearly: Number(plan?.priceYearly ?? 0),
     features: plan?.features ?? {},
+    recommended: Boolean(plan?.recommended),
     active: plan?.active ?? true,
     createdAt: plan?.createdAt,
   };
@@ -43,7 +44,8 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
   const [billingInterval, setBillingInterval] = useState<"month" | "year">("month");
 
   const safePlans = useMemo(() => {
-    return Array.isArray(plans) ? plans.map((plan, index) => safePlan(plan, index)) : [];
+    const normalized = Array.isArray(plans) ? plans.map((plan, index) => safePlan(plan, index)) : [];
+    return normalized.sort((a, b) => Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)));
   }, [plans]);
 
   const filtered = useMemo(() => {
@@ -56,8 +58,8 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
   }, [safePlans, query]);
 
   const recommendedId = useMemo(() => {
-    const pro = filtered.find((plan) => plan.name.toLowerCase().includes("pro"));
-    return pro?._id ?? filtered[Math.min(3, Math.max(filtered.length - 1, 0))]?._id ?? "";
+    const selected = filtered.find((plan) => plan.recommended);
+    return selected?._id ?? "";
   }, [filtered]);
 
   const buy = (planId: string) => {

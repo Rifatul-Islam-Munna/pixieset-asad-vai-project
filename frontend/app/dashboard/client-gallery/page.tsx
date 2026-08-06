@@ -1,5 +1,5 @@
-import { ClientDashboard } from "@/components/dashboard/client-dashboard";
+import { redirect } from "next/navigation";
 
 export default function ClientGalleryPage() {
-  return <ClientDashboard section="client-gallery" page="collections" />;
+  redirect("/dashboard/client-gallery/dashboard");
 }

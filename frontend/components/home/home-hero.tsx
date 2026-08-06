@@ -99,21 +99,16 @@ export function HomeHero({
         lang={lang}
         dashboardHref={dashboardHref}
       />
-      <div className="relative mx-auto grid max-w-[1320px] items-center gap-10 px-4 pb-14 pt-10 sm:px-5 sm:pb-16 sm:pt-12 md:grid-cols-[.86fr_1.14fr] md:px-8 md:pb-24 md:pt-24">
+      <div className="relative mx-auto grid max-w-[1320px] items-center gap-10 px-4 pb-14 pt-10 sm:px-5 sm:pb-16 sm:pt-12 md:grid-cols-[.9fr_1.1fr] md:px-8 md:pb-24 md:pt-24">
         <div className="z-10">
           <p className="inline-flex rounded-[5px] bg-[#f1edff] px-3.5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-[#6941d9]">
             <Sparkles className="mr-2 size-3.5" />
             {t.hero.eyebrow}
           </p>
-          <h1 className="mt-6 max-w-[560px] text-[40px] font-bold leading-[1.02] tracking-[-.045em] text-[#080808] sm:mt-7 sm:text-[54px] lg:text-[64px]">
-            <span className="block whitespace-pre-line">{t.hero.title}</span>
-            <span className="block whitespace-pre-line text-[#6240d7]">
-              {t.hero.accentTitle}
-            </span>
-            <span className="block whitespace-pre-line">
-              {t.hero.endingTitle}
-            </span>
-          </h1>
+          <h1
+            className="mt-6 max-w-[620px] text-[32px] font-bold leading-[1.04] tracking-[-.04em] text-[#080808] sm:mt-7 sm:text-[40px] lg:text-[46px] [&_div]:block [&_p]:m-0"
+            dangerouslySetInnerHTML={{ __html: t.hero.title }}
+          />
           <p className="mt-6 max-w-[470px] whitespace-pre-line text-[15px] leading-7 text-[#5f5f67] sm:mt-7 sm:text-[16px] sm:leading-8">
             {t.hero.subtitle}
           </p>
@@ -163,41 +158,29 @@ export function HomeHero({
           </div>
         </div>
 
-        <div className="relative min-h-[300px] sm:min-h-[380px] md:min-h-[520px]">
-          <div className="absolute bottom-2 right-0 w-[92%] rounded-[14px] border-[7px] border-[#111] bg-[#111] shadow-[0_24px_45px_rgba(40,20,100,.22)] sm:w-[88%] sm:rounded-[18px] sm:border-[9px] md:w-[86%] md:border-[10px] md:shadow-[0_32px_60px_rgba(40,20,100,.25)]">
-            <div className="rounded-[8px] bg-[#0f0f12] p-2.5 text-white sm:p-4">
-              <div className="mb-4 flex items-center justify-between text-[10px]">
-                <span className="tracking-[.16em]">GALLERISTA</span>
-                <span className="text-white/50">My Galleries</span>
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                {images.slice(0, 8).map((src, i) => (
-                  <img
-                    key={i}
-                    src={src}
-                    alt=""
-                    className="aspect-square w-full rounded-sm object-cover"
-                  />
-                ))}
-              </div>
-            </div>
+        <div className="relative flex min-h-[300px] items-center justify-center sm:min-h-[380px] md:min-h-[520px]">
+          <div className="relative w-full overflow-hidden rounded-[18px] bg-[#f4f1ff] shadow-[0_28px_70px_rgba(60,35,130,.2)] md:ml-auto">
+            {cms.media.heroMediaType === "video" ? (
+              <video
+                key={cms.media.heroMediaUrl}
+                src={cms.media.heroMediaUrl}
+                className="h-auto max-h-[620px] w-full object-contain"
+                autoPlay
+                muted
+                loop
+                playsInline
+                controls
+              />
+            ) : (
+              <img
+                key={hero}
+                src={hero}
+                alt="Nikoset hero media"
+                className="h-auto max-h-[620px] w-full object-contain"
+              />
+            )}
           </div>
-          <div className="absolute bottom-0 left-0 w-[34%] min-w-[108px] rounded-[20px] border-[5px] border-black bg-black p-1 shadow-[0_18px_38px_rgba(0,0,0,.28)] sm:left-3 sm:w-[30%] sm:min-w-[140px] sm:rounded-[26px] sm:border-[7px] md:min-w-[150px] md:rounded-[28px] md:border-[8px] md:shadow-[0_24px_55px_rgba(0,0,0,.3)]">
-            <div className="overflow-hidden rounded-[19px] bg-[#101014] p-2">
-              <p className="mb-2 px-1 text-[8px] text-white">Summer Wedding</p>
-              <div className="grid grid-cols-2 gap-1">
-                {[hero, ...images].slice(0, 6).map((src, i) => (
-                  <img
-                    key={i}
-                    src={src}
-                    alt=""
-                    className="aspect-square w-full object-cover"
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="absolute -bottom-4 left-16 h-16 w-[70%] rounded-full bg-[#7657f5]/30 blur-2xl" />
+          <div className="absolute -bottom-4 left-[15%] h-16 w-[70%] rounded-full bg-[#7657f5]/30 blur-2xl" />
         </div>
       </div>
 

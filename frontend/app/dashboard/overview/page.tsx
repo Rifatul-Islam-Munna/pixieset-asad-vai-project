@@ -2,18 +2,23 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  ArrowRight,
   BadgeDollarSign,
+  Camera,
   CircleUserRound,
   CreditCard,
+  Crown,
   Images,
   LayoutGrid,
   Mail,
   Palette,
+  ReceiptText,
   Settings,
   Smartphone,
   Store,
 } from "lucide-react";
 import { getBillingOverview, getPurchaseHistory } from "@/actions/billing";
+import { getHomeCms } from "@/lib/home-cms-server";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +68,7 @@ const products = [
   {
     title: "Client Gallery",
     icon: Images,
-    color: "bg-[#09bfb4]",
+    color: "bg-[#6337d8]",
     links: [
       ["Manage Galleries", "/dashboard/client-gallery"],
       ["Create Gallery", "/dashboard/client-gallery/collection-new"],
@@ -74,7 +79,7 @@ const products = [
   {
     title: "Store",
     icon: Store,
-    color: "bg-[#fb4857]",
+    color: "bg-[#6337d8]",
     links: [
       ["View Orders", "/dashboard/store-gallery/orders"],
       ["Products", "/dashboard/store-gallery/products"],
@@ -84,7 +89,7 @@ const products = [
   {
     title: "Mobile Gallery App",
     icon: Smartphone,
-    color: "bg-[#ffc400]",
+    color: "bg-[#6337d8]",
     links: [
       ["Manage Apps", "/dashboard/mobile-gallery"],
       ["Create New App", "/dashboard/mobile-gallery"],
@@ -94,7 +99,7 @@ const products = [
   {
     title: "Profile & Account",
     icon: CircleUserRound,
-    color: "bg-[#f23895]",
+    color: "bg-[#6337d8]",
     links: [
       ["Profile", "/dashboard/client-gallery/account"],
       ["Account", "/dashboard/client-gallery/account"],
@@ -123,18 +128,60 @@ function formatDate(value?: string) {
 }
 
 export default async function DashboardOverviewPage() {
-  const [{ user }, purchases, collections, orders] = await Promise.all([
+  const [{ user }, purchases, collections, orders, cms] = await Promise.all([
     getBillingOverview(),
     getPurchaseHistory(),
     authedOverviewRequest<OverviewCollection[]>("/collections", []),
     authedOverviewRequest<OverviewOrder[]>("/store/orders", []),
+    getHomeCms(),
   ]);
+  const brandLogo = cms.brand.logoUrl?.trim() || cms.brand.brandImageUrl?.trim() || "";
+  const brandText = cms.brand.brandText?.trim() || "";
   const recentCollections = collections.slice(0, 4);
   const recentOrders = orders.slice(0, 4);
+  const planNotExpired = !user.planExpiresAt || new Date(user.planExpiresAt).getTime() > Date.now();
+  const hasAssignedPaidPlan = Boolean(user.planId) || Boolean(user.planName && !/^free$/i.test(user.planName.trim()));
+  const hasPaidPurchase = purchases.some((purchase) => purchase.amount > 0 && (purchase.status === "active" || purchase.status === "paid"));
+  const isPlus = planNotExpired && (hasAssignedPaidPlan || hasPaidPurchase);
 
   return (
-    <main className="min-h-screen bg-white px-5 py-12 text-[#171717] md:px-10 md:py-20">
-      <div className="mx-auto max-w-[1100px]">
+    <main className="min-h-screen bg-[#fbfbfd] text-[#171717]">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[255px] border-r border-[#ececf1] bg-white md:flex md:flex-col">
+        <Link href="/" className="flex h-[78px] min-w-0 items-center border-b border-[#f0f0f3] px-7 text-lg font-bold" aria-label={brandLogo ? "Home" : brandText || "Home"}>
+          {brandLogo ? (
+            <img src={brandLogo} alt="" className="h-11 w-auto max-w-[190px] object-contain" />
+          ) : brandText ? (
+            <span className="max-w-[190px] truncate">{brandText}</span>
+          ) : null}
+        </Link>
+        <nav className="flex-1 px-5 py-6 text-sm font-medium text-[#3f3d47]">
+          <div className="grid gap-2">
+            <Link href="/dashboard/overview" className="flex h-12 items-center gap-4 rounded-[8px] bg-[#f1ecff] px-4 font-semibold text-[#6237d8]"><LayoutGrid className="size-5" />Dashboard</Link>
+            <Link href="/dashboard/client-gallery" className="flex h-12 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><Images className="size-5" />Client Gallery</Link>
+            <Link href="/dashboard/store-gallery" className="flex h-12 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><Store className="size-5" />Store</Link>
+            <Link href="/dashboard/mobile-gallery" className="flex h-12 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><Smartphone className="size-5" />Mobile Gallery App</Link>
+            <Link href="/dashboard/client-gallery/account" className="flex h-12 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><CircleUserRound className="size-5" />Profile & Account</Link>
+          </div>
+          <div className="my-6 border-t border-[#eeeeef]" />
+          <p className="px-4 text-[10px] font-bold uppercase tracking-[.18em] text-[#9996a1]">Quick Access</p>
+          <div className="mt-4 grid gap-2">
+            <Link href="/dashboard/client-gallery" className="flex h-11 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><Images className="size-5" />Recent Collections</Link>
+            <Link href="/dashboard/store-gallery/orders" className="flex h-11 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><Store className="size-5" />Recent Orders</Link>
+            <Link href="/dashboard/client-gallery/storage" className="flex h-11 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><ReceiptText className="size-5" />Recent Plan History</Link>
+            <Link href="/dashboard/client-gallery/account" className="flex h-11 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><BadgeDollarSign className="size-5" />Account</Link>
+          </div>
+        </nav>
+        {!isPlus && (
+          <div className="m-5 rounded-[12px] bg-gradient-to-br from-[#f1ebff] to-[#e9ddff] p-5">
+            <Crown className="size-7 text-[#6237d8]" />
+            <h3 className="mt-4 font-bold">Upgrade to Plus</h3>
+            <p className="mt-2 text-xs leading-5 text-[#726d7d]">Unlock premium features and grow your business.</p>
+            <Link href="/pricing" className="mt-5 flex h-10 items-center justify-center gap-2 rounded-[7px] bg-gradient-to-r from-[#5425c8] to-[#7436df] text-sm font-semibold text-white">Upgrade Now <ArrowRight className="size-4" /></Link>
+          </div>
+        )}
+      </aside>
+      <section className="min-h-screen px-5 py-10 md:pl-[295px] md:pr-10 md:py-14">
+      <div className="mx-auto max-w-[1080px]">
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <h1 className="text-3xl font-medium">Dashboard</h1>
@@ -155,19 +202,17 @@ export default async function DashboardOverviewPage() {
           <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#8a8f98]">
             Products
           </p>
-          <div className="mt-9 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {products.map((product) => (
-              <div key={product.title} className="min-w-0">
-                <span
-                  className={`mx-auto flex size-14 items-center justify-center rounded-full text-white ${product.color}`}
-                >
-                  <product.icon className="size-6" />
-                </span>
-                <h2 className="mt-5 truncate text-center text-base font-bold">
-                  {product.title}
-                </h2>
-                <div className="mt-4 border-t pt-4">
-                  <div className="grid gap-3 text-sm text-[#5f6670]">
+              <div key={product.title} className="min-w-0 rounded-[10px] border border-[#ececf1] bg-white p-5 shadow-[0_8px_24px_rgba(38,31,61,.04)]">
+                <div className="flex items-center gap-4">
+                  <span className={`flex size-12 shrink-0 items-center justify-center rounded-full text-white ${product.color}`}>
+                    <product.icon className="size-5" />
+                  </span>
+                  <h2 className="truncate text-[15px] font-bold">{product.title}</h2>
+                </div>
+                <div className="mt-4 border-t border-[#eeeeef] pt-4">
+                  <div className="grid gap-3 text-[13px] text-[#5f6670]">
                     {product.links.map(([label, href]) => (
                       <Link
                         key={label}
@@ -374,6 +419,7 @@ export default async function DashboardOverviewPage() {
           </div>
         </section>
       </div>
+      </section>
     </main>
   );
 }

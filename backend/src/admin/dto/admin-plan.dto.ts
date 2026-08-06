@@ -41,6 +41,10 @@ export class AdminCreatePlanDto {
 
   @IsOptional()
   @IsBoolean()
+  recommended?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   active?: boolean;
 }
 
@@ -85,6 +89,10 @@ export class AdminUpdatePlanDto {
 
   @IsOptional()
   features?: Record<string, boolean>;
+
+  @IsOptional()
+  @IsBoolean()
+  recommended?: boolean;
 
   @IsOptional()
   @IsBoolean()

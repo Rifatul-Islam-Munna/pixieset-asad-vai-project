@@ -46,8 +46,9 @@ export function SiteNav({
 }) {
   const [open, setOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
-  const brandText = brand?.brandText?.trim() || nav.brand;
-  const logoUrl = brand?.logoUrl?.trim() || brand?.brandImageUrl?.trim();
+  const brandText = brand?.brandText?.trim() || "";
+  const logoUrl = brand?.logoUrl?.trim() || brand?.brandImageUrl?.trim() || "";
+  const brandLabel = logoUrl ? "Home" : brandText;
   const productHref = (href: string) =>
     dashboardHref ? href : `/login?next=${encodeURIComponent(href)}`;
 
@@ -60,17 +61,16 @@ export function SiteNav({
     <header className="relative z-30 mx-auto flex h-16 max-w-[1240px] items-center justify-between px-4 sm:h-20 sm:px-5 md:px-7 lg:px-8">
       <Link
         href="/"
-        className="inline-flex min-w-0 items-center gap-3 text-[#101010]"
-        aria-label={brandText}
+        className="inline-flex min-w-0 items-center text-[#101010]"
+        aria-label={brandLabel || "Home"}
       >
-        {logoUrl && (
-          <img src={logoUrl} alt="" className="h-8 max-w-28 object-contain" />
-        )}
-        {brandText && (
+        {logoUrl ? (
+          <img src={logoUrl} alt="" className="h-10 w-auto max-w-[180px] object-contain sm:h-11 sm:max-w-[220px]" />
+        ) : brandText ? (
           <span className="max-w-[210px] truncate font-heading text-lg font-semibold tracking-[0.12em] sm:max-w-[320px] sm:text-2xl sm:tracking-[0.18em]">
             {brandText}
           </span>
-        )}
+        ) : null}
       </Link>
 
       <nav className="hidden items-center gap-9 text-[13px] font-semibold text-[#151515] md:flex">
@@ -154,10 +154,15 @@ export function SiteNav({
           <div className="flex items-center justify-between">
             <Link
               href="/"
-              className="font-heading text-2xl tracking-[0.18em]"
+              className="inline-flex min-w-0 items-center"
               onClick={() => setOpen(false)}
+              aria-label={brandLabel || "Home"}
             >
-              {brandText}
+              {logoUrl ? (
+                <img src={logoUrl} alt="" className="h-10 w-auto max-w-[190px] object-contain" />
+              ) : brandText ? (
+                <span className="max-w-[220px] truncate font-heading text-2xl tracking-[0.18em]">{brandText}</span>
+              ) : null}
             </Link>
             <button
               type="button"

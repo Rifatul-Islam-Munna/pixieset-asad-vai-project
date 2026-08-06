@@ -164,6 +164,8 @@ export type HomeContent = {
     images: string[];
   };
   footer: {
+    brandText: string;
+    logoUrl: string;
     description: string;
     copyright: string;
     columns: { title: string; links: FooterLink[] }[];
@@ -529,6 +531,8 @@ export const defaultHomeCms: HomeCmsData = {
         ],
       },
       footer: {
+        brandText: "Nikoset",
+        logoUrl: "",
         description:
           "An all-in-one platform for modern photographers, offering client photo galleries, websites, online stores and studio management software tools.",
         copyright: "Copyright 2026 Nikoset. Made with love in Vancity.",
@@ -538,8 +542,16 @@ export const defaultHomeCms: HomeCmsData = {
             links: ["Client Gallery", "Store Gallery", "Mobile Gallery App"],
           },
           {
-            title: "Pages",
-            links: ["Pricing", "Terms of Service", "Privacy Policy"],
+            title: "Company",
+            links: ["About", "Pricing", "Contact"],
+          },
+          {
+            title: "Resources",
+            links: ["Help Center", "Blog", "Community"],
+          },
+          {
+            title: "Legal",
+            links: ["Terms of Service", "Privacy Policy", "Cookies"],
           },
         ],
       },
@@ -623,6 +635,9 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     auth.registerImageUrl = defaultHomeCms.auth.registerImageUrl;
 
   const seo = { ...defaultHomeCms.seo, ...(data?.seo ?? {}) };
+  if (!seo.faviconUrl?.trim()) {
+    seo.faviconUrl = brand.logoUrl?.trim() || brand.brandImageUrl?.trim() || "";
+  }
   if (!Array.isArray(seo.extraMetaTags)) seo.extraMetaTags = [];
   if (seo.twitterCard !== "summary") seo.twitterCard = "summary_large_image";
 
@@ -748,14 +763,19 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
           ? content[lang].testimonials.items
           : fallback.testimonials.items,
     };
+    const savedFooterColumns = Array.isArray(content[lang].footer?.columns)
+      ? content[lang].footer.columns
+      : [];
     content[lang].footer = {
       ...fallback.footer,
       ...(content[lang].footer ?? {}),
-      columns:
-        Array.isArray(content[lang].footer?.columns) &&
-        content[lang].footer.columns.length
-          ? content[lang].footer.columns
-          : fallback.footer.columns,
+      columns: Array.from({ length: 4 }, (_, index) => ({
+        ...fallback.footer.columns[index],
+        ...(savedFooterColumns[index] ?? {}),
+        links: Array.isArray(savedFooterColumns[index]?.links)
+          ? savedFooterColumns[index].links
+          : fallback.footer.columns[index].links,
+      })),
     };
   });
 

@@ -41,6 +41,7 @@ export type AdminPlan = {
   yearlyEnabled?: boolean;
   priceYearly?: number;
   features?: Record<string, boolean>;
+  recommended?: boolean;
   active: boolean;
   createdAt?: string;
 };

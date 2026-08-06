@@ -7,10 +7,10 @@ import { loginUser, registerUser } from "@/actions/auth";
 import { GoogleLoginButton } from "@/components/auth/google-login-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AuthCms } from "@/lib/home-cms";
+import type { AuthCms, BrandSettings } from "@/lib/home-cms";
 
 
-export function LoginPageClient({ auth }: { auth: AuthCms }) {
+export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSettings }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [form, setForm] = useState({ phoneNumber: "", password: "" });
@@ -34,7 +34,7 @@ export function LoginPageClient({ auth }: { auth: AuthCms }) {
     <main className="min-h-screen bg-[#f7f6f3] px-4 py-4 text-[#111] sm:px-7 sm:py-7 lg:px-10 lg:py-10">
       <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-[1435px] overflow-hidden rounded-[18px] bg-white shadow-[0_22px_70px_rgba(31,25,18,.08)] sm:min-h-[calc(100vh-3.5rem)] lg:grid-cols-[41%_59%]">
         <section className="flex flex-col px-7 py-7 sm:px-12 sm:py-10 lg:px-14 xl:px-16">
-          <AuthBrand brand={auth.brand} />
+          <AuthBrand brand={brand} />
 
           <div className="flex flex-1 items-center py-10 lg:py-8">
             <form onSubmit={submit} className="w-full max-w-[460px]">
@@ -130,7 +130,7 @@ function LoginBenefit({ icon, title, text }: { icon: ReactNode; title: string; t
   );
 }
 
-export function RegisterPageClient({ auth }: { auth: AuthCms }) {
+export function RegisterPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSettings }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [form, setForm] = useState({ name: "", email: "", phoneNumber: "", password: "", gender: "" });
@@ -152,7 +152,7 @@ export function RegisterPageClient({ auth }: { auth: AuthCms }) {
     <main className="min-h-screen bg-[#f7f6f3] px-4 py-4 text-[#111] sm:px-7 sm:py-7 lg:px-10 lg:py-10">
       <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-[1435px] overflow-hidden rounded-[18px] bg-white shadow-[0_22px_70px_rgba(31,25,18,.08)] sm:min-h-[calc(100vh-3.5rem)] lg:grid-cols-[41%_59%]">
         <section className="flex flex-col px-7 py-7 sm:px-12 sm:py-10 lg:px-14 xl:px-16">
-          <AuthBrand brand={auth.brand} />
+          <AuthBrand brand={brand} />
 
           <div className="flex flex-1 items-center py-8 lg:py-6">
             <form onSubmit={submit} className="w-full max-w-[470px]">
@@ -214,11 +214,17 @@ function RegisterVisualPanel({ imageUrl }: { imageUrl: string }) {
   );
 }
 
-function AuthBrand({ brand }: { brand: string }) {
+function AuthBrand({ brand }: { brand: BrandSettings }) {
+  const logoUrl = brand.logoUrl?.trim() || brand.brandImageUrl?.trim() || "";
+  const brandText = brand.brandText?.trim() || "";
+
   return (
-    <Link href="/" className="flex w-fit items-center gap-3 text-sm font-bold">
-      <span className="size-5 rounded-full bg-[#6F57D9]" />
-      {brand}
+    <Link href="/" className="inline-flex w-fit min-w-0 items-center" aria-label={logoUrl ? "Home" : brandText || "Home"}>
+      {logoUrl ? (
+        <img src={logoUrl} alt="" className="h-11 w-auto max-w-[220px] object-contain" />
+      ) : brandText ? (
+        <span className="max-w-[240px] truncate font-heading text-xl font-semibold tracking-[0.14em]">{brandText}</span>
+      ) : null}
     </Link>
   );
 }

@@ -100,12 +100,12 @@ export default async function Home({
         className="relative overflow-hidden bg-[#fbfaff] px-4 py-16 sm:px-5 sm:py-20 md:px-8 md:py-28"
       >
         <div className="absolute inset-y-0 right-0 w-1/3 bg-[radial-gradient(circle,rgba(104,68,223,.12),transparent_65%)]" />
-        <div className="relative mx-auto grid max-w-[1320px] items-center gap-10 sm:gap-12 lg:grid-cols-[.65fr_1.35fr]">
+        <div className="relative mx-auto grid max-w-[1320px] items-center gap-10 sm:gap-12 lg:grid-cols-[.82fr_1.18fr]">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[.12em] text-[#6541d7]">
               {t.showcase.eyebrow}
             </p>
-            <h2 className="mt-5 whitespace-pre-line text-3xl font-bold leading-[1.08] tracking-[-.035em] sm:mt-6 sm:text-4xl md:text-5xl">
+            <h2 className="mt-5 max-w-[540px] whitespace-pre-line text-3xl font-bold leading-[1.08] tracking-[-.035em] sm:mt-6 sm:text-4xl md:text-[42px]">
               {t.showcase.title}
             </h2>
             <p className="mt-5 max-w-sm text-sm leading-7 text-[#666]">
@@ -271,18 +271,20 @@ export default async function Home({
         id="resources"
         className="bg-[#171918] px-4 py-10 text-white sm:px-5 sm:py-12 md:px-8 md:py-16"
       >
-        <div className="mx-auto grid max-w-[1320px] gap-10 md:grid-cols-[1.2fr_1fr]">
+        <div className="mx-auto grid max-w-[1320px] gap-10 lg:grid-cols-[1.15fr_1.85fr]">
           <div>
-            <p className="text-2xl tracking-[.18em]">
-              {cms.brand.brandText || t.nav.brand}
-            </p>
+            {t.footer.logoUrl ? (
+              <img src={t.footer.logoUrl} alt="" className="h-12 w-auto max-w-[240px] object-contain" />
+            ) : t.footer.brandText ? (
+              <p className="text-2xl tracking-[.18em]">{t.footer.brandText}</p>
+            ) : null}
             <p className="mt-6 max-w-[520px] text-sm leading-6 text-white/70">
               {t.footer.description}
             </p>
             <p className="mt-10 text-xs text-white/55">{t.footer.copyright}</p>
           </div>
-          <div className="grid gap-8 sm:grid-cols-2">
-            {t.footer.columns.map((column, i) => (
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            {t.footer.columns.slice(0, 4).map((column, i) => (
               <div key={i}>
                 <h3 className="text-sm font-bold">{column.title}</h3>
                 <ul className="mt-5 grid gap-3 text-sm text-white/70">

@@ -57,10 +57,11 @@ type PlanForm = {
   yearlyEnabled: boolean;
   priceYearly: string;
   features: Record<string, boolean>;
+  recommended: boolean;
   active: boolean;
 };
 
-type AdminTab = "overview" | "users" | "collections" | "plans" | "free-plan" | "stripe" | "cms" | "terms" | "privacy";
+type AdminTab = "overview" | "users" | "collections" | "plans" | "free-plan" | "stripe" | "cms" | "seo" | "terms" | "privacy";
 
 const emptyForm: UserForm = {
   name: "",
@@ -82,6 +83,7 @@ const emptyPlanForm: PlanForm = {
   yearlyEnabled: false,
   priceYearly: "",
   features: {},
+  recommended: false,
   active: true,
 };
 
@@ -191,6 +193,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       yearlyEnabled: planForm.yearlyEnabled,
       priceYearly: planForm.yearlyEnabled ? Number(planForm.priceYearly || 0) : 0,
       features: planForm.features,
+      recommended: planForm.recommended,
       active: planForm.active,
     };
     startTransition(async () => {
@@ -267,6 +270,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       yearlyEnabled: Boolean(plan.yearlyEnabled),
       priceYearly: String(plan.priceYearly ?? 0),
       features: plan.features ?? {},
+      recommended: Boolean(plan.recommended),
       active: plan.active,
     });
     setPlanModalOpen(true);
@@ -522,6 +526,15 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             <FreePlanSettingsPanel form={freePlanForm} setForm={setFreePlanForm} onSave={saveFreePlan} busy={pending} />
           ) : tab === "stripe" ? (
             <StripeSettingsPanel form={stripeForm} setForm={setStripeForm} />
+          ) : tab === "seo" ? (
+            <SeoCmsPanel
+              form={homeCms}
+              setForm={setHomeCms}
+              onUpload={uploadCmsFile}
+              onSave={() => saveHomeCms(false)}
+              saveState={cmsSaveState}
+              busy={pending}
+            />
           ) : tab === "cms" ? (
             <HomeCmsPanel
               form={homeCms}
@@ -650,6 +663,14 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
                   </label>
                 ))}
               </div>
+              <label className="flex h-11 items-center justify-between border border-[#cbbcf5] bg-[#f7f3ff] px-3 text-sm">
+                <span className="font-semibold text-[#6337d8]">Recommended plan</span>
+                <input
+                  type="checkbox"
+                  checked={planForm.recommended}
+                  onChange={(event) => setPlanForm({ ...planForm, recommended: event.target.checked })}
+                />
+              </label>
               <label className="flex h-11 items-center justify-between border px-3 text-sm">
                 <span className="font-semibold">Active</span>
                 <input
@@ -702,6 +723,7 @@ function AdminNav({ tab, setTab }: { tab: AdminTab; setTab: (tab: AdminTab) => v
     { id: "free-plan", label: "Free Plan", icon: HardDrive },
     { id: "stripe", label: "Stripe", icon: ShieldCheck },
     { id: "cms", label: "Homepage Editor", icon: FileImage },
+    { id: "seo", label: "SEO", icon: Search },
     { id: "terms", label: "Terms of Service", icon: FileText },
     { id: "privacy", label: "Privacy Policy", icon: ShieldCheck },
   ];
@@ -1108,6 +1130,97 @@ function RichTextEditor({ value, onChange }: { value: string; onChange: (value: 
   return <div className="border border-[#ccd5d1] bg-white"><div className="flex flex-wrap gap-1 border-b bg-[#f7f7f4] p-2">{[["bold", "Bold"], ["italic", "Italic"], ["underline", "Underline"], ["insertUnorderedList", "Bullets"], ["insertOrderedList", "Numbers"], ["formatBlock", "Heading", "h2"], ["formatBlock", "Paragraph", "p"]].map(([name, label, commandValue]) => <button key={`${name}-${label}`} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => command(name, commandValue)} className="border bg-white px-3 py-2 text-xs font-bold hover:bg-[#e9efec]">{label}</button>)}<button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const url = window.prompt("Link URL"); if (url) command("createLink", url); }} className="border bg-white px-3 py-2 text-xs font-bold hover:bg-[#e9efec]">Link</button><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => command("removeFormat")} className="border bg-white px-3 py-2 text-xs font-bold hover:bg-[#e9efec]">Clear format</button></div><div ref={editorRef} contentEditable suppressContentEditableWarning dangerouslySetInnerHTML={{ __html: initialHtml }} onInput={(event) => onChange(event.currentTarget.innerHTML)} className="min-h-[520px] p-5 text-base leading-8 outline-none [&_a]:text-[#087f70] [&_a]:underline [&_h2]:mb-4 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:font-bold [&_li]:ml-6 [&_ol]:list-decimal [&_p]:my-4 [&_ul]:list-disc" /></div>;
 }
 
+function SeoCmsPanel({
+  form,
+  setForm,
+  onUpload,
+  onSave,
+  saveState,
+  busy,
+}: {
+  form: HomeCmsData;
+  setForm: (value: HomeCmsData) => void;
+  onUpload: (file: File) => Promise<string>;
+  onSave: () => void;
+  saveState: "saved" | "saving" | "unsaved" | "error";
+  busy: boolean;
+}) {
+  const seo = form.seo;
+  const patchSeo = (value: Partial<HomeCmsData["seo"]>) =>
+    setForm({ ...form, seo: { ...seo, ...value } });
+  const addMeta = () => patchSeo({ extraMetaTags: [...seo.extraMetaTags, { type: "name", key: "", value: "" }] });
+  const updateMeta = (index: number, value: Partial<SeoMetaTag>) => {
+    const tags = [...seo.extraMetaTags];
+    tags[index] = { ...tags[index], ...value };
+    patchSeo({ extraMetaTags: tags });
+  };
+  const removeMeta = (index: number) => patchSeo({ extraMetaTags: seo.extraMetaTags.filter((_, i) => i !== index) });
+
+  return (
+    <div className="mt-6 grid gap-5">
+      <div className="sticky top-0 z-20 border border-[#dfe5e2] bg-[#12201c] p-5 text-white shadow-[0_14px_35px_rgba(0,0,0,.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div><p className="text-xs font-bold uppercase tracking-[.18em] text-white/60">Search & Social</p><h2 className="mt-1 text-2xl font-semibold">Homepage SEO</h2></div>
+          <div className="flex items-center gap-3"><span className="text-xs text-white/65">{saveState === "saving" ? "Saving" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved"}</span><Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#22bda7] px-6 text-white hover:bg-[#19a995]">Save SEO</Button></div>
+        </div>
+      </div>
+
+      <CmsSection eyebrow="SEO 1" title="Homepage search result" defaultOpen>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Main metadata">
+            <CmsInput label="Homepage title" value={seo.siteTitle} onChange={(siteTitle) => patchSeo({ siteTitle })} />
+            <CmsTextarea label="Meta description" value={seo.siteDescription} onChange={(siteDescription) => patchSeo({ siteDescription })} />
+            <CmsTextarea label="Keywords — separate with commas" value={seo.siteKeywords} onChange={(siteKeywords) => patchSeo({ siteKeywords })} />
+            <CmsInput label="Canonical homepage URL" value={seo.siteCanonicalUrl} onChange={(siteCanonicalUrl) => patchSeo({ siteCanonicalUrl })} />
+            <CmsInput label="Robots directive" value={seo.robots} onChange={(robots) => patchSeo({ robots })} />
+          </CmsRepeater>
+          <CmsRepeater title="Search preview">
+            <div className="rounded-lg border bg-white p-5"><p className="text-sm text-[#237804]">{seo.siteCanonicalUrl || "https://gallerista.app"}</p><h3 className="mt-1 text-xl text-[#1a0dab]">{seo.siteTitle || "Homepage title"}</h3><p className="mt-2 text-sm leading-6 text-[#4d5156]">{seo.siteDescription || "Your homepage description will appear here."}</p></div>
+          </CmsRepeater>
+        </div>
+      </CmsSection>
+
+      <CmsSection eyebrow="SEO 2" title="Social media sharing">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Open Graph and social image">
+            <CmsImageInput label="Social share image — recommended 1200 × 630 px" value={seo.siteImageUrl} onChange={(siteImageUrl) => patchSeo({ siteImageUrl })} onUpload={onUpload} busy={busy} />
+            <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Twitter card type</span><select value={seo.twitterCard} onChange={(event) => patchSeo({ twitterCard: event.target.value })} className="h-11 border px-3 text-sm"><option value="summary_large_image">Large image</option><option value="summary">Summary</option></select></label>
+            <p className="text-xs leading-5 text-[#777]">The homepage title, description and social image are used for Facebook, LinkedIn, X/Twitter, WhatsApp and other link previews.</p>
+          </CmsRepeater>
+          <CmsRepeater title="Website icon">
+            <CmsImageInput label="Custom favicon — recommended square PNG/SVG, 512 × 512 px" value={seo.faviconUrl} onChange={(faviconUrl) => patchSeo({ faviconUrl })} onUpload={onUpload} busy={busy} />
+            <p className="text-xs leading-5 text-[#777]">When this field is empty, the brand logo uploaded in the Homepage Editor is automatically used as the website icon, browser tab icon and app icon.</p>
+          </CmsRepeater>
+        </div>
+      </CmsSection>
+
+      <CmsSection eyebrow="SEO 3" title="Analytics and structured data">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Tracking">
+            <CmsInput label="Google Tag Manager ID" value={seo.googleTagManagerId} onChange={(googleTagManagerId) => patchSeo({ googleTagManagerId })} />
+            <CmsTextarea label="JSON-LD structured data" value={seo.jsonLd} onChange={(jsonLd) => patchSeo({ jsonLd })} />
+          </CmsRepeater>
+          <CmsRepeater title="Login and registration SEO">
+            <CmsInput label="Login page title" value={seo.loginTitle} onChange={(loginTitle) => patchSeo({ loginTitle })} />
+            <CmsTextarea label="Login description" value={seo.loginDescription} onChange={(loginDescription) => patchSeo({ loginDescription })} />
+            <CmsInput label="Login keywords" value={seo.loginKeywords} onChange={(loginKeywords) => patchSeo({ loginKeywords })} />
+            <CmsInput label="Registration page title" value={seo.registerTitle} onChange={(registerTitle) => patchSeo({ registerTitle })} />
+            <CmsTextarea label="Registration description" value={seo.registerDescription} onChange={(registerDescription) => patchSeo({ registerDescription })} />
+            <CmsInput label="Registration keywords" value={seo.registerKeywords} onChange={(registerKeywords) => patchSeo({ registerKeywords })} />
+          </CmsRepeater>
+        </div>
+      </CmsSection>
+
+      <CmsSection eyebrow="SEO 4" title="Custom meta tags">
+        <CmsRepeater title="Advanced tags">
+          {seo.extraMetaTags.map((tag, index) => <div key={index} className="grid gap-3 border p-4 lg:grid-cols-[150px_1fr_1fr_auto]"><select value={tag.type} onChange={(event) => updateMeta(index, { type: event.target.value as SeoMetaTag["type"] })} className="h-11 border px-3 text-sm"><option value="name">name</option><option value="property">property</option><option value="httpEquiv">httpEquiv</option></select><CmsInput label="Meta key" value={tag.key} onChange={(key) => updateMeta(index, { key })} /><CmsInput label="Meta value" value={tag.value} onChange={(value) => updateMeta(index, { value })} /><Button type="button" variant="outline" className="mt-6 h-11 rounded-none" onClick={() => removeMeta(index)}><Trash2 className="size-4" /></Button></div>)}
+          <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={addMeta}><PlusCircle className="size-4" /> Add meta tag</Button>
+        </CmsRepeater>
+      </CmsSection>
+    </div>
+  );
+}
+
 function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, onSave, saveState, busy }: {
   form: HomeCmsData;
   lang: HomeLanguage;
@@ -1183,8 +1296,8 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
       <CmsSection eyebrow="Section 1" title="Header, brand, login and registration" defaultOpen>
         <div className="grid gap-5 lg:grid-cols-2">
           <CmsRepeater title="Brand and navbar">
-            <CmsInput label="Brand text" value={safeForm.brand.brandText} onChange={(brandText) => setForm({ ...safeForm, brand: { ...safeForm.brand, brandText }, auth: { ...safeForm.auth, brand: brandText } })} />
-            <CmsImageInput label="Brand logo" value={safeForm.brand.logoUrl} onChange={(logoUrl) => setForm({ ...safeForm, brand: { ...safeForm.brand, logoUrl } })} onUpload={onUpload} busy={busy} />
+            <CmsInput label="Brand text (used only when no logo is uploaded)" value={safeForm.brand.brandText} onChange={(brandText) => setForm({ ...safeForm, brand: { ...safeForm.brand, brandText, logoUrl: brandText.trim() ? "" : safeForm.brand.logoUrl }, auth: { ...safeForm.auth, brand: brandText } })} />
+            <CmsImageInput label="Brand logo — recommended 440 × 88 px, transparent PNG/SVG" value={safeForm.brand.logoUrl} onChange={(logoUrl) => setForm({ ...safeForm, brand: { ...safeForm.brand, logoUrl, brandText: logoUrl.trim() ? "" : safeForm.brand.brandText }, auth: { ...safeForm.auth, brand: logoUrl.trim() ? "" : safeForm.auth.brand } })} onUpload={onUpload} busy={busy} />
             <CmsInput label="Products label" value={content.nav.products} onChange={(products) => patchObject("nav", { products })} />
             <CmsInput label="Pricing label" value={content.nav.pricing} onChange={(pricing) => patchObject("nav", { pricing })} />
             <CmsInput label="Login label" value={content.nav.login} onChange={(login) => patchObject("nav", { login })} />
@@ -1205,9 +1318,7 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
         <div className="grid gap-5 lg:grid-cols-2">
           <CmsRepeater title="Hero text">
             <CmsInput label="Top badge" value={content.hero.eyebrow} onChange={(eyebrow) => patchObject("hero", { eyebrow })} />
-            <CmsInput label="Main heading (black)" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
-            <CmsInput label="Highlighted heading (purple)" value={content.hero.accentTitle} onChange={(accentTitle) => patchObject("hero", { accentTitle })} />
-            <CmsInput label="Ending heading (black)" value={content.hero.endingTitle} onChange={(endingTitle) => patchObject("hero", { endingTitle })} />
+            <CmsHeroHeadingEditor label="Hero heading" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
             <CmsTextarea label="Description (normal paragraph text)" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
             <CmsInput label="Primary button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
             <CmsInput label="Secondary button" value={content.hero.secondaryCta} onChange={(secondaryCta) => patchObject("hero", { secondaryCta })} />
@@ -1220,10 +1331,10 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
             <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Upload hero media</span><Input type="file" accept="image/*,video/*" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) onHeroUpload(file); }} className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] pt-2" /></label>
             <div className="mt-2 grid gap-3">
               <p className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Reviewer avatars</p>
-              {content.hero.avatarImages.map((avatar, index) => (
-                <CmsImageInput key={index} label={`Avatar ${index + 1}`} value={avatar} onChange={(value) => { const avatarImages = [...content.hero.avatarImages]; avatarImages[index] = value; patchObject("hero", { avatarImages }); }} onUpload={onUpload} busy={busy} />
+              {(content.hero.avatarImages ?? []).map((avatar, index) => (
+                <CmsImageInput key={index} label={`Avatar ${index + 1}`} value={avatar} onChange={(value) => { const avatarImages = [...(content.hero.avatarImages ?? [])]; avatarImages[index] = value; patchObject("hero", { avatarImages }); }} onUpload={onUpload} busy={busy} />
               ))}
-              <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={() => patchObject("hero", { avatarImages: [...content.hero.avatarImages, ""] })}><PlusCircle className="size-4" /> Add avatar</Button>
+              <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={() => patchObject("hero", { avatarImages: [...(content.hero.avatarImages ?? []), ""] })}><PlusCircle className="size-4" /> Add avatar</Button>
             </div>
           </CmsRepeater>
         </div>
@@ -1287,7 +1398,9 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
 
       <CmsSection eyebrow="Section 6" title="Footer">
         <div className="grid gap-5 lg:grid-cols-2">
-          <CmsRepeater title="Footer text">
+          <CmsRepeater title="Footer branding and text">
+            <CmsInput label="Footer brand text (used only when no footer logo is uploaded)" value={content.footer.brandText} onChange={(brandText) => patchObject("footer", { brandText, logoUrl: brandText.trim() ? "" : content.footer.logoUrl })} />
+            <CmsImageInput label="Footer logo — recommended 440 × 88 px, transparent PNG/SVG" value={content.footer.logoUrl} onChange={(logoUrl) => patchObject("footer", { logoUrl, brandText: logoUrl.trim() ? "" : content.footer.brandText })} onUpload={onUpload} busy={busy} />
             <CmsTextarea label="Description" value={content.footer.description} onChange={(description) => patchObject("footer", { description })} />
             <CmsInput label="Copyright" value={content.footer.copyright} onChange={(copyright) => patchObject("footer", { copyright })} />
           </CmsRepeater>
@@ -1402,6 +1515,47 @@ function CmsImageInput({ label, value, onChange, onUpload, busy, wide, accept = 
   );
 }
 
+function CmsHeroHeadingEditor({ label, value, onChange }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || document.activeElement === editor) return;
+    editor.innerHTML = value || "";
+  }, [value]);
+
+  const applyColor = (color: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand("foreColor", false, color);
+    onChange(editor.innerHTML);
+  };
+
+  return (
+    <div className="grid gap-2">
+      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">{label}</span>
+      <div className="flex flex-wrap gap-2 border border-b-0 border-[#ddd] bg-[#f5f5f3] p-2">
+        <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyColor("#080808")} className="border border-[#ccc] bg-white px-3 py-1.5 text-xs font-bold text-[#080808]">Black</button>
+        <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyColor("#6240d7")} className="bg-[#6240d7] px-3 py-1.5 text-xs font-bold text-white">Purple</button>
+        <span className="self-center text-xs text-[#777]">Select text, then choose a color.</span>
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={(event) => onChange(event.currentTarget.innerHTML)}
+        className="min-h-32 border border-[#ddd] bg-[#fbfbfa] p-3 text-base leading-7 outline-none focus:border-[#22bda7]"
+      />
+    </div>
+  );
+}
+
 function CmsTextarea({ label, value, onChange, wide }: {
   label: string;
   value: string;
@@ -1426,6 +1580,7 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
   onDelete: (id: string) => void;
   busy: boolean;
 }) {
+  const sortedPlans = [...plans].sort((a, b) => Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)));
   return (
     <div className="mt-6 overflow-x-auto bg-white">
       <table className="w-full min-w-[720px] text-sm">
@@ -1440,10 +1595,13 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
           </tr>
         </thead>
         <tbody>
-          {plans.map((plan) => (
-            <tr key={plan._id} className="border-b last:border-0">
+          {sortedPlans.map((plan) => (
+            <tr key={plan._id} className={cn("border-b last:border-0", plan.recommended && "bg-[#f7f3ff] shadow-[inset_3px_0_0_#6337d8]")}>
               <td className="px-4 py-4">
-                <p className="font-bold">{plan.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold">{plan.name}</p>
+                  {plan.recommended && <span className="rounded-full bg-[#6337d8] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.12em] text-white">Recommended</span>}
+                </div>
                 <p className="mt-1 text-xs text-[#777]">Storage + monthly email allowance</p>
               </td>
               <td className="px-4 py-4">{plan.storageGb} GB</td>

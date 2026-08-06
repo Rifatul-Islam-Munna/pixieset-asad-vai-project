@@ -17,5 +17,5 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RegisterPage() {
   const cms = await getHomeCms();
-  return <RegisterPageClient auth={cms.auth} />;
+  return <RegisterPageClient auth={cms.auth} brand={cms.brand} />;
 }

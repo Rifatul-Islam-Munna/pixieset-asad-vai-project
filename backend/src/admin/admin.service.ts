@@ -184,7 +184,7 @@ export class AdminService implements OnModuleInit {
   }
 
   async findPlans() {
-    return this.planModel.find().sort({ createdAt: -1 }).lean();
+    return this.planModel.find().sort({ recommended: -1, createdAt: -1 }).lean();
   }
 
   async findDefaultStoreProducts() {
@@ -196,6 +196,7 @@ export class AdminService implements OnModuleInit {
   }
 
   async createPlan(dto: AdminCreatePlanDto) {
+    if (dto.recommended) await this.planModel.updateMany({}, { $set: { recommended: false } });
     if (dto.yearlyEnabled && Number(dto.priceYearly ?? 0) <= 0) {
       throw new BadRequestException('Yearly price must be greater than zero');
     }
@@ -209,12 +210,14 @@ export class AdminService implements OnModuleInit {
       yearlyEnabled: Boolean(dto.yearlyEnabled),
       priceYearly: Number(dto.priceYearly ?? 0),
       features: (dto.features ?? {}) as any,
+      recommended: Boolean(dto.recommended),
       active: dto.active ?? true,
     });
     return plan.toObject();
   }
 
   async updatePlan(id: string, dto: AdminUpdatePlanDto) {
+    if (dto.recommended) await this.planModel.updateMany({ _id: { $ne: id } }, { $set: { recommended: false } });
     const plan = await this.planModel.findById(id);
     if (!plan) throw new NotFoundException('Plan not found');
     const yearlyEnabled = dto.yearlyEnabled ?? plan.yearlyEnabled;
@@ -231,6 +234,7 @@ export class AdminService implements OnModuleInit {
     if (dto.yearlyEnabled !== undefined) plan.yearlyEnabled = Boolean(dto.yearlyEnabled);
     if (dto.priceYearly !== undefined) plan.priceYearly = Number(dto.priceYearly);
     if (dto.features !== undefined) plan.features = dto.features as any;
+    if (dto.recommended !== undefined) plan.recommended = Boolean(dto.recommended);
     if (dto.active !== undefined) plan.active = dto.active;
     await plan.save();
     return plan.toObject();

@@ -295,8 +295,8 @@ const switcherItems = [
     text: "Better way to share, deliver, proof and sell",
     href: "/dashboard/client-gallery",
     icon: Images,
-    mark: "bg-[#0dc6b5]",
-    accent: "from-[#0dc6b5] to-[#9de7de]",
+    mark: "bg-[#6337d8]",
+    accent: "from-[#5527c9] to-[#8a5cf0]",
   },
   {
     key: "store-gallery",
@@ -313,8 +313,8 @@ const switcherItems = [
     text: "Create installable mobile-first photo apps",
     href: "/dashboard/mobile-gallery",
     icon: Smartphone,
-    mark: "bg-[#f5c421]",
-    accent: "from-[#f5c421] to-[#ffe99a]",
+    mark: "bg-[#6337d8]",
+    accent: "from-[#5527c9] to-[#8a5cf0]",
   },
 ] as const;
 

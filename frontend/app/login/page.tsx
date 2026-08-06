@@ -17,5 +17,5 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function LoginPage() {
   const cms = await getHomeCms();
-  return <LoginPageClient auth={cms.auth} />;
+  return <LoginPageClient auth={cms.auth} brand={cms.brand} />;
 }

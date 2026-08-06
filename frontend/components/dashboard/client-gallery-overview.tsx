@@ -111,30 +111,33 @@ export function ClientGalleryOverview({
   const storageUsedGb = storageUsedBytes / 1024 / 1024 / 1024;
   const storagePercent =
     storageLimit > 0 ? Math.min(100, (storageUsedGb / storageLimit) * 100) : 0;
+  const recentSeries = data.series.slice(-8);
   const cards = [
     {
       label: "Total Revenue",
       value: money.format(data.metrics.revenue),
       change: data.metrics.revenueChange,
-      icon: WalletCards,
+      bars: recentSeries.map((item) => item.revenue),
     },
     {
       label: "Orders",
       value: number.format(data.metrics.orders),
       change: data.metrics.ordersChange,
-      icon: ShoppingBag,
+      bars: recentSeries.map((item) => item.orders),
     },
     {
       label: "Views",
       value: number.format(data.metrics.views),
       change: data.metrics.viewsChange,
-      icon: Eye,
+      bars: recentSeries.map((item) => item.views),
     },
     {
       label: "Conversion Rate",
       value: `${data.metrics.conversionRate.toFixed(1)}%`,
       change: data.metrics.conversionChange,
-      icon: TrendingUp,
+      bars: recentSeries.map((item) =>
+        item.views > 0 ? (item.orders / item.views) * 100 : 0,
+      ),
     },
   ];
   return (
@@ -382,23 +385,32 @@ function MetricCard({
   label,
   value,
   change,
-  icon: Icon,
+  bars,
 }: {
   label: string;
   value: string;
   change: number;
-  icon: typeof Eye;
+  bars: number[];
 }) {
+  const maximum = Math.max(1, ...bars);
+  const normalizedBars = bars.length ? bars : [0, 0, 0, 0, 0, 0, 0, 0];
+
   return (
     <div className="rounded-2xl border border-[#eceaf1] bg-white p-5 shadow-[0_10px_30px_rgba(35,25,70,.04)]">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-end justify-between gap-5">
+        <div className="min-w-0">
           <p className="text-xs font-medium text-[#77727f]">{label}</p>
           <p className="mt-2 text-2xl font-bold tracking-[-.03em]">{value}</p>
         </div>
-        <span className="grid size-10 place-items-center rounded-xl bg-[#f2edff] text-[#6337d8]">
-          <Icon className="size-5" />
-        </span>
+        <div className="flex h-12 w-24 shrink-0 items-end justify-end gap-1" aria-hidden="true">
+          {normalizedBars.map((bar, index) => (
+            <span
+              key={index}
+              className="min-h-[4px] flex-1 rounded-t-sm bg-[#6337d8]/80"
+              style={{ height: `${Math.max(8, (bar / maximum) * 100)}%` }}
+            />
+          ))}
+        </div>
       </div>
       <p
         className={`mt-4 text-xs font-semibold ${change >= 0 ? "text-emerald-600" : "text-red-500"}`}

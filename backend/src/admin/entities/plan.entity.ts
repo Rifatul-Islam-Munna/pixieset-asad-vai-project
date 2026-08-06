@@ -41,6 +41,9 @@ export class Plan {
     marketingEmails?: boolean;
   };
 
+  @Prop({ default: false })
+  recommended: boolean;
+
   @Prop({ default: true })
   active: boolean;
 }
