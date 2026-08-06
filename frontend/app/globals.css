@@ -320,3 +320,38 @@
 .sortable-image-drag {
   cursor: grabbing;
 }
+
+/* Keep Google Translate functional without showing its legacy toolbar. */
+.goog-te-banner-frame,
+.goog-te-balloon-frame,
+#goog-gt-tt,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+}
+
+body {
+  top: 0 !important;
+}
+
+.goog-text-highlight {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Strong override for the Google Translate injected top banner. */
+iframe.goog-te-banner-frame,
+iframe.skiptranslate,
+body > .skiptranslate {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  max-height: 0 !important;
+}
+
+html,
+body {
+  top: 0 !important;
+  margin-top: 0 !important;
+  transform: none !important;
+}

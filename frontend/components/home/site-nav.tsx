@@ -1,8 +1,8 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { Check, ChevronDown, Globe2, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BrandSettings } from "@/lib/home-cms";
 
@@ -46,16 +46,51 @@ export function SiteNav({
 }) {
   const [open, setOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [activeLanguage, setActiveLanguage] = useState<"en" | "gr" | "fr" | "de" | "ar">(lang);
   const brandText = brand?.brandText?.trim() || "";
   const logoUrl = brand?.logoUrl?.trim() || brand?.brandImageUrl?.trim() || "";
   const brandLabel = logoUrl ? "Home" : brandText;
   const productHref = (href: string) =>
     dashboardHref ? href : `/login?next=${encodeURIComponent(href)}`;
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem("home_selected_language");
+    if (saved === "en" || saved === "gr" || saved === "fr" || saved === "de" || saved === "ar") {
+      setActiveLanguage(saved);
+    } else {
+      setActiveLanguage(lang);
+    }
+  }, [lang]);
+
+  const clearGoogleTranslation = () => {
+    document.cookie = "googtrans=; Path=/; Max-Age=0; SameSite=Lax";
+    document.cookie = `googtrans=; Domain=.${window.location.hostname}; Path=/; Max-Age=0; SameSite=Lax`;
+  };
+
   const switchLanguage = (value: "en" | "gr") => {
+    clearGoogleTranslation();
+    window.localStorage.setItem("home_selected_language", value);
+    setActiveLanguage(value);
     document.cookie = `home_language=${value}; Path=/; Max-Age=31536000; SameSite=Lax`;
     window.location.assign(`/?lang=${value}`);
   };
+
+  const switchAutomaticLanguage = (value: "fr" | "de" | "ar") => {
+    window.localStorage.setItem("home_selected_language", value);
+    setActiveLanguage(value);
+    document.cookie = "home_language=en; Path=/; Max-Age=31536000; SameSite=Lax";
+    document.cookie = `googtrans=/en/${value}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    window.location.assign("/?lang=en");
+  };
+
+  const languages = [
+    { code: "en", label: "English", official: true },
+    { code: "gr", label: "Greek", official: true },
+    { code: "fr", label: "French", official: false },
+    { code: "de", label: "Deutsch", official: false },
+    { code: "ar", label: "العربية", official: false },
+  ] as const;
 
   return (
     <header className="relative z-30 mx-auto flex h-16 max-w-[1240px] items-center justify-between px-4 sm:h-20 sm:px-5 md:px-7 lg:px-8">
@@ -106,22 +141,37 @@ export function SiteNav({
       </nav>
 
       <div className="hidden items-center gap-5 md:flex">
-        <div className="flex items-center gap-2 text-[11px] font-bold text-[#7D7670]">
+        <div className="relative notranslate">
           <button
             type="button"
-            onClick={() => switchLanguage("en")}
-            className={lang === "en" ? "text-[#151515]" : ""}
+            onClick={() => setLanguageOpen((value) => !value)}
+            className="inline-flex h-10 items-center gap-2 rounded-[7px] border border-[#e7e3ee] bg-white px-3 text-[12px] font-bold text-[#151515]"
+            aria-label="Choose language"
           >
-            EN
+            <Globe2 className="size-4 text-[#6337d8]" />
+            {activeLanguage.toUpperCase()}
+            <ChevronDown className="size-3.5" />
           </button>
-          <span>/</span>
-          <button
-            type="button"
-            onClick={() => switchLanguage("gr")}
-            className={lang === "gr" ? "text-[#151515]" : ""}
-          >
-            GR
-          </button>
+          {languageOpen && (
+            <div className="absolute right-0 top-12 w-52 rounded-[8px] border border-[#EEEAE5] bg-white p-2 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
+              {languages.map((item) => (
+                <button
+                  key={item.code}
+                  type="button"
+                  onClick={() => {
+                    setLanguageOpen(false);
+                    item.official
+                      ? switchLanguage(item.code)
+                      : switchAutomaticLanguage(item.code);
+                  }}
+                  className="flex w-full items-center justify-between rounded-[6px] px-3 py-2.5 text-left text-sm hover:bg-[#F8F7F4]"
+                >
+                  <span>{item.label}</span>
+                  {item.code === activeLanguage && <Check className="size-4 text-[#6337d8]" />}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {!dashboardHref && (
           <Link
@@ -200,21 +250,27 @@ export function SiteNav({
               </Link>
             )}
           </nav>
-          <div className="mt-10 flex items-center gap-4 text-sm font-bold">
-            <button
-              type="button"
-              onClick={() => switchLanguage("en")}
-              className={lang === "en" ? "text-[#7A5CE8]" : "text-[#777]"}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              onClick={() => switchLanguage("gr")}
-              className={lang === "gr" ? "text-[#7A5CE8]" : "text-[#777]"}
-            >
-              GR
-            </button>
+          <div className="notranslate mt-10 border-t border-[#ded9ea] pt-6">
+            <p className="mb-3 flex items-center gap-2 text-sm font-bold">
+              <Globe2 className="size-4 text-[#6337d8]" /> Language
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {languages.map((item) => (
+                <button
+                  key={item.code}
+                  type="button"
+                  onClick={() =>
+                    item.official
+                      ? switchLanguage(item.code)
+                      : switchAutomaticLanguage(item.code)
+                  }
+                  className="flex items-center justify-between rounded-[7px] border border-[#ddd7e8] bg-white px-3 py-3 text-sm font-semibold"
+                >
+                  {item.label}
+                  {item.code === activeLanguage && <Check className="size-4 text-[#6337d8]" />}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

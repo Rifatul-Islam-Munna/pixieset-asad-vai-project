@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import QueryClint from "@/lib/queryclient";
 import { Toaster } from "@/components/ui/sonner";
+import { GoogleTranslate } from "@/components/translation/google-translate";
 import { getHomeCms } from "@/lib/home-cms-server";
 import {
   JsonLdScript,
@@ -108,6 +109,7 @@ export default async function RootLayout({
       </head>
       <body suppressHydrationWarning className="min-h-full flex flex-col">
         {gtmId && <GoogleTagManager gtmId={gtmId} />}
+        <GoogleTranslate />
         <QueryClint>
           <TooltipProvider>{children}</TooltipProvider>
         </QueryClint>
