@@ -158,29 +158,26 @@ export function HomeHero({
           </div>
         </div>
 
-        <div className="relative flex min-h-[300px] items-center justify-center sm:min-h-[380px] md:min-h-[520px]">
-          <div className="relative w-full overflow-hidden rounded-[18px] bg-[#f4f1ff] shadow-[0_28px_70px_rgba(60,35,130,.2)] md:ml-auto">
-            {cms.media.heroMediaType === "video" ? (
-              <video
-                key={cms.media.heroMediaUrl}
-                src={cms.media.heroMediaUrl}
-                className="h-auto max-h-[620px] w-full object-contain"
-                autoPlay
-                muted
-                loop
-                playsInline
-                controls
-              />
-            ) : (
-              <img
-                key={hero}
-                src={hero}
-                alt="Nikoset hero media"
-                className="h-auto max-h-[620px] w-full object-contain"
-              />
-            )}
-          </div>
-          <div className="absolute -bottom-4 left-[15%] h-16 w-[70%] rounded-full bg-[#7657f5]/30 blur-2xl" />
+        <div className="flex w-full items-center justify-center">
+          {cms.media.heroMediaType === "video" ? (
+            <video
+              key={cms.media.heroMediaUrl}
+              src={cms.media.heroMediaUrl}
+              className="block h-auto w-full object-contain"
+              autoPlay
+              muted
+              loop
+              playsInline
+              controls
+            />
+          ) : (
+            <img
+              key={hero}
+              src={hero}
+              alt="Nikoset hero media"
+              className="block h-auto w-full object-contain"
+            />
+          )}
         </div>
       </div>
 
