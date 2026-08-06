@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, FileImage, Package, ShoppingBag } from "lucide-react";
+import { BarChart3, FileImage, Newspaper, Package, ShoppingBag } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -9,16 +9,17 @@ const links = [
   { href: "/admin", label: "Admin dashboard", icon: BarChart3 },
   { href: "/admin/cover-templates", label: "Cover templates", icon: FileImage },
   { href: "/admin/default-products", label: "Default products", icon: ShoppingBag },
+  { href: "/admin/blogs", label: "Blog posts", icon: Newspaper },
 ];
 
 export function AdminResourceShell({ active, title, subtitle, action, children }: {
-  active: "covers" | "products";
+  active: "covers" | "products" | "blogs";
   title: string;
   subtitle: string;
   action?: ReactNode;
   children: ReactNode;
 }) {
-  const activeHref = active === "covers" ? "/admin/cover-templates" : "/admin/default-products";
+  const activeHref = active === "covers" ? "/admin/cover-templates" : active === "blogs" ? "/admin/blogs" : "/admin/default-products";
   return (
     <main className="min-h-screen bg-[#f3f3f1] text-[#171717]">
       <div className="grid min-h-screen lg:grid-cols-[250px_1fr]">

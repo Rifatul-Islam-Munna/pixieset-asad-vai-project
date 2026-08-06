@@ -295,3 +295,40 @@ export async function deleteAdminDefaultStoreProduct(id: string) {
   revalidatePath("/admin/default-products");
   return data;
 }
+
+export type AdminBlog = {
+  _id: string;
+  title: string;
+  slug: string;
+  excerpt?: string;
+  content?: string;
+  thumbnailUrl?: string;
+  author?: string;
+  keywords?: string[];
+  published: boolean;
+  publishedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export async function getAdminBlogs() {
+  return adminRequest<AdminBlog[]>("/blogs/admin/all");
+}
+
+export async function createAdminBlog(payload: Partial<AdminBlog>) {
+  const data = await adminRequest<AdminBlog>("/blogs/admin", { method: "POST", body: JSON.stringify(payload) });
+  revalidatePath("/admin/blogs"); revalidatePath("/blog");
+  return data;
+}
+
+export async function updateAdminBlog(id: string, payload: Partial<AdminBlog>) {
+  const data = await adminRequest<AdminBlog>(`/blogs/admin/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+  revalidatePath("/admin/blogs"); revalidatePath("/blog"); revalidatePath(`/blog/${data.slug}`);
+  return data;
+}
+
+export async function deleteAdminBlog(id: string) {
+  const data = await adminRequest<AdminBlog>(`/blogs/admin/${id}`, { method: "DELETE" });
+  revalidatePath("/admin/blogs"); revalidatePath("/blog");
+  return data;
+}

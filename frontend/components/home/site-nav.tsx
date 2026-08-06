@@ -75,6 +75,7 @@ export function SiteNav({
 
       <nav className="hidden items-center gap-9 text-[13px] font-semibold text-[#151515] md:flex">
         <Link href="/pricing">{nav.pricing}</Link>
+        <Link href="/blog">Blog</Link>
         <div className="relative">
           <button
             type="button"
@@ -177,6 +178,7 @@ export function SiteNav({
             <Link href="/pricing" onClick={() => setOpen(false)}>
               {nav.pricing}
             </Link>
+            <Link href="/blog" onClick={() => setOpen(false)}>Blog</Link>
             <span>{nav.products}</span>
             <div className="grid gap-4 text-base font-semibold">
               {productLinks.map((item) => (

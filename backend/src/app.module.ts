@@ -15,6 +15,7 @@ import { HomeCmsModule } from './home-cms/home-cms.module';
 import { MobileGalleryModule } from './mobile-gallery/mobile-gallery.module';
 import { MailModule } from './mail/mail.module';
 import { HomepageModule } from './homepage/homepage.module';
+import { BlogModule } from './blog/blog.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { HomepageModule } from './homepage/homepage.module';
     HomeCmsModule,
     MobileGalleryModule,
     HomepageModule,
+    BlogModule,
   ],
   controllers: [AppController],
   providers: [AppService],
