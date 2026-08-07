@@ -13,10 +13,31 @@ export type AdminUser = {
   phoneNumber: string;
   role: "admin" | "editor" | "user";
   gender?: string;
+  username?: string;
+  businessName?: string;
+  firstName?: string;
+  lastName?: string;
+  website?: string;
+  businessAddress?: string;
+  biography?: string;
+  avatar?: string;
   collectionCount?: number;
+  imageCount?: number;
+  orderCount?: number;
   planId?: string;
   planName?: string;
+  storageLimitGb?: number;
+  storageUsedBytes?: number;
+  galleryLimit?: number;
+  monthlyEmailLimit?: number;
+  monthlyEmailsUsed?: number;
+  videoUploadLimitMinutes?: number;
+  videoUploadQuality?: "hd" | "4k";
+  planActivatedAt?: string;
+  planExpiresAt?: string;
+  planBillingInterval?: "month" | "year";
   createdAt?: string;
+  collections?: AdminCollection[];
 };
 
 export type AdminCollection = {
@@ -43,6 +64,7 @@ export type AdminPlan = {
   priceYearly?: number;
   features?: Record<string, boolean>;
   recommended?: boolean;
+  sortOrder?: number;
   active: boolean;
   createdAt?: string;
 };
@@ -190,6 +212,42 @@ export async function deleteAdminUser(id: string) {
   return data;
 }
 
+export async function getAdminUserDetails(id: string) {
+  return adminRequest<AdminUser>(`/admin/users/${id}/details`);
+}
+
+export async function impersonateAdminUser(id: string) {
+  const cookieStore = await cookies();
+  const adminToken = cookieStore.get("access_token")?.value;
+  const adminUser = cookieStore.get("user")?.value;
+  const data = await adminRequest<{ accessToken: string; user: AdminUser }>(`/admin/users/${id}/impersonate`, { method: "POST" });
+  if (adminToken) cookieStore.set("admin_access_token_backup", adminToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 2 });
+  if (adminUser) cookieStore.set("admin_user_backup", adminUser, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 2 });
+  cookieStore.set("access_token", data.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 2 });
+  cookieStore.set("user", JSON.stringify(data.user), { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 2 });
+  cookieStore.set("admin_impersonating", "1", { httpOnly: false, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 2 });
+  return true;
+}
+
+export async function restoreAdminSession() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("admin_access_token_backup")?.value;
+  const user = cookieStore.get("admin_user_backup")?.value;
+  if (!token || !user) return false;
+  cookieStore.set("access_token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 10 });
+  cookieStore.set("user", user, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 10 });
+  cookieStore.delete("admin_access_token_backup");
+  cookieStore.delete("admin_user_backup");
+  cookieStore.delete("admin_impersonating");
+  return true;
+}
+
+export async function updateAdminCollection(id: string, payload: { name?: string; slug?: string; status?: string }) {
+  const data = await adminRequest<AdminCollection>(`/admin/collections/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+  revalidatePath("/admin");
+  return data;
+}
+
 export async function deleteAdminCollection(id: string) {
   const data = await adminRequest<AdminCollection>(`/admin/collections/${id}`, { method: "DELETE" });
   revalidatePath("/admin");
@@ -211,6 +269,17 @@ export async function updateAdminPlan(id: string, payload: Partial<Omit<AdminPla
     body: JSON.stringify(payload),
   });
   revalidatePath("/admin");
+  return data;
+}
+
+export async function reorderAdminPlans(planIds: string[]) {
+  const data = await adminRequest<AdminPlan[]>("/admin/plans/reorder", {
+    method: "PATCH",
+    body: JSON.stringify({ planIds }),
+  });
+  revalidatePath("/admin");
+  revalidatePath("/plans");
+  revalidatePath("/pricing");
   return data;
 }
 

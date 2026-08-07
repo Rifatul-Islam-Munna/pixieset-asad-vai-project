@@ -57,6 +57,9 @@ export class Plan {
   @Prop({ default: false })
   recommended: boolean;
 
+  @Prop({ default: 0, min: 0 })
+  sortOrder: number;
+
   @Prop({ default: true })
   active: boolean;
 }

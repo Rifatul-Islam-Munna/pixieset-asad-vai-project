@@ -189,7 +189,7 @@ import {
   type BillingUser,
   type PlanPurchase,
 } from "@/actions/billing";
-import type { AdminPlan } from "@/actions/admin";
+import { restoreAdminSession, type AdminPlan } from "@/actions/admin";
 import {
   CoverPreview,
   coverOptions,
@@ -511,7 +511,11 @@ export function ClientDashboard({
   const storeTopNavOpen = false;
   const [logoutPending, startLogoutTransition] = useTransition();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [adminImpersonating, setAdminImpersonating] = useState(false);
   const [billingUser, setBillingUser] = useState<BillingUser | null>(null);
+  useEffect(() => {
+    setAdminImpersonating(document.cookie.split(";").some((item) => item.trim() === "admin_impersonating=1"));
+  }, []);
   useEffect(() => {
     let active = true;
     const loadBilling = () =>
@@ -557,9 +561,22 @@ export function ClientDashboard({
       router.push("/login");
     });
   };
+  const returnToAdmin = () => {
+    startLogoutTransition(async () => {
+      const restored = await restoreAdminSession();
+      if (restored) window.location.href = "/admin?tab=users";
+      else toast.error("Admin session backup expired");
+    });
+  };
 
   return (
     <main className="gallerista-editorial min-h-screen overflow-x-hidden bg-[#fbfbfd] text-[#171717]">
+      {adminImpersonating && (
+        <div className="fixed inset-x-0 top-0 z-[100] flex min-h-11 items-center justify-center gap-3 bg-[#6337d8] px-4 py-2 text-center text-sm font-semibold text-white shadow-md">
+          <span>You are signed in as this user from Admin.</span>
+          <button type="button" onClick={returnToAdmin} disabled={logoutPending} className="rounded bg-white px-3 py-1.5 text-xs font-bold text-[#6337d8] hover:bg-[#f5f1ff] disabled:opacity-60">Return to Admin</button>
+        </div>
+      )}
       {dashboardChromeOpen && !storeTopNavOpen && (
         <aside
           className={cn(

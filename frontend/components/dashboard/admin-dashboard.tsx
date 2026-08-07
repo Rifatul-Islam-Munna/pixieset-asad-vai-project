@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Check, Edit3, Euro, ExternalLink, FileImage, FileText, HardDrive, Images, Loader2, LogOut, Mail, Menu, Newspaper, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { BarChart3, Check, Edit3, Euro, ExternalLink, FileImage, FileText, GripVertical, HardDrive, Images, Loader2, LogOut, Mail, Menu, Newspaper, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
@@ -12,6 +12,10 @@ import {
   deleteAdminCollection,
   deleteAdminPlan,
   deleteAdminUser,
+  getAdminUserDetails,
+  impersonateAdminUser,
+  reorderAdminPlans,
+  updateAdminCollection,
   updateAdminPlan,
   updateAdminFreePlanSettings,
   updateAdminStripeSettings,
@@ -117,6 +121,10 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
   const [planForm, setPlanForm] = useState<PlanForm>(emptyPlanForm);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [userModalOpen, setUserModalOpen] = useState(false);
+  const [userDetails, setUserDetails] = useState<AdminUser | null>(null);
+  const [userDetailsOpen, setUserDetailsOpen] = useState(false);
+  const [collectionEdit, setCollectionEdit] = useState<AdminCollection | null>(null);
+  const [collectionDraft, setCollectionDraft] = useState({ name: "", slug: "", status: "draft" });
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [stripeForm, setStripeForm] = useState<AdminStripeSetting>(
@@ -229,6 +237,31 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
     });
   };
 
+  const viewUser = (user: AdminUser) => {
+    startTransition(async () => {
+      try {
+        const details = await getAdminUserDetails(user._id);
+        setUserDetails(details);
+        setUserDetailsOpen(true);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not load user details");
+      }
+    });
+  };
+
+  const signInAsUser = (user: AdminUser) => {
+    openConfirm(`Sign in as ${user.name}? Your admin session will be saved for 2 hours.`, () => {
+      startTransition(async () => {
+        try {
+          await impersonateAdminUser(user._id);
+          window.location.href = "/dashboard";
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Could not sign in as user");
+        }
+      });
+    });
+  };
+
   const editUser = (user: AdminUser) => {
     setTab("users");
     setUserModalOpen(true);
@@ -272,8 +305,52 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
     });
   };
 
+  const editCollection = (collection: AdminCollection) => {
+    setCollectionEdit(collection);
+    setCollectionDraft({ name: collection.name ?? "", slug: collection.slug ?? "", status: collection.status ?? "draft" });
+  };
+
+  const saveCollection = () => {
+    if (!collectionEdit) return;
+    startTransition(async () => {
+      try {
+        await updateAdminCollection(collectionEdit._id, collectionDraft);
+        toast.success("Collection updated");
+        setCollectionEdit(null);
+        router.refresh();
+        if (userDetailsOpen && userDetails?._id) setUserDetails(await getAdminUserDetails(userDetails._id));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not update collection");
+      }
+    });
+  };
+
   const editPlan = (plan: AdminPlan) => {
     router.push(`/admin/plans/${plan._id}`);
+  };
+
+  const updatePlanOrder = (id: string, sortOrder: number) => {
+    startTransition(async () => {
+      try {
+        await updateAdminPlan(id, { sortOrder });
+        toast.success("Plan order updated");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not update plan order");
+      }
+    });
+  };
+
+  const reorderPlans = (planIds: string[]) => {
+    startTransition(async () => {
+      try {
+        await reorderAdminPlans(planIds);
+        toast.success("Plan order saved");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not reorder plans");
+      }
+    });
   };
 
   const removePlan = (id: string) => {
@@ -408,10 +485,13 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
     <main className="min-h-screen overflow-x-hidden bg-[#f6f6f3] text-[#151515]">
       <div className="grid min-h-screen lg:grid-cols-[260px_1fr]">
         <aside className="hidden border-r bg-white px-5 py-6 lg:block">
-          <div className="flex items-center gap-3 text-sm font-bold">
-            <span className="size-5 rounded-full bg-[#0dc6b5]" />
-            Nikoset Admin
-          </div>
+          <Link href="/" className="inline-flex min-h-10 items-center" aria-label="Open website">
+            {homeCms.brand.logoUrl ? (
+              <img src={homeCms.brand.logoUrl} alt={homeCms.brand.brandText || "Brand logo"} className="max-h-9 w-auto max-w-[170px] object-contain" />
+            ) : (
+              <span className="text-base font-bold text-[#6337d8]">{homeCms.brand.brandText || "Nikoset"}</span>
+            )}
+          </Link>
           <AdminNav tab={tab} setTab={setTab} />
           <Button onClick={logout} variant="outline" className="mt-10 h-10 w-full rounded-none" disabled={pending}>
             <LogOut className="size-4" />
@@ -421,11 +501,14 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
 
         <section className="min-w-0 px-3 py-4 sm:px-4 md:px-8 md:py-6">
           <div className="mb-5 flex items-center justify-between gap-3 bg-white px-3 py-3 sm:px-4 lg:hidden">
-            <div className="flex items-center gap-3 text-sm font-bold">
-              <span className="size-5 rounded-full bg-[#0dc6b5]" />
-              Nikoset Admin
-            </div>
-            <button className="flex size-10 items-center justify-center bg-[#111] text-white" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu">
+            <Link href="/" className="inline-flex min-h-9 items-center" aria-label="Open website">
+              {homeCms.brand.logoUrl ? (
+                <img src={homeCms.brand.logoUrl} alt={homeCms.brand.brandText || "Brand logo"} className="max-h-8 w-auto max-w-[150px] object-contain" />
+              ) : (
+                <span className="font-bold text-[#6337d8]">{homeCms.brand.brandText || "Nikoset"}</span>
+              )}
+            </Link>
+            <button className="flex size-10 items-center justify-center bg-[#6337d8] text-white" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu">
               <Menu />
             </button>
           </div>
@@ -434,10 +517,13 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
             <div className="fixed inset-0 z-50 bg-black/50 lg:hidden">
               <aside className="h-full w-[88vw] max-w-[320px] overflow-y-auto bg-white px-5 py-6 shadow-[20px_0_60px_rgba(0,0,0,0.25)]">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-sm font-bold">
-                    <span className="size-5 rounded-full bg-[#0dc6b5]" />
-                    Nikoset Admin
-                  </div>
+                  <Link href="/" className="inline-flex min-h-9 items-center" aria-label="Open website">
+                    {homeCms.brand.logoUrl ? (
+                      <img src={homeCms.brand.logoUrl} alt={homeCms.brand.brandText || "Brand logo"} className="max-h-8 w-auto max-w-[150px] object-contain" />
+                    ) : (
+                      <span className="font-bold text-[#6337d8]">{homeCms.brand.brandText || "Nikoset"}</span>
+                    )}
+                  </Link>
                   <button className="flex size-10 items-center justify-center bg-[#f3f3f3]" onClick={() => setAdminMenuOpen(false)} aria-label="Close admin menu">
                     <X className="size-5" />
                   </button>
@@ -454,7 +540,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
           <header className="flex flex-wrap items-start justify-between gap-5 border-b border-[#ddd] pb-6">
             <div className="min-w-0">
               <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-[#777]">
-                <ShieldCheck className="size-4 text-[#0aa997]" />
+                <ShieldCheck className="size-4 text-[#6337d8]" />
                 Control Panel
               </p>
               <h1 className="mt-3 text-2xl font-medium md:text-3xl">{pageTitle}</h1>
@@ -496,18 +582,18 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
               </select>
             )}
             {tab === "stripe" && (
-              <Button onClick={saveStripe} className="h-11 rounded-none bg-[#111] text-white" disabled={pending}>
+              <Button onClick={saveStripe} className="h-11 rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" disabled={pending}>
                 {pending ? <Loader2 className="size-4 animate-spin" /> : "Save Stripe"}
               </Button>
             )}
             {tab === "users" && (
-              <Button onClick={openAddModal} className="h-11 rounded-none bg-[#111] text-white">
+              <Button onClick={openAddModal} className="h-11 rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]">
                 <PlusCircle className="size-4" />
                 Add user
               </Button>
             )}
             {tab === "plans" && (
-              <Button asChild className="h-11 rounded-none bg-[#111] text-white">
+              <Button asChild className="h-11 rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]">
                 <Link href="/admin/plans/new">
                   <PlusCircle className="size-4" />
                   Add plan
@@ -520,10 +606,10 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
             <AdminOverview data={initialData} />
           ) : tab === "users" ? (
             <div className="mt-6">
-              <UserTable users={filteredUsers} onEdit={editUser} onDelete={removeUser} busy={pending} />
+              <UserTable users={filteredUsers} onView={viewUser} onEdit={editUser} onImpersonate={signInAsUser} onDelete={removeUser} busy={pending} />
             </div>
           ) : tab === "plans" ? (
-            <PlanTable plans={filteredPlans} onEdit={editPlan} onDelete={removePlan} busy={pending} />
+            <PlanTable plans={filteredPlans} onEdit={editPlan} onDelete={removePlan} onOrderChange={updatePlanOrder} onReorder={reorderPlans} busy={pending} />
           ) : tab === "free-plan" ? (
             <FreePlanSettingsPanel form={freePlanForm} setForm={setFreePlanForm} onSave={saveFreePlan} busy={pending} />
           ) : tab === "stripe" ? (
@@ -561,7 +647,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
               busy={pending}
             />
           ) : (
-            <CollectionTable collections={filteredCollections} onDelete={removeCollection} busy={pending} />
+            <CollectionTable collections={filteredCollections} onEdit={editCollection} onDelete={removeCollection} busy={pending} />
           )}
         </section>
       </div>
@@ -611,6 +697,58 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
               </Button>
             </div>
           </form>
+        </div>
+      )}
+
+      {userDetailsOpen && userDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/55 p-3 sm:p-4">
+          <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[980px] overflow-y-auto bg-white p-5 shadow-[0_28px_80px_rgba(0,0,0,0.2)] sm:p-7">
+            <div className="flex items-start justify-between gap-4 border-b pb-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[.18em] text-[#6337d8]">User details</p>
+                <h2 className="mt-2 text-2xl font-semibold">{userDetails.name}</h2>
+                <p className="mt-1 text-sm text-[#777]">{userDetails.email || userDetails.phoneNumber}</p>
+              </div>
+              <button className="p-2 hover:bg-[#f3f3f3]" onClick={() => setUserDetailsOpen(false)} aria-label="Close user details"><X className="size-5" /></button>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricCard icon={Images} label="Collections" value={userDetails.collectionCount ?? 0} />
+              <MetricCard icon={FileImage} label="Images" value={userDetails.imageCount ?? 0} />
+              <MetricCard icon={ShoppingBag} label="Orders" value={userDetails.orderCount ?? 0} />
+              <MetricCard icon={HardDrive} label="Storage used" value={`${(Number(userDetails.storageUsedBytes ?? 0) / 1024 / 1024).toFixed(1)} MB`} />
+            </div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <div className="border border-[#ece8f5] p-4 text-sm">
+                <p className="mb-3 font-bold text-[#6337d8]">Account</p>
+                <div className="grid gap-2 text-[#555]"><p><b className="text-[#111]">Phone:</b> {userDetails.phoneNumber}</p><p><b className="text-[#111]">Role:</b> {userDetails.role}</p><p><b className="text-[#111]">Plan:</b> {userDetails.planName ?? "Free"}</p><p><b className="text-[#111]">Gallery limit:</b> {userDetails.galleryLimit ?? 0}</p><p><b className="text-[#111]">Email usage:</b> {userDetails.monthlyEmailsUsed ?? 0} / {userDetails.monthlyEmailLimit ?? 0}</p><p><b className="text-[#111]">Storage limit:</b> {userDetails.storageLimitGb ?? 0} GB</p></div>
+              </div>
+              <div className="border border-[#ece8f5] p-4 text-sm">
+                <p className="mb-3 font-bold text-[#6337d8]">Business profile</p>
+                <div className="grid gap-2 text-[#555]"><p><b className="text-[#111]">Business:</b> {userDetails.businessName || "—"}</p><p><b className="text-[#111]">Username:</b> {userDetails.username || "—"}</p><p><b className="text-[#111]">Website:</b> {userDetails.website || "—"}</p><p><b className="text-[#111]">Address:</b> {userDetails.businessAddress || "—"}</p><p><b className="text-[#111]">Joined:</b> {userDetails.createdAt ? new Date(userDetails.createdAt).toLocaleDateString() : "—"}</p></div>
+              </div>
+            </div>
+            <div className="mt-5 border border-[#ece8f5]">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-[#faf8ff] px-4 py-3"><p className="font-bold">Collections</p><span className="text-xs text-[#777]">Admin can edit each collection</span></div>
+              <div className="divide-y">
+                {(userDetails.collections ?? []).map((collection) => <div key={collection._id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><p className="font-semibold">{collection.name}</p><p className="text-xs text-[#777]">{collection.imageCount ?? 0} images · {collection.status ?? "draft"}</p></div><Button type="button" variant="outline" className="rounded-none" onClick={() => editCollection(collection)}><Edit3 className="size-4" /> Edit</Button></div>)}
+                {!(userDetails.collections ?? []).length && <p className="px-4 py-6 text-sm text-[#777]">No collections yet.</p>}
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" className="rounded-none" onClick={() => { setUserDetailsOpen(false); editUser(userDetails); }}><Edit3 className="size-4" /> Edit user</Button>
+              {userDetails.role !== "admin" && <Button type="button" className="rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => signInAsUser(userDetails)}><ExternalLink className="size-4" /> Sign in as user</Button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {collectionEdit && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-[500px] bg-white p-6 shadow-[0_28px_80px_rgba(0,0,0,.2)]">
+            <div className="flex items-center justify-between border-b pb-4"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-[#6337d8]">Collection control</p><h2 className="mt-1 text-xl font-semibold">Edit collection</h2></div><button className="p-2 hover:bg-[#f3f3f3]" onClick={() => setCollectionEdit(null)}><X className="size-5" /></button></div>
+            <div className="mt-5 grid gap-4"><InputField label="Collection name" value={collectionDraft.name} onChange={(name) => setCollectionDraft({ ...collectionDraft, name })} /><InputField label="Slug" value={collectionDraft.slug} onChange={(slug) => setCollectionDraft({ ...collectionDraft, slug })} /><label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Status</span><select value={collectionDraft.status} onChange={(event) => setCollectionDraft({ ...collectionDraft, status: event.target.value })} className="h-11 border px-3 text-sm outline-none focus:border-[#6337d8]"><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label></div>
+            <div className="mt-5 flex justify-end gap-2"><Button type="button" variant="outline" className="rounded-none" onClick={() => setCollectionEdit(null)}>Cancel</Button><Button type="button" className="rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={saveCollection} disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" /> : "Save collection"}</Button></div>
+          </div>
         </div>
       )}
 
@@ -713,7 +851,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
 function navClass(active: boolean) {
   return cn(
     "flex h-11 items-center gap-3 px-3 text-left text-sm font-bold",
-    active ? "bg-[#111] text-white" : "text-[#555] hover:bg-[#f3f3f3]",
+    active ? "bg-[#6337d8] text-white" : "text-[#555] hover:bg-[#f3efff] hover:text-[#6337d8]",
   );
 }
 
@@ -771,15 +909,17 @@ function InputField({ label, value, onChange, required, type = "text" }: {
         onChange={(event) => onChange(event.target.value)}
         required={required}
         type={type}
-        className="h-11 rounded-none border-[#ddd] shadow-none focus-visible:ring-[#22bda7]"
+        className="h-11 rounded-none border-[#ddd] shadow-none focus-visible:ring-[#6337d8]"
       />
     </label>
   );
 }
 
-function UserTable({ users, onEdit, onDelete, busy }: {
+function UserTable({ users, onView, onEdit, onImpersonate, onDelete, busy }: {
   users: AdminUser[];
+  onView: (user: AdminUser) => void;
   onEdit: (user: AdminUser) => void;
+  onImpersonate: (user: AdminUser) => void;
   onDelete: (id: string) => void;
   busy: boolean;
 }) {
@@ -809,6 +949,14 @@ function UserTable({ users, onEdit, onDelete, busy }: {
               <td className="px-4 py-4">{user.collectionCount ?? 0}</td>
               <td className="px-4 py-4">
                 <div className="flex justify-end gap-2">
+                  <button className="p-2 text-[#6337d8] hover:bg-[#f3efff]" onClick={() => onView(user)} disabled={busy} aria-label="View user details" title="View details">
+                    <Users className="size-4" />
+                  </button>
+                  {user.role !== "admin" && (
+                    <button className="p-2 text-[#6337d8] hover:bg-[#f3efff]" onClick={() => onImpersonate(user)} disabled={busy} aria-label="Sign in as user" title="Sign in as user">
+                      <ExternalLink className="size-4" />
+                    </button>
+                  )}
                   <button className="p-2 hover:bg-[#f3f3f3]" onClick={() => onEdit(user)} disabled={busy} aria-label="Edit user">
                     <Edit3 className="size-4" />
                   </button>
@@ -830,7 +978,7 @@ function AdminOverview({ data }: { data: AdminDashboardData }) {
   const monthly = stats.monthly ?? [];
   const planMix = stats.planMix?.length ? stats.planMix : [{ name: "No plans", value: 1 }];
   const recentUsers = stats.recentUsers ?? data.users.slice(0, 6);
-  const chartColors = ["#22bda7", "#111111", "#9ca3af", "#d6b86a", "#ec6f58", "#6b8afd"];
+  const chartColors = ["#6337d8", "#111111", "#9ca3af", "#d6b86a", "#ec6f58", "#6b8afd"];
 
   return (
     <div className="mt-6 grid gap-5">
@@ -858,7 +1006,7 @@ function AdminOverview({ data }: { data: AdminDashboardData }) {
                 <XAxis dataKey="month" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} />
                 <Tooltip formatter={(value, name) => name === "revenue" ? [`€${Number(value).toLocaleString()}`, "Revenue"] : [value, "Orders"]} />
-                <Bar dataKey="revenue" fill="#22bda7" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenue" fill="#6337d8" radius={[4, 4, 0, 0]} />
                 <Line type="monotone" dataKey="orders" stroke="#111" strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -906,7 +1054,7 @@ function AdminOverview({ data }: { data: AdminDashboardData }) {
                 <XAxis dataKey="month" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} />
                 <Tooltip />
-                <Line type="monotone" dataKey="users" stroke="#22bda7" strokeWidth={3} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="users" stroke="#6337d8" strokeWidth={3} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -956,15 +1104,16 @@ function MetricCard({ icon: Icon, label, value, strong }: {
     <div className={cn("bg-white p-5", strong && "bg-[#141715] text-white")}>
       <div className="flex items-center justify-between gap-4">
         <p className={cn("text-xs font-bold uppercase tracking-[0.16em]", strong ? "text-white/60" : "text-[#777]")}>{label}</p>
-        <Icon className={cn("size-5", strong ? "text-[#22bda7]" : "text-[#0a9c8b]")} />
+        <Icon className={cn("size-5", strong ? "text-[#6337d8]" : "text-[#0a9c8b]")} />
       </div>
       <p className="mt-5 text-3xl font-semibold">{typeof value === "number" ? value.toLocaleString() : value}</p>
     </div>
   );
 }
 
-function CollectionTable({ collections, onDelete, busy }: {
+function CollectionTable({ collections, onEdit, onDelete, busy }: {
   collections: AdminCollection[];
+  onEdit: (collection: AdminCollection) => void;
   onDelete: (id: string) => void;
   busy: boolean;
 }) {
@@ -994,9 +1143,14 @@ function CollectionTable({ collections, onDelete, busy }: {
               <td className="px-4 py-4">{collection.imageCount ?? 0}</td>
               <td className="px-4 py-4 capitalize">{collection.status ?? "draft"}</td>
               <td className="px-4 py-4 text-right">
-                <button className="p-2 text-red-600 hover:bg-red-50" onClick={() => onDelete(collection._id)} disabled={busy} aria-label="Delete collection">
-                  <Trash2 className="size-4" />
-                </button>
+                <div className="flex justify-end gap-2">
+                  <button className="p-2 text-[#6337d8] hover:bg-[#f3efff]" onClick={() => onEdit(collection)} disabled={busy} aria-label="Edit collection" title="Edit collection">
+                    <Edit3 className="size-4" />
+                  </button>
+                  <button className="p-2 text-red-600 hover:bg-red-50" onClick={() => onDelete(collection._id)} disabled={busy} aria-label="Delete collection">
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
@@ -1120,7 +1274,7 @@ function LegalCmsPanel({ type, form, lang, setForm, setLang, onSave, saveState, 
   const page = form.legal[lang][type];
   const update = (value: Partial<typeof page>) => setForm({ ...form, legal: { ...form.legal, [lang]: { ...form.legal[lang], [type]: { ...page, ...value } } } });
   const previewHref = `${type === "terms" ? "/terms-of-service" : "/privacy-policy"}?lang=${lang}`;
-  return <div className="mt-6 overflow-hidden border border-[#dfe5e2] bg-white shadow-[0_18px_55px_rgba(18,38,32,.07)]"><header className="border-b bg-[#f7faf8] px-5 py-6 md:px-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-[#079c8a]">Public legal page</p><h2 className="mt-2 text-3xl font-semibold">{type === "terms" ? "Terms of Service" : "Privacy Policy"}</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#68726e]">Edit title and fully formatted page content.</p></div><div className="flex gap-2"><a href={previewHref} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 border bg-white px-4 text-sm font-bold">Preview <ExternalLink className="size-4" /></a><Button onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#111] px-5 text-white">Save now</Button></div></div></header><div className="grid md:grid-cols-[210px_1fr]"><aside className="border-b bg-[#fbfbfa] p-5 md:border-b-0 md:border-r"><p className="text-xs font-bold uppercase tracking-[.16em] text-[#888]">Language</p><div className="mt-4 grid gap-2">{(["en", "gr"] as HomeLanguage[]).map((value) => <button key={value} onClick={() => setLang(value)} className={cn("flex h-11 items-center justify-between px-4 text-left text-sm font-bold", lang === value ? "bg-[#111] text-white" : "border bg-white text-[#555]")}>{value === "en" ? "English" : "Greek"}<span>{value.toUpperCase()}</span></button>)}</div><div className={cn("mt-6 px-3 py-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>{saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved · Live"}</div></aside><section className="p-5 md:p-8"><label className="grid gap-2"><span className="text-sm font-bold">Page title</span><Input value={page.title} onChange={(event) => update({ title: event.target.value })} className="h-13 rounded-none border-[#ccd5d1] px-4 text-lg shadow-none" /></label><div className="mt-7 grid gap-2"><span className="text-sm font-bold">Page content</span><RichTextEditor key={`${type}-${lang}`} value={page.content} onChange={(content) => update({ content })} /></div></section></div></div>;
+  return <div className="mt-6 overflow-hidden border border-[#dfe5e2] bg-white shadow-[0_18px_55px_rgba(18,38,32,.07)]"><header className="border-b bg-[#f7faf8] px-5 py-6 md:px-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-[#079c8a]">Public legal page</p><h2 className="mt-2 text-3xl font-semibold">{type === "terms" ? "Terms of Service" : "Privacy Policy"}</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#68726e]">Edit title and fully formatted page content.</p></div><div className="flex gap-2"><a href={previewHref} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 border bg-white px-4 text-sm font-bold">Preview <ExternalLink className="size-4" /></a><Button onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#111] px-5 text-white">Save now</Button></div></div></header><div className="grid md:grid-cols-[210px_1fr]"><aside className="border-b bg-[#fbfbfa] p-5 md:border-b-0 md:border-r"><p className="text-xs font-bold uppercase tracking-[.16em] text-[#888]">Language</p><div className="mt-4 grid gap-2">{(["en", "gr"] as HomeLanguage[]).map((value) => <button key={value} onClick={() => setLang(value)} className={cn("flex h-11 items-center justify-between px-4 text-left text-sm font-bold", lang === value ? "bg-[#6337d8] text-white hover:bg-[#5430bd]" : "border bg-white text-[#555]")}>{value === "en" ? "English" : "Greek"}<span>{value.toUpperCase()}</span></button>)}</div><div className={cn("mt-6 px-3 py-3 text-xs font-bold", saveState === "error" ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800")}>{saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved · Live"}</div></aside><section className="p-5 md:p-8"><label className="grid gap-2"><span className="text-sm font-bold">Page title</span><Input value={page.title} onChange={(event) => update({ title: event.target.value })} className="h-13 rounded-none border-[#ccd5d1] px-4 text-lg shadow-none" /></label><div className="mt-7 grid gap-2"><span className="text-sm font-bold">Page content</span><RichTextEditor key={`${type}-${lang}`} value={page.content} onChange={(content) => update({ content })} /></div></section></div></div>;
 }
 
 function RichTextEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -1165,7 +1319,7 @@ function SeoCmsPanel({
       <div className="sticky top-0 z-20 border border-[#dfe5e2] bg-[#12201c] p-5 text-white shadow-[0_14px_35px_rgba(0,0,0,.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div><p className="text-xs font-bold uppercase tracking-[.18em] text-white/60">Search & Social</p><h2 className="mt-1 text-2xl font-semibold">Homepage SEO</h2></div>
-          <div className="flex items-center gap-3"><span className="text-xs text-white/65">{saveState === "saving" ? "Saving" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved"}</span><Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#22bda7] px-6 text-white hover:bg-[#19a995]">Save SEO</Button></div>
+          <div className="flex items-center gap-3"><span className="text-xs text-white/65">{saveState === "saving" ? "Saving" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved"}</span><Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#6337d8] px-6 text-white hover:bg-[#19a995]">Save SEO</Button></div>
         </div>
       </div>
 
@@ -1218,7 +1372,7 @@ function SeoCmsPanel({
       <CmsSection eyebrow="SEO 4" title="Custom meta tags">
         <CmsRepeater title="Advanced tags">
           {seo.extraMetaTags.map((tag, index) => <div key={index} className="grid gap-3 border p-4 lg:grid-cols-[150px_1fr_1fr_auto]"><select value={tag.type} onChange={(event) => updateMeta(index, { type: event.target.value as SeoMetaTag["type"] })} className="h-11 border px-3 text-sm"><option value="name">name</option><option value="property">property</option><option value="httpEquiv">httpEquiv</option></select><CmsInput label="Meta key" value={tag.key} onChange={(key) => updateMeta(index, { key })} /><CmsInput label="Meta value" value={tag.value} onChange={(value) => updateMeta(index, { value })} /><Button type="button" variant="outline" className="mt-6 h-11 rounded-none" onClick={() => removeMeta(index)}><Trash2 className="size-4" /></Button></div>)}
-          <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={addMeta}><PlusCircle className="size-4" /> Add meta tag</Button>
+          <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={addMeta}><PlusCircle className="size-4" /> Add meta tag</Button>
         </CmsRepeater>
       </CmsSection>
     </div>
@@ -1257,6 +1411,16 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
     tabs[index] = { ...tabs[index], ...value };
     patchObject("workflow", { tabs });
   };
+  const patchClientGalleryTab = (index: number, value: Partial<GalleryTab>) => {
+    const tabs = [...content.clientGallery.tabs];
+    tabs[index] = { ...tabs[index], ...value };
+    patchObject("clientGallery", { tabs });
+  };
+  const patchPhotographerTypeTab = (index: number, value: Partial<GalleryTab>) => {
+    const tabs = [...content.photographerTypes.tabs];
+    tabs[index] = { ...tabs[index], ...value };
+    patchObject("photographerTypes", { tabs });
+  };
   const patchBrandLogo = (index: number, value: Partial<BrandLogo>) => {
     const logos = [...content.brandLogos];
     logos[index] = { ...logos[index], ...value };
@@ -1280,7 +1444,7 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.2em] text-[#5ce0cd]">Homepage CMS</p>
-            <h2 className="mt-1 text-2xl font-semibold">Six homepage sections</h2>
+            <h2 className="mt-1 text-2xl font-semibold">Eight homepage sections</h2>
             <p className="mt-1 text-sm text-white/65">Edit the fields below and press Save now. These values are used directly on the public homepage.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1292,7 +1456,7 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
               {saveState === "saved" && <Check className="size-3.5" />}
               {saveState === "saving" ? "Saving" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved"}
             </span>
-            <Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#22bda7] px-6 text-white hover:bg-[#19a995]">Save now</Button>
+            <Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#6337d8] px-6 text-white hover:bg-[#19a995]">Save now</Button>
           </div>
         </div>
       </div>
@@ -1338,7 +1502,7 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
               {(content.hero.avatarImages ?? []).map((avatar, index) => (
                 <CmsImageInput key={index} label={`Avatar ${index + 1}`} value={avatar} onChange={(value) => { const avatarImages = [...(content.hero.avatarImages ?? [])]; avatarImages[index] = value; patchObject("hero", { avatarImages }); }} onUpload={onUpload} busy={busy} />
               ))}
-              <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={() => patchObject("hero", { avatarImages: [...(content.hero.avatarImages ?? []), ""] })}><PlusCircle className="size-4" /> Add avatar</Button>
+              <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patchObject("hero", { avatarImages: [...(content.hero.avatarImages ?? []), ""] })}><PlusCircle className="size-4" /> Add avatar</Button>
             </div>
           </CmsRepeater>
         </div>
@@ -1347,11 +1511,51 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
       <CmsSection eyebrow="Section 3" title="Feature strip">
         <div className="grid gap-4">
           {content.featureCards.map((card, index) => <div key={index} className="grid gap-3 border bg-[#fafaf8] p-4 md:grid-cols-3"><CmsInput label={`Feature ${index + 1} title`} value={card.title} onChange={(title) => patchFeature(index, { title })} /><CmsTextarea label="Description" value={card.text} onChange={(text) => patchFeature(index, { text })} /><CmsInput label="Icon name" value={card.icon} onChange={(icon) => patchFeature(index, { icon })} /></div>)}
-          <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={() => patch("featureCards", [...content.featureCards, { title: "New feature", text: "Feature description", icon: "Sparkles" }])}><PlusCircle className="size-4" /> Add feature</Button>
+          <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patch("featureCards", [...content.featureCards, { title: "New feature", text: "Feature description", icon: "Sparkles" }])}><PlusCircle className="size-4" /> Add feature</Button>
         </div>
       </CmsSection>
 
-      <CmsSection eyebrow="Section 4" title="Gallery showcase and statistics">
+      <CmsSection eyebrow="Section 4" title="Client Gallery tabs">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Client Gallery text">
+            <CmsInput label="Eyebrow" value={content.clientGallery.eyebrow} onChange={(eyebrow) => patchObject("clientGallery", { eyebrow })} />
+            <CmsTextarea label="Heading" value={content.clientGallery.title} onChange={(title) => patchObject("clientGallery", { title })} />
+            <CmsTextarea label="Description" value={content.clientGallery.subtitle} onChange={(subtitle) => patchObject("clientGallery", { subtitle })} />
+          </CmsRepeater>
+          <CmsRepeater title="Tabs and images">
+            {content.clientGallery.tabs.map((tab, index) => (
+              <div key={`${tab.value}-${index}`} className="grid gap-3 rounded-[10px] border border-[#e8e3ef] bg-white p-4">
+                <CmsInput label={`Tab ${index + 1} label`} value={tab.label} onChange={(label) => patchClientGalleryTab(index, { label })} />
+                <CmsImageInput label="Tab image" value={tab.image} onChange={(image) => patchClientGalleryTab(index, { image })} onUpload={onUpload} busy={busy} />
+                <Button type="button" variant="outline" className="w-fit rounded-none" onClick={() => patchObject("clientGallery", { tabs: content.clientGallery.tabs.filter((_, i) => i !== index) })}><Trash2 className="size-4" /> Remove tab</Button>
+              </div>
+            ))}
+            <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patchObject("clientGallery", { tabs: [...content.clientGallery.tabs, { value: `tab-${Date.now()}`, label: "New tab", image: "" }] })}><PlusCircle className="size-4" /> Add tab</Button>
+          </CmsRepeater>
+        </div>
+      </CmsSection>
+
+      <CmsSection eyebrow="Section 5" title="Photographer types tabs">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Section text">
+            <CmsInput label="Eyebrow" value={content.photographerTypes.eyebrow} onChange={(eyebrow) => patchObject("photographerTypes", { eyebrow })} />
+            <CmsTextarea label="Heading" value={content.photographerTypes.title} onChange={(title) => patchObject("photographerTypes", { title })} />
+            <CmsTextarea label="Description" value={content.photographerTypes.subtitle} onChange={(subtitle) => patchObject("photographerTypes", { subtitle })} />
+          </CmsRepeater>
+          <CmsRepeater title="Photographer type tabs and images">
+            {content.photographerTypes.tabs.map((tab, index) => (
+              <div key={`${tab.value}-${index}`} className="grid gap-3 rounded-[10px] border border-[#e8e3ef] bg-white p-4">
+                <CmsInput label={`Tab ${index + 1} label`} value={tab.label} onChange={(label) => patchPhotographerTypeTab(index, { label })} />
+                <CmsImageInput label="Tab image" value={tab.image} onChange={(image) => patchPhotographerTypeTab(index, { image })} onUpload={onUpload} busy={busy} />
+                <Button type="button" variant="outline" className="w-fit rounded-none" onClick={() => patchObject("photographerTypes", { tabs: content.photographerTypes.tabs.filter((_, i) => i !== index) })}><Trash2 className="size-4" /> Remove tab</Button>
+              </div>
+            ))}
+            <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patchObject("photographerTypes", { tabs: [...content.photographerTypes.tabs, { value: `type-${Date.now()}`, label: "New type", image: "" }] })}><PlusCircle className="size-4" /> Add photographer type</Button>
+          </CmsRepeater>
+        </div>
+      </CmsSection>
+
+      <CmsSection eyebrow="Section 6" title="Gallery showcase and statistics">
         <div className="grid gap-5 lg:grid-cols-2">
           <CmsRepeater title="Showcase text">
             <CmsInput label="Eyebrow" value={content.showcase.eyebrow} onChange={(eyebrow) => patchObject("showcase", { eyebrow })} />
@@ -1383,7 +1587,7 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
         </div>
       </CmsSection>
 
-      <CmsSection eyebrow="Section 5" title="Call to action and trusted brands">
+      <CmsSection eyebrow="Section 7" title="Call to action and trusted brands">
         <div className="grid gap-5 lg:grid-cols-2">
           <CmsRepeater title="Call to action">
             <CmsTextarea label="Heading" value={content.cta.title} onChange={(title) => patchObject("cta", { title })} />
@@ -1395,12 +1599,12 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
           <CmsRepeater title="Trusted brands">
             <CmsInput label="Section heading" value={content.trustHeading} onChange={(trustHeading) => patch("trustHeading", trustHeading)} />
             {content.brandLogos.map((logo, index) => <div key={index} className="border p-3"><CmsInput label="Brand name" value={logo.name} onChange={(name) => patchBrandLogo(index, { name })} /><div className="mt-3"><CmsImageInput label="Brand logo" value={logo.image} onChange={(image) => patchBrandLogo(index, { image })} onUpload={onUpload} busy={busy} /></div></div>)}
-            <Button type="button" className="w-fit rounded-none bg-[#111] text-white" onClick={() => patch("brandLogos", [...content.brandLogos, { name: "New brand", image: "", url: "" }])}><PlusCircle className="size-4" /> Add brand</Button>
+            <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patch("brandLogos", [...content.brandLogos, { name: "New brand", image: "", url: "" }])}><PlusCircle className="size-4" /> Add brand</Button>
           </CmsRepeater>
         </div>
       </CmsSection>
 
-      <CmsSection eyebrow="Section 6" title="Footer">
+      <CmsSection eyebrow="Section 8" title="Footer">
         <div className="grid gap-5 lg:grid-cols-2">
           <CmsRepeater title="Footer branding and text">
             <CmsInput label="Footer brand text (used only when no footer logo is uploaded)" value={content.footer.brandText} onChange={(brandText) => patchObject("footer", { brandText, logoUrl: brandText.trim() ? "" : content.footer.logoUrl })} />
@@ -1461,7 +1665,7 @@ function CmsInput({ label, value, onChange, wide, dark }: {
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "min-h-11 resize-y rounded-none py-3 shadow-none focus-visible:ring-[#22bda7]",
+          "min-h-11 resize-y rounded-none py-3 shadow-none focus-visible:ring-[#6337d8]",
           dark ? "border-0 bg-white/8 text-white placeholder:text-white/40" : "border-[#ddd] bg-[#fbfbfa]",
         )}
       />
@@ -1487,7 +1691,7 @@ function CmsImageInput({ label, value, onChange, onUpload, busy, wide, accept = 
         <Input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] shadow-none focus-visible:ring-[#22bda7]"
+          className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] shadow-none focus-visible:ring-[#6337d8]"
         />
         <label className="flex h-11 cursor-pointer items-center justify-center bg-[#111] px-4 text-sm font-bold text-white hover:bg-[#202020]">
           {uploading ? "Uploading" : "Upload"}
@@ -1554,7 +1758,7 @@ function CmsHeroHeadingEditor({ label, value, onChange }: {
         contentEditable
         suppressContentEditableWarning
         onInput={(event) => onChange(event.currentTarget.innerHTML)}
-        className="min-h-32 border border-[#ddd] bg-[#fbfbfa] p-3 text-base leading-7 outline-none focus:border-[#22bda7]"
+        className="min-h-32 border border-[#ddd] bg-[#fbfbfa] p-3 text-base leading-7 outline-none focus:border-[#6337d8]"
       />
     </div>
   );
@@ -1572,21 +1776,49 @@ function CmsTextarea({ label, value, onChange, wide }: {
       <Textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-28 rounded-none border-[#ddd] bg-[#fbfbfa] shadow-none focus-visible:ring-[#22bda7]"
+        className="min-h-28 rounded-none border-[#ddd] bg-[#fbfbfa] shadow-none focus-visible:ring-[#6337d8]"
       />
     </label>
   );
 }
 
-function PlanTable({ plans, onEdit, onDelete, busy }: {
+function PlanTable({ plans, onEdit, onDelete, onOrderChange, onReorder, busy }: {
   plans: AdminPlan[];
   onEdit: (plan: AdminPlan) => void;
   onDelete: (id: string) => void;
+  onOrderChange: (id: string, sortOrder: number) => void;
+  onReorder: (planIds: string[]) => void;
   busy: boolean;
 }) {
-  const sortedPlans = [...plans].sort((a, b) => Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)));
+  const [orderedPlans, setOrderedPlans] = useState<AdminPlan[]>(() => [...plans].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)));
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOrderedPlans([...plans].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)));
+  }, [plans]);
+
+  const moveDraggedPlan = (targetId: string) => {
+    if (!draggedId || draggedId === targetId || busy) return;
+    const fromIndex = orderedPlans.findIndex((plan) => plan._id === draggedId);
+    const toIndex = orderedPlans.findIndex((plan) => plan._id === targetId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const next = [...orderedPlans];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setOrderedPlans(next);
+  };
+
+  const finishDrag = () => {
+    if (!draggedId) return;
+    setDraggedId(null);
+    onReorder(orderedPlans.map((plan) => plan._id));
+  };
+
   return (
     <div className="mt-6 overflow-x-auto bg-white">
+      <div className="flex items-center gap-2 border-b border-[#ece8f5] bg-[#faf8ff] px-4 py-3 text-xs font-semibold text-[#6337d8]">
+        <GripVertical className="size-4" /> Drag plans by the handle to change their display order.
+      </div>
       <table className="w-full min-w-[720px] text-sm">
         <thead className="border-b text-left text-xs uppercase tracking-[0.14em] text-[#777]">
           <tr>
@@ -1594,15 +1826,41 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
             <th className="px-4 py-3">Storage</th>
             <th className="px-4 py-3">Emails</th>
             <th className="px-4 py-3">Price</th>
+            <th className="px-4 py-3">Order</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3 text-right">Action</th>
           </tr>
         </thead>
         <tbody>
-          {sortedPlans.map((plan) => (
-            <tr key={plan._id} className={cn("border-b last:border-0", plan.recommended && "bg-[#f7f3ff] shadow-[inset_3px_0_0_#6337d8]")}>
+          {orderedPlans.map((plan) => (
+            <tr
+              key={plan._id}
+              onDragOver={(event) => { event.preventDefault(); moveDraggedPlan(plan._id); }}
+              onDrop={(event) => event.preventDefault()}
+              className={cn(
+                "border-b transition last:border-0",
+                plan.recommended && "bg-[#f7f3ff] shadow-[inset_3px_0_0_#6337d8]",
+                draggedId === plan._id && "opacity-45",
+              )}
+            >
               <td className="px-4 py-4">
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    draggable={!busy}
+                    onDragStart={(event) => {
+                      setDraggedId(plan._id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", plan._id);
+                    }}
+                    onDragEnd={finishDrag}
+                    disabled={busy}
+                    aria-label={`Drag ${plan.name} to reorder`}
+                    title="Drag to reorder"
+                    className="cursor-grab rounded p-1.5 text-[#8b80a8] hover:bg-[#f1edfb] hover:text-[#6337d8] active:cursor-grabbing disabled:cursor-not-allowed"
+                  >
+                    <GripVertical className="size-5" />
+                  </button>
                   <p className="font-bold">{plan.name}</p>
                   {plan.recommended && <span className="rounded-full bg-[#6337d8] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.12em] text-white">Recommended</span>}
                 </div>
@@ -1616,6 +1874,17 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
               <td className="px-4 py-4">
                 <p>€{Number(plan.priceMonthly ?? 0).toLocaleString()} / month</p>
                 {plan.yearlyEnabled && <p className="mt-1 text-xs text-[#777]">€{Number(plan.priceYearly ?? 0).toLocaleString()} / year</p>}
+              </td>
+              <td className="px-4 py-4">
+                <input
+                  type="number"
+                  min={0}
+                  defaultValue={Number(plan.sortOrder ?? 0)}
+                  onBlur={(event) => onOrderChange(plan._id, Math.max(0, Number(event.currentTarget.value || 0)))}
+                  disabled={busy}
+                  aria-label={`Order for ${plan.name}`}
+                  className="h-9 w-20 border border-[#d8d2e8] bg-white px-2 text-center font-semibold outline-none focus:border-[#6337d8] focus:ring-2 focus:ring-[#6337d8]/15"
+                />
               </td>
               <td className="px-4 py-4">{plan.active ? "Active" : "Inactive"}</td>
               <td className="px-4 py-4">
@@ -1632,7 +1901,7 @@ function PlanTable({ plans, onEdit, onDelete, busy }: {
           ))}
           {!plans.length && (
             <tr>
-              <td className="px-4 py-8 text-center text-sm font-semibold text-[#777]" colSpan={6}>
+              <td className="px-4 py-8 text-center text-sm font-semibold text-[#777]" colSpan={7}>
                 No plans yet.
               </td>
             </tr>

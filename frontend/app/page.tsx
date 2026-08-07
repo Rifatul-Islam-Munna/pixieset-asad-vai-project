@@ -11,6 +11,8 @@
   Users,
 } from "lucide-react";
 import { HomeHero } from "@/components/home/home-hero";
+import { ClientGalleryShowcase } from "@/components/home/client-gallery-showcase";
+import { PhotographerTypesShowcase } from "@/components/home/photographer-types-showcase";
 import { getUser } from "@/actions/auth";
 import { UserType } from "@/@types/user";
 import { type FooterLink, type HomeLanguage } from "@/lib/home-cms";
@@ -94,6 +96,8 @@ export default async function Home({
           })}
         </div>
       </section>
+
+      <ClientGalleryShowcase section={t.clientGallery} />
 
       <section
         id="features"
@@ -218,6 +222,8 @@ export default async function Home({
           })}
         </div>
       </section>
+
+      <PhotographerTypesShowcase section={t.photographerTypes} />
 
       <section className="relative overflow-hidden bg-[#f5f0ff] px-4 py-14 sm:px-5 sm:py-16 md:px-8 md:py-24">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(117,78,233,.28),transparent_48%)]" />

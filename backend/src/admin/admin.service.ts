@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
 import Stripe from 'stripe';
@@ -32,6 +33,7 @@ export class AdminService implements OnModuleInit {
     private readonly faceSearchService: FaceSearchService,
     private readonly defaultProducts: StoreDefaultProductService,
     private readonly freePlanSettings: FreePlanSettingService,
+    private readonly jwtService: JwtService,
   ) {}
 
   async onModuleInit() {
@@ -115,6 +117,41 @@ export class AdminService implements OnModuleInit {
     }));
   }
 
+  async getUserDetails(id: string) {
+    const user = await this.userModel.findById(id).select('-password -otpNumber').lean();
+    if (!user) throw new NotFoundException('User not found');
+    const [collections, images, orders] = await Promise.all([
+      this.collectionModel.find({ userId: id }).sort({ createdAt: -1 }).lean(),
+      this.imageModel.countDocuments({ userId: id }),
+      this.orderModel.countDocuments({ userId: id }),
+    ]);
+    return { ...user, collectionCount: collections.length, imageCount: images, orderCount: orders, collections };
+  }
+
+  async impersonateUser(id: string, adminId: string) {
+    const user = await this.userModel.findById(id).select('-password -otpNumber').lean();
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role === UserType.ADMIN) throw new BadRequestException('Admin accounts cannot be impersonated');
+    const accessToken = this.jwtService.sign({
+      email: user.email ?? '',
+      id: user._id.toString(),
+      role: user.role,
+      mobileNumber: user.phoneNumber,
+      impersonatedBy: adminId,
+    }, { expiresIn: '2h' });
+    return { accessToken, user };
+  }
+
+  async updateCollection(id: string, dto: { name?: string; slug?: string; status?: string }) {
+    const collection = await this.collectionModel.findById(id);
+    if (!collection) throw new NotFoundException('Collection not found');
+    if (dto.name !== undefined) collection.name = dto.name.trim();
+    if (dto.slug !== undefined) collection.slug = dto.slug.trim();
+    if (dto.status !== undefined) collection.status = dto.status.trim();
+    await collection.save();
+    return collection.toObject();
+  }
+
   async createUser(dto: AdminCreateUserDto) {
     await this.ensureUnique(dto.phoneNumber);
     const { planId, ...userDto } = dto;
@@ -184,7 +221,7 @@ export class AdminService implements OnModuleInit {
   }
 
   async findPlans() {
-    return this.planModel.find().sort({ recommended: -1, createdAt: -1 }).lean();
+    return this.planModel.find().sort({ sortOrder: 1, createdAt: 1 }).lean();
   }
 
   async findDefaultStoreProducts() {
@@ -212,9 +249,17 @@ export class AdminService implements OnModuleInit {
       priceYearly: Number(dto.priceYearly ?? 0),
       features: this.cleanPlanFeatures((dto.features ?? {}) as Record<string, boolean>) as any,
       recommended: Boolean(dto.recommended),
+      sortOrder: Number(dto.sortOrder ?? 0),
       active: dto.active ?? true,
     });
     return plan.toObject();
+  }
+
+  async reorderPlans(planIds: string[]) {
+    if (!Array.isArray(planIds)) throw new BadRequestException('planIds must be an array');
+    const uniqueIds = [...new Set(planIds.filter(Boolean))];
+    await Promise.all(uniqueIds.map((id, index) => this.planModel.updateOne({ _id: id }, { $set: { sortOrder: index + 1 } })));
+    return this.findPlans();
   }
 
   async updatePlan(id: string, dto: AdminUpdatePlanDto) {
@@ -237,6 +282,7 @@ export class AdminService implements OnModuleInit {
     if (dto.priceYearly !== undefined) plan.priceYearly = Number(dto.priceYearly);
     if (dto.features !== undefined) plan.features = this.cleanPlanFeatures(dto.features as Record<string, boolean>) as any;
     if (dto.recommended !== undefined) plan.recommended = Boolean(dto.recommended);
+    if (dto.sortOrder !== undefined) plan.sortOrder = Number(dto.sortOrder);
     if (dto.active !== undefined) plan.active = dto.active;
     await plan.save();
 

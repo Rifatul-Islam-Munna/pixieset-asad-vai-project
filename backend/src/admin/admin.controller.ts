@@ -31,6 +31,18 @@ export class AdminController {
     return { data };
   }
 
+  @Get('users/:id/details')
+  async userDetails(@Param('id') id: string) {
+    const data = await this.adminService.getUserDetails(id);
+    return { data };
+  }
+
+  @Post('users/:id/impersonate')
+  async impersonateUser(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.adminService.impersonateUser(id, req.user.id);
+    return { message: 'Impersonation started', data };
+  }
+
   @Post('users')
   async createUser(@Body() dto: AdminCreateUserDto) {
     const data = await this.adminService.createUser(dto);
@@ -53,6 +65,12 @@ export class AdminController {
   async collections(@Query('userId') userId?: string) {
     const data = await this.adminService.findCollections(userId);
     return { data };
+  }
+
+  @Patch('collections/:id')
+  async updateCollection(@Param('id') id: string, @Body() dto: { name?: string; slug?: string; status?: string }) {
+    const data = await this.adminService.updateCollection(id, dto);
+    return { message: 'Collection updated', data };
   }
 
   @Delete('collections/:id')
@@ -101,6 +119,12 @@ export class AdminController {
   async createPlan(@Body() dto: AdminCreatePlanDto) {
     const data = await this.adminService.createPlan(dto);
     return { message: 'Plan created', data };
+  }
+
+  @Patch('plans/reorder')
+  async reorderPlans(@Body('planIds') planIds: string[]) {
+    const data = await this.adminService.reorderPlans(planIds);
+    return { message: 'Plans reordered', data };
   }
 
   @Patch('plans/:id')

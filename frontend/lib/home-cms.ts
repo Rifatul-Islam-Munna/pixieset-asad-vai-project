@@ -143,6 +143,18 @@ export type HomeContent = {
     tabs: GalleryTab[];
     cardText: string;
   };
+  clientGallery: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    tabs: GalleryTab[];
+  };
+  photographerTypes: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    tabs: GalleryTab[];
+  };
   testimonials: {
     eyebrow: string;
     title: string;
@@ -469,6 +481,32 @@ export const defaultHomeCms: HomeCmsData = {
           },
         ],
       },
+      clientGallery: {
+        eyebrow: "CLIENT GALLERY",
+        title: "The ultimate photo gallery that redefined the industry.",
+        subtitle: "Deliver beautiful galleries, simplify proofing, and sell more with a client experience built around your brand.",
+        tabs: [
+          { value: "share", label: "Share Photos", image: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1500&q=85" },
+          { value: "delivery", label: "Digital delivery", image: "https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=1500&q=85" },
+          { value: "proofing", label: "Online proofing", image: "https://images.unsplash.com/photo-1507501336603-6e31db2be093?auto=format&fit=crop&w=1500&q=85" },
+          { value: "sell", label: "Sell photos", image: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=1500&q=85" },
+        ],
+      },
+      photographerTypes: {
+        eyebrow: "DESIGNED FOR EVERY WORKFLOW",
+        title: "Made for all photographers.",
+        subtitle: "From weddings to landscapes and everything in between, Nikoset is built to elevate your business—and make your work look its best.",
+        tabs: [
+          { value: "wedding", label: "Wedding", image: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1500&q=85" },
+          { value: "portrait", label: "Portrait", image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=1500&q=85" },
+          { value: "family", label: "Family", image: "https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1500&q=85" },
+          { value: "seniors", label: "Seniors", image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1500&q=85" },
+          { value: "events", label: "Events", image: "https://images.unsplash.com/photo-1507501336603-6e31db2be093?auto=format&fit=crop&w=1500&q=85" },
+          { value: "adventure", label: "Adventure", image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1500&q=85" },
+          { value: "commercial", label: "Commercial", image: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1500&q=85" },
+          { value: "sports", label: "Sports", image: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1500&q=85" },
+        ],
+      },
       testimonials: {
         eyebrow: "TRUSTED BY PROFESSIONALS",
         title: '"Truly the go-to photographer platform"',
@@ -753,6 +791,24 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
         content[lang].workflow.tabs.length
           ? content[lang].workflow.tabs
           : fallback.workflow.tabs,
+    };
+    content[lang].clientGallery = {
+      ...fallback.clientGallery,
+      ...(content[lang].clientGallery ?? {}),
+      tabs:
+        Array.isArray(content[lang].clientGallery?.tabs) &&
+        content[lang].clientGallery.tabs.length
+          ? content[lang].clientGallery.tabs
+          : fallback.clientGallery.tabs,
+    };
+    content[lang].photographerTypes = {
+      ...fallback.photographerTypes,
+      ...(content[lang].photographerTypes ?? {}),
+      tabs:
+        Array.isArray(content[lang].photographerTypes?.tabs) &&
+        content[lang].photographerTypes.tabs.length
+          ? content[lang].photographerTypes.tabs
+          : fallback.photographerTypes.tabs,
     };
     content[lang].testimonials = {
       ...fallback.testimonials,

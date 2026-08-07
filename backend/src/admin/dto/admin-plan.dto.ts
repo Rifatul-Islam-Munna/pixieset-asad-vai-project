@@ -49,6 +49,11 @@ export class AdminCreatePlanDto {
   recommended?: boolean;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  sortOrder?: number;
+
+  @IsOptional()
   @IsBoolean()
   active?: boolean;
 }
@@ -103,6 +108,11 @@ export class AdminUpdatePlanDto {
   @IsOptional()
   @IsBoolean()
   recommended?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  sortOrder?: number;
 
   @IsOptional()
   @IsBoolean()
