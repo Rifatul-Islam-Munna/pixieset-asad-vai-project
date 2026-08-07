@@ -29,6 +29,7 @@ function normalizePlans(value: unknown): AdminPlan[] {
     _id: String(plan?._id ?? index),
     name: String(plan?.name ?? "Untitled plan"),
     storageGb: Number(plan?.storageGb ?? 0),
+    galleryLimit: Number(plan?.galleryLimit ?? 0),
     monthlyEmails: Number(plan?.monthlyEmails ?? 0),
     priceMonthly: Number(plan?.priceMonthly ?? 0),
     yearlyEnabled: Boolean(plan?.yearlyEnabled),

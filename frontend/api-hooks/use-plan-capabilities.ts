@@ -3,6 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 
 export type PlanFeatureKey =
+  | "aiFaceSearch"
+  | "downloads"
+  | "mobileGallery"
+  | "beautifulGalleries"
+  | "passwordProtection"
+  | "multipleGalleryStores"
+  | "advancedFaceSearch"
+  | "basicAnalytics"
+  | "advancedBranding"
   | "pinSet"
   | "downloadLimit"
   | "coverImage"
@@ -15,18 +24,14 @@ export type PlanFeatureKey =
 export type PlanCapabilities = {
   planName: string;
   storageLimitGb: number;
+  galleryLimit?: number;
   monthlyEmailLimit: number;
   videoUploadLimitMinutes?: number;
   videoUploadQuality?: "hd" | "4k";
   features: Partial<Record<PlanFeatureKey, boolean>>;
 };
 
-const freeDesignFeatures = new Set<PlanFeatureKey>([
-  "coverImage",
-  "layouts",
-  "advancedDesign",
-  "customCover",
-]);
+
 
 export function usePlanCapabilities() {
   return useQuery<{ data: PlanCapabilities }>({
@@ -37,7 +42,9 @@ export function usePlanCapabilities() {
       if (!response.ok) throw new Error(payload?.message ?? "Could not load plan features");
       return payload;
     },
-    staleTime: 60_000,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }
@@ -46,7 +53,6 @@ export function usePlanFeatureAccess(feature: PlanFeatureKey) {
   const query = usePlanCapabilities();
   const loading = query.isLoading;
   const enabled =
-    freeDesignFeatures.has(feature) ||
     loading ||
     Boolean(query.data?.data?.features?.[feature]);
   return { enabled, locked: !loading && !enabled, loading, capabilities: query.data?.data };

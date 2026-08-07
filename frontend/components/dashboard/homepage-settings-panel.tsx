@@ -14,6 +14,7 @@ import {
   Save,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PlanFeatureLock } from "@/components/dashboard/plan-feature-lock";
 import {
   type HomepageRecord,
   type HomepageVisibility,
@@ -181,22 +182,24 @@ export function HomepageSettingsPanel() {
             </div>
           </Section>
 
-          <Section title="Homepage Password">
-            <div className="flex min-h-14 items-center gap-3 border px-4">
-              <input
-                type="text"
-                value={password}
-                onChange={(event) => { setPassword(event.target.value); setPasswordDirty(true); }}
-                placeholder={record?.hasPassword && !passwordDirty ? "Password is set" : "Add a password"}
-                className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none"
-              />
-              <button type="button" onClick={generatePassword} className="inline-flex items-center gap-2 text-sm font-bold text-[#6F57D9]"><RefreshCw className="size-4" />Generate</button>
-              {record?.hasPassword && (
-                <button type="button" onClick={() => { setPassword(""); setPasswordDirty(true); }} className="text-xs font-bold text-red-600">Remove</button>
-              )}
-            </div>
-            <HelpText>Leave unchanged to keep the current password. Remove clears homepage protection.</HelpText>
-          </Section>
+          <PlanFeatureLock feature="passwordProtection" label="Password Protection">
+            <Section title="Homepage Password">
+              <div className="flex min-h-14 items-center gap-3 border px-4">
+                <input
+                  type="text"
+                  value={password}
+                  onChange={(event) => { setPassword(event.target.value); setPasswordDirty(true); }}
+                  placeholder={record?.hasPassword && !passwordDirty ? "Password is set" : "Add a password"}
+                  className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none"
+                />
+                <button type="button" onClick={generatePassword} className="inline-flex items-center gap-2 text-sm font-bold text-[#6F57D9]"><RefreshCw className="size-4" />Generate</button>
+                {record?.hasPassword && (
+                  <button type="button" onClick={() => { setPassword(""); setPasswordDirty(true); }} className="text-xs font-bold text-red-600">Remove</button>
+                )}
+              </div>
+              <HelpText>Leave unchanged to keep the current password. Remove clears homepage protection.</HelpText>
+            </Section>
+          </PlanFeatureLock>
 
           <Section title="Homepage Identity">
             <Field label="Studio / Brand Name" value={form.brandName} onChange={(brandName) => setForm((current) => ({ ...current, brandName }))} />

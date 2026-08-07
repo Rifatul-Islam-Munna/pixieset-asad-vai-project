@@ -203,13 +203,14 @@ export class AdminService implements OnModuleInit {
     const plan = await this.planModel.create({
       name: dto.name.trim(),
       storageGb: Number(dto.storageGb ?? 0),
+      galleryLimit: Number(dto.galleryLimit ?? 0),
       monthlyEmails: Number(dto.monthlyEmails ?? 0),
       videoMinutes: Number(dto.videoMinutes ?? 0),
       videoQuality: dto.videoQuality === '4k' ? '4k' : 'hd',
       priceMonthly: Number(dto.priceMonthly ?? 0),
       yearlyEnabled: Boolean(dto.yearlyEnabled),
       priceYearly: Number(dto.priceYearly ?? 0),
-      features: (dto.features ?? {}) as any,
+      features: this.cleanPlanFeatures((dto.features ?? {}) as Record<string, boolean>) as any,
       recommended: Boolean(dto.recommended),
       active: dto.active ?? true,
     });
@@ -227,16 +228,35 @@ export class AdminService implements OnModuleInit {
     }
     if (dto.name !== undefined) plan.name = dto.name.trim();
     if (dto.storageGb !== undefined) plan.storageGb = Number(dto.storageGb);
+    if (dto.galleryLimit !== undefined) plan.galleryLimit = Number(dto.galleryLimit);
     if (dto.monthlyEmails !== undefined) plan.monthlyEmails = Number(dto.monthlyEmails);
     if (dto.videoMinutes !== undefined) plan.videoMinutes = Number(dto.videoMinutes);
     if (dto.videoQuality !== undefined) plan.videoQuality = dto.videoQuality === '4k' ? '4k' : 'hd';
     if (dto.priceMonthly !== undefined) plan.priceMonthly = Number(dto.priceMonthly);
     if (dto.yearlyEnabled !== undefined) plan.yearlyEnabled = Boolean(dto.yearlyEnabled);
     if (dto.priceYearly !== undefined) plan.priceYearly = Number(dto.priceYearly);
-    if (dto.features !== undefined) plan.features = dto.features as any;
+    if (dto.features !== undefined) plan.features = this.cleanPlanFeatures(dto.features as Record<string, boolean>) as any;
     if (dto.recommended !== undefined) plan.recommended = Boolean(dto.recommended);
     if (dto.active !== undefined) plan.active = dto.active;
     await plan.save();
+
+    // A plan is the source of truth. Existing subscribers/users assigned to this
+    // plan must receive changes immediately without repurchase or relogin.
+    await this.userModel.updateMany(
+      { planId: plan._id.toString() },
+      {
+        $set: {
+          planName: plan.name,
+          storageLimitGb: Number(plan.storageGb ?? 0),
+          galleryLimit: Number(plan.galleryLimit ?? 0),
+          monthlyEmailLimit: Number(plan.monthlyEmails ?? 0),
+          videoUploadLimitMinutes: Number(plan.videoMinutes ?? 0),
+          videoUploadQuality: plan.videoQuality ?? 'hd',
+          planFeatures: this.normalizedPlanFeatures((plan.features ?? {}) as Record<string, boolean>),
+        },
+      },
+    );
+
     return plan.toObject();
   }
 
@@ -396,10 +416,11 @@ export class AdminService implements OnModuleInit {
           planId: plan._id.toString(),
           planName: plan.name,
           storageLimitGb: plan.storageGb,
+          galleryLimit: Number(plan.galleryLimit ?? 0),
           monthlyEmailLimit: plan.monthlyEmails,
           videoUploadLimitMinutes: plan.videoMinutes ?? 0,
           videoUploadQuality: plan.videoQuality ?? 'hd',
-          planFeatures: plan.features ?? {},
+          planFeatures: this.normalizedPlanFeatures(plan.features ?? {}),
           monthlyEmailsUsed: 0,
           monthlyUsageKey: this.currentMonthKey(),
           planActivatedAt: new Date(),
@@ -416,6 +437,24 @@ export class AdminService implements OnModuleInit {
     return plan;
   }
 
+  private cleanPlanFeatures(features: Record<string, boolean>) {
+    const { emailSupport: _emailSupport, vipSupport: _vipSupport, ...clean } = features ?? {};
+    return clean;
+  }
+
+  private normalizedPlanFeatures(features: Record<string, boolean>) {
+    const clean = this.cleanPlanFeatures(features);
+    return {
+      ...clean,
+      coverImage: Boolean(features.coverImage || features.beautifulGalleries),
+      layouts: Boolean(features.layouts || features.beautifulGalleries),
+      advancedDesign: Boolean(features.advancedDesign || features.beautifulGalleries),
+      customCover: Boolean(features.customCover || features.beautifulGalleries),
+      downloadLimit: Boolean(features.downloadLimit || features.downloads),
+      pinSet: Boolean(features.pinSet || features.passwordProtection),
+    };
+  }
+
   async purchaseHistory(userId: string) {
     return this.planPurchaseModel.find({ userId }).sort('-createdAt').lean();
   }
@@ -428,6 +467,7 @@ export class AdminService implements OnModuleInit {
         $set: {
           planName: 'Free',
           storageLimitGb: freePlan.storageGb,
+          galleryLimit: 10,
           monthlyEmailLimit: freePlan.monthlyEmails,
           videoUploadLimitMinutes: 0,
           videoUploadQuality: 'hd',
@@ -446,10 +486,45 @@ export class AdminService implements OnModuleInit {
   }
 
   async userCapabilities(userId: string) {
-    const user = await this.userModel.findById(userId).select('planName planFeatures storageLimitGb monthlyEmailLimit videoUploadLimitMinutes videoUploadQuality').lean();
+    const user = await this.userModel
+      .findById(userId)
+      .select('planId planName planFeatures storageLimitGb galleryLimit monthlyEmailLimit videoUploadLimitMinutes videoUploadQuality')
+      .lean();
+
+    // Always resolve paid-plan capabilities from the current master Plan document.
+    // This self-heals users that were assigned before live plan propagation existed.
+    if (user?.planId) {
+      const plan = await this.planModel.findById(user.planId).lean();
+      if (plan) {
+        const features = this.normalizedPlanFeatures((plan.features ?? {}) as Record<string, boolean>);
+        const current = {
+          planName: plan.name,
+          storageLimitGb: Number(plan.storageGb ?? 0),
+          galleryLimit: Number(plan.galleryLimit ?? 0),
+          monthlyEmailLimit: Number(plan.monthlyEmails ?? 0),
+          videoUploadLimitMinutes: Number(plan.videoMinutes ?? 0),
+          videoUploadQuality: plan.videoQuality ?? 'hd',
+          planFeatures: features,
+        };
+
+        await this.userModel.updateOne({ _id: userId }, { $set: current });
+
+        return {
+          planName: current.planName,
+          storageLimitGb: current.storageLimitGb,
+          galleryLimit: current.galleryLimit,
+          monthlyEmailLimit: current.monthlyEmailLimit,
+          videoUploadLimitMinutes: current.videoUploadLimitMinutes,
+          videoUploadQuality: current.videoUploadQuality,
+          features: { ...features, marketingEmails: true },
+        };
+      }
+    }
+
     return {
       planName: user?.planName ?? 'Free',
       storageLimitGb: user?.storageLimitGb ?? 0,
+      galleryLimit: user?.galleryLimit ?? 10,
       monthlyEmailLimit: user?.monthlyEmailLimit ?? 0,
       videoUploadLimitMinutes: user?.videoUploadLimitMinutes ?? 0,
       videoUploadQuality: user?.videoUploadQuality ?? 'hd',

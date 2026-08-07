@@ -1206,7 +1206,11 @@ function ClientGalleryDashboardPanel({
 }: {
   billingUser: BillingUser | null;
 }) {
-  return <ClientGalleryOverview billingUser={billingUser} />;
+  return (
+    <PlanFeatureLock feature="basicAnalytics" label="Basic Gallery & Sales Analytics">
+      <ClientGalleryOverview billingUser={billingUser} />
+    </PlanFeatureLock>
+  );
 }
 
 function AccountPanel() {
@@ -4282,7 +4286,9 @@ function SettingsPanel({
         {settingsPage === "watermark" ? (
           <WatermarkList section={section} />
         ) : settingsPage === "branding" ? (
-          <BrandingSettings />
+          <PlanFeatureLock feature="advancedBranding" label="Advanced Branding">
+            <BrandingSettings />
+          </PlanFeatureLock>
         ) : settingsPage === "watermark-editor" ? (
           <WatermarkSettings section={section} />
         ) : settingsPage === "presets" ? (
@@ -15776,15 +15782,17 @@ function CollectionDetailView({
               )}
 
               {activeSettingsPanel === "download" && (
-                <PresetDownloadPanel
-                  download={form.download}
-                  onChange={(download) =>
-                    setForm((value) => ({
-                      ...value,
-                      download: { ...value.download, ...download },
-                    }))
-                  }
-                />
+                <PlanFeatureLock feature="downloads" label="Downloads">
+                  <PresetDownloadPanel
+                    download={form.download}
+                    onChange={(download) =>
+                      setForm((value) => ({
+                        ...value,
+                        download: { ...value.download, ...download },
+                      }))
+                    }
+                  />
+                </PlanFeatureLock>
               )}
 
               {activeSettingsPanel === "favorite" && (

@@ -78,6 +78,10 @@ export class HomepageService {
     }
 
     if (dto.password !== undefined) {
+      const owner = await this.userModel.findById(userId).select('planFeatures').lean();
+      if (dto.password && !owner?.planFeatures?.passwordProtection) {
+        throw new ConflictException('Current plan does not allow Password Protection.');
+      }
       homepage.passwordHash = dto.password
         ? this.hashPassword(userId, dto.password)
         : undefined;

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -50,6 +50,7 @@ type PlanForm = {
   id?: string;
   name: string;
   storageGb: string;
+  galleryLimit: string;
   monthlyEmails: string;
   videoMinutes: string;
   videoQuality: "hd" | "4k";
@@ -76,6 +77,7 @@ const emptyForm: UserForm = {
 const emptyPlanForm: PlanForm = {
   name: "",
   storageGb: "",
+  galleryLimit: "",
   monthlyEmails: "",
   videoMinutes: "",
   videoQuality: "hd",
@@ -88,16 +90,28 @@ const emptyPlanForm: PlanForm = {
 };
 
 const planFeatures = [
+  ["aiFaceSearch", "AI Face Search"],
+  ["downloads", "Downloads"],
+  ["mobileGallery", "Mobile Gallery"],
+  ["beautifulGalleries", "Beautiful Galleries"],
+  ["passwordProtection", "Password Protection"],
+  ["multipleGalleryStores", "Multiple Gallery Stores"],
+  ["advancedFaceSearch", "Advanced Face Search"],
+  ["basicAnalytics", "Basic Gallery & Sales Analytics"],
+  ["advancedBranding", "Advanced Branding"],
   ["pinSet", "PIN set"],
   ["downloadLimit", "Download limit"],
   ["store", "Store"],
   ["marketingEmails", "Marketing email"],
 ] as const;
 
-export function AdminDashboard({ initialData }: { initialData: AdminDashboardData }) {
+export function AdminDashboard({ initialData, initialTab }: { initialData: AdminDashboardData; initialTab?: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [tab, setTab] = useState<AdminTab>("overview");
+  const validInitialTab = (["overview", "users", "collections", "plans", "free-plan", "stripe", "cms", "seo", "terms", "privacy"] as AdminTab[]).includes(initialTab as AdminTab)
+    ? (initialTab as AdminTab)
+    : "overview";
+  const [tab, setTab] = useState<AdminTab>(validInitialTab);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [planForm, setPlanForm] = useState<PlanForm>(emptyPlanForm);
@@ -186,6 +200,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     const payload = {
       name: planForm.name,
       storageGb: Number(planForm.storageGb || 0),
+      galleryLimit: Number(planForm.galleryLimit || 0),
       monthlyEmails: Number(planForm.monthlyEmails || 0),
       videoMinutes: Number(planForm.videoMinutes || 0),
       videoQuality: planForm.videoQuality,
@@ -258,22 +273,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   };
 
   const editPlan = (plan: AdminPlan) => {
-    setTab("plans");
-    setPlanForm({
-      id: plan._id,
-      name: plan.name,
-      storageGb: String(plan.storageGb ?? 0),
-      monthlyEmails: String(plan.monthlyEmails ?? 0),
-      videoMinutes: String(plan.videoMinutes ?? 0),
-      videoQuality: plan.videoQuality === "4k" ? "4k" : "hd",
-      priceMonthly: String(plan.priceMonthly ?? 0),
-      yearlyEnabled: Boolean(plan.yearlyEnabled),
-      priceYearly: String(plan.priceYearly ?? 0),
-      features: plan.features ?? {},
-      recommended: Boolean(plan.recommended),
-      active: plan.active,
-    });
-    setPlanModalOpen(true);
+    router.push(`/admin/plans/${plan._id}`);
   };
 
   const removePlan = (id: string) => {
@@ -507,9 +507,11 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               </Button>
             )}
             {tab === "plans" && (
-              <Button onClick={openPlanModal} className="h-11 rounded-none bg-[#111] text-white">
-                <PlusCircle className="size-4" />
-                Add plan
+              <Button asChild className="h-11 rounded-none bg-[#111] text-white">
+                <Link href="/admin/plans/new">
+                  <PlusCircle className="size-4" />
+                  Add plan
+                </Link>
               </Button>
             )}
           </div>
@@ -627,6 +629,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             <div className="grid gap-3">
               <InputField label="Plan name" value={planForm.name} onChange={(value) => setPlanForm({ ...planForm, name: value })} required />
               <InputField label="Storage limit GB" value={planForm.storageGb} onChange={(value) => setPlanForm({ ...planForm, storageGb: value })} required type="number" />
+              <InputField label="Gallery limit (0 = unlimited)" value={planForm.galleryLimit} onChange={(value) => setPlanForm({ ...planForm, galleryLimit: value })} required type="number" />
               <InputField label="Emails / month" value={planForm.monthlyEmails} onChange={(value) => setPlanForm({ ...planForm, monthlyEmails: value })} required type="number" />
               <InputField label="Total video minutes" value={planForm.videoMinutes} onChange={(value) => setPlanForm({ ...planForm, videoMinutes: value })} required type="number" />
               <label className="grid gap-1 text-xs font-bold uppercase tracking-[0.14em] text-[#777]">

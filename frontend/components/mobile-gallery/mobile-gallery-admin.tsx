@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -40,6 +40,7 @@ import {
 import { MobileGalleryDesignEditor } from "./mobile-gallery-design-editor";
 import { MobileGalleryShareScreen } from "./mobile-gallery-share-screen";
 import { MobileGalleryPreviewScreen } from "./mobile-gallery-preview-screen";
+import { PlanFeatureLock } from "@/components/dashboard/plan-feature-lock";
 
 type View = "apps" | "settings" | "editor" | "preview" | "share";
 type EditorTab = "photos" | "design" | "app-settings";
@@ -66,9 +67,12 @@ const switcherItems = [
 ];
 
 export function MobileGalleryDashboard({ view, appId }: { view: View; appId?: string }) {
-  if (view === "apps") return <AppsPage />;
-  if (view === "settings") return <ProfileSettingsPage />;
-  return <AppWorkspace view={view} appId={appId} />;
+  const content = view === "apps"
+    ? <AppsPage />
+    : view === "settings"
+      ? <ProfileSettingsPage />
+      : <AppWorkspace view={view} appId={appId} />;
+  return <PlanFeatureLock feature="mobileGallery" label="Mobile Gallery">{content}</PlanFeatureLock>;
 }
 
 function TopBar({ active }: { active: "apps" | "settings" }) {
@@ -78,20 +82,30 @@ function TopBar({ active }: { active: "apps" | "settings" }) {
       <div className="flex h-[74px] items-center justify-between px-4 sm:px-8 lg:px-10">
         <div className="relative min-w-0">
           <button onClick={() => setSwitcherOpen((value) => !value)} className="flex min-w-0 items-center gap-3 font-semibold text-[#17151f]">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#ffca22] text-[#332500]"><Smartphone className="size-4" /></span>
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#6337d8] text-white"><Smartphone className="size-4" /></span>
             <span className="truncate">Mobile Gallery App</span><ChevronDown className="size-4 shrink-0" />
           </button>
           {switcherOpen && (
             <div className="absolute left-0 top-12 z-50 w-[calc(100vw-2rem)] max-w-[350px] overflow-hidden rounded-[10px] border border-[#eceaf2] bg-white shadow-[0_22px_60px_rgba(32,20,70,.16)]">
               <div className="p-3">
-                {switcherItems.map((item) => (
-                  <Link key={item.title} href={item.href} className="flex gap-4 rounded-[8px] px-3 py-4 hover:bg-[#f8f6ff]">
-                    <span className={`mt-1 grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br ${item.accent} text-white`}>
-                      {item.title === "Client Gallery" ? <LayoutGrid className="size-5" /> : item.title === "Store Gallery" ? <Store className="size-5" /> : <Smartphone className="size-5" />}
-                    </span>
-                    <span className="flex flex-col gap-1"><span className="font-bold text-[#151515]">{item.title}</span><span className="text-xs leading-5 text-[#777]">{item.text}</span></span>
-                  </Link>
-                ))}
+                {switcherItems.map((item) => {
+                  const isActive = item.href === "/dashboard/mobile-gallery";
+                  return (
+                    <Link
+                      key={item.title}
+                      href={item.href}
+                      className={`flex gap-4 rounded-[8px] border px-3 py-4 transition ${isActive ? "border-[#d9cef8] bg-[#f3efff]" : "border-transparent hover:bg-[#f8f6ff]"}`}
+                    >
+                      <span className={`mt-1 grid size-10 shrink-0 place-items-center rounded-full text-white ${isActive ? "bg-[#6337d8]" : `bg-gradient-to-br ${item.accent}`}`}>
+                        {item.title === "Client Gallery" ? <LayoutGrid className="size-5" /> : item.title === "Store Gallery" ? <Store className="size-5" /> : <Smartphone className="size-5" />}
+                      </span>
+                      <span className="flex flex-col gap-1">
+                        <span className={`font-bold ${isActive ? "text-[#6337d8]" : "text-[#151515]"}`}>{item.title}</span>
+                        <span className="text-xs leading-5 text-[#777]">{item.text}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
               <div className="bg-[#f8f7fb] p-4 text-center"><Link href="/dashboard/client-gallery/dashboard" className="inline-flex items-center gap-2 text-sm text-[#4e3bbd]"><LayoutGrid className="size-4" />View Dashboard</Link></div>
             </div>

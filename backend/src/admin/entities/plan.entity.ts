@@ -11,6 +11,10 @@ export class Plan {
   @Prop({ required: true, min: 0 })
   storageGb: number;
 
+  // 0 means unlimited galleries.
+  @Prop({ default: 0, min: 0 })
+  galleryLimit: number;
+
   @Prop({ required: true, min: 0 })
   monthlyEmails: number;
 
@@ -31,6 +35,15 @@ export class Plan {
 
   @Prop({ type: Object, default: {} })
   features: {
+    aiFaceSearch?: boolean;
+    downloads?: boolean;
+    mobileGallery?: boolean;
+    beautifulGalleries?: boolean;
+    passwordProtection?: boolean;
+    multipleGalleryStores?: boolean;
+    advancedFaceSearch?: boolean;
+    basicAnalytics?: boolean;
+    advancedBranding?: boolean;
     pinSet?: boolean;
     downloadLimit?: boolean;
     coverImage?: boolean;

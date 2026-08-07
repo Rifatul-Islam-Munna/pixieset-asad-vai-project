@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { User, UserDocument } from 'src/user/entities/user.entity';
 import { UpsertDashboardSettingDto } from './dto/upsert-dashboard-setting.dto';
 import {
   DashboardSetting,
@@ -13,6 +14,7 @@ export class SettingsService {
   constructor(
     @InjectModel(DashboardSetting.name)
     private readonly settingModel: Model<DashboardSettingDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
   ) {}
 
   findAll(userId: string, type: DashboardSettingType, collectionId?: string) {
@@ -26,6 +28,12 @@ export class SettingsService {
   }
 
   async upsert(userId: string, type: DashboardSettingType, dto: UpsertDashboardSettingDto) {
+    if (type === DashboardSettingType.BRANDING) {
+      const user = await this.userModel.findById(userId).select('planFeatures').lean();
+      if (!user?.planFeatures?.advancedBranding) {
+        throw new BadRequestException('Current plan does not allow Advanced Branding.');
+      }
+    }
     const setting = await this.settingModel
       .findOneAndUpdate(
         { userId, type, localId: dto.localId },

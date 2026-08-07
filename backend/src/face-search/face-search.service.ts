@@ -7,6 +7,7 @@ import { Model } from 'mongoose';
 import sharp from 'sharp';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
+import { User, UserDocument } from 'src/user/entities/user.entity';
 import { FacePerson, FacePersonDocument } from './entities/face-person.entity';
 
 type IndexedImage = CollectionImage & { _id?: unknown };
@@ -56,6 +57,7 @@ export class FaceSearchService implements OnModuleInit {
     @InjectModel(Collection.name) private readonly collectionModel: Model<CollectionDocument>,
     @InjectModel(CollectionImage.name) private readonly imageModel: Model<CollectionImageDocument>,
     @InjectModel(FacePerson.name) private readonly facePersonModel: Model<FacePersonDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
   ) {}
 
   async onModuleInit() {
@@ -176,6 +178,7 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   async searchCollection(collectionIdOrSlug: string, file?: Express.Multer.File) {
+    await this.assertCollectionFeature(collectionIdOrSlug, 'aiFaceSearch', 'AI Face Search');
     if (!file?.buffer?.length) {
       throw new BadRequestException('Face image is required');
     }
@@ -283,6 +286,7 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   async listCollectionFaces(collectionIdOrSlug: string) {
+    await this.assertCollectionFeature(collectionIdOrSlug, 'advancedFaceSearch', 'Advanced Face Search');
     if (!this.ready || !this.qdrant) {
       throw new BadRequestException('Face search is not ready');
     }
@@ -351,6 +355,7 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   async searchCollectionByFaceId(collectionIdOrSlug: string, faceId: string) {
+    await this.assertCollectionFeature(collectionIdOrSlug, 'advancedFaceSearch', 'Advanced Face Search');
     if (!this.ready || !this.qdrant) {
       throw new BadRequestException('Face search is not ready');
     }
@@ -376,6 +381,14 @@ export class FaceSearchService implements OnModuleInit {
     const queryVectors = [targetVector];
 
     return this.searchByVectors(collectionId, queryVectors);
+  }
+
+  private async assertCollectionFeature(collectionIdOrSlug: string, feature: string, label: string) {
+    const collection = await this.findCollection(collectionIdOrSlug);
+    const owner = await this.userModel.findById(collection.userId).select('planFeatures').lean();
+    if (!owner?.planFeatures?.[feature]) {
+      throw new BadRequestException(`Current plan does not allow ${label}.`);
+    }
   }
 
   private async indexMissingFaces(images: IndexedImage[]) {

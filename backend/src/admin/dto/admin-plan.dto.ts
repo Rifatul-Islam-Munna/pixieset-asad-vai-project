@@ -9,6 +9,11 @@ export class AdminCreatePlanDto {
   @Min(0)
   storageGb: number;
 
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  galleryLimit?: number;
+
   @IsNumber()
   @Min(0)
   monthlyEmails: number;
@@ -58,6 +63,11 @@ export class AdminUpdatePlanDto {
   @IsNumber()
   @Min(0)
   storageGb?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  galleryLimit?: number;
 
   @IsOptional()
   @IsNumber()

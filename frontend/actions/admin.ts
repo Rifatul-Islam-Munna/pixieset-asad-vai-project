@@ -34,6 +34,7 @@ export type AdminPlan = {
   _id: string;
   name: string;
   storageGb: number;
+  galleryLimit?: number;
   monthlyEmails: number;
   videoMinutes?: number;
   videoQuality?: "hd" | "4k";

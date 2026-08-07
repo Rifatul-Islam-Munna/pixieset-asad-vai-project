@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
@@ -69,6 +69,12 @@ type PublicCollection = {
     rawPhotoSupport?: boolean;
     termsOfService?: string;
     privacyPolicy?: string;
+  };
+  planCapabilities?: {
+    aiFaceSearch?: boolean;
+    advancedFaceSearch?: boolean;
+    downloads?: boolean;
+    store?: boolean;
   };
   marketing?: {
     optIn?: {
@@ -179,6 +185,8 @@ export function PublicGallery({
     ...(collection?.design ?? fallbackPresetDesign),
   };
   const studioName = decodeRouteText(name);
+  const aiFaceSearchEnabled = collection?.planCapabilities?.aiFaceSearch !== false;
+  const advancedFaceSearchEnabled = collection?.planCapabilities?.advancedFaceSearch === true;
   const title = collection?.name ?? decodeRouteText(galary);
   design.coverTitle = coverTextOrDefault(design.coverTitle, title);
   design.coverDate = coverTextOrDefault(
@@ -1002,16 +1010,22 @@ export function PublicGallery({
                 <Play className="size-5" />
               </button>
             )}
-            <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center text-black/70 transition hover:text-[#6337d8]" title={faceBusy ? "Searching" : "Find me"} aria-label="Find me">
-              {faceBusy ? <Search className="size-5 animate-pulse" /> : <Camera className="size-5" />}
-              <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
-                void searchByFace(event.target.files?.[0]);
-                event.target.value = "";
-              }} />
-            </label>
-            <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
-              <Search className="size-5" />
-            </button>
+            {aiFaceSearchEnabled && (
+              <>
+                <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center text-black/70 transition hover:text-[#6337d8]" title={faceBusy ? "Searching" : "Find me"} aria-label="Find me">
+                  {faceBusy ? <Search className="size-5 animate-pulse" /> : <Camera className="size-5" />}
+                  <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
+                    void searchByFace(event.target.files?.[0]);
+                    event.target.value = "";
+                  }} />
+                </label>
+                {advancedFaceSearchEnabled && (
+                  <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
+                    <Search className="size-5" />
+                  </button>
+                )}
+              </>
+            )}
             {faceResults && (
               <button className="inline-flex h-10 shrink-0 items-center border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em]" onClick={() => setFaceResults(null)} type="button">
                 Show all

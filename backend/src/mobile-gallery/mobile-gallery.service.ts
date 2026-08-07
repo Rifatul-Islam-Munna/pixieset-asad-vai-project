@@ -51,6 +51,10 @@ export class MobileGalleryService {
   ) {}
 
   async create(userId: string, body: Record<string, any>) {
+    const owner = await this.userModel.findById(userId).select('planFeatures').lean();
+    if (!owner?.planFeatures?.mobileGallery) {
+      throw new BadRequestException('Current plan does not allow Mobile Gallery.');
+    }
     const name = String(body.name ?? '').trim();
     if (!name) throw new BadRequestException('App name is required');
     const app = await this.appModel.create({

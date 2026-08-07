@@ -122,6 +122,14 @@ export class CollectionsService {
   ) {}
 
   async create(userId: string, dto: CreateCollectionDto) {
+    const owner = await this.userModel.findById(userId).select('galleryLimit').lean();
+    const galleryLimit = Number(owner?.galleryLimit ?? 10);
+    if (galleryLimit > 0) {
+      const galleryCount = await this.collectionModel.countDocuments({ userId });
+      if (galleryCount >= galleryLimit) {
+        throw new BadRequestException(`Your current plan allows ${galleryLimit} galleries.`);
+      }
+    }
     const safeDto = await this.sanitizeCollectionCapabilities(userId, dto);
     const collection = await this.collectionModel.create({
       userId,
@@ -140,6 +148,10 @@ export class CollectionsService {
   }
 
   async dashboardOverview(userId: string) {
+    const analyticsOwner = await this.userModel.findById(userId).select('planFeatures').lean();
+    if (!analyticsOwner?.planFeatures?.basicAnalytics) {
+      throw new BadRequestException('Current plan does not allow Basic Gallery & Sales Analytics.');
+    }
     const now = new Date();
     const periodStart = new Date(now.getTime() - 30 * 86400000);
     const previousStart = new Date(now.getTime() - 60 * 86400000);
@@ -425,6 +437,11 @@ export class CollectionsService {
         localId: 'gallery-marketing',
       })
       .lean();
+    const owner = await this.userModel
+      .findById(collection.userId)
+      .select('planFeatures')
+      .lean();
+    const ownerFeatures = owner?.planFeatures ?? {};
 
     const mergedSettings = {
       general: {
@@ -451,8 +468,37 @@ export class CollectionsService {
       },
     };
 
+    if (!ownerFeatures.downloads) {
+      mergedSettings.download = {
+        ...mergedSettings.download,
+        enabled: false,
+        allowDownload: false,
+        allowDownloads: false,
+        photoDownload: false,
+        galleryDownload: false,
+        singlePhotoDownload: false,
+        videoDownload: false,
+      };
+    }
+    if (!ownerFeatures.store) {
+      mergedSettings.store = {
+        ...mergedSettings.store,
+        enabled: false,
+        storeStatus: false,
+        showPrintStoreNav: false,
+        showBuyPhotoButton: false,
+      };
+    }
+
     return {
       ...collection,
+      planCapabilities: {
+        aiFaceSearch: Boolean(ownerFeatures.aiFaceSearch),
+        advancedFaceSearch: Boolean(ownerFeatures.advancedFaceSearch),
+        downloads: Boolean(ownerFeatures.downloads),
+        store: Boolean(ownerFeatures.store),
+        multipleGalleryStores: Boolean(ownerFeatures.multipleGalleryStores),
+      },
       design: {
         ...(presetData?.design ?? presetData?.presetDesign ?? {}),
         ...(collection.design ?? {}),
@@ -1171,6 +1217,13 @@ export class CollectionsService {
     );
     if (!this.isPublicCollectionVisible(collection))
       throw new NotFoundException('Collection not found');
+    const owner = await this.userModel
+      .findById(collection.userId)
+      .select('planFeatures')
+      .lean();
+    if (!owner?.planFeatures?.downloads) {
+      throw new BadRequestException('Current plan does not allow Downloads.');
+    }
     const email = String(body?.email ?? '')
       .trim()
       .toLowerCase();
@@ -1469,7 +1522,7 @@ export class CollectionsService {
   async update(userId: string, id: string, dto: UpdateCollectionDto) {
     const collection = await this.collectionModel.findOne({ _id: id, userId });
     if (!collection) throw new NotFoundException('Collection not found');
-    dto = await this.sanitizeCollectionCapabilities(userId, dto);
+    dto = await this.sanitizeCollectionCapabilities(userId, dto, id);
 
     if (dto.name !== undefined) {
       collection.name = dto.name;
@@ -2888,18 +2941,34 @@ export class CollectionsService {
 
   private async sanitizeCollectionCapabilities<
     T extends CreateCollectionDto | UpdateCollectionDto,
-  >(userId: string, dto: T): Promise<T> {
+  >(userId: string, dto: T, collectionId?: string): Promise<T> {
     const user = await this.userModel
       .findById(userId)
       .select('planFeatures')
       .lean();
     const features = user?.planFeatures ?? {};
     const next: any = { ...dto };
+    if (next.design && !features.beautifulGalleries) {
+      next.design = {};
+    }
     const settings = { ...((next.settings ?? {}) as any) };
     const download = { ...(settings.download ?? {}) };
     const store = { ...(settings.store ?? {}) };
 
-    if (
+    if (!features.downloads) {
+      download.enabled = false;
+      download.allowDownload = false;
+      download.allowDownloads = false;
+      download.photoDownload = false;
+      download.galleryDownload = false;
+      download.singlePhotoDownload = false;
+      download.videoDownload = false;
+      download.limitDownloads = false;
+      download.restrictDownloads = false;
+      download.limitPinUsage = '';
+      download.downloadPin = false;
+      download.downloadPinCode = '';
+    } else if (
       (download.limitDownloads || download.restrictDownloads) &&
       !features.downloadLimit
     ) {
@@ -2916,6 +2985,19 @@ export class CollectionsService {
       store.storeStatus = false;
       store.showPrintStoreNav = false;
       store.showBuyPhotoButton = false;
+    } else if ((store.enabled || store.storeStatus) && !features.multipleGalleryStores) {
+      const storeQuery: any = {
+        userId,
+        $or: [
+          { 'settings.store.enabled': true },
+          { 'settings.store.storeStatus': true },
+        ],
+      };
+      if (collectionId) storeQuery._id = { $ne: collectionId };
+      const existingStore = await this.collectionModel.exists(storeQuery);
+      if (existingStore) {
+        throw new BadRequestException('Your current plan allows Store on one gallery only. Upgrade for Multiple Gallery Stores.');
+      }
     }
 
     if (next.settings) next.settings = { ...settings, download, store };

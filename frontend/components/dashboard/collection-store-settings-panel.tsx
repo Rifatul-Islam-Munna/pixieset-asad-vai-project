@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, Save } from "lucide-react";
+import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 
 export type StoreSettingsForm = {
   enabled: boolean;
@@ -28,9 +29,15 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
   onSave: () => void;
 }) {
   const sheets = priceSheets ?? [];
+  const multiStore = usePlanFeatureAccess("multipleGalleryStores");
   return (
     <section className="mt-6 max-w-[760px] bg-white p-4 sm:p-6 md:p-8">
       <h2 className="text-2xl font-medium">Store Settings</h2>
+      {multiStore.locked && (
+        <div className="mt-5 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Your plan supports one active gallery store. Multiple Gallery Stores requires an upgrade. The backend will block activating a second store.
+        </div>
+      )}
       <div className="mt-8 bg-[#eef7f9] p-6">
         <p className="font-bold">Activate Store</p>
         <p className="mt-4 text-sm leading-7 text-[#222]">

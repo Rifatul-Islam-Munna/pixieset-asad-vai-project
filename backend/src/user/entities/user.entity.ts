@@ -77,6 +77,10 @@ export class User {
   @Prop({ default: 3 })
   storageLimitGb: number;
 
+  // 0 means unlimited galleries.
+  @Prop({ default: 10, min: 0 })
+  galleryLimit: number;
+
   @Prop({ default: 0 })
   monthlyEmailLimit: number;
 
