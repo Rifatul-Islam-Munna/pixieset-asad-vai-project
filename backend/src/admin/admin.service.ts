@@ -484,7 +484,7 @@ export class AdminService implements OnModuleInit {
   }
 
   private cleanPlanFeatures(features: Record<string, boolean>) {
-    const { emailSupport: _emailSupport, vipSupport: _vipSupport, ...clean } = features ?? {};
+    const { emailSupport: _emailSupport, ...clean } = features ?? {};
     return clean;
   }
 

@@ -52,6 +52,7 @@ export class Plan {
     customCover?: boolean;
     store?: boolean;
     marketingEmails?: boolean;
+    vipSupport?: boolean;
   };
 
   @Prop({ default: false })

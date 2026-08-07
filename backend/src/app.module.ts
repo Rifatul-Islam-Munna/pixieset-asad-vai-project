@@ -16,6 +16,7 @@ import { MobileGalleryModule } from './mobile-gallery/mobile-gallery.module';
 import { MailModule } from './mail/mail.module';
 import { HomepageModule } from './homepage/homepage.module';
 import { BlogModule } from './blog/blog.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { BlogModule } from './blog/blog.module';
     MobileGalleryModule,
     HomepageModule,
     BlogModule,
+    SupportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

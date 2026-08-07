@@ -55,6 +55,7 @@ const featureGroups = [
       ["pinSet", "PIN Set", "Allows the existing download PIN control. Password Protection also enables this internally."],
       ["downloadLimit", "Download Limit", "Allows download restriction/limit controls. Downloads also enables this internally for compatible plans."],
       ["marketingEmails", "Marketing Email", "Allows the existing marketing-email capability. Monthly email quantity is controlled separately by Emails / month."],
+      ["vipSupport", "VIP Support", "Unlocks the private real-time Support page and live chat with admin. User messages are rate-limited and chat history expires automatically."],
     ],
   },
 ] as const;

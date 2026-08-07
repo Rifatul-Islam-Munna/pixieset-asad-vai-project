@@ -99,6 +99,9 @@ export class User {
   @Prop({ type: Object, default: {} })
   planFeatures: Record<string, boolean>;
 
+  @Prop({ default: false })
+  supportBlocked: boolean;
+
   @Prop()
   monthlyUsageKey?: string;
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Check, Edit3, Euro, ExternalLink, FileImage, FileText, GripVertical, HardDrive, Images, Loader2, LogOut, Mail, Menu, Newspaper, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { BarChart3, Check, Edit3, Euro, ExternalLink, FileImage, FileText, GripVertical, HardDrive, Images, Loader2, LogOut, Mail, Menu, MessageCircle, Newspaper, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
@@ -38,6 +38,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { mergeHomeCms, type BrandLogo, type FeatureCard, type FooterLink, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
+import { SupportChat } from "@/components/dashboard/support-chat";
 
 type UserForm = {
   id?: string;
@@ -66,7 +67,7 @@ type PlanForm = {
   active: boolean;
 };
 
-type AdminTab = "overview" | "users" | "collections" | "plans" | "free-plan" | "stripe" | "cms" | "seo" | "terms" | "privacy";
+type AdminTab = "overview" | "users" | "collections" | "plans" | "free-plan" | "stripe" | "vip-support" | "cms" | "seo" | "terms" | "privacy";
 
 const emptyForm: UserForm = {
   name: "",
@@ -107,12 +108,13 @@ const planFeatures = [
   ["downloadLimit", "Download limit"],
   ["store", "Store"],
   ["marketingEmails", "Marketing email"],
+  ["vipSupport", "VIP Support"],
 ] as const;
 
 export function AdminDashboard({ initialData, initialTab }: { initialData: AdminDashboardData; initialTab?: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const validInitialTab = (["overview", "users", "collections", "plans", "free-plan", "stripe", "cms", "seo", "terms", "privacy"] as AdminTab[]).includes(initialTab as AdminTab)
+  const validInitialTab = (["overview", "users", "collections", "plans", "free-plan", "stripe", "vip-support", "cms", "seo", "terms", "privacy"] as AdminTab[]).includes(initialTab as AdminTab)
     ? (initialTab as AdminTab)
     : "overview";
   const [tab, setTab] = useState<AdminTab>(validInitialTab);
@@ -614,6 +616,8 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
             <FreePlanSettingsPanel form={freePlanForm} setForm={setFreePlanForm} onSave={saveFreePlan} busy={pending} />
           ) : tab === "stripe" ? (
             <StripeSettingsPanel form={stripeForm} setForm={setStripeForm} />
+          ) : tab === "vip-support" ? (
+            <SupportChat admin />
           ) : tab === "seo" ? (
             <SeoCmsPanel
               form={homeCms}
@@ -863,6 +867,7 @@ function AdminNav({ tab, setTab }: { tab: AdminTab; setTab: (tab: AdminTab) => v
     { id: "plans", label: "Plans", icon: Package },
     { id: "free-plan", label: "Free Plan", icon: HardDrive },
     { id: "stripe", label: "Stripe", icon: ShieldCheck },
+    { id: "vip-support", label: "VIP Support", icon: MessageCircle },
     { id: "cms", label: "Homepage Editor", icon: FileImage },
     { id: "seo", label: "SEO", icon: Search },
     { id: "terms", label: "Terms of Service", icon: FileText },

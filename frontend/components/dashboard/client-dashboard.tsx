@@ -54,6 +54,7 @@ import {
   LogOut,
   Mail,
   MailCheck,
+  MessageCircle,
   Megaphone,
   MoreHorizontal,
   Monitor,
@@ -244,6 +245,7 @@ import {
   PlanFeatureNotice,
 } from "@/components/dashboard/plan-feature-lock";
 import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
+import { SupportChat } from "@/components/dashboard/support-chat";
 import { CollectionStoreSettingsPanel } from "@/components/dashboard/collection-store-settings-panel";
 import { CollectionRegistrationActivity } from "@/components/dashboard/collection-registration-activity";
 import { MarketingContactsGrid } from "@/components/dashboard/marketing-contacts-grid";
@@ -276,6 +278,7 @@ export type DashboardPage =
   | "get-started"
   | "storefront"
   | "storage"
+  | "support"
   | "account";
 export type MarketingPage = "email-campaigns" | "contacts" | "settings";
 export type SettingsPage =
@@ -497,8 +500,10 @@ export function ClientDashboard({
   const activeNav =
     page === "dashboard"
       ? "Dashboard"
-      : (sidebarItems[section].find((item) => item.page === page)?.label ??
-        (page === "marketing" ? "Marketing" : "Storage"));
+      : page === "support"
+        ? "Support"
+        : (sidebarItems[section].find((item) => item.page === page)?.label ??
+          (page === "marketing" ? "Marketing" : "Storage"));
   const isCollectionIndex =
     page === "collections" ||
     (section === "store-gallery" && page === "products");
@@ -717,6 +722,20 @@ export function ClientDashboard({
                   {!collapsed && item.label}
                 </Link>
               ))}
+              {section === "client-gallery" && Boolean(billingUser?.planFeatures?.vipSupport) && (
+                <Link
+                  href="/dashboard/client-gallery/support"
+                  className={cn(
+                    "group flex h-12 items-center rounded-md text-sm transition-colors hover:bg-[#f5f7f7]",
+                    collapsed ? "justify-center px-0" : "gap-4 px-3",
+                    page === "support" ? "bg-[#f0ebff] font-semibold text-[#6337d8]" : "text-[#333]",
+                  )}
+                  title={collapsed ? "Support" : undefined}
+                >
+                  <MessageCircle className={cn("size-5", page === "support" && "text-[#6337d8]")} />
+                  {!collapsed && "Support"}
+                </Link>
+              )}
             </div>
 
             {section === "client-gallery" && (
@@ -1040,6 +1059,15 @@ export function ClientDashboard({
                     {item.label}
                   </Link>
                 ))}
+                {section === "client-gallery" && Boolean(billingUser?.planFeatures?.vipSupport) && (
+                  <Link
+                    href="/dashboard/client-gallery/support"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn("flex items-center gap-4 text-base text-[#222]", page === "support" && "font-semibold text-[#6337d8]")}
+                  >
+                    <MessageCircle className={cn("size-5", page === "support" && "text-[#6337d8]")} /> Support
+                  </Link>
+                )}
                 {section === "client-gallery" && (
                   <>
                     <p className="mt-4 text-sm font-semibold text-[#777]">
@@ -1160,6 +1188,19 @@ export function ClientDashboard({
               <HomepageSettings />
             ) : page === "storage" ? (
               <StoragePlanPanel />
+            ) : page === "support" ? (
+              billingUser === null ? (
+                <div className="mx-auto max-w-[900px] p-8"><Skeleton className="h-[620px] w-full rounded-2xl" /></div>
+              ) : billingUser.planFeatures?.vipSupport ? (
+                <SupportChat />
+              ) : (
+                <div className="mx-auto max-w-[760px] rounded-2xl border border-[#e9e3f6] bg-white p-8 text-center shadow-sm">
+                  <MessageCircle className="mx-auto size-10 text-[#6337d8]" />
+                  <h2 className="mt-4 text-2xl font-semibold">VIP Support is not enabled</h2>
+                  <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#777]">This live support area is available only on plans that include VIP Support.</p>
+                  <Link href="/pricing" className="mt-5 inline-flex rounded-lg bg-[#6337d8] px-5 py-3 text-sm font-semibold text-white">View plans</Link>
+                </div>
+              )
             ) : page === "account" ? (
               <AccountPanel />
             ) : page === "marketing" ? (
