@@ -103,7 +103,9 @@ export type HomeContent = {
     title: string;
     accentTitle: string;
     endingTitle: string;
+    titleFontSizePx: number;
     subtitle: string;
+    subtitleFontSizePx: number;
     cta: string;
     secondaryCta: string;
     videoUrl: string;
@@ -295,8 +297,10 @@ export const defaultHomeCms: HomeCmsData = {
         title: "Your Moments.",
         accentTitle: "Beautifully",
         endingTitle: "Presented.",
+        titleFontSizePx: 46,
         subtitle:
           "Industry-leading photo galleries, website and business tools to streamline your workflow and grow your photography business.",
+        subtitleFontSizePx: 16,
         cta: "Get Started",
         secondaryCta: "Watch Video",
         videoUrl: "",
@@ -614,8 +618,10 @@ Object.assign(defaultHomeCms.content.gr, {
     eyebrow: "Gallerista",
     title:
       "Î£Ï‡ÎµÎ´Î¹Î±ÏƒÎ¼Î­Î½Î¿ Î³Î¹Î± Ï†Ï‰Ï„Î¿Î³ÏÎ¬Ï†Î¿Ï…Ï‚.\nÎ”Î·Î¼Î¹Î¿Ï…ÏÎ³Î®Î¸Î·ÎºÎµ Î³Î¹Î± Î½Î± Î±Î½Î±Ï€Ï„Ï…Ï‡Î¸ÎµÎ¯Ï„Îµ.",
+    titleFontSizePx: 52,
     subtitle:
       "ÎšÎ¿ÏÏ…Ï†Î±Î¯ÎµÏ‚ Î³ÎºÎ±Î»ÎµÏÎ¯ Ï†Ï‰Ï„Î¿Î³ÏÎ±Ï†Î¹ÏŽÎ½, Î¹ÏƒÏ„Î¿ÏƒÎµÎ»Î¯Î´ÎµÏ‚ ÎºÎ±Î¹ ÎµÏÎ³Î±Î»ÎµÎ¯Î± ÎµÏ€Î¹Ï‡ÎµÎ¯ÏÎ·ÏƒÎ·Ï‚ Î³Î¹Î± ÎºÎ±Î»ÏÏ„ÎµÏÎ· ÏÎ¿Î® ÎµÏÎ³Î±ÏƒÎ¯Î±Ï‚.",
+    subtitleFontSizePx: 17,
     cta: "ÎžÎµÎºÎ¹Î½Î®ÏƒÏ„Îµ",
   },
   gallery: {
@@ -738,6 +744,14 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
         ? savedHeadingLines.slice(2).join(" ")
         : ((savedHero as Partial<HomeContent["hero"]>).endingTitle ??
           defaultHomeCms.content[lang].hero.endingTitle),
+      titleFontSizePx: Math.min(
+        96,
+        Math.max(24, Number(savedHero.titleFontSizePx) || defaultHomeCms.content[lang].hero.titleFontSizePx),
+      ),
+      subtitleFontSizePx: Math.min(
+        40,
+        Math.max(12, Number(savedHero.subtitleFontSizePx) || defaultHomeCms.content[lang].hero.subtitleFontSizePx),
+      ),
       avatarImages:
         Array.isArray(
           (savedHero as Partial<HomeContent["hero"]>).avatarImages,

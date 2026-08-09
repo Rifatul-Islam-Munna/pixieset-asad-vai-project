@@ -75,6 +75,8 @@ export function HomeHero({
     () => getVideoEmbed(t.hero.videoUrl),
     [t.hero.videoUrl],
   );
+  const heroTitleSize = Number(t.hero.titleFontSizePx) || 46;
+  const heroSubtitleSize = Number(t.hero.subtitleFontSizePx) || 16;
 
   useEffect(() => {
     if (!videoOpen) return;
@@ -106,10 +108,18 @@ export function HomeHero({
             {t.hero.eyebrow}
           </p>
           <h1
-            className="mt-6 max-w-[620px] text-[32px] font-bold leading-[1.04] tracking-[-.04em] text-[#080808] sm:mt-7 sm:text-[40px] lg:text-[46px] [&_div]:block [&_p]:m-0"
+            className="mt-6 max-w-[620px] font-bold leading-[1.04] tracking-[-.04em] text-[#080808] sm:mt-7 [&_div]:block [&_p]:m-0"
+            style={{
+              fontSize: `clamp(${Math.min(32, heroTitleSize)}px, 4vw, ${heroTitleSize}px)`,
+            }}
             dangerouslySetInnerHTML={{ __html: t.hero.title }}
           />
-          <p className="mt-6 max-w-[470px] whitespace-pre-line text-[15px] leading-7 text-[#5f5f67] sm:mt-7 sm:text-[16px] sm:leading-8">
+          <p
+            className="mt-6 max-w-[470px] whitespace-pre-line leading-7 text-[#5f5f67] sm:mt-7 sm:leading-8"
+            style={{
+              fontSize: `clamp(${Math.min(15, heroSubtitleSize)}px, 2vw, ${heroSubtitleSize}px)`,
+            }}
+          >
             {t.hero.subtitle}
           </p>
           <div className="mt-7 grid gap-3 sm:flex sm:flex-wrap sm:gap-4">

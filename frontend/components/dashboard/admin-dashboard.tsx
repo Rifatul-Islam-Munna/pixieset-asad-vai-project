@@ -1492,6 +1492,22 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
           <CmsRepeater title="Hero text">
             <CmsInput label="Top badge" value={content.hero.eyebrow} onChange={(eyebrow) => patchObject("hero", { eyebrow })} />
             <CmsHeroHeadingEditor label="Hero heading" value={content.hero.title} onChange={(title) => patchObject("hero", { title })} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CmsNumberInput
+                label={`Hero title size (px) — ${lang.toUpperCase()}`}
+                value={content.hero.titleFontSizePx ?? 46}
+                min={24}
+                max={96}
+                onCommit={(value) => patchObject("hero", { titleFontSizePx: value })}
+              />
+              <CmsNumberInput
+                label={`Description size (px) — ${lang.toUpperCase()}`}
+                value={content.hero.subtitleFontSizePx ?? 16}
+                min={12}
+                max={40}
+                onCommit={(value) => patchObject("hero", { subtitleFontSizePx: value })}
+              />
+            </div>
             <CmsTextarea label="Description (normal paragraph text)" value={content.hero.subtitle} onChange={(subtitle) => patchObject("hero", { subtitle })} />
             <CmsInput label="Primary button" value={content.hero.cta} onChange={(cta) => patchObject("hero", { cta })} />
             <CmsInput label="Secondary button" value={content.hero.secondaryCta} onChange={(secondaryCta) => patchObject("hero", { secondaryCta })} />
@@ -1674,6 +1690,28 @@ function CmsInput({ label, value, onChange, wide, dark }: {
           dark ? "border-0 bg-white/8 text-white placeholder:text-white/40" : "border-[#ddd] bg-[#fbfbfa]",
         )}
       />
+    </label>
+  );
+}
+
+function CmsNumberInput({ label, value, min, max, onCommit }: {
+  label: string; value: number; min: number; max: number; onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const parsed = Number(draft);
+    const next = Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : value;
+    setDraft(String(next));
+    onCommit(next);
+  };
+  return (
+    <label className="grid gap-2">
+      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">{label}</span>
+      <Input type="number" inputMode="numeric" min={min} max={max} value={draft}
+        onChange={(event) => setDraft(event.target.value)} onBlur={commit}
+        onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+        className="h-11 rounded-none border-[#ddd] bg-[#fbfbfa] shadow-none focus-visible:ring-[#6337d8]" />
     </label>
   );
 }

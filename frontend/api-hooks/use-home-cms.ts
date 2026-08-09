@@ -7,10 +7,7 @@ export function useHomeCms(initialData: HomeCmsData) {
   const [data, setData] = useState(() => mergeHomeCms(initialData));
 
   useEffect(() => {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ||
-      "http://localhost:4000";
-    const url = `${baseUrl}/home-cms`;
+    const url = "/api/home-cms";
 
     console.log("[Home CMS] fetching", url);
     fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } })
