@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Geist, Geist_Mono, Inter } from "next/font/google";
+import { Cormorant_Garamond, Geist_Mono, Manrope } from "next/font/google";
 import { GoogleTagManager } from "@next/third-parties/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -19,17 +19,16 @@ import {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["500"],
   variable: "--font-cormorant",
-});
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
 });
 
 const geistMono = Geist_Mono({
@@ -64,10 +63,9 @@ export default async function RootLayout({
       className={cn(
         "h-full",
         "antialiased",
-        geistSans.variable,
+        manrope.variable,
         geistMono.variable,
         "font-sans",
-        inter.variable,
         cormorant.variable,
       )}
     >

@@ -161,10 +161,12 @@ export function PublicGallery({
   name,
   galary,
   collection: initialCollection,
+  visitorCode = "ANONYMOUS",
 }: {
   name: string;
   galary: string;
   collection?: PublicCollection | null;
+  visitorCode?: string;
 }) {
   const [collection, setCollection] = useState(initialCollection);
   useEffect(() => setCollection(initialCollection), [initialCollection]);
@@ -884,7 +886,7 @@ export function PublicGallery({
       {customFontName && design.customFontDataUrl && (
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
-      <ScreenCaptureGuard />
+      <ScreenCaptureGuard watermark={`${studioName} · ${title} · Visitor ${visitorCode}`} />
       {popupOpen && marketingSubscriptionEnabled && marketingPopupEnabled && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
           <div className="relative w-full max-w-[450px] bg-white p-8 text-[#111] shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-10">

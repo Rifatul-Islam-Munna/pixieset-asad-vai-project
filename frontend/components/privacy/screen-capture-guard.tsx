@@ -1,62 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import hotkeys from "hotkeys-js";
 
-export function ScreenCaptureGuard({ enabled = true }: { enabled?: boolean }) {
-  const [active, setActive] = useState(false);
+type ScreenCaptureGuardProps = {
+  enabled?: boolean;
+  watermark?: string;
+};
+
+const BLOCKED_HOTKEYS =
+  "printscreen,ctrl+p,command+p,ctrl+s,command+s,ctrl+shift+s,command+shift+s,command+shift+3,command+shift+4,command+shift+5";
+
+export function ScreenCaptureGuard({
+  enabled = true,
+  watermark = "Protected collection",
+}: ScreenCaptureGuardProps) {
+  const [shielded, setShielded] = useState(false);
+  const sessionMark = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const existing = window.sessionStorage.getItem("gallery-protection-id");
+    if (existing) return existing;
+    const id = crypto.randomUUID().slice(0, 8).toUpperCase();
+    window.sessionStorage.setItem("gallery-protection-id", id);
+    return id;
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
-    let timer: ReturnType<typeof window.setTimeout> | undefined;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const showBriefly = () => {
-      setActive(true);
-      if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(() => setActive(false), 1800);
+      setShielded(true);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setShielded(false), 1800);
     };
-    const show = () => setActive(true);
-    const hide = () => setActive(false);
+    const show = () => setShielded(true);
+    const hide = () => setShielded(false);
+    const clearClipboard = () => {
+      void navigator.clipboard?.writeText("").catch(() => undefined);
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      if (key === "printscreen" || ((event.ctrlKey || event.metaKey) && key === "p")) {
-        event.preventDefault();
-        void navigator.clipboard?.writeText("");
-        showBriefly();
-      }
+      const screenshotCombo =
+        key === "printscreen" ||
+        (event.metaKey && event.shiftKey && ["3", "4", "5"].includes(key)) ||
+        (event.shiftKey && key === "s" && event.metaKey);
+      const browserExport =
+        (event.ctrlKey || event.metaKey) && ["p", "s"].includes(key);
+      if (!screenshotCombo && !browserExport) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      clearClipboard();
+      showBriefly();
     };
-    const onContextMenu = (event: MouseEvent) => event.preventDefault();
-    const onDragStart = (event: DragEvent) => event.preventDefault();
-    const onVisibilityChange = () => {
-      if (document.hidden) show();
-      else hide();
+    const blockEvent = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
     };
+    const onVisibilityChange = () => setShielded(document.hidden);
     const hotkeyHandler = (event: KeyboardEvent) => {
       event.preventDefault();
-      void navigator.clipboard?.writeText("");
+      event.stopImmediatePropagation();
+      clearClipboard();
       showBriefly();
     };
 
     hotkeys.filter = () => true;
-    hotkeys("printscreen,ctrl+p,command+p,ctrl+s,command+s,ctrl+shift+s,command+shift+s", hotkeyHandler);
+    hotkeys(BLOCKED_HOTKEYS, hotkeyHandler);
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("blur", show);
     window.addEventListener("focus", hide);
     window.addEventListener("beforeprint", show);
     window.addEventListener("afterprint", hide);
     document.addEventListener("visibilitychange", onVisibilityChange);
-    document.addEventListener("contextmenu", onContextMenu, true);
-    document.addEventListener("dragstart", onDragStart, true);
+    document.addEventListener("contextmenu", blockEvent, true);
+    document.addEventListener("dragstart", blockEvent, true);
+    document.addEventListener("copy", blockEvent, true);
+
     return () => {
-      if (timer) window.clearTimeout(timer);
-      hotkeys.unbind("printscreen,ctrl+p,command+p,ctrl+s,command+s,ctrl+shift+s,command+shift+s", hotkeyHandler);
+      if (timer) clearTimeout(timer);
+      hotkeys.unbind(BLOCKED_HOTKEYS, hotkeyHandler);
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("blur", show);
       window.removeEventListener("focus", hide);
       window.removeEventListener("beforeprint", show);
       window.removeEventListener("afterprint", hide);
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      document.removeEventListener("contextmenu", onContextMenu, true);
-      document.removeEventListener("dragstart", onDragStart, true);
+      document.removeEventListener("contextmenu", blockEvent, true);
+      document.removeEventListener("dragstart", blockEvent, true);
+      document.removeEventListener("copy", blockEvent, true);
     };
   }, [enabled]);
 
@@ -68,21 +100,33 @@ export function ScreenCaptureGuard({ enabled = true }: { enabled?: boolean }) {
         @media print {
           body * { visibility: hidden !important; }
           body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
-            z-index: 2147483647;
-            display: block;
-            background: #000;
+            content: "Protected collection";
+            position: fixed; inset: 0; z-index: 2147483647;
+            display: grid; place-items: center;
+            background: #000; color: #fff;
             visibility: visible !important;
           }
         }
+        img, video { -webkit-user-drag: none; user-select: none; }
       `}</style>
-      {active && (
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[2147483000] overflow-hidden select-none">
+        <div className="absolute -inset-[30%] grid rotate-[-24deg] grid-cols-3 gap-x-24 gap-y-28 opacity-[0.075]">
+          {Array.from({ length: 36 }, (_, index) => (
+            <span key={index} className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.18em] text-black mix-blend-multiply">
+              {watermark} · {sessionMark}
+            </span>
+          ))}
+        </div>
+      </div>
+      {shielded && (
         <div
           aria-hidden="true"
-          className="fixed inset-0 z-[2147483647] bg-black"
-        />
+          className="fixed inset-0 z-[2147483647] grid place-items-center bg-black text-white"
+        >
+          <p className="px-6 text-center text-sm font-semibold uppercase tracking-[0.2em]">
+            Protected collection
+          </p>
+        </div>
       )}
     </>
   );

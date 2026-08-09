@@ -58,8 +58,22 @@ export function SiteNav({
     const saved = window.localStorage.getItem("home_selected_language");
     if (saved === "en" || saved === "gr" || saved === "fr" || saved === "de" || saved === "ar") {
       setActiveLanguage(saved);
-    } else {
-      setActiveLanguage(lang);
+      return;
+    }
+
+    const detected = document.cookie
+      .split("; ")
+      .find((cookie) => cookie.startsWith("home_geo_language="))
+      ?.split("=")[1];
+    const initial =
+      detected === "gr" || detected === "fr" || detected === "de" || detected === "ar"
+        ? detected
+        : "en";
+
+    setActiveLanguage(initial);
+    window.localStorage.setItem("home_selected_language", initial);
+    if (initial !== "en") {
+      window.location.assign(initial === "gr" ? "/?lang=gr" : "/?lang=en");
     }
   }, [lang]);
 

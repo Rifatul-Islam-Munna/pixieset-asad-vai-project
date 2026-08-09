@@ -17,6 +17,48 @@ const RESERVED_HOSTS = new Set([
 const FORBIDDEN_PATHS = ["/login", "/register", "/dashboard", "/admin", "/plans", "/pricing"];
 const PASSTHROUGH_PATHS = ["/_next", "/api", "/favicon.ico", "/manifest.webmanifest", "/robots.txt", "/sitemap.xml"];
 
+const COUNTRY_LANGUAGE: Record<string, "gr" | "fr" | "de" | "ar"> = {
+  GR: "gr",
+  FR: "fr",
+  DE: "de",
+  AT: "de",
+  CH: "de",
+  AE: "ar",
+  BH: "ar",
+  DZ: "ar",
+  EG: "ar",
+  IQ: "ar",
+  JO: "ar",
+  KW: "ar",
+  LB: "ar",
+  LY: "ar",
+  MA: "ar",
+  OM: "ar",
+  QA: "ar",
+  SA: "ar",
+  SY: "ar",
+  TN: "ar",
+  YE: "ar",
+};
+
+function withGeoLanguage(request: NextRequest, response: NextResponse) {
+  if (request.cookies.has("home_geo_language")) return response;
+
+  const country = (
+    request.headers.get("x-vercel-ip-country") ||
+    request.headers.get("cf-ipcountry") ||
+    request.headers.get("cloudfront-viewer-country") ||
+    ""
+  ).toUpperCase();
+  const language = COUNTRY_LANGUAGE[country] ?? "en";
+  response.cookies.set("home_geo_language", language, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+    sameSite: "lax",
+  });
+  return response;
+}
+
 function hostname(value: string) {
   return value.trim().toLowerCase().split(",")[0].replace(/^https?:\/\//, "").split("/")[0].split(":")[0];
 }
@@ -37,12 +79,12 @@ function siteSlug(request: NextRequest) {
 
 export function proxy(request: NextRequest) {
   const slug = siteSlug(request);
-  if (!slug) return NextResponse.next();
+  if (!slug) return withGeoLanguage(request, NextResponse.next());
 
   const path = request.nextUrl.pathname;
-  if (/\.[a-z0-9]{1,12}$/i.test(path)) return NextResponse.next();
+  if (/\.[a-z0-9]{1,12}$/i.test(path)) return withGeoLanguage(request, NextResponse.next());
   if (PASSTHROUGH_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
-    return NextResponse.next();
+    return withGeoLanguage(request, NextResponse.next());
   }
 
   if (FORBIDDEN_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {

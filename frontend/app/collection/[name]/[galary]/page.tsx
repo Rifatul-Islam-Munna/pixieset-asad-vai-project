@@ -1,5 +1,6 @@
-import { randomUUID } from "crypto";
+import { createHmac, randomUUID } from "crypto";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { PublicGallery } from "@/components/dashboard/public-gallery";
@@ -35,6 +36,22 @@ function imageSrc(url?: string) {
   if (!url) return undefined;
   if (url.startsWith("/uploads/")) return `${baseUrl}${url}`;
   return url;
+}
+
+async function visitorWatermarkCode() {
+  const requestHeaders = await headers();
+  const forwarded = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip =
+    forwarded ||
+    requestHeaders.get("x-real-ip") ||
+    requestHeaders.get("cf-connecting-ip") ||
+    "unknown";
+  const secret =
+    process.env.WATERMARK_SECRET ||
+    process.env.AUTH_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    "pixieset-watermark-v1";
+  return createHmac("sha256", secret).update(ip).digest("hex").slice(0, 8).toUpperCase();
 }
 
 export async function generateMetadata({
@@ -90,7 +107,10 @@ export default async function CollectionGalleryPage({
   params: Promise<{ name: string; galary: string }>;
 }) {
   const { name, galary } = await params;
-  const collection = await getCollection(galary, name);
+  const [collection, visitorCode] = await Promise.all([
+    getCollection(galary, name),
+    visitorWatermarkCode(),
+  ]);
   if (!collection) notFound();
   const gaId = gaIdFrom(collection);
   const viewToken = randomUUID();
@@ -121,7 +141,12 @@ export default async function CollectionGalleryPage({
         viewToken={viewToken}
       />
       <PublicGalleryHashOpener />
-      <PublicGallery name={name} galary={galary} collection={collection} />
+      <PublicGallery
+        name={name}
+        galary={galary}
+        collection={collection}
+        visitorCode={visitorCode}
+      />
       <PublicGalleryStoreBridge
         name={name}
         galary={galary}

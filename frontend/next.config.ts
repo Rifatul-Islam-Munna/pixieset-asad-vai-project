@@ -53,7 +53,15 @@ const nextConfig: NextConfig = {
       { source: "/", headers: noCacheHeaders },
       { source: "/(login|register)", headers: noCacheHeaders },
       { source: "/home/:path*", headers: noCacheHeaders },
-      { source: "/collection/:path*", headers: noCacheHeaders },
+      {
+        source: "/collection/:path*",
+        headers: [
+          ...noCacheHeaders,
+          { key: "Permissions-Policy", value: "display-capture=()" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
     ];
   },
   
