@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Loader2, Lock, Play, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Copy, Download, Eye, EyeOff, Loader2, Lock, Play, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
@@ -278,6 +279,12 @@ export function PublicGallery({
   const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
+  const [shareTarget, setShareTarget] = useState<{
+    title: string;
+    text?: string;
+    url: string;
+    notice: string;
+  } | null>(null);
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [downloadEmail, setDownloadEmail] = useState("");
   const [downloadEmailDraft, setDownloadEmailDraft] = useState("");
@@ -695,14 +702,51 @@ export function PublicGallery({
     const url = `${window.location.origin}${window.location.pathname}`;
     return photoId ? `${url}#photo-${encodeURIComponent(photoId)}` : url;
   };
-  const shareItem = async (share: { title: string; text?: string; url: string }, notice: string) => {
-    if (navigator.share) {
-      await navigator.share(share).catch(() => null);
-      setShareNotice(notice);
+  const shareItem = (share: { title: string; text?: string; url: string }, notice: string) => {
+    setShareTarget({ ...share, notice });
+  };
+  const copyShareLink = async () => {
+    if (!shareTarget) return;
+    try {
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        copied = await navigator.clipboard.writeText(shareTarget.url).then(() => true).catch(() => false);
+      }
+      if (!copied) {
+        const input = document.createElement("textarea");
+        input.value = shareTarget.url;
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand("copy");
+        input.remove();
+        if (!copied) throw new Error("Copy failed");
+      }
+      setShareTarget(null);
+      setShareNotice("Link copied");
+    } catch {
+      setShareNotice("Could not copy link");
+    }
+  };
+  const shareWithDevice = async () => {
+    if (!shareTarget) return;
+    if (!navigator.share) {
+      await copyShareLink();
       return;
     }
-    await navigator.clipboard?.writeText(share.url).catch(() => null);
-    setShareNotice("Link copied");
+    try {
+      await navigator.share({
+        title: shareTarget.title,
+        text: shareTarget.text,
+        url: shareTarget.url,
+      });
+      setShareNotice(shareTarget.notice);
+      setShareTarget(null);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareNotice("Could not open share options");
+    }
   };
   const togglePrivatePhoto = async (photo: PublicImage) => {
     if (!isPersistedImageId(photo._id) || privateImageBusy) return;
@@ -1295,6 +1339,33 @@ export function PublicGallery({
           </div>
         </div>
       )}
+
+      <Dialog open={Boolean(shareTarget)} onOpenChange={(open) => !open && setShareTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share link</DialogTitle>
+            <DialogDescription>
+              Copy a direct link or open your device sharing options.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            aria-label="Share link"
+            value={shareTarget?.url ?? ""}
+            readOnly
+            onFocus={(event) => event.currentTarget.select()}
+          />
+          <DialogFooter className="sm:justify-stretch">
+            <Button className="flex-1" variant="outline" onClick={() => void copyShareLink()} type="button">
+              <Copy data-icon="inline-start" />
+              Copy link
+            </Button>
+            <Button className="flex-1" onClick={() => void shareWithDevice()} type="button">
+              <Share2 data-icon="inline-start" />
+              More options
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {activeImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 px-2 pb-4 pt-24 sm:p-4">
