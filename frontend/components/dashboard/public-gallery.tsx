@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Copy, Download, Eye, EyeOff, Loader2, Lock, Play, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Copy, Download, Eye, EyeOff, Loader2, Lock, Play, Printer, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
@@ -291,6 +291,7 @@ export function PublicGallery({
     text?: string;
     url: string;
     notice: string;
+    printImages: PublicImage[];
   } | null>(null);
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [downloadEmail, setDownloadEmail] = useState("");
@@ -710,8 +711,12 @@ export function PublicGallery({
     const url = `${window.location.origin}${window.location.pathname}`;
     return photoId ? `${url}#photo-${encodeURIComponent(photoId)}` : url;
   };
-  const shareItem = (share: { title: string; text?: string; url: string }, notice: string) => {
-    setShareTarget({ ...share, notice });
+  const shareItem = (
+    share: { title: string; text?: string; url: string },
+    notice: string,
+    printImages: PublicImage[],
+  ) => {
+    setShareTarget({ ...share, notice, printImages });
   };
   const copyShareLink = async () => {
     if (!shareTarget) return;
@@ -755,6 +760,38 @@ export function PublicGallery({
       if (error instanceof DOMException && error.name === "AbortError") return;
       setShareNotice("Could not open share options");
     }
+  };
+  const printSharedItem = () => {
+    if (!shareTarget) return;
+    const printableImages = shareTarget.printImages.filter(
+      (image) => !isVideo(image) || Boolean(image.thumbnailUrl),
+    );
+    if (!printableImages.length) {
+      setShareNotice("No printable photo available");
+      return;
+    }
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setShareNotice("Allow pop-ups to print");
+      return;
+    }
+    printWindow.opener = null;
+    const singlePhoto = printableImages.length === 1;
+    const photos = printableImages
+      .map((photo) => {
+        const source = imageSrc(
+          singlePhoto ? photo.url : photo.thumbnailUrl || photo.url,
+        );
+        const filename = displayFilename(photo);
+        return `<figure><img src="${escapePrintHtml(source)}" alt="${escapePrintHtml(filename)}" />${showFilenames && filename ? `<figcaption>${escapePrintHtml(filename)}</figcaption>` : ""}</figure>`;
+      })
+      .join("");
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapePrintHtml(shareTarget.title)}</title><style>
+      @page{margin:12mm}*{box-sizing:border-box}body{margin:0;color:#111;font-family:Arial,sans-serif}h1{margin:0 0 18px;font-size:20px}.photos{display:grid;grid-template-columns:${singlePhoto ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:12px}figure{margin:0;break-inside:avoid;text-align:center}img{display:block;max-width:100%;${singlePhoto ? "max-height:calc(100vh - 36mm);margin:auto;object-fit:contain" : "width:100%;height:110mm;object-fit:contain"}}figcaption{padding-top:6px;font-size:10px;color:#555}@media print{h1{display:${singlePhoto ? "none" : "block"}}}
+    </style></head><body><h1>${escapePrintHtml(shareTarget.title)}</h1><main class="photos">${photos}</main><script>window.addEventListener('load',function(){setTimeout(function(){window.print()},250)})<\/script></body></html>`);
+    printWindow.document.close();
+    setShareTarget(null);
   };
   const togglePrivatePhoto = async (photo: PublicImage) => {
     if (!isPersistedImageId(photo._id) || privateImageBusy) return;
@@ -807,12 +844,14 @@ export function PublicGallery({
   const shareCollection = () =>
     shareItem(
       { title, text: `View ${title}`, url: currentPublicUrl() },
-      "Collection shared"
+      "Collection shared",
+      galleryImages,
     );
   const sharePhoto = (photo: PublicImage) =>
     shareItem(
       { title: photo.originalName || title, text: title, url: currentPublicUrl(photo._id) },
-      "Photo shared"
+      "Photo shared",
+      [photo],
     );
   const startSlideshow = () => {
     if (!visibleImages.length) return;
@@ -1364,12 +1403,16 @@ export function PublicGallery({
             readOnly
             onFocus={(event) => event.currentTarget.select()}
           />
-          <DialogFooter className="sm:justify-stretch">
-            <Button className="flex-1" variant="outline" onClick={() => void copyShareLink()} type="button">
+          <DialogFooter className="flex-col sm:justify-stretch">
+            <Button className="w-full" variant="outline" onClick={() => void copyShareLink()} type="button">
               <Copy data-icon="inline-start" />
               Copy link
             </Button>
-            <Button className="flex-1" onClick={() => void shareWithDevice()} type="button">
+            <Button className="w-full" variant="outline" onClick={printSharedItem} type="button">
+              <Printer data-icon="inline-start" />
+              {shareTarget?.printImages.length === 1 ? "Print photo" : "Print gallery"}
+            </Button>
+            <Button className="w-full" onClick={() => void shareWithDevice()} type="button">
               <Share2 data-icon="inline-start" />
               More options
             </Button>
@@ -1545,6 +1588,14 @@ function isPersistedImageId(value: string) {
 
 function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
+}
+
+function escapePrintHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function displayFilename(image: PublicImage) {
