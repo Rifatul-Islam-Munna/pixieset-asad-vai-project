@@ -238,6 +238,7 @@ import type {
   HomeCmsData,
 } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
+import { GALLERY_LANGUAGES, normalizeGalleryLanguage, type GalleryLanguage } from "@/lib/gallery-language";
 import { ClientGalleryOverview } from "@/components/dashboard/client-gallery-overview";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 import {
@@ -4375,7 +4376,7 @@ function SettingsPanel({
 }
 
 type PreferenceSettings = {
-  defaultLanguage: string;
+  defaultLanguage: GalleryLanguage;
   filenameDisplay: "show" | "hide";
   searchEngineVisibility: "homepage" | "all" | "hidden";
   sharpeningLevel: "optimal" | "low" | "high";
@@ -4403,7 +4404,11 @@ function PreferencesPanel() {
   const [form, setForm] = useState<PreferenceSettings>(saved);
 
   useEffect(() => {
-    setForm({ ...defaultPreferenceSettings, ...saved });
+    setForm({
+      ...defaultPreferenceSettings,
+      ...saved,
+      defaultLanguage: normalizeGalleryLanguage(saved.defaultLanguage),
+    });
   }, [
     saved.defaultLanguage,
     saved.filenameDisplay,
@@ -4434,14 +4439,16 @@ function PreferencesPanel() {
           <select
             value={form.defaultLanguage}
             onChange={(event) =>
-              setForm({ ...form, defaultLanguage: event.target.value })
+              setForm({
+                ...form,
+                defaultLanguage: normalizeGalleryLanguage(event.target.value),
+              })
             }
             className="h-12 rounded-none border bg-white px-4 text-sm"
           >
-            <option>English</option>
-            <option>Bangla</option>
-            <option>Spanish</option>
-            <option>French</option>
+            {GALLERY_LANGUAGES.map((language) => (
+              <option key={language}>{language}</option>
+            ))}
           </select>
           <p className="text-sm leading-6 text-[#666]">
             Select default language for newly created galleries.
@@ -5761,14 +5768,13 @@ function PresetGeneralPanel({
         <Field>
           <FieldLabel className="font-bold">Language</FieldLabel>
           <select
-            value={general.language}
+            value={normalizeGalleryLanguage(general.language)}
             onChange={(event) => onChange({ language: event.target.value })}
             className="h-12 rounded-none border bg-white px-5"
           >
-            <option>English</option>
-            <option>Bangla</option>
-            <option>Spanish</option>
-            <option>French</option>
+            {GALLERY_LANGUAGES.map((language) => (
+              <option key={language}>{language}</option>
+            ))}
           </select>
           <p className="text-sm leading-6 text-[#666]">
             Choose the language to display these galleries in.
@@ -12445,9 +12451,14 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
     const savedPreferences =
       (preferenceSettings.data?.data?.[0]?.data as
         PreferenceSettings | undefined) ?? defaultPreferenceSettings;
-    const generalSettings = preset?.general ?? {
-      ...collectionDefaultGeneral,
-      language: savedPreferences.defaultLanguage,
+    const generalSettings = {
+      ...(preset?.general ?? {
+        ...collectionDefaultGeneral,
+        language: savedPreferences.defaultLanguage,
+      }),
+      language: normalizeGalleryLanguage(
+        preset?.general.language ?? savedPreferences.defaultLanguage,
+      ),
     };
 
     createCollection.mutate(
@@ -15602,7 +15613,7 @@ function CollectionDetailView({
                     <Field>
                       <FieldLabel className="font-bold">Language</FieldLabel>
                       <select
-                        value={form.general.language}
+                        value={normalizeGalleryLanguage(form.general.language)}
                         onChange={(event) =>
                           setForm((value) => ({
                             ...value,
@@ -15614,10 +15625,9 @@ function CollectionDetailView({
                         }
                         className="h-12 w-full rounded-none border bg-white px-5"
                       >
-                        <option>English</option>
-                        <option>Bangla</option>
-                        <option>Spanish</option>
-                        <option>French</option>
+                        {GALLERY_LANGUAGES.map((language) => (
+                          <option key={language}>{language}</option>
+                        ))}
                       </select>
                     </Field>
                   </FieldGroup>
@@ -17185,6 +17195,7 @@ function collectionPreferencesFromGlobal(
   return {
     ...defaultPreferenceSettings,
     ...(preferences ?? {}),
+    defaultLanguage: normalizeGalleryLanguage(preferences?.defaultLanguage),
   };
 }
 
@@ -17299,13 +17310,16 @@ function collectionForm(
     design,
     general: {
       ...collectionDefaultGeneral,
-      language: preferenceDefaults.defaultLanguage,
       collectionTags:
         collection?.tags?.join(", ") ?? collectionDefaultGeneral.collectionTags,
       defaultWatermark:
         collection?.watermarkId ?? collectionDefaultGeneral.defaultWatermark,
       ...((collection?.settings?.general as
         Partial<PresetGeneralSettings> | undefined) ?? {}),
+      language: normalizeGalleryLanguage(
+        collection?.settings?.general?.language ??
+          preferenceDefaults.defaultLanguage,
+      ),
     },
     download: {
       ...collectionDefaultDownload,

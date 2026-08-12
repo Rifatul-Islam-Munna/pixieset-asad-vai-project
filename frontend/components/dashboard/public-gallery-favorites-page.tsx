@@ -7,13 +7,14 @@ import {
   Check,
   Download,
   ExternalLink,
-  Heart,
+  Star,
   ImageIcon,
   Loader2,
   Mail,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { galleryLanguageCode } from "@/lib/gallery-language";
 
 type FavoritePageImage = {
   _id: string;
@@ -29,6 +30,7 @@ type FavoritePageCollection = {
   coverImage?: string;
   eventDate?: string;
   images?: FavoritePageImage[];
+  settings?: { general?: { language?: string } };
 };
 
 type StoredFavorites = {
@@ -55,6 +57,7 @@ export function PublicGalleryFavoritesPage({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [zipBusy, setZipBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const language = galleryLanguageCode(collection.settings?.general?.language);
 
   const favoriteImages = useMemo(
     () => images.filter((image) => favoriteIds.has(image._id)),
@@ -183,11 +186,16 @@ export function PublicGalleryFavoritesPage({
   };
 
   if (!loaded) {
-    return <main className="flex min-h-screen items-center justify-center bg-[#f5f5f2]"><Loader2 className="size-7 animate-spin" /></main>;
+    return <main data-gallery-language={language} className="flex min-h-screen items-center justify-center bg-[#f5f5f2]"><Loader2 className="size-7 animate-spin" /></main>;
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f5f2] text-[#202326]">
+    <main
+      className="min-h-screen bg-[#f5f5f2] text-[#202326]"
+      data-gallery-language={language}
+      lang={language}
+      dir={language === "ar" ? "rtl" : "ltr"}
+    >
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-8 lg:px-12">
           <Link href={galleryPath} className="inline-flex items-center gap-2 text-sm font-bold"><ArrowLeft className="size-4" />Back to gallery</Link>
@@ -217,7 +225,7 @@ export function PublicGalleryFavoritesPage({
         {collectionFavorited && (
           <div className="mt-8 flex flex-col gap-5 border bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div className="flex items-center gap-4">
-              <span className="flex size-12 items-center justify-center rounded-full bg-red-50 text-red-500"><Heart className="size-5 fill-current" /></span>
+              <span className="flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-500"><Star className="size-5 fill-current" /></span>
               <div><p className="font-semibold">Entire collection is saved</p><p className="mt-1 text-sm text-[#777]">Open the full gallery whenever you need to continue viewing or selecting photos.</p></div>
             </div>
             <div className="flex gap-2"><Link href={galleryPath} className="inline-flex h-10 items-center gap-2 border px-4 text-sm font-bold"><ExternalLink className="size-4" />Open collection</Link><button onClick={removeCollection} className="inline-flex size-10 items-center justify-center border text-red-600" aria-label="Remove collection favorite"><Trash2 className="size-4" /></button></div>
@@ -254,7 +262,7 @@ export function PublicGalleryFavoritesPage({
           </div>
         ) : (
           <div className="mt-6 border border-dashed bg-white px-6 py-20 text-center">
-            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#f2f2f0]"><Heart className="size-6 text-[#999]" /></span>
+            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#f2f2f0]"><Star className="size-6 text-[#999]" /></span>
             <h3 className="mt-5 text-xl font-semibold">No favorite photos yet</h3>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#777]">Return to the collection and use the heart button on any image. Your selections will appear here automatically.</p>
             <Link href={galleryPath} className="mt-6 inline-flex h-11 items-center gap-2 bg-[#202326] px-5 text-sm font-bold text-white"><ExternalLink className="size-4" />Browse collection</Link>

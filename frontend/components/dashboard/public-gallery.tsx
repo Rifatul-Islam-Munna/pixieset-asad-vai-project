@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Heart, Loader2, Lock, Play, Search, Share2, ShoppingBag, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Loader2, Lock, Play, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
+import { galleryLanguageCode } from "@/lib/gallery-language";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 import { usePublicGalleryFavorites } from "./public-gallery-favorites";
@@ -358,6 +359,24 @@ export function PublicGallery({
   const canDownloadSingle = canDownloadPhoto && singlePhotoDownloadEnabled;
   const canDownloadMedia = (photo: PublicImage) =>
     isVideo(photo) ? canDownloadVideo : canDownloadSingle;
+  const requestPhotoDownload = (photo: PublicImage, index = 0) => {
+    const mediaEnabled = isVideo(photo)
+      ? videoDownloadsEnabled
+      : photoDownloadsEnabled && singlePhotoDownloadEnabled;
+    if (!mediaEnabled) {
+      setShareNotice("Downloads are disabled for this gallery");
+      return;
+    }
+    if (pinRequired && !pinOk) {
+      setPinDialogOpen(true);
+      return;
+    }
+    if (!limitOk) {
+      setShareNotice("Download limit reached");
+      return;
+    }
+    void downloadPhoto(photo, index);
+  };
   const onDownload = () => setDownloadCount((count) => count + 1);
   const unlockDownloads = () => {
     setEnteredPin(pinDraft.trim());
@@ -883,6 +902,7 @@ export function PublicGallery({
 
   return (
     <>
+      <span hidden data-gallery-language={galleryLanguageCode(generalSettings.language)} />
       {customFontName && design.customFontDataUrl && (
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
@@ -956,7 +976,7 @@ export function PublicGallery({
         </section>
       </main>
       ) : (
-    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={String(generalSettings.language || "en").slice(0, 2).toLowerCase()}>
+    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={galleryLanguageCode(generalSettings.language)} dir={galleryLanguageCode(generalSettings.language) === "ar" ? "rtl" : "ltr"}>
       <section className="px-3 pb-7 pt-3 sm:px-5 sm:pb-10 md:px-10">
         <CoverPreview
           design={{
@@ -994,8 +1014,8 @@ export function PublicGallery({
           <div className="flex min-w-0 items-center justify-end gap-2">
             {storeStatus && <span data-print-store-nav-host="true" />}
             <span data-public-store-cart-host="true" />
-            <button className="inline-flex size-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-[#6337d8]" onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Favorite" aria-label="My Favorite">
-              <Heart className={cn("size-5", favoritesPanelOpen && "fill-current text-red-500")} />
+            <button className="inline-flex size-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-[#6337d8]" onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Starred" aria-label="My Starred">
+              <Star className={cn("size-5", favoritesPanelOpen && "fill-current text-amber-500")} />
             </button>
             {canDownloadAll && (
               <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8] disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
@@ -1064,7 +1084,7 @@ export function PublicGallery({
                   <button key={photo._id} className="group relative aspect-[4/3] overflow-hidden bg-white" onClick={() => setActiveImage(photo)} type="button">
                     <img src={imageSrc(photo.thumbnailUrl || photo.url)} alt={photo.originalName ?? ""} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                     <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white text-red-500 shadow">
-                      <Heart className="size-4 fill-current" />
+                      <Star className="size-4 fill-current" />
                     </span>
                   </button>
                 ))}
@@ -1288,8 +1308,8 @@ export function PublicGallery({
               </button>
             )}
             {favoritesEnabled && isPersistedImageId(activeImage._id) && (
-              <button className="polished-icon-button" onClick={() => void toggleImageFavorite(activeImage)} type="button" aria-label="Favorite" title="Favorite">
-                <Heart className={cn("size-5", favoriteImageIds.has(activeImage._id) && "fill-red-500 text-red-500")} />
+              <button className="polished-icon-button" onClick={() => void toggleImageFavorite(activeImage)} type="button" aria-label={favoriteImageIds.has(activeImage._id) ? "Remove star" : "Star photo"} title={favoriteImageIds.has(activeImage._id) ? "Remove star" : "Star photo"}>
+                <Star className={cn("size-5", favoriteImageIds.has(activeImage._id) && "fill-amber-400 text-amber-500")} />
               </button>
             )}
             {socialSharingEnabled && (
@@ -1297,8 +1317,8 @@ export function PublicGallery({
                 <Share2 className="size-5" />
               </button>
             )}
-            {activeImage && canDownloadMedia(activeImage) && (
-              <button className="polished-icon-button" onClick={() => downloadPhoto(activeImage)} type="button" aria-label="Download" title="Download">
+            {activeImage && (
+              <button className="polished-icon-button" onClick={() => requestPhotoDownload(activeImage)} type="button" aria-label="Download" title="Download">
                 <Download className="size-5" />
               </button>
             )}
@@ -1341,8 +1361,8 @@ export function PublicGallery({
               </button>
             )}
             {favoritesEnabled && isPersistedImageId(slideshowImage._id) && (
-              <button className="polished-icon-button" onClick={() => void toggleImageFavorite(slideshowImage)} type="button" aria-label="Favorite" title="Favorite">
-                <Heart className={cn("size-5", favoriteImageIds.has(slideshowImage._id) && "fill-red-500 text-red-500")} />
+              <button className="polished-icon-button" onClick={() => void toggleImageFavorite(slideshowImage)} type="button" aria-label={favoriteImageIds.has(slideshowImage._id) ? "Remove star" : "Star photo"} title={favoriteImageIds.has(slideshowImage._id) ? "Remove star" : "Star photo"}>
+                <Star className={cn("size-5", favoriteImageIds.has(slideshowImage._id) && "fill-amber-400 text-amber-500")} />
               </button>
             )}
             {socialSharingEnabled && (
@@ -1350,11 +1370,9 @@ export function PublicGallery({
                 <Share2 className="size-5" />
               </button>
             )}
-            {canDownloadMedia(slideshowImage) && (
-              <button className="polished-icon-button" onClick={() => downloadPhoto(slideshowImage, slideshowPosition)} type="button" aria-label="Download" title="Download">
+            <button className="polished-icon-button" onClick={() => requestPhotoDownload(slideshowImage, slideshowPosition)} type="button" aria-label="Download" title="Download">
                 <Download className="size-5" />
-              </button>
-            )}
+            </button>
           </div>
           {isVideo(slideshowImage) ? (
             <video key={slideshowImage._id} src={imageSrc(slideshowImage.url)} className="max-h-full max-w-full object-contain" controls autoPlay />
@@ -1525,8 +1543,8 @@ function GalleryTile({
       </button>
       <div className="absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         {canFavorite && isPersistedImageId(photo._id) && (
-          <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label="Favorite image" title="Favorite" type="button">
-            <Heart className={cn("size-4", favorited && "fill-red-500 text-red-500")} />
+          <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label={favorited ? "Remove star" : "Star photo"} title={favorited ? "Remove star" : "Star photo"} type="button">
+            <Star className={cn("size-4", favorited && "fill-amber-400 text-amber-500")} />
           </button>
         )}
         {isPersistedImageId(photo._id) && (
