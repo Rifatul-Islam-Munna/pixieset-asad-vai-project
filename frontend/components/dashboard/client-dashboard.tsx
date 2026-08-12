@@ -416,10 +416,6 @@ const libraryFilters = [
       "Color Space",
     ],
   },
-  {
-    title: "Nikoset",
-    items: ["Starred"],
-  },
 ];
 
 const libraryPhotos = [
@@ -4032,10 +4028,11 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
     ),
   );
   const normalizedQuery = debouncedQuery.trim().toLowerCase();
+  const queryTerms = normalizedQuery.split(/\s+/).filter(Boolean);
   const visiblePhotos = images.filter((image) => {
     const matchesCollection =
       collectionFilter === "all" || image.collectionId === collectionFilter;
-    const text = [
+    const searchableValues = [
       image.originalName,
       image.collectionName,
       image.setName,
@@ -4045,13 +4042,20 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
       image.metadata?.keyword,
       image.metadata?.camera,
       image.metadata?.lens,
+      image.metadata?.make,
+      image.metadata?.model,
+      image.metadata?.headline,
+      image.metadata?.artist,
+      image.metadata?.copyright,
     ]
       .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
+      .map((value) => String(value).toLowerCase());
 
     return (
-      matchesCollection && (!normalizedQuery || text.includes(normalizedQuery))
+      matchesCollection &&
+      queryTerms.every((term) =>
+        searchableValues.some((value) => value.includes(term)),
+      )
     );
   });
   const libraryPageSize = 48;
@@ -6036,6 +6040,12 @@ function PresetDesignPanel({
     typography: string;
     customFontName?: string;
     customFontDataUrl?: string;
+    coverSmallTitleFontSizePx?: number;
+    coverTitleFontSizePx?: number;
+    coverDateFontSizePx?: number;
+    coverButtonFontSizePx?: number;
+    galleryTitleFontSizePx?: number;
+    galleryNavigationFontSizePx?: number;
     color: string;
     gridStyle: "Vertical" | "Horizontal";
     thumbnailSize: "Regular" | "Large";
@@ -6356,6 +6366,46 @@ function PresetDesignPanel({
               </button>
             )}
           </div>
+          <OptionSection title="Font Sizes">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {(
+                [
+                  ["Cover small title", "coverSmallTitleFontSizePx", 8, 48, 12],
+                  ["Cover title", "coverTitleFontSizePx", 16, 120, 60],
+                  ["Cover date", "coverDateFontSizePx", 8, 48, 14],
+                  ["Cover button", "coverButtonFontSizePx", 8, 32, 12],
+                  ["Gallery title", "galleryTitleFontSizePx", 10, 48, 16],
+                  ["Gallery navigation", "galleryNavigationFontSizePx", 8, 32, 12],
+                ] as const
+              ).map(([label, key, min, max, fallback]) => (
+                <Field key={key}>
+                  <FieldLabel className="font-bold">{label}</FieldLabel>
+                  <div className="relative mt-2">
+                    <Input
+                      type="number"
+                      min={min}
+                      max={max}
+                      value={design[key] ?? fallback}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (Number.isFinite(value)) {
+                          onChange({ [key]: value } as Partial<typeof design>);
+                        }
+                      }}
+                      onBlur={(event) => {
+                        const value = Number(event.target.value);
+                        onChange({
+                          [key]: Math.min(max, Math.max(min, value || fallback)),
+                        } as Partial<typeof design>);
+                      }}
+                      className="h-11 rounded-none bg-white pr-10"
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777]">px</span>
+                  </div>
+                </Field>
+              ))}
+            </div>
+          </OptionSection>
         </PlanFeatureLock>
       )}
 
@@ -6547,7 +6597,7 @@ function CollectionDesignLivePreview({
                 >
                   Masonry Gallery
                 </p>
-                <p className="mt-1 truncate text-[14px] font-semibold">
+                <p className="mt-1 truncate font-semibold" style={{ fontSize: `${design.galleryTitleFontSizePx ?? 16}px` }}>
                   {collectionName}
                 </p>
                 <p
@@ -6568,8 +6618,8 @@ function CollectionDesignLivePreview({
               </div>
             </div>
             <div
-              className="flex items-center gap-5 overflow-hidden px-3 py-2 text-[7px]"
-              style={{ color: accent }}
+              className="flex items-center gap-5 overflow-hidden px-3 py-2"
+              style={{ color: accent, fontSize: `${Math.max(7, (design.galleryNavigationFontSizePx ?? 12) * 0.6)}px` }}
             >
               {firstSets.length ? (
                 firstSets.map((set) => (
@@ -17168,6 +17218,12 @@ const collectionDefaultDesign: PresetDesignSettings = {
   typography: "Classic",
   customFontName: "",
   customFontDataUrl: "",
+  coverSmallTitleFontSizePx: 12,
+  coverTitleFontSizePx: 60,
+  coverDateFontSizePx: 14,
+  coverButtonFontSizePx: 12,
+  galleryTitleFontSizePx: 16,
+  galleryNavigationFontSizePx: 12,
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -17461,10 +17517,6 @@ const metadataGroups = [
       ["colorSpace", "Color Space"],
     ],
   },
-  {
-    title: "Nikoset",
-    items: [["starred", "Starred"]],
-  },
 ] as const;
 
 function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
@@ -17473,32 +17525,36 @@ function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
   return (
     <aside className="border bg-white p-5">
       <p className="text-sm font-bold">Image Metadata</p>
-      {metadataGroups.map((group) => (
+      {metadataGroups.map((group) => {
+        const relevantItems = group.items.filter(([key]) =>
+          Boolean(formatMetaValue(metadata[key])),
+        );
+        if (!relevantItems.length) return null;
+        return (
         <div key={group.title} className="mt-7">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-[#777]">
             {group.title}
           </p>
           <div className="flex flex-wrap gap-2">
-            {group.items.map(([key, label]) => {
+            {relevantItems.map(([key, label]) => {
               const value = formatMetaValue(metadata[key]);
               return (
                 <span
                   key={key}
                   className={cn(
                     "rounded-full px-3 py-2 text-sm",
-                    value
-                      ? "bg-[#f1f5f4] text-[#333]"
-                      : "bg-[#f5f5f5] text-[#777]",
+                    "bg-[#f1f5f4] text-[#333]",
                   )}
                   title={value || label}
                 >
-                  {value ? `${label}: ${value}` : label}
+                  {`${label}: ${value}`}
                 </span>
               );
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
     </aside>
   );
 }

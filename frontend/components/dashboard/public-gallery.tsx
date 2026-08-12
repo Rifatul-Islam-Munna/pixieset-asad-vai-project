@@ -25,6 +25,7 @@ type PublicImage = {
   mimetype?: string;
   mediaType?: "image" | "video";
   faceScore?: number;
+  metadata?: { filename?: string };
 };
 
 type PublicFace = {
@@ -134,6 +135,12 @@ const defaultDesign: PresetDesignSettings = {
   typography: "Classic",
   customFontName: "",
   customFontDataUrl: "",
+  coverSmallTitleFontSizePx: 12,
+  coverTitleFontSizePx: 60,
+  coverDateFontSizePx: 14,
+  coverButtonFontSizePx: 12,
+  galleryTitleFontSizePx: 16,
+  galleryNavigationFontSizePx: 12,
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -326,7 +333,8 @@ export function PublicGallery({
   const singlePhotoDownloadEmailTracking = download.singlePhotoDownloadEmailTracking !== false;
   const restrictedSinglePhotoDownloadSize = Boolean(download.restrictedSinglePhotoDownloadSize);
   const preferences = collection?.preferences ?? {};
-  const showFilenames = preferences.filenameDisplay !== "hide";
+  const showFilenames =
+    String(preferences.filenameDisplay ?? "show").toLowerCase() !== "hide";
   const sharpeningLevel = preferences.sharpeningLevel ?? "optimal";
   const favoriteSettings = collection?.settings?.favorite;
   const favoritesEnabled = favoriteSettings?.favoritePhotos !== false;
@@ -1037,10 +1045,10 @@ export function PublicGallery({
       <section className="px-0 py-0">
         <div className="sticky top-0 z-20 grid min-h-[76px] grid-cols-1 items-center gap-3 border-y border-black/10 bg-white/95 px-4 py-3 text-[#202326] shadow-[0_10px_28px_rgba(0,0,0,0.08)] backdrop-blur md:grid-cols-[minmax(180px,0.75fr)_minmax(0,1.6fr)_auto] md:px-8">
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold uppercase tracking-[0.12em]">{title}</h1>
+            <h1 className="truncate font-bold uppercase tracking-[0.12em]" style={{ fontSize: `${design.galleryTitleFontSizePx ?? 16}px` }}>{title}</h1>
             <p className="mt-1 truncate text-[11px] uppercase tracking-[0.22em] text-black/45">{studioName}</p>
           </div>
-          <div className="-mx-1 flex min-w-0 gap-5 overflow-x-auto px-1 text-xs font-semibold uppercase tracking-[0.12em] md:justify-center">
+          <div className="-mx-1 flex min-w-0 gap-5 overflow-x-auto px-1 font-semibold uppercase tracking-[0.12em] md:justify-center" style={{ fontSize: `${design.galleryNavigationFontSizePx ?? 12}px` }}>
             {showSetTabs && gallerySets.map((set) => (
               <button
                 key={set.id}
@@ -1200,7 +1208,7 @@ export function PublicGallery({
           className="mt-0 bg-white p-0"
         >
           <div className={masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
-            {visibleImages.map((photo) => (
+            {visibleImages.map((photo, index) => (
               <GalleryTile
                 key={photo._id}
                 photo={photo}
@@ -1213,6 +1221,8 @@ export function PublicGallery({
                 favorited={favoriteImageIds.has(photo._id)}
                 privatePhoto={privateImageIds.has(photo._id)}
                 privateBusy={privateImageBusy === photo._id}
+                showFilename={showFilenames}
+                priority={index < 4}
                 onPrivate={togglePrivatePhoto}
                 onDownload={downloadPhoto}
                 onFavorite={toggleImageFavorite}
@@ -1368,7 +1378,7 @@ export function PublicGallery({
       </Dialog>
 
       {activeImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 px-2 pb-4 pt-24 sm:p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 px-2 pb-4 pt-24 sm:p-4" role="dialog" aria-modal="true" aria-label={`Preview ${displayFilename(activeImage) || "photo"}`}>
           <button className="polished-icon-button absolute left-3 top-3 sm:left-5 sm:top-5" onClick={() => setActiveImage(null)} aria-label="Back to gallery" title="Back">
             <ChevronLeft className="size-5" />
           </button>
@@ -1397,15 +1407,17 @@ export function PublicGallery({
           {isVideo(activeImage) ? (
             <video src={imageSrc(activeImage.url)} className="max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
-            <img
-              src={imageSrc(activeImage.url)}
-              alt={activeImage.originalName ?? ""}
-              className="max-h-full max-w-full object-contain"
+            <GalleryImage
+              src={imageSrc(activeImage.thumbnailUrl || activeImage.url)}
+              fallbackSrc={imageSrc(activeImage.url)}
+              alt={displayFilename(activeImage)}
+              className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full object-contain"
+              priority
             />
           )}
-          {showFilenames && activeImage.originalName && (
+          {showFilenames && displayFilename(activeImage) && (
             <p className="absolute bottom-4 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full bg-black/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
-              {activeImage.originalName}
+              {displayFilename(activeImage)}
             </p>
           )}
         </div>
@@ -1448,16 +1460,18 @@ export function PublicGallery({
           {isVideo(slideshowImage) ? (
             <video key={slideshowImage._id} src={imageSrc(slideshowImage.url)} className="max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
-            <img
+            <GalleryImage
               key={slideshowImage._id}
-              src={imageSrc(slideshowImage.url)}
-              alt={slideshowImage.originalName ?? ""}
-              className="max-h-full max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
+              src={imageSrc(slideshowImage.thumbnailUrl || slideshowImage.url)}
+              fallbackSrc={imageSrc(slideshowImage.url)}
+              alt={displayFilename(slideshowImage)}
+              className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
+              priority
             />
           )}
-          {showFilenames && slideshowImage.originalName && (
+          {showFilenames && displayFilename(slideshowImage) && (
             <p className="absolute bottom-4 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-black shadow">
-              {slideshowImage.originalName}
+              {displayFilename(slideshowImage)}
             </p>
           )}
         </div>
@@ -1533,6 +1547,10 @@ function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
 }
 
+function displayFilename(image: PublicImage) {
+  return image.originalName || image.metadata?.filename || "";
+}
+
 function sharpenStyle(level: "optimal" | "low" | "high"): CSSProperties | undefined {
   if (level === "low") return { filter: "contrast(1.01)" };
   if (level === "high") return { filter: "contrast(1.08) saturate(1.04)" };
@@ -1566,6 +1584,8 @@ function GalleryTile({
   favorited,
   privatePhoto,
   privateBusy,
+  showFilename,
+  priority,
   onPrivate,
   onDownload,
   onFavorite,
@@ -1582,6 +1602,8 @@ function GalleryTile({
   favorited: boolean;
   privatePhoto: boolean;
   privateBusy: boolean;
+  showFilename: boolean;
+  priority: boolean;
   onPrivate: (photo: PublicImage) => void;
   onDownload: (photo: PublicImage) => void;
   onFavorite: (photo: PublicImage) => void;
@@ -1592,12 +1614,16 @@ function GalleryTile({
     <div
       id={`photo-${photo._id}`}
       className="group relative mb-0 w-full break-inside-avoid bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
-      style={{ marginBottom: `${spacing}px` }}
+      style={{
+        marginBottom: `${spacing}px`,
+        contentVisibility: "auto",
+        containIntrinsicSize: "420px 320px",
+      }}
     >
-      <button className="block w-full" onClick={() => onPreview(photo)}>
+      <button className="block w-full" onClick={() => onPreview(photo)} type="button" aria-label={`Open ${displayFilename(photo) || "photo"}`}>
         {isVideo(photo) ? (
           <span className="relative block aspect-video w-full bg-black">
-            <video src={imageSrc(photo.url)} className="h-full w-full object-cover opacity-80" preload="metadata" muted />
+            <video src={imageSrc(photo.url)} className="h-full w-full object-cover opacity-80" preload={priority ? "metadata" : "none"} muted />
             <span className="absolute inset-0 flex items-center justify-center text-white">
               <Play className="size-10 fill-current" />
             </span>
@@ -1609,9 +1635,15 @@ function GalleryTile({
             alt={photo.originalName ?? ""}
             className="block h-auto w-full"
             style={sharpenStyle(sharpeningLevel)}
+            priority={priority}
           />
         )}
       </button>
+      {showFilename && displayFilename(photo) && (
+        <p className="truncate border-t border-black/5 bg-white px-3 py-2 text-xs text-[#555]">
+          {displayFilename(photo)}
+        </p>
+      )}
       <div className="absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
         {canFavorite && isPersistedImageId(photo._id) && (
           <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label={favorited ? "Remove star" : "Star photo"} title={favorited ? "Remove star" : "Star photo"} type="button">
@@ -1655,6 +1687,7 @@ function GalleryImage({
   className,
   style,
   onShape,
+  priority = false,
 }: {
   src: string;
   fallbackSrc?: string;
@@ -1662,6 +1695,7 @@ function GalleryImage({
   className?: string;
   style?: CSSProperties;
   onShape?: (shape: "portrait" | "landscape" | "square") => void;
+  priority?: boolean;
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
   useEffect(() => {
@@ -1672,8 +1706,8 @@ function GalleryImage({
       <img
         src={currentSrc}
         alt={alt}
-        loading="eager"
-        fetchPriority="high"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
         decoding="async"
         onLoad={(event) => {
           const image = event.currentTarget;

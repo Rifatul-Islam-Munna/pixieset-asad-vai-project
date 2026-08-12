@@ -133,11 +133,12 @@ export function PublicGalleryStoreBridge({
         cartSlot.replaceWith(cartButtonHost);
         setCartHost(cartButtonHost);
       }
+      if (host && cartButtonHost) observer.disconnect();
     };
 
-    attach();
     const observer = new MutationObserver(attach);
     observer.observe(document.body, { childList: true, subtree: true });
+    attach();
 
     return () => {
       observer.disconnect();
@@ -207,14 +208,23 @@ export function PublicGalleryStoreBridge({
     };
 
     syncLightbox();
-    const observer = new MutationObserver(syncLightbox);
+    let frame = 0;
+    const scheduleSync = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        syncLightbox();
+      });
+    };
+    const observer = new MutationObserver(scheduleSync);
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      attributes: true,
-      attributeFilter: ["src"],
     });
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, [enabled, images]);
 
   if (!enabled) return null;

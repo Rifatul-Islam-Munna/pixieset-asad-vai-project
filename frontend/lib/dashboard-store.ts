@@ -22,6 +22,12 @@ export type PresetDesignSettings = {
   typography: string;
   customFontName?: string;
   customFontDataUrl?: string;
+  coverSmallTitleFontSizePx?: number;
+  coverTitleFontSizePx?: number;
+  coverDateFontSizePx?: number;
+  coverButtonFontSizePx?: number;
+  galleryTitleFontSizePx?: number;
+  galleryNavigationFontSizePx?: number;
   color: string;
   gridStyle: "Vertical" | "Horizontal";
   thumbnailSize: "Regular" | "Large";
@@ -278,6 +284,12 @@ const emptyPresetDesign: PresetDesignSettings = {
   typography: "Classic",
   customFontName: "",
   customFontDataUrl: "",
+  coverSmallTitleFontSizePx: 12,
+  coverTitleFontSizePx: 60,
+  coverDateFontSizePx: 14,
+  coverButtonFontSizePx: 12,
+  galleryTitleFontSizePx: 16,
+  galleryNavigationFontSizePx: 12,
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",

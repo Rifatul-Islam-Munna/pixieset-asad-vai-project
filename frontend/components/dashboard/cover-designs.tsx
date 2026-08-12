@@ -40,6 +40,10 @@ export type CoverPreviewSettings = {
   coverTitle?: string;
   coverDate?: string;
   coverButtonText?: string;
+  coverSmallTitleFontSizePx?: number;
+  coverTitleFontSizePx?: number;
+  coverDateFontSizePx?: number;
+  coverButtonFontSizePx?: number;
   showCoverSmallTitle?: boolean;
   showCoverTitle?: boolean;
   showCoverDate?: boolean;
@@ -76,6 +80,12 @@ export function CoverPreview({
         subtitle={design.coverSmallTitle}
         date={design.coverDate}
         buttonText={design.coverButtonText}
+        fontSizes={{
+          subtitle: design.coverSmallTitleFontSizePx,
+          title: design.coverTitleFontSizePx,
+          date: design.coverDateFontSizePx,
+          button: design.coverButtonFontSizePx,
+        }}
       />
     );
   }
@@ -88,13 +98,19 @@ export function CoverPreview({
   const date = design.coverDate || "June 14, 2026";
   const buttonText = design.coverButtonText || "View Gallery";
   const sampleTitle = compact ? "TITLE" : title;
+  const sized = (value: number | undefined, fallback: number) => {
+    const requested = Math.max(1, Number(value) || fallback);
+    return {
+      fontSize: `${compact ? Math.max(8, (requested / fallback) * 11) : requested}px`,
+    };
+  };
   const text = (
     <div className={cn("flex flex-col gap-2", compact && "gap-1")}>
-      {!compact && showSmall && <p className="text-xs uppercase tracking-[0.28em]">{smallTitle}</p>}
-      {showTitle && <h3 className={cn("break-words font-semibold uppercase", compact ? "text-[11px] tracking-[0.24em]" : "text-2xl tracking-[0.12em] sm:text-4xl sm:tracking-[0.18em] md:text-6xl")}>{sampleTitle}</h3>}
-      {!compact && showDate && <p className="text-sm uppercase tracking-[0.22em]">{date}</p>}
+      {!compact && showSmall && <p className="uppercase tracking-[0.28em]" style={sized(design.coverSmallTitleFontSizePx, 12)}>{smallTitle}</p>}
+      {showTitle && <h3 className="break-words font-semibold uppercase tracking-[0.18em]" style={sized(design.coverTitleFontSizePx, 60)}>{sampleTitle}</h3>}
+      {!compact && showDate && <p className="uppercase tracking-[0.22em]" style={sized(design.coverDateFontSizePx, 14)}>{date}</p>}
       {!compact && showButton && (
-        <span className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]">
+        <span className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={sized(design.coverButtonFontSizePx, 12)}>
           {buttonText}
         </span>
       )}
@@ -107,12 +123,12 @@ export function CoverPreview({
         <img src={src} alt="" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/38 via-black/10 to-black/20" />
         <div className={cn("absolute left-5 top-[58%] max-w-[82%] -translate-y-1/2 sm:left-8 sm:max-w-[72%]", compact && "left-3 max-w-[68%]")}>
-          {!compact && showSmall && <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em]">{smallTitle}</p>}
-          {showTitle && <h3 className={cn("break-words font-medium uppercase leading-[0.96]", compact ? "text-[13px] tracking-[0.12em]" : "text-3xl tracking-[0.04em] sm:text-4xl md:text-6xl")}>{sampleTitle}</h3>}
-          {!compact && showDate && <p className="mt-5 text-sm font-semibold uppercase tracking-[0.22em]">{date}</p>}
+          {!compact && showSmall && <p className="mb-3 font-semibold uppercase tracking-[0.28em]" style={sized(design.coverSmallTitleFontSizePx, 12)}>{smallTitle}</p>}
+          {showTitle && <h3 className="break-words font-medium uppercase leading-[0.96] tracking-[0.04em]" style={sized(design.coverTitleFontSizePx, 60)}>{sampleTitle}</h3>}
+          {!compact && showDate && <p className="mt-5 font-semibold uppercase tracking-[0.22em]" style={sized(design.coverDateFontSizePx, 14)}>{date}</p>}
         </div>
         {!compact && showButton && (
-          <span className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]">
+          <span className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]" style={sized(design.coverButtonFontSizePx, 12)}>
             {buttonText}
           </span>
         )}
@@ -152,7 +168,7 @@ export function CoverPreview({
         <div className={cn("absolute inset-6 border border-white/75", compact && "inset-2")} />
         <div className={cn("absolute left-5 top-5 max-w-[82%] sm:left-8 sm:top-8 sm:max-w-[70%]", compact && "left-3 top-3 max-w-[74%]")}>{text}</div>
         {design.cover === "Side Button" && !compact && showButton && (
-          <span className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]">
+          <span className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]" style={sized(design.coverButtonFontSizePx, 12)}>
             {buttonText}
           </span>
         )}
@@ -230,11 +246,11 @@ export function CoverPreview({
         <div className="absolute bottom-[22%] left-[12%] right-[12%] border-t border-white" />
         <div className={cn("absolute bottom-[22%] left-[12%] right-[12%] top-[22%] flex items-center justify-center p-6 text-center [text-shadow:0_2px_14px_rgba(0,0,0,0.55)]", compact && "p-3")}>
           <div className={cn("flex max-w-full flex-col items-center gap-3", compact && "gap-1")}>
-            {!compact && showSmall && <p className="text-xs uppercase tracking-[0.28em]">{smallTitle}</p>}
-            {showTitle && <h3 className={cn("break-words font-semibold uppercase", compact ? "text-[11px] tracking-[0.24em]" : "text-2xl tracking-[0.12em] sm:text-4xl sm:tracking-[0.18em] md:text-6xl")}>{sampleTitle}</h3>}
-            {!compact && showDate && <p className="text-sm uppercase tracking-[0.22em]">{date}</p>}
+            {!compact && showSmall && <p className="uppercase tracking-[0.28em]" style={sized(design.coverSmallTitleFontSizePx, 12)}>{smallTitle}</p>}
+            {showTitle && <h3 className="break-words font-semibold uppercase tracking-[0.18em]" style={sized(design.coverTitleFontSizePx, 60)}>{sampleTitle}</h3>}
+            {!compact && showDate && <p className="uppercase tracking-[0.22em]" style={sized(design.coverDateFontSizePx, 14)}>{date}</p>}
             {!compact && showButton && (
-              <span className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]">
+              <span className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={sized(design.coverButtonFontSizePx, 12)}>
                 {buttonText}
               </span>
             )}
@@ -278,6 +294,7 @@ function CustomCoverPreview({
   className,
   compact,
   date,
+  fontSizes,
   image,
   subtitle,
   template,
@@ -288,6 +305,7 @@ function CustomCoverPreview({
   className?: string;
   compact?: boolean;
   date?: string;
+  fontSizes?: Partial<Record<"title" | "subtitle" | "date" | "button", number>>;
   image?: string;
   subtitle?: string;
   template: CustomCoverTemplate;
@@ -320,6 +338,13 @@ function CustomCoverPreview({
         />
       )}
       {template.elements.map((element) => {
+        const customFontSize =
+          element.type === "title" ||
+          element.type === "subtitle" ||
+          element.type === "date" ||
+          element.type === "button"
+            ? fontSizes?.[element.type]
+            : undefined;
         const common = {
           left: `${element.x}%`,
           top: `${element.y}%`,
@@ -355,7 +380,9 @@ function CustomCoverPreview({
             className={cn("absolute flex items-center leading-tight", element.type === "button" && "justify-center border px-3 font-semibold uppercase tracking-[0.18em]")}
             style={{
               ...common,
-              fontSize: compact ? Math.max(8, element.fontSize / 3) : element.fontSize,
+              fontSize: compact
+                ? Math.max(8, (customFontSize ?? element.fontSize) / 3)
+                : customFontSize ?? element.fontSize,
               textAlign: element.align ?? "center",
               justifyContent: element.align === "left" ? "flex-start" : element.align === "right" ? "flex-end" : "center",
               borderColor: element.color,
