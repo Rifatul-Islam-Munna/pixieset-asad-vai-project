@@ -8,6 +8,7 @@ import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Textarea } from "@/components/ui/textarea";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import { galleryLanguageCode } from "@/lib/gallery-language";
@@ -1390,31 +1391,57 @@ export function PublicGallery({
       )}
 
       <Dialog open={Boolean(shareTarget)} onOpenChange={(open) => !open && setShareTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Share link</DialogTitle>
-            <DialogDescription>
-              Copy a direct link or open your device sharing options.
-            </DialogDescription>
+        <DialogContent className="max-w-[calc(100%-1.5rem)] gap-0 overflow-hidden p-0 sm:max-w-[440px]">
+          <DialogHeader className="px-6 pb-5 pt-6 pr-14">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+                <Share2 aria-hidden="true" />
+              </div>
+              <div className="flex min-w-0 flex-col gap-1">
+                <DialogTitle>
+                  {shareTarget?.printImages.length === 1 ? "Share photo" : "Share gallery"}
+                </DialogTitle>
+                <DialogDescription>
+                  Copy link or send it from your device.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <Input
-            aria-label="Share link"
-            value={shareTarget?.url ?? ""}
-            readOnly
-            onFocus={(event) => event.currentTarget.select()}
-          />
-          <DialogFooter className="flex-col sm:justify-stretch">
-            <Button className="w-full" variant="outline" onClick={() => void copyShareLink()} type="button">
-              <Copy data-icon="inline-start" />
-              Copy link
-            </Button>
-            <Button className="w-full" variant="outline" onClick={printSharedItem} type="button">
+
+          <div className="px-6 pb-6">
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground" htmlFor="share-link">
+              Direct link
+            </label>
+            <InputGroup className="h-12 rounded-xl bg-muted/45 pl-1">
+              <InputGroupInput
+                id="share-link"
+                aria-label="Share link"
+                value={shareTarget?.url ?? ""}
+                readOnly
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  aria-label="Copy share link"
+                  className="h-8 rounded-lg px-3"
+                  onClick={() => void copyShareLink()}
+                  variant="default"
+                >
+                  <Copy data-icon="inline-start" />
+                  Copy
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+          </div>
+
+          <DialogFooter className="m-0 grid grid-cols-2 gap-3 rounded-none p-4 sm:grid sm:grid-cols-2 sm:justify-stretch">
+            <Button className="h-11 w-full" variant="outline" onClick={printSharedItem} type="button">
               <Printer data-icon="inline-start" />
               {shareTarget?.printImages.length === 1 ? "Print photo" : "Print gallery"}
             </Button>
-            <Button className="w-full" onClick={() => void shareWithDevice()} type="button">
+            <Button className="h-11 w-full" onClick={() => void shareWithDevice()} type="button">
               <Share2 data-icon="inline-start" />
-              More options
+              Share
             </Button>
           </DialogFooter>
         </DialogContent>

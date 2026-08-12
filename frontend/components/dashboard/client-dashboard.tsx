@@ -13687,6 +13687,8 @@ function CollectionDetailView({
         toast.error(error instanceof Error ? error.message : "Delete failed"),
     });
   };
+  const hasUnsavedChanges =
+    collectionFormKey(form) !== syncedCollectionFormKeyRef.current;
 
   if (!collection) {
     return <CollectionDetailSkeleton />;
@@ -13696,14 +13698,14 @@ function CollectionDetailView({
     <div className="flex h-[100dvh] min-w-0 flex-col overflow-hidden bg-white">
       <header className="flex h-[90px] shrink-0 items-center justify-between gap-6 border-b border-[#e8e8e8] bg-white px-7">
         <div className="flex min-w-0 items-center gap-5">
-          <button
+          <Link
+            href={`/dashboard/${section}`}
             className="flex size-8 shrink-0 items-center justify-center text-[#8a8a8a] hover:text-[#222]"
-            onClick={() => router.push(`/dashboard/${section}`)}
-            aria-label="Back to galleries"
-            type="button"
+            aria-label="Back to collections"
+            title="Back to collections"
           >
             <ArrowLeft className="size-5" />
-          </button>
+          </Link>
           <button
             className="flex size-8 shrink-0 items-center justify-center text-[#8a8a8a] hover:bg-[#f4f4f4] hover:text-[#222]"
             onClick={() => router.push(`/dashboard/${section}`)}
@@ -13827,6 +13829,24 @@ function CollectionDetailView({
           >
             Preview
           </button>
+          <Button
+            className="h-10 px-5"
+            disabled={updateCollection.isPending || !hasUnsavedChanges}
+            onClick={saveCollection}
+            type="button"
+            variant={hasUnsavedChanges ? "default" : "outline"}
+          >
+            {updateCollection.isPending ? (
+              <Loader2 data-icon="inline-start" className="animate-spin" />
+            ) : (
+              <Save data-icon="inline-start" />
+            )}
+            {updateCollection.isPending
+              ? "Saving..."
+              : hasUnsavedChanges
+                ? "Save changes"
+                : "Saved"}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
