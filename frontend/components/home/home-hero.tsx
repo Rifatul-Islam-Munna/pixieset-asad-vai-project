@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ArrowRight, Play, Sparkles, Star, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -108,7 +108,7 @@ export function HomeHero({
             {t.hero.eyebrow}
           </p>
           <h1
-            className="mt-6 max-w-[620px] font-bold leading-[1.04] tracking-[-.04em] text-[#080808] sm:mt-7 [&_div]:block [&_p]:m-0"
+            className="mt-6 max-w-[620px] font-bold leading-[1.04] tracking-[-.04em] text-[#080808] sm:mt-7 [&_div]:m-0 [&_div]:block [&_div]:leading-[1.04] [&_p]:m-0 [&_p]:leading-[1.04]"
             style={{
               fontSize: `clamp(${Math.min(32, heroTitleSize)}px, 4vw, ${heroTitleSize}px)`,
             }}
