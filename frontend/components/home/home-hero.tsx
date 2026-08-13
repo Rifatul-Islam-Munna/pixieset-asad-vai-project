@@ -114,9 +114,9 @@ export function HomeHero({
             {t.hero.eyebrow}
           </p>
           <h1
-            className={lang === "gr" ? "mt-6 max-w-[620px] font-bold leading-[0.9] tracking-[-.04em] text-[#080808] sm:mt-7 [&_div]:m-0 [&_div]:block [&_div]:leading-[0.9] [&_p]:m-0 [&_p]:leading-[0.9]" : "mt-6 max-w-[620px] font-bold leading-[1.04] tracking-[-.04em] text-[#080808] sm:mt-7 [&_div]:m-0 [&_div]:block [&_div]:leading-[1.04] [&_p]:m-0 [&_p]:leading-[1.04]"}
+            className={lang === "gr" ? "mt-6 max-w-[620px] font-bold leading-[0.96] tracking-[-.04em] text-[#080808] sm:mt-7 [&_*]:!m-0 [&_*]:!p-0 [&_*]:!text-[1em] [&_*]:!leading-[0.96]" : "mt-6 max-w-[620px] font-bold leading-[1.04] tracking-[-.04em] text-[#080808] sm:mt-7"}
             style={{
-              fontSize: lang === "gr" ? `clamp(${Math.min(32, heroTitleSize)}px, 7vw, ${heroTitleSize}px)` : `clamp(${Math.min(32, heroTitleSize)}px, 4vw, ${heroTitleSize}px)`,
+              fontSize: `clamp(${Math.min(32, heroTitleSize)}px, 4vw, ${heroTitleSize}px)`,
             }}
             dangerouslySetInnerHTML={{ __html: compactRichHeading(t.hero.title) }}
           />
