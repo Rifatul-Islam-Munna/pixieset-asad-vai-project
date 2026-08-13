@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ArrowRight, Play, Sparkles, Star, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -6,6 +6,12 @@ import { SiteNav } from "@/components/home/site-nav";
 import { useHomeCms } from "@/api-hooks/use-home-cms";
 import type { HomeCmsData, HomeLanguage } from "@/lib/home-cms";
 
+function compactRichHeading(html: string) {
+  return String(html ?? "")
+    .replace(/<(p|div)(?:\s[^>]*)?>\s*(?:<br\s*\/?\s*>|&nbsp;|\u00a0|\s)*<\/\1>/gi, "")
+    .replace(/(?:<br\s*\/?\s*>\s*){2,}/gi, "<br />")
+    .trim();
+}
 function getVideoEmbed(url?: string | null) {
   const value = String(url ?? "")?.trim();
   if (!value) return { kind: "empty" as const, src: "" };
@@ -112,7 +118,7 @@ export function HomeHero({
             style={{
               fontSize: `clamp(${Math.min(32, heroTitleSize)}px, 4vw, ${heroTitleSize}px)`,
             }}
-            dangerouslySetInnerHTML={{ __html: t.hero.title }}
+            dangerouslySetInnerHTML={{ __html: compactRichHeading(t.hero.title) }}
           />
           <p
             className="mt-6 max-w-[470px] whitespace-pre-line leading-7 text-[#5f5f67] sm:mt-7 sm:leading-8"
@@ -236,8 +242,8 @@ export function HomeHero({
                       Video is not configured yet.
                     </p>
                     <p className="mt-2 text-sm text-white/65">
-                      Add a YouTube, Vimeo, MP4, WebM, or OGG URL in Admin →
-                      Homepage CMS → Hero section.
+                      Add a YouTube, Vimeo, MP4, WebM, or OGG URL in Admin â†’
+                      Homepage CMS â†’ Hero section.
                     </p>
                   </div>
                 </div>
@@ -249,3 +255,4 @@ export function HomeHero({
     </section>
   );
 }
+
