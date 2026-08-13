@@ -16213,15 +16213,41 @@ function CollectionActivityPanel({
   >("all");
   const accessRequests = accessSettings.requests ?? [];
   const downloadFavoritesCsv = (list?: CollectionFavoriteActivityRecord) => {
-    const rows = (list ? [list] : favoriteLists).map((item) => ({
-      email: item.email,
-      favoriteList: item.name,
-      photos: item.photos,
-      filenames: item.filenames.join("; "),
-      dateCreated: formatActivityDate(item.createdAt),
-      dateUpdated: formatActivityDate(item.updatedAt),
-    }));
-    downloadCsv(`${safeCsvName(collectionName)}-favorite-activity.csv`, rows);
+    const imageById = new Map(
+      collectionImages.map((image) => [image._id, image] as const),
+    );
+    const sections = (list ? [list] : favoriteLists).map((item) => {
+      const images = item.images?.length
+        ? item.images
+        : item.filenames.map((name) => ({ imageId: "", name, url: "" }));
+
+      return [
+        [
+          `Collection: ${collectionName}`,
+          `Favorite: ${item.name}`,
+          `Email ${item.email}`,
+        ]
+          .map(csvCell)
+          .join(",") + ",",
+        'Name,Note,"Photo Set","Created at"',
+        ...images.map((favoriteImage) => {
+          const galleryImage = imageById.get(favoriteImage.imageId);
+          return [
+            csvCellWhenNeeded(favoriteImage.name),
+            "",
+            csvCell(galleryImage?.setName ?? ""),
+            csvCellWhenNeeded(
+              formatCsvDate(galleryImage?.createdAt ?? item.createdAt),
+            ),
+          ].join(",");
+        }),
+      ].join("\r\n");
+    });
+
+    downloadCsvContent(
+      `${safeCsvName(collectionName)}-favorite-activity.csv`,
+      sections.join("\r\n\r\n"),
+    );
   };
   const downloadActivityCsv = () => {
     downloadCsv(
@@ -17658,6 +17684,13 @@ function formatActivityDate(value?: string) {
   });
 }
 
+function formatCsvDate(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+}
+
 function publicCollectionPath(collection: CollectionRecord) {
   return `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
 }
@@ -17679,6 +17712,10 @@ function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
       headers.map((header) => csvCell(row[header])).join(","),
     ),
   ].join("\n");
+  downloadCsvContent(filename, csv);
+}
+
+function downloadCsvContent(filename: string, csv: string) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -17692,6 +17729,11 @@ function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
 
 function csvCell(value: unknown) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function csvCellWhenNeeded(value: unknown) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? csvCell(text) : text;
 }
 
 function imageSrc(url?: string) {
