@@ -120,6 +120,9 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -2446,6 +2449,8 @@ function optimiseMarketingPopupImage(file: File) {
 }
 
 function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
+  const [campaignStatus, setCampaignStatus] = useState("all");
+  const [campaignSort, setCampaignSort] = useState("newest");
   const {
     campaignSearch,
     hydrateDashboardSettings,
@@ -2503,8 +2508,12 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
     <div>
       <CampaignListHeader
         query={campaignSearch}
+        sort={campaignSort}
+        status={campaignStatus}
         onNew={() => setShowCampaignTemplates(true)}
         onQueryChange={setCampaignSearch}
+        onSortChange={setCampaignSort}
+        onStatusChange={setCampaignStatus}
       />
       {showCampaignTemplates && (
         <button type="button" onClick={() => setShowCampaignTemplates(false)} className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-[#6337d8] hover:text-[#4f2db1]">
@@ -2520,6 +2529,8 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
       ) : (
         <CampaignTable
           query={campaignSearch}
+          sort={campaignSort}
+          status={campaignStatus}
           onEdit={(name) => startCampaignBuilder(name)}
         />
       )}
@@ -2845,12 +2856,20 @@ function MarketingPopupPreview({ settings }: { settings: MarketingSettings }) {
 
 function CampaignListHeader({
   query,
+  sort,
+  status,
   onNew,
   onQueryChange,
+  onSortChange,
+  onStatusChange,
 }: {
   query: string;
+  sort: string;
+  status: string;
   onNew: () => void;
   onQueryChange: (value: string) => void;
+  onSortChange: (value: string) => void;
+  onStatusChange: (value: string) => void;
 }) {
   return (
     <div>
@@ -2877,12 +2896,38 @@ function CampaignListHeader({
         </Button>
       </div>
       <div className="mt-7 flex items-center justify-between">
-        <button className="rounded-full bg-[#f7f7f7] px-4 py-2 text-sm font-semibold">
-          Status <ChevronDown className="ml-1 inline size-3" />
-        </button>
-        <div className="flex items-center gap-5">
-          <ListFilter className="size-5 text-[#777]" />
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="rounded-full bg-[#f7f7f7] px-4">
+              {status === "all" ? "Status" : `Status: ${titleCase(status)}`}
+              <ChevronDown data-icon="inline-end" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-44">
+            <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={status} onValueChange={onStatusChange}>
+              <DropdownMenuRadioItem value="all">All campaigns</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="draft">Draft</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="sent">Sent</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Sort campaigns" title="Sort campaigns">
+              <ListFilter />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuLabel>Sort campaigns</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={sort} onValueChange={onSortChange}>
+              <DropdownMenuRadioItem value="newest">Newest first</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="oldest">Oldest first</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="name">Name A–Z</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
@@ -2890,9 +2935,13 @@ function CampaignListHeader({
 
 function CampaignTable({
   query,
+  sort,
+  status,
   onEdit,
 }: {
   query: string;
+  sort: string;
+  status: string;
   onEdit: (name: string) => void;
 }) {
   const campaigns = [
@@ -2904,7 +2953,15 @@ function CampaignTable({
       openRate: "-",
       created: "Jun 14, 2026",
     },
-  ].filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
+  ]
+    .filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
+    .filter((item) => status === "all" || item.status.toLowerCase() === status)
+    .sort((a, b) => {
+      if (sort === "name") return a.name.localeCompare(b.name);
+
+      const direction = sort === "oldest" ? 1 : -1;
+      return direction * (Date.parse(a.created) - Date.parse(b.created));
+    });
 
   if (!campaigns.length) {
     return (
