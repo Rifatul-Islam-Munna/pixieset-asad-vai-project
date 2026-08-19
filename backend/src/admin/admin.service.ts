@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { createHash, randomBytes } from 'node:crypto';
+import { MailService } from 'src/mail/mail.service';
 import bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
 import Stripe from 'stripe';
@@ -10,6 +13,7 @@ import { User, UserDocument, UserType } from 'src/user/entities/user.entity';
 import { AdminCreatePlanDto, AdminUpdatePlanDto } from './dto/admin-plan.dto';
 import { AdminStripeSettingDto } from './dto/admin-stripe-setting.dto';
 import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
+import { AdminSendLoginAccessDto } from './dto/admin-login-access.dto';
 import { AdminStripeSetting, AdminStripeSettingDocument } from './entities/admin-stripe-setting.entity';
 import { Plan, PlanDocument } from './entities/plan.entity';
 import { StoreOrder, StoreOrderDocument } from 'src/store/entities/store-order.entity';
@@ -34,11 +38,68 @@ export class AdminService implements OnModuleInit {
     private readonly defaultProducts: StoreDefaultProductService,
     private readonly freePlanSettings: FreePlanSettingService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
   async onModuleInit() {
     const settings = await this.freePlanSettings.get();
     await this.syncFreeUsers(settings);
+  }
+
+  async createUserLoginAccess(id: string, expiresInHours: number) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.email) throw new BadRequestException('User does not have an email address');
+    const hours = Math.min(24 * 365, Math.max(1, Math.floor(expiresInHours)));
+    const pin = String(Math.floor(100000 + Math.random() * 900000));
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
+    user.loginPinHash = await bcrypt.hash(pin, 10);
+    user.loginTokenHash = createHash('sha256').update(token).digest('hex');
+    user.loginExpiresAt = expiresAt;
+    user.loginAttempts = 0;
+    await user.save();
+    const appUrl = (this.configService.get<string>('FRONTEND_URL') || this.configService.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '');
+    const link = `${appUrl}/login?magic=${encodeURIComponent(token)}`;
+    const validity = hours % 24 === 0 ? `${hours / 24} day${hours === 24 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'}`;
+    const subject = 'Your secure login access';
+    const message = 'Hello {{name}},\n\nUse this one-time PIN to sign in: {{pin}}\n\nOr open this direct login link:\n{{link}}\n\nThis access is valid until {{expiresAt}} and can only be used once. After signing in, you can change your password from your account settings.\n\nIf you did not expect this message, you can ignore it.';
+    return { email: user.email, pin, link, expiresAt, expiresInHours: hours, validity, subject, message, sent: false };
+  }
+
+  async sendUserLoginEmail(id: string, dto: AdminSendLoginAccessDto) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.email) throw new BadRequestException('User does not have an email address');
+    if (!user.loginPinHash || !user.loginTokenHash || !user.loginExpiresAt) throw new BadRequestException('Create login access first');
+    if (new Date(user.loginExpiresAt).getTime() <= Date.now()) throw new BadRequestException('This login access has expired. Generate a new one.');
+    const pinMatches = await bcrypt.compare(dto.pin, user.loginPinHash);
+    let token = '';
+    try { token = new URL(dto.link).searchParams.get('magic') || ''; } catch { token = ''; }
+    const tokenHash = token ? createHash('sha256').update(token).digest('hex') : '';
+    if (!pinMatches || tokenHash !== user.loginTokenHash) throw new BadRequestException('The PIN or direct link no longer matches the active login access');
+    const replacements: Record<string, string> = {
+      '{{name}}': user.name || 'there',
+      '{{email}}': user.email,
+      '{{pin}}': dto.pin,
+      '{{link}}': dto.link,
+      '{{expiresAt}}': new Date(user.loginExpiresAt).toLocaleString(),
+    };
+    const render = (value: string) => Object.entries(replacements).reduce((output, [key, replacement]) => output.split(key).join(replacement), value);
+    const subject = render(dto.subject.trim());
+    const message = render(dto.message);
+    const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    const safeLink = escapeHtml(dto.link);
+    const escaped = escapeHtml(message).replace(/\n/g, '<br>');
+    const htmlMessage = escaped.split(safeLink).join(`<a href="${safeLink}" style="color:#6337d8;font-weight:600;word-break:break-all">${safeLink}</a>`);
+    const result = await this.mailService.send({
+      to: user.email,
+      subject,
+      text: message,
+      html: `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:32px;line-height:1.65;color:#1f1f1f">${htmlMessage}</div>`,
+    });
+    return { email: user.email, expiresAt: user.loginExpiresAt, sent: result.sent, skipped: result.skipped ?? false, reason: result.reason };
   }
 
   async dashboard() {

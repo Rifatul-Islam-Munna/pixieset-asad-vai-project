@@ -4,6 +4,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { FindOneTokenDto, LoginDto, OtpstringDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { MagicLoginDto, PinLoginDto } from './dto/passwordless-login.dto';
 
 @Controller('user')
 export class UserController {
@@ -22,6 +23,16 @@ export class UserController {
   @Post('verify-otp')
   verifyOtp(@Body() dto: OtpstringDto) {
     return this.userService.verifyOtp(dto.otp);
+  }
+
+  @Post('login-with-pin')
+  loginWithPin(@Body() dto: PinLoginDto) {
+    return this.userService.loginWithPin(dto.login, dto.pin);
+  }
+
+  @Post('login-with-link')
+  loginWithLink(@Body() dto: MagicLoginDto) {
+    return this.userService.loginWithMagicLink(dto.token);
   }
 
   @Post('login-user-with-google')

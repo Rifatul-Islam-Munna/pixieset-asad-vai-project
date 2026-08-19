@@ -18,12 +18,14 @@ import {
 import { PublicStoreCatalog } from "./public-store-catalog";
 import { PublicStoreProductBuilder } from "./public-store-product-builder";
 import { StoreCartPanel } from "./store-cart-panel";
+import { FreePrintRequestDialog } from "./free-print-request-dialog";
 
 type GalleryImage = PublicStoreImage;
 
 type GalleryStoreSettings = {
   enabled?: boolean;
   storeStatus?: boolean;
+  printRequestsEnabled?: boolean;
   showPrintStoreNav?: boolean;
   showBuyPhotoButton?: boolean;
 };
@@ -52,7 +54,9 @@ export function PublicGalleryStoreBridge({
   } | null;
 }) {
   const storeSettings = collection?.settings?.store ?? {};
-  const enabled = Boolean(storeSettings.enabled ?? storeSettings.storeStatus);
+  const paidStoreEnabled = Boolean(storeSettings.enabled || storeSettings.storeStatus);
+  const printRequestsEnabled = Boolean(storeSettings.printRequestsEnabled);
+  const enabled = paidStoreEnabled || printRequestsEnabled;
   const showPrintStoreNav = storeSettings.showPrintStoreNav !== false;
   const showBuyPhotoButton = storeSettings.showBuyPhotoButton !== false;
   const [storeData, setStoreData] = useState<PublicStoreData | null>(null);
@@ -60,6 +64,7 @@ export function PublicGalleryStoreBridge({
   const [cartHost, setCartHost] = useState<HTMLElement | null>(null);
   const [activeImageId, setActiveImageId] = useState("");
   const [buyOpen, setBuyOpen] = useState(false);
+  const [printRequestOpen, setPrintRequestOpen] = useState(false);
   const [storeOpen, setStoreOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeProduct, setActiveProduct] = useState<PublicStoreProduct | null>(null);
@@ -103,7 +108,7 @@ export function PublicGalleryStoreBridge({
   };
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!paidStoreEnabled) return;
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
     fetch(`${baseUrl}/public/collections/${encodeURIComponent(galary)}/store?siteSlug=${encodeURIComponent(name)}`, {
       cache: "no-store",
@@ -111,10 +116,10 @@ export function PublicGalleryStoreBridge({
       .then((response) => (response.ok ? response.json() : null))
       .then((payload) => setStoreData(payload?.data ?? null))
       .catch(() => setStoreData(null));
-  }, [enabled, galary, name]);
+  }, [galary, name, paidStoreEnabled]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!paidStoreEnabled) return;
 
     let host: HTMLElement | null = null;
     let cartButtonHost: HTMLElement | null = null;
@@ -147,7 +152,7 @@ export function PublicGalleryStoreBridge({
       host?.remove();
       cartButtonHost?.remove();
     };
-  }, [enabled]);
+  }, [paidStoreEnabled]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -177,11 +182,33 @@ export function PublicGalleryStoreBridge({
       setActiveImageId(imageId);
       setBuyOpen(true);
     };
+    const openPrintRequest = (event: MouseEvent) => {
+      const trigger = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-print-request-open]");
+      const imageId = trigger?.dataset.printRequestOpen;
+      if (!imageId) return;
+      event.preventDefault();
+      if (!images.some((image) => image._id === imageId) && trigger.dataset.printRequestUrl) {
+        setExtraImages((current) => [
+          ...current,
+          {
+            _id: imageId,
+            url: trigger.dataset.printRequestUrl || "",
+            thumbnailUrl: trigger.dataset.printRequestThumbnail || undefined,
+            originalName: trigger.dataset.printRequestName || undefined,
+            mediaType: "image",
+          },
+        ]);
+      }
+      setActiveImageId(imageId);
+      setPrintRequestOpen(true);
+    };
     document.addEventListener("click", openStore);
     document.addEventListener("click", openBuyPhoto);
+    document.addEventListener("click", openPrintRequest);
     return () => {
       document.removeEventListener("click", openStore);
       document.removeEventListener("click", openBuyPhoto);
+      document.removeEventListener("click", openPrintRequest);
     };
   }, [enabled, images]);
 
@@ -231,7 +258,7 @@ export function PublicGalleryStoreBridge({
 
   return (
     <>
-      {navHost && showPrintStoreNav &&
+      {navHost && paidStoreEnabled && showPrintStoreNav &&
         createPortal(
           <div className="relative shrink-0">
             <button
@@ -246,7 +273,7 @@ export function PublicGalleryStoreBridge({
           navHost,
         )}
 
-      {cartHost &&
+      {cartHost && paidStoreEnabled &&
         createPortal(
           <button
             type="button"
@@ -264,7 +291,7 @@ export function PublicGalleryStoreBridge({
           cartHost,
         )}
 
-      {buyOpen && selectedImage && (
+      {buyOpen && paidStoreEnabled && selectedImage && (
         <BuyPhotoDialog
           image={selectedImage}
           products={isVideo(selectedImage) ? (storeData?.products ?? []).filter((product) => product.type === "digital-download") : storeData?.products ?? []}
@@ -281,7 +308,7 @@ export function PublicGalleryStoreBridge({
         />
       )}
 
-      {storeOpen && (
+      {storeOpen && paidStoreEnabled && (
         <StoreOverlay
           data={storeData}
           currency={storeData?.store?.currency ?? "EUR"}
@@ -319,6 +346,15 @@ export function PublicGalleryStoreBridge({
         onRemove={(itemId) => setCart((items) => items.filter((item) => item.id !== itemId))}
         onClear={() => setCart([])}
       />
+
+      {printRequestOpen && printRequestsEnabled && selectedImage && (
+        <FreePrintRequestDialog
+          image={selectedImage}
+          identifier={galary}
+          siteSlug={name}
+          onClose={() => setPrintRequestOpen(false)}
+        />
+      )}
     </>
   );
 }

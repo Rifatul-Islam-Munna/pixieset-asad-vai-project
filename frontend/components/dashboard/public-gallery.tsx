@@ -63,7 +63,7 @@ type PublicCollection = {
     };
     download?: Partial<PresetDownloadSettings>;
     favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string };
-    store?: { storeStatus?: boolean; enabled?: boolean; showPrintStoreNav?: boolean; showBuyPhotoButton?: boolean };
+    store?: { storeStatus?: boolean; enabled?: boolean; printRequestsEnabled?: boolean; showPrintStoreNav?: boolean; showBuyPhotoButton?: boolean };
     access?: { emailRequired?: boolean; emailAuthorized?: boolean; emailStatus?: string; email?: string };
   };
   preferences?: {
@@ -142,6 +142,12 @@ const defaultDesign: PresetDesignSettings = {
   coverButtonFontSizePx: 12,
   galleryTitleFontSizePx: 16,
   galleryNavigationFontSizePx: 12,
+  coverSmallTitleColor: "#ffffff",
+  coverTitleColor: "#ffffff",
+  coverDateColor: "#ffffff",
+  coverButtonColor: "#ffffff",
+  galleryTitleColor: "#202326",
+  galleryNavigationColor: "#6b7280",
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -211,13 +217,15 @@ export function PublicGallery({
     ...(collection ? (collection.settings?.download ?? {}) : fallbackPresetDownload),
   };
   const storeConfig = collection?.settings?.store;
-  const storeEnabled = Boolean(collection ? (storeConfig?.enabled ?? storeConfig?.storeStatus) : fallbackPresetStore.storeStatus);
+  const paidStoreEnabled = Boolean(collection ? (storeConfig?.enabled || storeConfig?.storeStatus) : fallbackPresetStore.storeStatus);
+  const printRequestsEnabled = Boolean(collection && storeConfig?.printRequestsEnabled);
   const storeStatus = Boolean(
     collection
-      ? storeEnabled && storeConfig?.showPrintStoreNav !== false
+      ? paidStoreEnabled && storeConfig?.showPrintStoreNav !== false
       : fallbackPresetStore.showPrintStoreNav ?? fallbackPresetStore.storeStatus,
   );
-  const showBuyPhotoButton = Boolean(storeEnabled && storeConfig?.showBuyPhotoButton !== false);
+  const showBuyPhotoButton = Boolean(paidStoreEnabled && storeConfig?.showBuyPhotoButton !== false);
+  const showPrintRequestButton = printRequestsEnabled;
   const generalSettings = collection?.settings?.general ?? fallbackPresetGeneral;
   const slideshowEnabled = collection
     ? boolSetting(generalSettings.slideshow ?? true)
@@ -1085,16 +1093,16 @@ export function PublicGallery({
       <section className="px-0 py-0">
         <div className="sticky top-0 z-20 grid min-h-[76px] grid-cols-1 items-center gap-3 border-y border-black/10 bg-white/95 px-4 py-3 text-[#202326] shadow-[0_10px_28px_rgba(0,0,0,0.08)] backdrop-blur md:grid-cols-[minmax(180px,0.75fr)_minmax(0,1.6fr)_auto] md:px-8">
           <div className="min-w-0">
-            <h1 className="truncate font-bold uppercase tracking-[0.12em]" style={{ fontSize: `${design.galleryTitleFontSizePx ?? 16}px` }}>{title}</h1>
+            <h1 className="truncate font-bold uppercase tracking-[0.12em]" style={{ fontSize: `${design.galleryTitleFontSizePx ?? 16}px`, color: design.galleryTitleColor || undefined }}>{title}</h1>
             <p className="mt-1 truncate text-[11px] uppercase tracking-[0.22em] text-black/45">{studioName}</p>
           </div>
-          <div className="-mx-1 flex min-w-0 gap-5 overflow-x-auto px-1 font-semibold uppercase tracking-[0.12em] md:justify-center" style={{ fontSize: `${design.galleryNavigationFontSizePx ?? 12}px` }}>
+          <div className="-mx-1 flex min-w-0 gap-5 overflow-x-auto px-1 font-semibold uppercase tracking-[0.12em] md:justify-center" style={{ fontSize: `${design.galleryNavigationFontSizePx ?? 12}px`, color: design.galleryNavigationColor || undefined }}>
             {showSetTabs && gallerySets.map((set) => (
               <button
                 key={set.id}
                 className={cn(
-                  "shrink-0 transition hover:text-[#6337d8]",
-                  activeSetId === set.id ? "text-[#6337d8]" : "text-black/45",
+                  "shrink-0 transition hover:opacity-100",
+                  activeSetId === set.id ? "opacity-100 underline decoration-2 underline-offset-4" : "opacity-55",
                 )}
                 onClick={() => setActiveSetId(set.id)}
                 type="button"
@@ -1458,6 +1466,12 @@ export function PublicGallery({
                 <ShoppingBag className="size-5" />
               </button>
             )}
+            {showPrintRequestButton && !isVideo(activeImage) && isPersistedImageId(activeImage._id) && (
+              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-print-request-open={activeImage._id} data-print-request-url={activeImage.url} data-print-request-thumbnail={activeImage.thumbnailUrl} data-print-request-name={activeImage.originalName} type="button" aria-label="Request print" title="Request print">
+                <Printer className="size-5" />
+                <span>Request Print</span>
+              </button>
+            )}
             {favoritesEnabled && isPersistedImageId(activeImage._id) && (
               <button className="polished-icon-button" onClick={() => void toggleImageFavorite(activeImage)} type="button" aria-label={favoriteImageIds.has(activeImage._id) ? "Remove star" : "Star photo"} title={favoriteImageIds.has(activeImage._id) ? "Remove star" : "Star photo"}>
                 <Star className={cn("size-5", favoriteImageIds.has(activeImage._id) && "fill-amber-400 text-amber-500")} />
@@ -1511,6 +1525,12 @@ export function PublicGallery({
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
               <button className="polished-icon-button" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={slideshowImage.originalName} data-buy-photo-media-type={slideshowImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
                 <ShoppingBag className="size-5" />
+              </button>
+            )}
+            {showPrintRequestButton && !isVideo(slideshowImage) && isPersistedImageId(slideshowImage._id) && (
+              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-print-request-open={slideshowImage._id} data-print-request-url={slideshowImage.url} data-print-request-thumbnail={slideshowImage.thumbnailUrl} data-print-request-name={slideshowImage.originalName} type="button" aria-label="Request print" title="Request print">
+                <Printer className="size-5" />
+                <span>Request Print</span>
               </button>
             )}
             {favoritesEnabled && isPersistedImageId(slideshowImage._id) && (

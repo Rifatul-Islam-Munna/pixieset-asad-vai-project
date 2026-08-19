@@ -12,6 +12,8 @@ import {
   Phone,
   RefreshCw,
   Save,
+  UploadCloud,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PlanFeatureLock } from "@/components/dashboard/plan-feature-lock";
@@ -52,6 +54,7 @@ export function HomepageSettingsPanel() {
   const [passwordDirty, setPasswordDirty] = useState(false);
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => setOrigin(window.location.origin), []);
   useEffect(() => {
@@ -112,6 +115,26 @@ export function HomepageSettingsPanel() {
     const value = Math.random().toString(36).slice(2, 10).toUpperCase();
     setPassword(value);
     setPasswordDirty(true);
+  };
+
+  const uploadLogo = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Choose an image file"); return; }
+    setLogoUploading(true);
+    try {
+      const data = new FormData();
+      data.append("file", file);
+      const response = await fetch("/api/mobile-gallery/assets", { method: "POST", body: data });
+      const payload = await response.json();
+      if (!response.ok || !payload?.data?.url) throw new Error(payload?.message || "Logo upload failed");
+      const uploaded = String(payload.data.url);
+      const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+      const logoUrl = uploaded.startsWith("/") ? `${base}${uploaded}` : uploaded;
+      setForm((current) => ({ ...current, logoUrl }));
+      toast.success("Logo uploaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Logo upload failed");
+    } finally { setLogoUploading(false); }
   };
 
   const toggleVisibility = (key: keyof HomepageVisibility) => {
@@ -203,7 +226,15 @@ export function HomepageSettingsPanel() {
 
           <Section title="Homepage Identity">
             <Field label="Studio / Brand Name" value={form.brandName} onChange={(brandName) => setForm((current) => ({ ...current, brandName }))} />
-            <Field label="Logo Image URL" value={form.logoUrl} onChange={(logoUrl) => setForm((current) => ({ ...current, logoUrl }))} placeholder="https://..." />
+            <div className="grid gap-3">
+              <span className="text-xs font-bold uppercase tracking-[0.08em] text-[#667085]">Homepage Logo</span>
+              <label className="flex min-h-14 cursor-pointer items-center justify-center gap-2 border border-dashed border-[#CFC9E8] bg-white px-4 text-sm font-bold text-[#6F57D9] hover:bg-[#FAF9FF]">
+                <UploadCloud className="size-4" />{logoUploading ? "Uploading..." : "Upload logo"}
+                <input type="file" accept="image/*" disabled={logoUploading} className="sr-only" onChange={(event) => void uploadLogo(event.target.files?.[0])} />
+              </label>
+              {form.logoUrl && <div className="flex items-center justify-between gap-4 border bg-white p-3"><img src={form.logoUrl} alt="Homepage logo preview" className="max-h-14 max-w-44 object-contain" /><button type="button" onClick={() => setForm((current) => ({ ...current, logoUrl: "" }))} className="inline-flex items-center gap-2 text-xs font-bold text-red-600"><X className="size-4" />Remove</button></div>}
+              <Field label="Or paste logo URL" value={form.logoUrl} onChange={(logoUrl) => setForm((current) => ({ ...current, logoUrl }))} placeholder="https://..." />
+            </div>
           </Section>
 
           <Section title="Biography">

@@ -65,6 +65,18 @@ export class User {
   @Prop()
   otpValidatedAt?: Date;
 
+  @Prop()
+  loginPinHash?: string;
+
+  @Prop()
+  loginTokenHash?: string;
+
+  @Prop()
+  loginExpiresAt?: Date;
+
+  @Prop({ default: 0 })
+  loginAttempts?: number;
+
   @Prop({ default: 0 })
   numberOfConnections: number;
 

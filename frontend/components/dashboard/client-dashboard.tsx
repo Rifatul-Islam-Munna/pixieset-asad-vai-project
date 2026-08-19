@@ -2236,7 +2236,7 @@ function DashboardNotifications({ mobile = false }: { mobile?: boolean }) {
                   {item.id.startsWith("download") ? (
                     <Download />
                   ) : item.id.startsWith("favorite") ? (
-                    <Heart />
+                    <Star className="fill-current" />
                   ) : (
                     <ShoppingBag />
                   )}
@@ -2506,6 +2506,12 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
         onNew={() => setShowCampaignTemplates(true)}
         onQueryChange={setCampaignSearch}
       />
+      {showCampaignTemplates && (
+        <button type="button" onClick={() => setShowCampaignTemplates(false)} className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-[#6337d8] hover:text-[#4f2db1]">
+          <ArrowLeft className="size-4" />
+          Back to campaigns
+        </button>
+      )}
       {showCampaignTemplates ? (
         <TemplateGrid
           isLoading={emailTemplateSettings.isLoading}
@@ -6026,6 +6032,7 @@ function PresetDesignPanel({
   design,
   activePanel,
   onChange,
+  coverImage,
 }: {
   design: {
     cover: string;
@@ -6046,6 +6053,15 @@ function PresetDesignPanel({
     coverButtonFontSizePx?: number;
     galleryTitleFontSizePx?: number;
     galleryNavigationFontSizePx?: number;
+    coverSmallTitleColor?: string;
+    coverTitleColor?: string;
+    coverDateColor?: string;
+    coverButtonColor?: string;
+    galleryTitleColor?: string;
+    galleryNavigationColor?: string;
+    textColor?: string;
+    coverFocalX?: number;
+    coverFocalY?: number;
     color: string;
     gridStyle: "Vertical" | "Horizontal";
     thumbnailSize: "Regular" | "Large";
@@ -6054,6 +6070,7 @@ function PresetDesignPanel({
   };
   activePanel: "cover" | "typography" | "color" | "grid";
   onChange: (value: Partial<typeof design>) => void;
+  coverImage?: string;
 }) {
   type UploadedFont = { name: string; url: string; fileName: string };
   const [adminCoverTemplates, setAdminCoverTemplates] = useState<
@@ -6103,6 +6120,16 @@ function PresetDesignPanel({
       )
       .catch(() => setAdminCoverTemplates([]));
   }, []);
+
+  const updateFocalFromPointer = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.type === "pointermove" && event.buttons !== 1) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100));
+    if (event.type === "pointerdown") event.currentTarget.setPointerCapture(event.pointerId);
+    onChange({ coverFocalX: x, coverFocalY: y });
+  };
 
   return (
     <div className="min-w-0 border bg-white p-7">
@@ -6252,6 +6279,47 @@ function PresetDesignPanel({
               </button>
             ))}
           </div>
+          <OptionSection title="Cover Photo Focal Point">
+            <p className="mb-4 text-sm leading-6 text-[#666]">
+              Drag directly on the cover to choose the part of the photo that should stay in focus.
+            </p>
+            <div
+              className="relative aspect-[1.75] cursor-crosshair touch-none overflow-hidden border bg-[#111] select-none"
+              onPointerDown={updateFocalFromPointer}
+              onPointerMove={updateFocalFromPointer}
+              role="slider"
+              aria-label="Cover photo focal point"
+              aria-valuetext={`${Math.round(Number(design.coverFocalX ?? 50))}% horizontal, ${Math.round(Number(design.coverFocalY ?? 50))}% vertical`}
+            >
+              <CoverPreview
+                design={design}
+                image={coverImage}
+                compact
+                className="pointer-events-none min-h-0 h-full"
+              />
+              <span
+                className="pointer-events-none absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/25 shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_4px_16px_rgba(0,0,0,0.35)]"
+                style={{
+                  left: `${design.coverFocalX ?? 50}%`,
+                  top: `${design.coverFocalY ?? 50}%`,
+                }}
+              >
+                <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+              </span>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              {([['Horizontal', 'coverFocalX'], ['Vertical', 'coverFocalY']] as const).map(([label, key]) => (
+                <Field key={key}>
+                  <div className="flex items-center justify-between gap-3">
+                    <FieldLabel className="font-bold">{label}</FieldLabel>
+                    <span className="text-xs text-[#777]">{Math.round(Number(design[key] ?? 50))}%</span>
+                  </div>
+                  <input type="range" min={0} max={100} value={design[key] ?? 50} onChange={(event) => onChange({ [key]: Number(event.target.value) } as Partial<typeof design>)} className="mt-3 w-full accent-[#6337d8]" />
+                </Field>
+              ))}
+            </div>
+            <button type="button" className="mt-4 text-sm font-bold text-[#6337d8]" onClick={() => onChange({ coverFocalX: 50, coverFocalY: 50 })}>Reset focal point</button>
+          </OptionSection>
         </>
       )}
 
@@ -6366,45 +6434,34 @@ function PresetDesignPanel({
               </button>
             )}
           </div>
-          <OptionSection title="Font Sizes">
+          <OptionSection title="Font Sizes & Colors">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {(
-                [
-                  ["Cover small title", "coverSmallTitleFontSizePx", 8, 48, 12],
-                  ["Cover title", "coverTitleFontSizePx", 16, 120, 60],
-                  ["Cover date", "coverDateFontSizePx", 8, 48, 14],
-                  ["Cover button", "coverButtonFontSizePx", 8, 32, 12],
-                  ["Gallery title", "galleryTitleFontSizePx", 10, 48, 16],
-                  ["Gallery navigation", "galleryNavigationFontSizePx", 8, 32, 12],
-                ] as const
-              ).map(([label, key, min, max, fallback]) => (
-                <Field key={key}>
+              {([
+                ["Cover small title", "coverSmallTitleFontSizePx", "coverSmallTitleColor", 8, 48, 12, "#ffffff"],
+                ["Cover title", "coverTitleFontSizePx", "coverTitleColor", 16, 120, 60, "#ffffff"],
+                ["Cover date", "coverDateFontSizePx", "coverDateColor", 8, 48, 14, "#ffffff"],
+                ["Cover button", "coverButtonFontSizePx", "coverButtonColor", 8, 32, 12, "#ffffff"],
+                ["Gallery title", "galleryTitleFontSizePx", "galleryTitleColor", 10, 48, 16, "#202326"],
+                ["Gallery navigation", "galleryNavigationFontSizePx", "galleryNavigationColor", 8, 32, 12, "#6b7280"],
+              ] as const).map(([label, sizeKey, colorKey, min, max, fallback, fallbackColor]) => (
+                <Field key={sizeKey}>
                   <FieldLabel className="font-bold">{label}</FieldLabel>
-                  <div className="relative mt-2">
-                    <Input
-                      type="number"
-                      min={min}
-                      max={max}
-                      value={design[key] ?? fallback}
-                      onChange={(event) => {
-                        const value = Number(event.target.value);
-                        if (Number.isFinite(value)) {
-                          onChange({ [key]: value } as Partial<typeof design>);
-                        }
-                      }}
-                      onBlur={(event) => {
-                        const value = Number(event.target.value);
-                        onChange({
-                          [key]: Math.min(max, Math.max(min, value || fallback)),
-                        } as Partial<typeof design>);
-                      }}
-                      className="h-11 rounded-none bg-white pr-10"
-                    />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777]">px</span>
+                  <div className="mt-2 grid grid-cols-[minmax(0,1fr)_54px] gap-2">
+                    <div className="relative">
+                      <Input type="number" min={min} max={max} value={design[sizeKey] ?? fallback}
+                        onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value)) onChange({ [sizeKey]: value } as Partial<typeof design>); }}
+                        onBlur={(event) => { const value = Number(event.target.value); onChange({ [sizeKey]: Math.min(max, Math.max(min, value || fallback)) } as Partial<typeof design>); }}
+                        className="h-11 rounded-none bg-white pr-10" />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777]">px</span>
+                    </div>
+                    <input type="color" value={design[colorKey] || design.textColor || fallbackColor}
+                      onChange={(event) => onChange({ [colorKey]: event.target.value } as Partial<typeof design>)}
+                      className="h-11 w-full cursor-pointer border bg-white p-1" aria-label={`${label} color`} title={`${label} color`} />
                   </div>
                 </Field>
               ))}
             </div>
+            <p className="mt-3 text-xs text-[#777]">Each color swatch controls that exact text in the editor preview and on the public collection.</p>
           </OptionSection>
         </PlanFeatureLock>
       )}
@@ -6412,6 +6469,31 @@ function PresetDesignPanel({
       {activePanel === "color" && (
         <PlanFeatureLock feature="advancedDesign" label="Advanced design">
           <h2 className="text-2xl font-medium">Color</h2>
+          <OptionSection title="Individual Text Colors">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {([
+                ["Cover small title", "coverSmallTitleColor", "#ffffff"],
+                ["Cover title", "coverTitleColor", "#ffffff"],
+                ["Cover date", "coverDateColor", "#ffffff"],
+                ["Cover button", "coverButtonColor", "#ffffff"],
+                ["Gallery title", "galleryTitleColor", "#202326"],
+                ["Gallery navigation", "galleryNavigationColor", "#6b7280"],
+              ] as const).map(([label, key, fallback]) => (
+                <Field key={key}>
+                  <FieldLabel className="font-bold">{label}</FieldLabel>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input type="color" value={design[key] || design.textColor || fallback}
+                      onChange={(event) => onChange({ [key]: event.target.value } as Partial<typeof design>)}
+                      className="h-11 w-14 cursor-pointer border bg-white p-1" aria-label={`${label} color`} />
+                    <Input value={design[key] || design.textColor || fallback}
+                      onChange={(event) => onChange({ [key]: event.target.value } as Partial<typeof design>)}
+                      className="h-11 rounded-none bg-white font-mono" placeholder={fallback} />
+                  </div>
+                </Field>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-[#777]">These are saved with the Collection design and render with the same colors on the public gallery.</p>
+          </OptionSection>
           <div className="mt-8 grid grid-cols-2 gap-3">
             {colorOptions.map(([name, colors]) => (
               <button
@@ -6597,7 +6679,7 @@ function CollectionDesignLivePreview({
                 >
                   Masonry Gallery
                 </p>
-                <p className="mt-1 truncate font-semibold" style={{ fontSize: `${design.galleryTitleFontSizePx ?? 16}px` }}>
+                <p className="mt-1 truncate font-semibold" style={{ fontSize: `${design.galleryTitleFontSizePx ?? 16}px`, color: design.galleryTitleColor || undefined }}>
                   {collectionName}
                 </p>
                 <p
@@ -6619,7 +6701,7 @@ function CollectionDesignLivePreview({
             </div>
             <div
               className="flex items-center gap-5 overflow-hidden px-3 py-2"
-              style={{ color: accent, fontSize: `${Math.max(7, (design.galleryNavigationFontSizePx ?? 12) * 0.6)}px` }}
+              style={{ color: design.galleryNavigationColor || accent, fontSize: `${Math.max(7, (design.galleryNavigationFontSizePx ?? 12) * 0.6)}px` }}
             >
               {firstSets.length ? (
                 firstSets.map((set) => (
@@ -8098,7 +8180,7 @@ function StoreOrdersPanel() {
             "Actions",
           ]}
           rows={orders.map((order) => [
-            order.orderNumber,
+            <div key="order"><p className="font-medium">{order.orderNumber}</p>{order.checkoutSource === "print-request" && <span className="mt-1 inline-flex bg-[#eaf8f4] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#159d8b]">Print request</span>}</div>,
             <div key="customer">
               <p className="font-medium">{order.customer?.name}</p>
               <p className="text-xs text-[#777]">{order.customer?.email}</p>
@@ -8194,6 +8276,12 @@ function StoreOrdersPanel() {
                   </p>
                 </div>
               </div>
+              {viewOrder.note && (
+                <div className="mt-4 border border-[#d9eee9] bg-[#f4fbf9] p-4 text-sm">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#159d8b]">Request note</p>
+                  <p className="mt-2 whitespace-pre-wrap leading-6 text-[#333]">{viewOrder.note}</p>
+                </div>
+              )}
               <div className="mt-5 grid gap-4">
                 {viewOrder.items.map((item, index) => (
                   <article
@@ -9559,7 +9647,7 @@ function StatusBadge({ value }: { value: string }) {
         danger ? "bg-[#fff0f0] text-red-600" : "bg-[#f0ebff] text-[#5a2fc5]",
       )}
     >
-      {value}
+      {value === "not-required" ? "Not required" : value}
     </span>
   );
 }
@@ -14797,7 +14885,7 @@ function CollectionDetailView({
                 onClick={() => setActivityPage("favorite")}
                 type="button"
               >
-                <Heart className="size-4" />
+                <Star className="size-4" />
                 Favorite Activity
               </button>
               <button
@@ -15284,7 +15372,7 @@ function CollectionDetailView({
                           />
                           <PhotoMenuItem
                             icon={Images}
-                            label="Set as cover"
+                            label="Make cover photo"
                             disabled={
                               coverImageAccess.locked ||
                               image.mediaType === "video"
@@ -15520,6 +15608,10 @@ function CollectionDetailView({
                 <PresetDesignPanel
                   design={form.design}
                   activePanel={activeDesignPanel}
+                  coverImage={
+                    form.coverImage ||
+                    images.find((image) => image.mediaType !== "video")?.url
+                  }
                   onChange={(value) =>
                     setForm((current) => ({
                       ...current,
@@ -17270,6 +17362,15 @@ const collectionDefaultDesign: PresetDesignSettings = {
   coverButtonFontSizePx: 12,
   galleryTitleFontSizePx: 16,
   galleryNavigationFontSizePx: 12,
+  coverSmallTitleColor: "#ffffff",
+  coverTitleColor: "#ffffff",
+  coverDateColor: "#ffffff",
+  coverButtonColor: "#ffffff",
+  galleryTitleColor: "#202326",
+  galleryNavigationColor: "#6b7280",
+  textColor: "#ffffff",
+  coverFocalX: 50,
+  coverFocalY: 50,
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",

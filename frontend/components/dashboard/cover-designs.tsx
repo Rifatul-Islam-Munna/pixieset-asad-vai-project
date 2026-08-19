@@ -44,6 +44,13 @@ export type CoverPreviewSettings = {
   coverTitleFontSizePx?: number;
   coverDateFontSizePx?: number;
   coverButtonFontSizePx?: number;
+  coverSmallTitleColor?: string;
+  coverTitleColor?: string;
+  coverDateColor?: string;
+  coverButtonColor?: string;
+  textColor?: string;
+  coverFocalX?: number;
+  coverFocalY?: number;
   showCoverSmallTitle?: boolean;
   showCoverTitle?: boolean;
   showCoverDate?: boolean;
@@ -68,6 +75,9 @@ export function CoverPreview({
   className?: string;
 }) {
   const src = image || coverImage(design.cover);
+  const focalX = Math.min(100, Math.max(0, Number(design.coverFocalX ?? 50)));
+  const focalY = Math.min(100, Math.max(0, Number(design.coverFocalY ?? 50)));
+  const imageStyle = { objectPosition: `${focalX}% ${focalY}%` };
   if (design.customCoverTemplate) {
     return (
       <CustomCoverPreview
@@ -80,6 +90,15 @@ export function CoverPreview({
         subtitle={design.coverSmallTitle}
         date={design.coverDate}
         buttonText={design.coverButtonText}
+        focalX={focalX}
+        focalY={focalY}
+        textColor={design.textColor}
+        textColors={{
+          subtitle: design.coverSmallTitleColor,
+          title: design.coverTitleColor,
+          date: design.coverDateColor,
+          button: design.coverButtonColor,
+        }}
         fontSizes={{
           subtitle: design.coverSmallTitleFontSizePx,
           title: design.coverTitleFontSizePx,
@@ -97,6 +116,10 @@ export function CoverPreview({
   const title = design.coverTitle || "Sarah & Daniel";
   const date = design.coverDate || "June 14, 2026";
   const buttonText = design.coverButtonText || "View Gallery";
+  const smallTitleColor = design.coverSmallTitleColor || design.textColor;
+  const titleColor = design.coverTitleColor || design.textColor;
+  const dateColor = design.coverDateColor || design.textColor;
+  const buttonColor = design.coverButtonColor || design.textColor;
   const sampleTitle = compact ? "TITLE" : title;
   const sized = (value: number | undefined, fallback: number) => {
     const requested = Math.max(1, Number(value) || fallback);
@@ -106,11 +129,11 @@ export function CoverPreview({
   };
   const text = (
     <div className={cn("flex flex-col gap-2", compact && "gap-1")}>
-      {!compact && showSmall && <p className="uppercase tracking-[0.28em]" style={sized(design.coverSmallTitleFontSizePx, 12)}>{smallTitle}</p>}
-      {showTitle && <h3 className="break-words font-semibold uppercase tracking-[0.18em]" style={sized(design.coverTitleFontSizePx, 60)}>{sampleTitle}</h3>}
-      {!compact && showDate && <p className="uppercase tracking-[0.22em]" style={sized(design.coverDateFontSizePx, 14)}>{date}</p>}
+      {!compact && showSmall && <p className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }}>{smallTitle}</p>}
+      {showTitle && <h3 className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }}>{sampleTitle}</h3>}
+      {!compact && showDate && <p className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }}>{date}</p>}
       {!compact && showButton && (
-        <span className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={sized(design.coverButtonFontSizePx, 12)}>
+        <span className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }}>
           {buttonText}
         </span>
       )}
@@ -120,15 +143,15 @@ export function CoverPreview({
   if (design.cover === "Ceremony Wide") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-gradient-to-r from-black/38 via-black/10 to-black/20" />
         <div className={cn("absolute left-5 top-[58%] max-w-[82%] -translate-y-1/2 sm:left-8 sm:max-w-[72%]", compact && "left-3 max-w-[68%]")}>
-          {!compact && showSmall && <p className="mb-3 font-semibold uppercase tracking-[0.28em]" style={sized(design.coverSmallTitleFontSizePx, 12)}>{smallTitle}</p>}
-          {showTitle && <h3 className="break-words font-medium uppercase leading-[0.96] tracking-[0.04em]" style={sized(design.coverTitleFontSizePx, 60)}>{sampleTitle}</h3>}
-          {!compact && showDate && <p className="mt-5 font-semibold uppercase tracking-[0.22em]" style={sized(design.coverDateFontSizePx, 14)}>{date}</p>}
+          {!compact && showSmall && <p className="mb-3 font-semibold uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }}>{smallTitle}</p>}
+          {showTitle && <h3 className="break-words font-medium uppercase leading-[0.96] tracking-[0.04em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }}>{sampleTitle}</h3>}
+          {!compact && showDate && <p className="mt-5 font-semibold uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }}>{date}</p>}
         </div>
         {!compact && showButton && (
-          <span className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]" style={sized(design.coverButtonFontSizePx, 12)}>
+          <span className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }}>
             {buttonText}
           </span>
         )}
@@ -139,7 +162,7 @@ export function CoverPreview({
   if (design.cover === "Cinematic") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-black text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover opacity-80" />
+        <img src={src} alt="" className="h-full w-full object-cover opacity-80" style={imageStyle} />
         <div className="absolute inset-x-0 top-0 h-[16%] bg-black/55" />
         <div className="absolute inset-x-0 bottom-0 h-[16%] bg-black/55" />
         <div className="absolute inset-x-[8%] top-[19%] border-t border-white/70" />
@@ -152,7 +175,7 @@ export function CoverPreview({
   if (design.cover === "Lower Left" || design.cover === "Lower Split") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#1c1c1c] text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
         {design.cover === "Lower Split" && <div className="absolute bottom-0 left-0 right-0 h-[34%] bg-white/92" />}
         <div className={cn("absolute bottom-5 left-5 max-w-[82%] sm:bottom-8 sm:left-8 sm:max-w-[64%]", design.cover === "Lower Split" && "text-[#222] [text-shadow:none]", compact && "bottom-3 left-3 max-w-[75%]")}>{text}</div>
@@ -163,12 +186,12 @@ export function CoverPreview({
   if (design.cover === "Top Frame" || design.cover === "Side Button") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-black/24" />
         <div className={cn("absolute inset-6 border border-white/75", compact && "inset-2")} />
         <div className={cn("absolute left-5 top-5 max-w-[82%] sm:left-8 sm:top-8 sm:max-w-[70%]", compact && "left-3 top-3 max-w-[74%]")}>{text}</div>
         {design.cover === "Side Button" && !compact && showButton && (
-          <span className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]" style={sized(design.coverButtonFontSizePx, 12)}>
+          <span className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }}>
             {buttonText}
           </span>
         )}
@@ -182,6 +205,7 @@ export function CoverPreview({
         <img
           src={src}
           alt=""
+          style={imageStyle}
           className={cn(
             "h-full w-full object-cover",
             design.cover === "Mono Frame" && "grayscale",
@@ -214,7 +238,7 @@ export function CoverPreview({
     return (
       <div className={cn("relative grid h-full min-h-[62vh] grid-cols-1 bg-white text-[#222] sm:grid-cols-2", compact && "min-h-0", className)}>
         <div className={cn("flex items-center justify-center p-4 text-center", compact && "p-2")}>{text}</div>
-        <img src={src} alt="" className={cn("h-full w-full object-cover p-3", compact && "p-2")} />
+        <img src={src} alt="" style={imageStyle} className={cn("h-full w-full object-cover p-3", compact && "p-2")} />
       </div>
     );
   }
@@ -222,7 +246,7 @@ export function CoverPreview({
   if (design.cover === "Split" || design.cover === "Journal" || design.cover === "Editorial") {
     return (
       <div className={cn("relative grid h-full min-h-[62vh] grid-cols-1 bg-white text-[#222] sm:grid-cols-2", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
         <div className={cn("flex items-center p-6", design.cover === "Journal" ? "justify-start" : "justify-center text-center", compact && "p-2")}>{text}</div>
       </div>
     );
@@ -231,7 +255,7 @@ export function CoverPreview({
   if (design.cover === "Stamp" || design.cover === "Minimal") {
     return (
       <div className={cn("relative flex h-full min-h-[62vh] flex-col items-center justify-center gap-5 bg-white text-center text-[#222]", compact && "min-h-0 gap-2", className)}>
-        <img src={src} alt="" className={cn("aspect-square w-[34%] object-cover", compact && "w-[32%]")} />
+        <img src={src} alt="" style={imageStyle} className={cn("aspect-square w-[34%] object-cover", compact && "w-[32%]")} />
         {text}
       </div>
     );
@@ -240,17 +264,17 @@ export function CoverPreview({
   if (design.cover === "Stripe") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-black/28" />
         <div className="absolute left-[12%] right-[12%] top-[22%] border-t border-white" />
         <div className="absolute bottom-[22%] left-[12%] right-[12%] border-t border-white" />
         <div className={cn("absolute bottom-[22%] left-[12%] right-[12%] top-[22%] flex items-center justify-center p-6 text-center [text-shadow:0_2px_14px_rgba(0,0,0,0.55)]", compact && "p-3")}>
           <div className={cn("flex max-w-full flex-col items-center gap-3", compact && "gap-1")}>
-            {!compact && showSmall && <p className="uppercase tracking-[0.28em]" style={sized(design.coverSmallTitleFontSizePx, 12)}>{smallTitle}</p>}
-            {showTitle && <h3 className="break-words font-semibold uppercase tracking-[0.18em]" style={sized(design.coverTitleFontSizePx, 60)}>{sampleTitle}</h3>}
-            {!compact && showDate && <p className="uppercase tracking-[0.22em]" style={sized(design.coverDateFontSizePx, 14)}>{date}</p>}
+            {!compact && showSmall && <p className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }}>{smallTitle}</p>}
+            {showTitle && <h3 className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }}>{sampleTitle}</h3>}
+            {!compact && showDate && <p className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }}>{date}</p>}
             {!compact && showButton && (
-              <span className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={sized(design.coverButtonFontSizePx, 12)}>
+              <span className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }}>
                 {buttonText}
               </span>
             )}
@@ -262,7 +286,7 @@ export function CoverPreview({
 
   return (
     <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-      <img src={src} alt="" className="h-full w-full object-cover" />
+      <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
       <div className={cn("absolute inset-0", design.cover === "Vintage" ? "bg-white/55" : "bg-black/28")} />
       {design.cover === "Frame" && <div className={cn("absolute inset-4 border border-white", compact && "inset-2")} />}
       {design.cover === "Divider" && <div className="absolute bottom-0 left-1/2 top-0 border-l border-white" />}
@@ -295,9 +319,13 @@ function CustomCoverPreview({
   compact,
   date,
   fontSizes,
+  focalX,
+  focalY,
   image,
   subtitle,
   template,
+  textColor,
+  textColors,
   title,
 }: {
   branding?: Partial<BrandSettings>;
@@ -306,6 +334,10 @@ function CustomCoverPreview({
   compact?: boolean;
   date?: string;
   fontSizes?: Partial<Record<"title" | "subtitle" | "date" | "button", number>>;
+  focalX?: number;
+  focalY?: number;
+  textColor?: string;
+  textColors?: Partial<Record<"title" | "subtitle" | "date" | "button", string>>;
   image?: string;
   subtitle?: string;
   template: CustomCoverTemplate;
@@ -324,7 +356,7 @@ function CustomCoverPreview({
 
   return (
     <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#111] text-white", compact && "min-h-0", className)}>
-      <img src={src} alt="" className="h-full w-full object-cover" />
+      <img src={src} alt="" className="h-full w-full object-cover" style={{ objectPosition: `${Math.min(100, Math.max(0, Number(focalX ?? 50)))}% ${Math.min(100, Math.max(0, Number(focalY ?? 50)))}%` }} />
       <div className="absolute inset-0 bg-black" style={{ opacity: template.overlayOpacity / 100 }} />
       {template.gridOpacity > 0 && (
         <div
@@ -345,13 +377,17 @@ function CustomCoverPreview({
           element.type === "button"
             ? fontSizes?.[element.type]
             : undefined;
+        const elementTextColor =
+          element.type === "title" || element.type === "subtitle" || element.type === "date" || element.type === "button"
+            ? textColors?.[element.type]
+            : undefined;
         const common = {
           left: `${element.x}%`,
           top: `${element.y}%`,
           width: `${element.width}%`,
           height: `${element.height}%`,
           opacity: element.opacity / 100,
-          color: element.color,
+          color: elementTextColor || textColor || element.color,
           transform: "translate(-50%, -50%)",
         };
         if (element.type === "logo") {
@@ -385,7 +421,7 @@ function CustomCoverPreview({
                 : customFontSize ?? element.fontSize,
               textAlign: element.align ?? "center",
               justifyContent: element.align === "left" ? "flex-start" : element.align === "right" ? "flex-end" : "center",
-              borderColor: element.color,
+              borderColor: elementTextColor || textColor || element.color,
             }}
           >
             {textMap[element.type]}

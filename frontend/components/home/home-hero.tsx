@@ -2,6 +2,7 @@
 
 import { ArrowRight, Play, Sparkles, Star, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { SiteNav } from "@/components/home/site-nav";
 import { useHomeCms } from "@/api-hooks/use-home-cms";
 import type { HomeCmsData, HomeLanguage } from "@/lib/home-cms";
@@ -59,6 +60,7 @@ export function HomeHero({
   dashboardHref?: string;
 }) {
   const cms = useHomeCms(initialCms);
+  const reduceMotion = useReducedMotion();
   const lang: HomeLanguage =
     requestedLanguage === "gr" || requestedLanguage === "en"
       ? requestedLanguage
@@ -72,7 +74,7 @@ export function HomeHero({
     : [];
   const images = [
     ...workflowTabs.map((item) => item?.image),
-    ...galleryTabs.map((item) => item?.image),
+    ...galleryTabs.map((item) => item?.mediaType === "video" ? "" : item?.image),
     ...ctaImages,
   ].filter(Boolean);
   const hero = cms.media.heroMediaUrl || images[0];
@@ -108,7 +110,7 @@ export function HomeHero({
         dashboardHref={dashboardHref}
       />
       <div className="relative mx-auto grid max-w-[1320px] items-center gap-10 px-4 pb-14 pt-10 sm:px-5 sm:pb-16 sm:pt-12 md:grid-cols-[.9fr_1.1fr] md:px-8 md:pb-24 md:pt-24">
-        <div className="z-10">
+        <motion.div className="z-10" initial={reduceMotion ? false : { opacity: 0, y: 30 }} animate={reduceMotion ? undefined : { opacity: 1, y: 0 }} transition={{ duration: 0.82, ease: [0.22, 1, 0.36, 1] }}>
           <p className="inline-flex rounded-[5px] bg-[#f1edff] px-3.5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-[#6941d9]">
             <Sparkles className="mr-2 size-3.5" />
             {t.hero.eyebrow}
@@ -172,9 +174,9 @@ export function HomeHero({
               </p>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="flex w-full items-center justify-center">
+        <motion.div className="flex w-full items-center justify-center" initial={reduceMotion ? false : { opacity: 0, x: 38, scale: 0.985 }} animate={reduceMotion ? undefined : { opacity: 1, x: 0, scale: 1 }} transition={{ duration: 0.95, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}>
           {cms.media.heroMediaType === "video" ? (
             <video
               key={cms.media.heroMediaUrl}
@@ -194,7 +196,7 @@ export function HomeHero({
               className="block h-auto w-full object-contain"
             />
           )}
-        </div>
+        </motion.div>
       </div>
 
       {videoOpen && (

@@ -35,4 +35,4 @@ USER appuser
 EXPOSE 8010
 
 # One process. The app keeps a small internal worker pool for a 2-core VPS.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1", "--limit-concurrency", "4", "--timeout-keep-alive", "20"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1", "--limit-concurrency", "2", "--timeout-keep-alive", "20"]

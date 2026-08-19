@@ -8,6 +8,7 @@ import { AdminService } from './admin.service';
 import { AdminCreatePlanDto, AdminUpdatePlanDto } from './dto/admin-plan.dto';
 import { AdminStripeSettingDto } from './dto/admin-stripe-setting.dto';
 import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
+import { AdminCreateLoginAccessDto, AdminSendLoginAccessDto } from './dto/admin-login-access.dto';
 import { FreePlanSettingDto } from './dto/free-plan-setting.dto';
 
 @Controller('admin')
@@ -35,6 +36,18 @@ export class AdminController {
   async userDetails(@Param('id') id: string) {
     const data = await this.adminService.getUserDetails(id);
     return { data };
+  }
+
+  @Post('users/:id/login-access')
+  async createLoginAccess(@Param('id') id: string, @Body() dto: AdminCreateLoginAccessDto) {
+    const data = await this.adminService.createUserLoginAccess(id, dto.expiresInHours);
+    return { message: 'Login access created', data };
+  }
+
+  @Post('users/:id/login-access/send')
+  async sendLoginAccess(@Param('id') id: string, @Body() dto: AdminSendLoginAccessDto) {
+    const data = await this.adminService.sendUserLoginEmail(id, dto);
+    return { message: 'Login email sent', data };
   }
 
   @Post('users/:id/impersonate')

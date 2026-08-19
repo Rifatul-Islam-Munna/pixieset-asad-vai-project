@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Check, Edit3, Euro, ExternalLink, FileImage, FileText, GripVertical, HardDrive, Images, Loader2, LogOut, Mail, Menu, MessageCircle, Newspaper, Package, PlusCircle, Search, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { BarChart3, Check, Clock3, Copy, Edit3, Euro, ExternalLink, FileImage, FileText, GripVertical, HardDrive, Images, Loader2, LogOut, Mail, Menu, MessageCircle, Newspaper, Package, PlusCircle, Search, Send, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
+  createAdminLoginAccess,
   createAdminPlan,
   createAdminUser,
   deleteAdminCollection,
@@ -15,6 +16,7 @@ import {
   getAdminUserDetails,
   impersonateAdminUser,
   reorderAdminPlans,
+  sendAdminLoginAccessEmail,
   updateAdminCollection,
   updateAdminPlan,
   updateAdminFreePlanSettings,
@@ -25,6 +27,7 @@ import {
   type AdminCollection,
   type AdminDashboardData,
   type AdminFreePlanSetting,
+  type AdminLoginAccess,
   type AdminPlan,
   type AdminStripeSetting,
   type AdminUser,
@@ -36,7 +39,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { mergeHomeCms, type BrandLogo, type FeatureCard, type FooterLink, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
+import { mergeHomeCms, type BrandLogo, type FeatureCard, type FooterLink, type GalleryTab, type HomeCmsData, type HomeContent, type HomeLanguage, type HomeMarqueeItem, type SeoMetaTag, type Testimonial } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 import { SupportChat } from "@/components/dashboard/support-chat";
 
@@ -94,6 +97,10 @@ const emptyPlanForm: PlanForm = {
   active: true,
 };
 
+type LoginValidityUnit = "hours" | "days";
+const defaultLoginEmailSubject = "Your secure login access";
+const defaultLoginEmailMessage = "Hello {{name}},\n\nUse this one-time PIN to sign in: {{pin}}\n\nOr open this direct login link:\n{{link}}\n\nThis access is valid until {{expiresAt}} and can only be used once. After signing in, you can change your password from your account settings.\n\nIf you did not expect this message, you can ignore it.";
+
 const planFeatures = [
   ["aiFaceSearch", "AI Face Search"],
   ["downloads", "Downloads"],
@@ -135,6 +142,13 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
   const [freePlanForm, setFreePlanForm] = useState<AdminFreePlanSetting>(
     initialData.freePlan ?? { storageGb: 3, monthlyEmails: 1000 },
   );
+  const [loginAccessUser, setLoginAccessUser] = useState<AdminUser | null>(null);
+  const [loginAccess, setLoginAccess] = useState<AdminLoginAccess | null>(null);
+  const [loginValidityValue, setLoginValidityValue] = useState("10");
+  const [loginValidityUnit, setLoginValidityUnit] = useState<LoginValidityUnit>("hours");
+  const [loginEmailSubject, setLoginEmailSubject] = useState(defaultLoginEmailSubject);
+  const [loginEmailMessage, setLoginEmailMessage] = useState(defaultLoginEmailMessage);
+  const [loginSendStatus, setLoginSendStatus] = useState<{ sent: boolean; reason?: string } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
@@ -277,6 +291,55 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
       gender: user.gender ?? "",
       planId: user.planId ?? "",
     });
+  };
+
+  const openLoginAccess = (user: AdminUser) => {
+    setLoginAccessUser(user);
+    setLoginAccess(null);
+    setLoginValidityValue("10");
+    setLoginValidityUnit("hours");
+    setLoginEmailSubject(defaultLoginEmailSubject);
+    setLoginEmailMessage(defaultLoginEmailMessage);
+    setLoginSendStatus(null);
+  };
+
+  const generateLoginAccess = () => {
+    if (!loginAccessUser) return;
+    const amount = Math.max(1, Number.parseInt(loginValidityValue, 10) || 1);
+    const expiresInHours = loginValidityUnit === "days" ? amount * 24 : amount;
+    startTransition(async () => {
+      try {
+        const data = await createAdminLoginAccess(loginAccessUser._id, expiresInHours);
+        setLoginAccess(data);
+        setLoginSendStatus(null);
+        toast.success(`Login access created for ${data.validity}. Email has not been sent yet.`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not create login access");
+      }
+    });
+  };
+
+  const sendLoginAccessEmail = () => {
+    if (!loginAccessUser || !loginAccess) return;
+    startTransition(async () => {
+      try {
+        const result = await sendAdminLoginAccessEmail(loginAccessUser._id, {
+          pin: loginAccess.pin,
+          link: loginAccess.link,
+          subject: loginEmailSubject,
+          message: loginEmailMessage,
+        });
+        setLoginSendStatus({ sent: result.sent, reason: result.reason });
+        toast.success(result.sent ? `Login email sent to ${result.email}` : "SMTP did not send the email");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not send login email");
+      }
+    });
+  };
+
+  const copyLoginValue = async (label: string, value: string) => {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copied`);
   };
 
   const removeUser = (id: string) => {
@@ -608,7 +671,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
             <AdminOverview data={initialData} />
           ) : tab === "users" ? (
             <div className="mt-6">
-              <UserTable users={filteredUsers} onView={viewUser} onEdit={editUser} onImpersonate={signInAsUser} onDelete={removeUser} busy={pending} />
+              <UserTable users={filteredUsers} onView={viewUser} onEdit={editUser} onImpersonate={signInAsUser} onSendLogin={openLoginAccess} onDelete={removeUser} busy={pending} />
             </div>
           ) : tab === "plans" ? (
             <PlanTable plans={filteredPlans} onEdit={editPlan} onDelete={removePlan} onOrderChange={updatePlanOrder} onReorder={reorderPlans} busy={pending} />
@@ -836,6 +899,49 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
           </form>
         </div>
       )}
+      {loginAccessUser && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/55 p-3 sm:p-4">
+          <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[760px] overflow-y-auto bg-white p-5 shadow-[0_30px_90px_rgba(0,0,0,.25)] sm:p-7">
+            <div className="flex items-start justify-between gap-4 border-b pb-5">
+              <div><p className="text-xs font-bold uppercase tracking-[.18em] text-[#6337d8]">Secure login access</p><h2 className="mt-2 text-2xl font-semibold">{loginAccessUser.email}</h2><p className="mt-1 text-sm text-[#777]">Create access first, review the email, then send it manually.</p></div>
+              <button type="button" onClick={() => { setLoginAccessUser(null); setLoginAccess(null); }} className="p-2 hover:bg-[#f3f3f3]" aria-label="Close login access"><X className="size-5" /></button>
+            </div>
+
+            <section className="mt-5 border border-[#e7e2ef] bg-[#faf9fc] p-4 sm:p-5">
+              <div className="flex items-center gap-2"><Clock3 className="size-4 text-[#6337d8]" /><p className="font-bold">Choose how long this login stays valid</p></div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]">
+                <Input type="number" min={1} max={loginValidityUnit === "days" ? 365 : 8760} value={loginValidityValue} onChange={(event) => setLoginValidityValue(event.target.value)} className="h-11 rounded-none bg-white" />
+                <select value={loginValidityUnit} onChange={(event) => setLoginValidityUnit(event.target.value as LoginValidityUnit)} className="h-11 border bg-white px-3 text-sm"><option value="hours">Hours</option><option value="days">Days</option></select>
+                <Button type="button" onClick={generateLoginAccess} disabled={pending} className="h-11 rounded-none bg-[#111] px-5 text-white hover:bg-[#222]">{pending ? <Loader2 className="size-4 animate-spin" /> : loginAccess ? "Regenerate access" : "Generate access"}</Button>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#777]">Examples: 19 hours, 1 day, 20 days. Maximum 365 days. Generating access does <b>not</b> send an email.</p>
+            </section>
+
+            {loginAccess && (
+              <section className="mt-5 grid gap-3 sm:grid-cols-2">
+                <button type="button" onClick={() => copyLoginValue("PIN", loginAccess.pin)} className="group border border-[#ddd5f2] bg-[#faf8ff] p-4 text-left transition hover:border-[#6337d8]">
+                  <span className="flex items-center justify-between text-xs font-bold uppercase tracking-[.15em] text-[#777]">One-time PIN <Copy className="size-4 text-[#6337d8]" /></span><span className="mt-2 block text-3xl font-bold tracking-[.25em]">{loginAccess.pin}</span><span className="mt-2 block text-xs text-[#6337d8]">Click to copy</span>
+                </button>
+                <button type="button" onClick={() => copyLoginValue("Login link", loginAccess.link)} className="group min-w-0 border border-[#e1e1e1] bg-[#fafafa] p-4 text-left transition hover:border-[#6337d8]">
+                  <span className="flex items-center justify-between text-xs font-bold uppercase tracking-[.15em] text-[#777]">Direct login link <Copy className="size-4 text-[#6337d8]" /></span><span className="mt-3 block truncate text-xs text-[#444]">{loginAccess.link}</span><span className="mt-2 block text-xs text-[#6337d8]">Click to copy full link</span>
+                </button>
+                <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border px-4 py-3 text-sm"><span><b>Valid for {loginAccess.validity}</b> · expires {new Date(loginAccess.expiresAt).toLocaleString()}</span><Button type="button" variant="outline" className="h-9 rounded-none" onClick={() => copyLoginValue("All login details", `Email: ${loginAccess.email}\nPIN: ${loginAccess.pin}\nLogin link: ${loginAccess.link}\nExpires: ${new Date(loginAccess.expiresAt).toLocaleString()}`)}><Copy className="size-4" /> Copy all</Button></div>
+              </section>
+            )}
+
+            <section className="mt-5 border-t pt-5">
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">Login email</p><p className="mt-1 text-xs text-[#777]">Edit the subject and message before sending. Nothing is sent automatically.</p></div><Button type="button" variant="outline" className="h-9 rounded-none" onClick={() => { setLoginEmailSubject(defaultLoginEmailSubject); setLoginEmailMessage(defaultLoginEmailMessage); }}>Reset email</Button></div>
+              <div className="mt-4 grid gap-4">
+                <InputField label="Email subject" value={loginEmailSubject} onChange={setLoginEmailSubject} />
+                <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Email message</span><Textarea value={loginEmailMessage} onChange={(event) => setLoginEmailMessage(event.target.value)} className="min-h-[220px] rounded-none border-[#ddd] bg-white text-sm leading-6" /></label>
+                <p className="text-xs leading-5 text-[#777]">Available placeholders: <code>{"{{name}}"}</code>, <code>{"{{email}}"}</code>, <code>{"{{pin}}"}</code>, <code>{"{{link}}"}</code>, <code>{"{{expiresAt}}"}</code>.</p>
+              </div>
+              {loginSendStatus && <p className={cn("mt-4 text-sm font-semibold", loginSendStatus.sent ? "text-emerald-700" : "text-amber-700")}>{loginSendStatus.sent ? "Email sent successfully." : `SMTP did not send the email${loginSendStatus.reason ? `: ${loginSendStatus.reason}` : "."}`}</p>}
+              <div className="mt-5 flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" className="rounded-none" onClick={() => { setLoginAccessUser(null); setLoginAccess(null); }}>Close</Button><Button type="button" onClick={sendLoginAccessEmail} disabled={pending || !loginAccess || !loginEmailSubject.trim() || !loginEmailMessage.trim()} className="rounded-none bg-[#6337d8] px-6 text-white hover:bg-[#5430bd]">{pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send email</Button></div>
+            </section>
+          </div>
+        </div>
+      )}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -920,11 +1026,12 @@ function InputField({ label, value, onChange, required, type = "text" }: {
   );
 }
 
-function UserTable({ users, onView, onEdit, onImpersonate, onDelete, busy }: {
+function UserTable({ users, onView, onEdit, onImpersonate, onSendLogin, onDelete, busy }: {
   users: AdminUser[];
   onView: (user: AdminUser) => void;
   onEdit: (user: AdminUser) => void;
   onImpersonate: (user: AdminUser) => void;
+  onSendLogin: (user: AdminUser) => void;
   onDelete: (id: string) => void;
   busy: boolean;
 }) {
@@ -960,6 +1067,11 @@ function UserTable({ users, onView, onEdit, onImpersonate, onDelete, busy }: {
                   {user.role !== "admin" && (
                     <button className="p-2 text-[#6337d8] hover:bg-[#f3efff]" onClick={() => onImpersonate(user)} disabled={busy} aria-label="Sign in as user" title="Sign in as user">
                       <ExternalLink className="size-4" />
+                    </button>
+                  )}
+                  {user.role !== "admin" && user.email && (
+                    <button className="p-2 text-[#6337d8] hover:bg-[#f3efff]" onClick={() => onSendLogin(user)} disabled={busy} aria-label="Create secure login access" title="Create PIN + login link">
+                      <Mail className="size-4" />
                     </button>
                   )}
                   <button className="p-2 hover:bg-[#f3f3f3]" onClick={() => onEdit(user)} disabled={busy} aria-label="Edit user">
@@ -1431,6 +1543,11 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
     logos[index] = { ...logos[index], ...value };
     patch("brandLogos", logos);
   };
+  const patchMarqueeItem = (index: number, value: Partial<HomeMarqueeItem>) => {
+    const items = [...content.marquee.items];
+    items[index] = { ...items[index], ...value };
+    patchObject("marquee", { items });
+  };
   const patchFooterColumn = (index: number, value: Partial<HomeContent["footer"]["columns"][number]>) => {
     const columns = [...content.footer.columns];
     columns[index] = { ...columns[index], ...value };
@@ -1529,6 +1646,21 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
         </div>
       </CmsSection>
 
+      <CmsSection eyebrow="Hero add-on" title="Single-line marquee under hero" defaultOpen>
+        <CmsRepeater title="Marquee content — text, images/GIFs, logos and videos can be mixed">
+          <label className="flex items-center justify-between border bg-white px-4 py-3 text-sm font-semibold"><span>Show marquee</span><input type="checkbox" checked={content.marquee.enabled} onChange={(event) => patchObject("marquee", { enabled: event.target.checked })} /></label>
+          <CmsNumberInput label="Scroll duration (seconds)" value={content.marquee.durationSeconds} min={8} max={120} onCommit={(durationSeconds) => patchObject("marquee", { durationSeconds })} />
+          {content.marquee.items.map((item, index) => (
+            <div key={item.id || index} className="grid gap-3 border bg-[#fafaf8] p-4 md:grid-cols-[150px_1fr_auto]">
+              <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Item type</span><select value={item.type} onChange={(event) => patchMarqueeItem(index, { type: event.target.value as HomeMarqueeItem["type"] })} className="h-11 border bg-white px-3 text-sm"><option value="text">Text</option><option value="image">Image / GIF</option><option value="video">Video</option><option value="logo">Logo</option></select></label>
+              {item.type === "text" ? <CmsInput label={`Text ${index + 1}`} value={item.text} onChange={(value) => patchMarqueeItem(index, { text: value })} /> : <CmsImageInput label={`${item.type === "video" ? "Video" : item.type === "logo" ? "Logo" : "Image / GIF"} ${index + 1}`} value={item.image} onChange={(image) => patchMarqueeItem(index, { image })} onUpload={onUpload} busy={busy} accept={item.type === "video" ? "video/mp4,video/webm,video/ogg,video/quicktime" : "image/*,.gif"} mediaType={item.type === "video" ? "video" : "image"} />}
+              <Button type="button" variant="outline" className="self-end rounded-none" onClick={() => patchObject("marquee", { items: content.marquee.items.filter((_, i) => i !== index) })}><Trash2 className="size-4" /> Remove</Button>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2"><Button type="button" className="rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patchObject("marquee", { items: [...content.marquee.items, { id: `text-${Date.now()}`, type: "text", text: "New marquee text", image: "" }] })}><PlusCircle className="size-4" /> Add text</Button><Button type="button" variant="outline" className="rounded-none" onClick={() => patchObject("marquee", { items: [...content.marquee.items, { id: `image-${Date.now()}`, type: "image", text: "", image: "" }] })}><PlusCircle className="size-4" /> Add image / GIF</Button><Button type="button" variant="outline" className="rounded-none" onClick={() => patchObject("marquee", { items: [...content.marquee.items, { id: `video-${Date.now()}`, type: "video", text: "", image: "" }] })}><PlusCircle className="size-4" /> Add video</Button><Button type="button" variant="outline" className="rounded-none" onClick={() => patchObject("marquee", { items: [...content.marquee.items, { id: `logo-${Date.now()}`, type: "logo", text: "", image: "" }] })}><PlusCircle className="size-4" /> Add logo</Button></div>
+        </CmsRepeater>
+      </CmsSection>
+
       <CmsSection eyebrow="Section 3" title="Feature strip">
         <div className="grid gap-4">
           {content.featureCards.map((card, index) => <div key={index} className="grid gap-3 border bg-[#fafaf8] p-4 md:grid-cols-3"><CmsInput label={`Feature ${index + 1} title`} value={card.title} onChange={(title) => patchFeature(index, { title })} /><CmsTextarea label="Description" value={card.text} onChange={(text) => patchFeature(index, { text })} /><CmsInput label="Icon name" value={card.icon} onChange={(icon) => patchFeature(index, { icon })} /></div>)}
@@ -1543,15 +1675,15 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
             <CmsTextarea label="Heading" value={content.clientGallery.title} onChange={(title) => patchObject("clientGallery", { title })} />
             <CmsTextarea label="Description" value={content.clientGallery.subtitle} onChange={(subtitle) => patchObject("clientGallery", { subtitle })} />
           </CmsRepeater>
-          <CmsRepeater title="Tabs and images">
+          <CmsRepeater title="Tabs and media">
             {content.clientGallery.tabs.map((tab, index) => (
               <div key={`${tab.value}-${index}`} className="grid gap-3 rounded-[10px] border border-[#e8e3ef] bg-white p-4">
                 <CmsInput label={`Tab ${index + 1} label`} value={tab.label} onChange={(label) => patchClientGalleryTab(index, { label })} />
-                <CmsImageInput label="Tab image" value={tab.image} onChange={(image) => patchClientGalleryTab(index, { image })} onUpload={onUpload} busy={busy} />
+                <CmsImageInput label="Tab media" value={tab.image} onChange={(image) => patchClientGalleryTab(index, { image })} onUpload={onUpload} busy={busy} accept="image/*,.gif,video/mp4,video/webm,video/ogg,video/quicktime" mediaType={tab.mediaType ?? "image"} onMediaTypeChange={(mediaType) => patchClientGalleryTab(index, { mediaType })} onUploaded={(image, mediaType) => patchClientGalleryTab(index, { image, mediaType })} />
                 <Button type="button" variant="outline" className="w-fit rounded-none" onClick={() => patchObject("clientGallery", { tabs: content.clientGallery.tabs.filter((_, i) => i !== index) })}><Trash2 className="size-4" /> Remove tab</Button>
               </div>
             ))}
-            <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patchObject("clientGallery", { tabs: [...content.clientGallery.tabs, { value: `tab-${Date.now()}`, label: "New tab", image: "" }] })}><PlusCircle className="size-4" /> Add tab</Button>
+            <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patchObject("clientGallery", { tabs: [...content.clientGallery.tabs, { value: `tab-${Date.now()}`, label: "New tab", image: "", mediaType: "image" }] })}><PlusCircle className="size-4" /> Add tab</Button>
           </CmsRepeater>
         </div>
       </CmsSection>
@@ -1563,15 +1695,15 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
             <CmsTextarea label="Heading" value={content.photographerTypes.title} onChange={(title) => patchObject("photographerTypes", { title })} />
             <CmsTextarea label="Description" value={content.photographerTypes.subtitle} onChange={(subtitle) => patchObject("photographerTypes", { subtitle })} />
           </CmsRepeater>
-          <CmsRepeater title="Photographer type tabs and images">
+          <CmsRepeater title="Photographer type tabs and media">
             {content.photographerTypes.tabs.map((tab, index) => (
               <div key={`${tab.value}-${index}`} className="grid gap-3 rounded-[10px] border border-[#e8e3ef] bg-white p-4">
                 <CmsInput label={`Tab ${index + 1} label`} value={tab.label} onChange={(label) => patchPhotographerTypeTab(index, { label })} />
-                <CmsImageInput label="Tab image" value={tab.image} onChange={(image) => patchPhotographerTypeTab(index, { image })} onUpload={onUpload} busy={busy} />
+                <CmsImageInput label="Tab media" value={tab.image} onChange={(image) => patchPhotographerTypeTab(index, { image })} onUpload={onUpload} busy={busy} accept="image/*,.gif,video/mp4,video/webm,video/ogg,video/quicktime" mediaType={tab.mediaType ?? "image"} onMediaTypeChange={(mediaType) => patchPhotographerTypeTab(index, { mediaType })} onUploaded={(image, mediaType) => patchPhotographerTypeTab(index, { image, mediaType })} />
                 <Button type="button" variant="outline" className="w-fit rounded-none" onClick={() => patchObject("photographerTypes", { tabs: content.photographerTypes.tabs.filter((_, i) => i !== index) })}><Trash2 className="size-4" /> Remove tab</Button>
               </div>
             ))}
-            <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patchObject("photographerTypes", { tabs: [...content.photographerTypes.tabs, { value: `type-${Date.now()}`, label: "New type", image: "" }] })}><PlusCircle className="size-4" /> Add photographer type</Button>
+            <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={() => patchObject("photographerTypes", { tabs: [...content.photographerTypes.tabs, { value: `type-${Date.now()}`, label: "New type", image: "", mediaType: "image" }] })}><PlusCircle className="size-4" /> Add photographer type</Button>
           </CmsRepeater>
         </div>
       </CmsSection>
@@ -1593,15 +1725,15 @@ function HomeCmsPanel({ form, lang, setForm, setLang, onUpload, onHeroUpload, on
           <CmsRepeater title="Statistics">
             {content.stats.map((stat, index) => <div key={index} className="grid grid-cols-2 gap-3"><CmsInput label={`Stat ${index + 1} value`} value={stat.value} onChange={(value) => { const stats = [...content.stats]; stats[index] = { ...stats[index], value }; patch("stats", stats); }} /><CmsInput label="Label" value={stat.label} onChange={(label) => { const stats = [...content.stats]; stats[index] = { ...stats[index], label }; patch("stats", stats); }} /></div>)}
           </CmsRepeater>
-          <CmsRepeater title="Five gallery showcase images">
-            <p className="rounded-[8px] bg-[#f5f1ff] px-3 py-2 text-xs leading-5 text-[#5f35c8]">These five slots map directly to the five images shown in the homepage gallery showcase. Each image can open its own gallery URL.</p>
+          <CmsRepeater title="Five gallery showcase media slots">
+            <p className="rounded-[8px] bg-[#f5f1ff] px-3 py-2 text-xs leading-5 text-[#5f35c8]">Each slot can be an image, animated GIF, or video and maps directly to the homepage gallery showcase. Each item can open its own gallery URL.</p>
             {content.gallery.tabs.slice(0, 5).map((tab, index) => (
               <div key={index} className="grid gap-3 rounded-[10px] border border-[#e8e3ef] bg-white p-4">
-                <div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-[#6337d8]">Image slot {index + 1}</p><span className="text-xs text-[#777]">{index === 0 ? "Main center card" : index === 1 ? "Left top" : index === 2 ? "Left bottom" : index === 3 ? "Right top" : "Right bottom"}</span></div>
-                <CmsInput label="Image label" value={tab.label} onChange={(label) => patchGalleryImage(index, { label })} />
+                <div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-[#6337d8]">Media slot {index + 1}</p><span className="text-xs text-[#777]">{index === 0 ? "Main center card" : index === 1 ? "Left top" : index === 2 ? "Left bottom" : index === 3 ? "Right top" : "Right bottom"}</span></div>
+                <CmsInput label="Media label" value={tab.label} onChange={(label) => patchGalleryImage(index, { label })} />
                 <CmsInput label="Gallery title" value={tab.title ?? ""} onChange={(title) => patchGalleryImage(index, { title })} />
                 <CmsInput label="Full gallery URL (example: https://example.com/collection/name/gallery)" value={tab.href ?? ""} onChange={(href) => patchGalleryImage(index, { href })} />
-                <CmsImageInput label="Upload image" value={tab.image} onChange={(image) => patchGalleryImage(index, { image })} onUpload={onUpload} busy={busy} />
+                <CmsImageInput label="Upload media" value={tab.image} onChange={(image) => patchGalleryImage(index, { image })} onUpload={onUpload} busy={busy} accept="image/*,.gif,video/mp4,video/webm,video/ogg,video/quicktime" mediaType={tab.mediaType ?? "image"} onMediaTypeChange={(mediaType) => patchGalleryImage(index, { mediaType })} onUploaded={(image, mediaType) => patchGalleryImage(index, { image, mediaType })} />
               </div>
             ))}
           </CmsRepeater>
@@ -1716,7 +1848,7 @@ function CmsNumberInput({ label, value, min, max, onCommit }: {
   );
 }
 
-function CmsImageInput({ label, value, onChange, onUpload, busy, wide, accept = "image/*" }: {
+function CmsImageInput({ label, value, onChange, onUpload, busy, wide, accept = "image/*", mediaType = "image", onMediaTypeChange, onUploaded }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -1724,12 +1856,18 @@ function CmsImageInput({ label, value, onChange, onUpload, busy, wide, accept = 
   busy: boolean;
   wide?: boolean;
   accept?: string;
+  mediaType?: "image" | "video";
+  onMediaTypeChange?: (value: "image" | "video") => void;
+  onUploaded?: (url: string, mediaType: "image" | "video") => void;
 }) {
   const [uploading, setUploading] = useState(false);
 
   return (
     <div className={cn("grid gap-2", wide && "md:col-span-2")}>
-      <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">{label}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">{label}</span>
+        {onMediaTypeChange && <select value={mediaType} onChange={(event) => onMediaTypeChange(event.target.value as "image" | "video")} className="h-8 border bg-white px-2 text-xs font-semibold"><option value="image">Image / GIF</option><option value="video">Video</option></select>}
+      </div>
       <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
         <Input
           value={value}
@@ -1748,9 +1886,11 @@ function CmsImageInput({ label, value, onChange, onUpload, busy, wide, accept = 
               if (!file) return;
               setUploading(true);
               try {
+                const nextMediaType = file.type.startsWith("video/") ? "video" : "image";
                 const url = await onUpload(file);
-                onChange(url);
-                toast.success("Image uploaded");
+                if (onUploaded) onUploaded(url, nextMediaType);
+                else onChange(url);
+                toast.success(nextMediaType === "video" ? "Video uploaded" : "Image / GIF uploaded");
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "Upload failed");
               } finally {
@@ -1761,7 +1901,7 @@ function CmsImageInput({ label, value, onChange, onUpload, busy, wide, accept = 
           />
         </label>
       </div>
-      {value && <img src={value} alt={label} className="h-24 w-full max-w-[260px] border bg-white object-cover p-1" />}
+      {value && (mediaType === "video" ? <video src={value} className="h-28 w-full max-w-[320px] border bg-black object-contain" controls muted playsInline /> : <img src={value} alt={label} className="h-24 w-full max-w-[260px] border bg-white object-cover p-1" />)}
     </div>
   );
 }

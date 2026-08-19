@@ -22,10 +22,11 @@ export class StoreOrderCreateService {
   async checkout(identifier: string, body: any, siteSlug?: string) {
     const priced = await this.pricing.price(identifier, body, siteSlug);
     const { resolved, customer } = priced;
+    const printRequestMode = Boolean(body.printRequest);
     if (!customer.email || !customer.email.includes('@')) {
       throw new BadRequestException('A valid email is required');
     }
-    if (resolved.config.requireProfessionalInfo && !priced.professionalInfo?.company) {
+    if (!printRequestMode && resolved.config.requireProfessionalInfo && !priced.professionalInfo?.company) {
       throw new BadRequestException('Professional information is required');
     }
     const savedCustomer = await this.customerModel.findOneAndUpdate(
@@ -40,9 +41,11 @@ export class StoreOrderCreateService {
       },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
-    const source = body.checkoutSource === 'public-gallery' || body.checkoutSource === 'buy-photo'
-      ? body.checkoutSource
-      : 'public-store';
+    const source = printRequestMode
+      ? 'print-request'
+      : body.checkoutSource === 'public-gallery' || body.checkoutSource === 'buy-photo'
+        ? body.checkoutSource
+        : 'public-store';
     const order = await this.orderModel.create({
       userId: resolved.userId,
       collectionId: resolved.collection._id.toString(),
@@ -61,7 +64,7 @@ export class StoreOrderCreateService {
       discount: priced.discount,
       total: priced.total,
       status: 'pending',
-      paymentStatus: 'unpaid',
+      paymentStatus: printRequestMode ? 'not-required' : 'unpaid',
       stripeAccountMode: 'owner',
       checkoutSource: source,
       note: String(body.note ?? ''),
@@ -75,6 +78,17 @@ export class StoreOrderCreateService {
       }, customer.email),
     ]);
     order.activityLogIds = logs.map((entry) => entry?._id?.toString()).filter(Boolean) as string[];
+    if (printRequestMode) {
+      await order.save();
+      return {
+        order: order.toObject(),
+        paymentUnavailable: false,
+        checkoutUrl: null,
+        sessionId: null,
+        printRequest: true,
+        completed: true,
+      };
+    }
     const session = await this.stripe.createCheckoutSession(priced, order, body);
     order.stripeCheckoutSessionId = session.id;
     await order.save();
@@ -83,6 +97,8 @@ export class StoreOrderCreateService {
       paymentUnavailable: false,
       checkoutUrl: session.url,
       sessionId: session.id,
+      printRequest: false,
+      completed: false,
     };
   }
 }

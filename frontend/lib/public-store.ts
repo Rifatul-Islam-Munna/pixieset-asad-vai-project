@@ -68,6 +68,8 @@ export type PublicStoreData = {
   };
   store?: {
     enabled?: boolean;
+    paidStoreEnabled?: boolean;
+    printRequestsEnabled?: boolean;
     priceSheetId?: string;
     showPrintStoreNav?: boolean;
     showBuyPhotoButton?: boolean;

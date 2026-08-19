@@ -356,3 +356,9 @@ body {
   margin-top: 0 !important;
   transform: none !important;
 }
+/* Refined homepage Greek typography and logo reveal. */
+.home-greek { font-family: var(--font-greek-sans), sans-serif; }
+.home-greek h1, .home-greek h2, .home-greek h3, .home-greek [data-display-type="serif"] { font-family: var(--font-greek-serif), serif; letter-spacing: -0.025em; }
+.home-logo-reveal { opacity: 0; transform: translateY(18px) scale(.94); transform-origin: center; }
+.home-logo-reveal[data-home-visible="true"] { opacity: 1; transform: translateY(0) scale(1); }
+@media (prefers-reduced-motion: reduce) { .home-logo-reveal { opacity: 1 !important; transform: none !important; } }

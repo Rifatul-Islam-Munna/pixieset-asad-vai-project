@@ -1,10 +1,12 @@
 "use client";
 
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Printer, Save } from "lucide-react";
+import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 
 export type StoreSettingsForm = {
   enabled: boolean;
+  printRequestsEnabled: boolean;
   priceSheetId: string;
   showPrintStoreNav: boolean;
   showBuyPhotoButton: boolean;
@@ -26,10 +28,12 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
   busy: boolean;
   priceSheets?: StoreSheetSummary[];
   onChange: (patch: Partial<StoreSettingsForm>) => void;
-  onSave: () => void;
+  onSave: (patch?: Partial<StoreSettingsForm>) => void;
 }) {
   const sheets = priceSheets ?? [];
   const multiStore = usePlanFeatureAccess("multipleGalleryStores");
+  const homepage = useHomepageSettings().query.data?.data;
+  const siteName = homepage?.brandName?.trim() || homepage?.slug?.trim() || "your website";
   return (
     <section className="mt-6 max-w-[760px] bg-white p-4 sm:p-6 md:p-8">
       <h2 className="text-2xl font-medium">Store Settings</h2>
@@ -41,7 +45,7 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
       <div className="mt-8 bg-[#eef7f9] p-6">
         <p className="font-bold">Activate Store</p>
         <p className="mt-4 text-sm leading-7 text-[#222]">
-          Setup Nikoset Store to start selling prints, digital downloads, and more directly from your collections.
+          Set up {siteName} Store to sell prints, digital downloads, and more from this collection.
         </p>
       </div>
       <div className="mt-12 grid gap-10">
@@ -53,6 +57,25 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
           </span>
           <span className="block text-sm leading-6 text-[#666]">
             Allow visitors to purchase products for photos from this collection.
+          </span>
+        </label>
+        <label className="grid cursor-pointer gap-3 border border-[#d9eee9] bg-[#f4fbf9] p-5">
+          <span className="flex items-center gap-2 text-sm font-bold"><Printer className="size-4 text-[#159d8b]" /> Free Print Requests</span>
+          <span className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={form.printRequestsEnabled}
+              onChange={(event) => {
+                const printRequestsEnabled = event.target.checked;
+                onChange({ printRequestsEnabled });
+                onSave({ printRequestsEnabled });
+              }}
+              className="size-5 accent-[#22bda7]"
+            />
+            <span>{form.printRequestsEnabled ? "On" : "Off"}</span>
+          </span>
+          <span className="block text-sm leading-6 text-[#56635f]">
+            Adds a Print Request button to each photo. Visitors adjust the photo and send a free request with notes. Store products and prices stay unchanged.
           </span>
         </label>
         <label className="block text-sm font-medium">
@@ -100,7 +123,7 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
           <span className="mt-3 block text-sm font-normal text-[#666]">Leave at 0 when there is no minimum order amount.</span>
         </label>
       </div>
-      <button className="mt-8 inline-flex h-11 items-center gap-2 bg-[#22bda7] px-6 text-sm font-semibold text-white disabled:opacity-50" disabled={busy} onClick={onSave}>
+      <button className="mt-8 inline-flex h-11 items-center gap-2 bg-[#22bda7] px-6 text-sm font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => onSave()}>
         {busy ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save settings
       </button>
     </section>

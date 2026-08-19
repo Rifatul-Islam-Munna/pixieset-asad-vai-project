@@ -397,7 +397,7 @@ function CropSlider({ label, min, max, step, value, onChange }: { label: string;
   );
 }
 
-function CropCanvas({
+export function CropCanvas({
   crop,
   imageUrl,
   alt,
@@ -459,7 +459,7 @@ function cropAspectNumber(value: string) {
   return width > 0 && height > 0 ? width / height : 4 / 3;
 }
 
-function defaultCrop(aspectRatio: string): StoreCrop {
+export function defaultCrop(aspectRatio = "4:3"): StoreCrop {
   return { x: 0, y: 0, width: 100, height: 100, zoom: 1, rotation: 0, aspectRatio, fit: "contain" };
 }
 

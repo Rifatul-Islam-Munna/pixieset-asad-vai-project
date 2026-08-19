@@ -28,6 +28,18 @@ export const loginUser = async (phoneNumber: string, password: string) => {
 
 }
 
+export const loginWithPin = async (login: string, pin: string) => {
+    const [data, error] = await PostRequestAxios<userData>("/user/login-with-pin", { login, pin });
+    if (data) { const cookie = await cookies(); cookie.set("access_token", data.access_token || "", cookieOptions); cookie.set("user", JSON.stringify(data.user) || "", cookieOptions); }
+    return { data, error };
+}
+
+export const loginWithMagic = async (token: string) => {
+    const [data, error] = await PostRequestAxios<userData>("/user/login-with-link", { token });
+    if (data) { const cookie = await cookies(); cookie.set("access_token", data.access_token || "", cookieOptions); cookie.set("user", JSON.stringify(data.user) || "", cookieOptions); }
+    return { data, error };
+}
+
 export const registerUser = async (payload: {
     name: string;
     phoneNumber: string;

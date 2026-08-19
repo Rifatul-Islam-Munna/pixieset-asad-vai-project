@@ -40,6 +40,20 @@ export type AdminUser = {
   collections?: AdminCollection[];
 };
 
+export type AdminLoginAccess = {
+  email: string;
+  pin: string;
+  link: string;
+  expiresAt: string;
+  expiresInHours: number;
+  validity: string;
+  subject: string;
+  message: string;
+  sent: boolean;
+  skipped?: boolean;
+  reason?: string;
+};
+
 export type AdminCollection = {
   _id: string;
   userId: string;
@@ -210,6 +224,20 @@ export async function deleteAdminUser(id: string) {
   const data = await adminRequest<AdminUser>(`/admin/users/${id}`, { method: "DELETE" });
   revalidatePath("/admin");
   return data;
+}
+
+export async function createAdminLoginAccess(id: string, expiresInHours: number) {
+  return adminRequest<AdminLoginAccess>(`/admin/users/${id}/login-access`, {
+    method: "POST",
+    body: JSON.stringify({ expiresInHours }),
+  });
+}
+
+export async function sendAdminLoginAccessEmail(id: string, payload: Pick<AdminLoginAccess, "pin" | "link" | "subject" | "message">) {
+  return adminRequest<{ email: string; expiresAt: string; sent: boolean; skipped?: boolean; reason?: string }>(`/admin/users/${id}/login-access/send`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getAdminUserDetails(id: string) {

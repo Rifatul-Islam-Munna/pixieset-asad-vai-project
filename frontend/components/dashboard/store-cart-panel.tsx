@@ -19,6 +19,7 @@ export function StoreCartPanel({
   data,
   identifier,
   checkoutHref,
+  printRequestMode = false,
   onClose,
   onChange,
   onRemove,
@@ -29,6 +30,7 @@ export function StoreCartPanel({
   data?: PublicStoreData | null;
   identifier: string;
   checkoutHref?: string;
+  printRequestMode?: boolean;
   onClose: () => void;
   onChange: (itemId: string, patch: Partial<PublicStoreCartItem>) => void;
   onRemove: (itemId: string) => void;
@@ -39,8 +41,8 @@ export function StoreCartPanel({
   const currency = data?.store?.currency ?? "EUR";
   const cropItem = items.find((item) => item.id === cropItemId);
   const subtotal = useMemo(
-    () => items.reduce((sum, item) => sum + cartItemPrice(item) * item.quantity, 0),
-    [items],
+    () => printRequestMode ? 0 : items.reduce((sum, item) => sum + cartItemPrice(item) * item.quantity, 0),
+    [items, printRequestMode],
   );
   const count = items.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -70,6 +72,7 @@ export function StoreCartPanel({
             items={items}
             data={data}
             identifier={identifier}
+            printRequestMode={printRequestMode}
             onBack={() => setOrderOpen(false)}
             onClear={onClear}
           />
@@ -103,7 +106,7 @@ export function StoreCartPanel({
                         <span className="w-8 text-center text-xs">{item.quantity}</span>
                         <button className="flex size-9 items-center justify-center" onClick={() => onChange(item.id, { quantity: Math.min(99, item.quantity + 1) })}><Plus className="size-3" /></button>
                       </div>
-                      <span className="text-sm font-medium">{formatMoney(cartItemPrice(item) * item.quantity, currency)}</span>
+                      <span className="text-sm font-medium">{printRequestMode ? "Free" : formatMoney(cartItemPrice(item) * item.quantity, currency)}</span>
                     </div>
                     {item.crop && (
                       <button className="mt-3 text-xs font-medium underline underline-offset-4" onClick={() => setCropItemId(item.id)}>Edit crop</button>
@@ -113,7 +116,7 @@ export function StoreCartPanel({
               ))}
             </div>
             <footer className="shrink-0 border-t px-4 py-5 md:px-7">
-              <div className="flex items-center justify-between text-base font-semibold"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
+              <div className="flex items-center justify-between text-base font-semibold"><span>{printRequestMode ? "Print request" : "Subtotal"}</span><span>{printRequestMode ? "Free" : formatMoney(subtotal, currency)}</span></div>
               <button
                 className="mt-4 h-12 w-full bg-[#303030] text-sm font-semibold text-white"
                 onClick={() => {
@@ -121,7 +124,7 @@ export function StoreCartPanel({
                   else setOrderOpen(true);
                 }}
               >
-                Checkout
+                {printRequestMode ? "Continue to print request" : "Checkout"}
               </button>
               <button className="mt-3 h-10 w-full text-xs font-medium text-[#777]" onClick={onClear}>Clear cart</button>
             </footer>

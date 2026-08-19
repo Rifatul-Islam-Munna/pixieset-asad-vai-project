@@ -28,6 +28,15 @@ export type PresetDesignSettings = {
   coverButtonFontSizePx?: number;
   galleryTitleFontSizePx?: number;
   galleryNavigationFontSizePx?: number;
+  coverSmallTitleColor?: string;
+  coverTitleColor?: string;
+  coverDateColor?: string;
+  coverButtonColor?: string;
+  galleryTitleColor?: string;
+  galleryNavigationColor?: string;
+  textColor?: string;
+  coverFocalX?: number;
+  coverFocalY?: number;
   color: string;
   gridStyle: "Vertical" | "Horizontal";
   thumbnailSize: "Regular" | "Large";
@@ -255,7 +264,16 @@ const samplePhotos = [
 
 const defaultFooterText = "";
 
-const defaultEmailTemplates: EmailTemplateItem[] = [];
+export const baseEmailTemplates: EmailTemplateItem[] = [
+  { id: "base-gallery-ready", name: "Gallery Ready", subject: "Your photos are ready", previewText: "Your gallery is ready to view.", title: "Your photos are ready", message: "Your gallery is ready. We hope you love reliving these moments. Use the button below to view and download your photos.", buttonText: "View Gallery", buttonLink: "Collection URL", buttonColor: "#1C1C1C", footerText: "Thank you for trusting us with your memories.", image: "", updatedAt: "Built in" },
+  { id: "base-friendly-reminder", name: "Friendly Reminder", subject: "A quick reminder about your gallery", previewText: "Your gallery is still waiting for you.", title: "Your gallery is waiting", message: "Just a friendly reminder that your photo gallery is ready. Open it anytime to view your images, choose favorites, and download the moments you love.", buttonText: "Open Gallery", buttonLink: "Collection URL", buttonColor: "#6F57D9", footerText: "Questions? Reply to this email and we’ll be happy to help.", image: "", updatedAt: "Built in" },
+  { id: "base-thank-you", name: "Thank You", subject: "Thank you — your gallery is here", previewText: "A small thank-you and your finished gallery.", title: "Thank you", message: "Thank you for choosing us to photograph your story. Your finished gallery is now available and ready to share with the people you love.", buttonText: "See Your Photos", buttonLink: "Collection URL", buttonColor: "#B48A58", footerText: "With gratitude, your photography team.", image: "", updatedAt: "Built in" },
+];
+
+const mergeEmailTemplates = (templates: EmailTemplateItem[]) => [
+  ...baseEmailTemplates.map((builtIn) => templates.find((item) => item.id === builtIn.id) ?? builtIn),
+  ...templates.filter((item) => !baseEmailTemplates.some((builtIn) => builtIn.id === item.id)),
+];
 
 const emptyPresetGeneral: PresetGeneralSettings = {
   collectionTags: "",
@@ -290,6 +308,15 @@ const emptyPresetDesign: PresetDesignSettings = {
   coverButtonFontSizePx: 12,
   galleryTitleFontSizePx: 16,
   galleryNavigationFontSizePx: 12,
+  coverSmallTitleColor: "#ffffff",
+  coverTitleColor: "#ffffff",
+  coverDateColor: "#ffffff",
+  coverButtonColor: "#ffffff",
+  galleryTitleColor: "#202326",
+  galleryNavigationColor: "#6b7280",
+  textColor: "#ffffff",
+  coverFocalX: 50,
+  coverFocalY: 50,
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -412,7 +439,7 @@ const defaultPresetItems: PresetItem[] = [
 ];
 
 const readEmailTemplates = () => {
-  return defaultEmailTemplates;
+  return mergeEmailTemplates([]);
 };
 
 const writeEmailTemplates = (templates: EmailTemplateItem[]) => {
@@ -842,6 +869,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
       const emailTemplates = settings
         .filter((setting) => setting.type === "email-template")
         .map((setting) => setting.data as EmailTemplateItem);
+      const combinedEmailTemplates = mergeEmailTemplates(emailTemplates);
       const presetItems = settings
         .filter((setting) => setting.type === "preset")
         .map((setting) => {
@@ -876,8 +904,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
       return {
         watermarkItems: watermarks.length ? watermarks : state.watermarkItems,
         activeWatermarkId: watermarks[0]?.id ?? state.activeWatermarkId,
-        emailTemplates: emailTemplates.length ? emailTemplates : state.emailTemplates,
-        activeEmailTemplateId: emailTemplates[0]?.id ?? state.activeEmailTemplateId,
+        emailTemplates: combinedEmailTemplates,
+        activeEmailTemplateId: combinedEmailTemplates[0]?.id ?? state.activeEmailTemplateId,
         presetItems: combinedPresets,
         activePresetId: activePreset?.id ?? state.activePresetId,
         presetName: activePreset?.name ?? state.presetName,

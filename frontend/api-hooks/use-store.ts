@@ -116,7 +116,8 @@ export type StoreOrderRecord = {
   discount: number;
   total: number;
   status: StoreOrderStatus;
-  paymentStatus: "unpaid" | "paid" | "refunded";
+  paymentStatus: "unpaid" | "paid" | "refunded" | "not-required";
+  checkoutSource?: "public-gallery" | "public-store" | "buy-photo" | "print-request";
   trackingNumber?: string;
   trackingUrl?: string;
   note?: string;

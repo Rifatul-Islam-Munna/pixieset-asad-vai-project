@@ -1,4 +1,4 @@
-﻿export type HomeLanguage = "en" | "gr";
+export type HomeLanguage = "en" | "gr";
 
 export type HomeCmsData = {
   seo: SiteSeo;
@@ -89,6 +89,8 @@ export type AuthCms = {
   registerImageSide: "left" | "right";
 };
 
+export type HomeMarqueeItem = { id: string; type: "text" | "logo" | "image" | "video"; text: string; image: string; url?: string };
+
 export type HomeContent = {
   nav: {
     brand: string;
@@ -111,6 +113,11 @@ export type HomeContent = {
     videoUrl: string;
     ratingText: string;
     avatarImages: string[];
+  };
+  marquee: {
+    enabled: boolean;
+    durationSeconds: number;
+    items: HomeMarqueeItem[];
   };
   gallery: {
     title: string;
@@ -190,6 +197,7 @@ export type GalleryTab = {
   value: string;
   label: string;
   image: string;
+  mediaType?: "image" | "video";
   href?: string;
   title?: string;
   icon?: string;
@@ -310,6 +318,16 @@ export const defaultHomeCms: HomeCmsData = {
           "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80",
           "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
           "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=120&q=80",
+        ],
+      },
+      marquee: {
+        enabled: true,
+        durationSeconds: 28,
+        items: [
+          { id: "delivery", type: "text", text: "BEAUTIFUL CLIENT DELIVERY", image: "" },
+          { id: "proofing", type: "text", text: "ONLINE PROOFING", image: "" },
+          { id: "favorites", type: "text", text: "CLIENT FAVORITES", image: "" },
+          { id: "sales", type: "text", text: "PRINT & DIGITAL SALES", image: "" },
         ],
       },
       gallery: {
@@ -758,6 +776,13 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
         ) && (savedHero as Partial<HomeContent["hero"]>).avatarImages!.length
           ? (savedHero as Partial<HomeContent["hero"]>).avatarImages!
           : defaultHomeCms.content[lang].hero.avatarImages,
+    };
+    const savedMarquee = content[lang].marquee ?? fallback.marquee;
+    content[lang].marquee = {
+      ...fallback.marquee,
+      ...savedMarquee,
+      durationSeconds: Math.min(120, Math.max(8, Number(savedMarquee.durationSeconds) || fallback.marquee.durationSeconds)),
+      items: Array.isArray(savedMarquee.items) ? savedMarquee.items : fallback.marquee.items,
     };
     const savedGalleryTabs = Array.isArray(content[lang].gallery?.tabs)
       ? content[lang].gallery.tabs

@@ -16,6 +16,8 @@ import { StoreDefaultProductService } from './store-default-product.service';
 
 export type CollectionStoreConfig = {
   enabled: boolean;
+  paidStoreEnabled: boolean;
+  printRequestsEnabled: boolean;
   priceSheetId?: string;
   showPrintStoreNav: boolean;
   showBuyPhotoButton: boolean;
@@ -63,7 +65,7 @@ export class StoreCatalogService {
 
   async getPublicStore(identifier: string, logView = true, siteSlug?: string) {
     const resolved = await this.resolve(identifier, false, siteSlug);
-    const products = resolved.config.enabled && resolved.sheet
+    const products = resolved.config.paidStoreEnabled && resolved.sheet
       ? await this.productModel
           .find({
             userId: resolved.userId,
@@ -107,6 +109,7 @@ export class StoreCatalogService {
       },
       store: {
         ...resolved.config,
+        enabled: resolved.config.paidStoreEnabled,
         priceSheetId: resolved.sheet?._id?.toString(),
         globalStatus: resolved.settings?.globalStatus ?? false,
         canCheckout: Boolean(stripe.enabled && stripe.publishableKey && stripe.secretKey),
@@ -127,6 +130,7 @@ export class StoreCatalogService {
 
   async getPublicProduct(identifier: string, slug: string, siteSlug?: string) {
     const resolved = await this.resolve(identifier, true, siteSlug);
+    if (!resolved.config.paidStoreEnabled) throw new NotFoundException('Store is not enabled for this collection');
     if (!resolved.sheet) throw new NotFoundException('The automatic store catalog is unavailable');
     const product = await this.productModel.findOne({
       userId: resolved.userId,
@@ -155,7 +159,12 @@ export class StoreCatalogService {
         name: resolved.collection.name,
         slug: resolved.collection.slug,
       },
-      store: { enabled: true, currency: resolved.config.currency },
+      store: {
+        enabled: true,
+        currency: resolved.config.currency,
+        printRequestsEnabled: resolved.config.printRequestsEnabled,
+        paidStoreEnabled: resolved.config.paidStoreEnabled,
+      },
     };
   }
 
@@ -171,7 +180,9 @@ export class StoreCatalogService {
     const userId = String(collection.userId);
     const settings = await this.settingModel.findOne({ userId }).lean();
     const raw = ((collection.settings as any)?.store ?? {}) as Record<string, any>;
-    const enabled = Boolean(raw.enabled ?? raw.storeStatus);
+    const paidStoreEnabled = Boolean(raw.enabled || raw.storeStatus);
+    const printRequestsEnabled = Boolean(raw.printRequestsEnabled);
+    const enabled = paidStoreEnabled || printRequestsEnabled;
     let sheet: any | null = null;
 
     if (raw.priceSheetId && Types.ObjectId.isValid(raw.priceSheetId)) {
@@ -189,7 +200,7 @@ export class StoreCatalogService {
         .sort({ isDefault: -1, createdAt: 1 })
         .lean();
     }
-    if (enabled && !sheet) {
+    if (paidStoreEnabled && !sheet) {
       sheet = await this.priceSheetModel.create({
         userId,
         name: 'Default Print Store',
@@ -217,7 +228,7 @@ export class StoreCatalogService {
           },
         },
       );
-    } else if (sheet && enabled) {
+    } else if (sheet && paidStoreEnabled) {
       await Promise.all([
         this.priceSheetModel.updateOne(
           { _id: sheet._id, userId },
@@ -229,6 +240,8 @@ export class StoreCatalogService {
 
     const config: CollectionStoreConfig = {
       enabled,
+      paidStoreEnabled,
+      printRequestsEnabled,
       priceSheetId: sheet?._id?.toString() || raw.priceSheetId,
       showPrintStoreNav: raw.showPrintStoreNav ?? true,
       showBuyPhotoButton: raw.showBuyPhotoButton ?? true,
@@ -318,13 +331,14 @@ export class StoreCatalogService {
 
   publicProduct(product: any) {
     const previewImages = product.previewImages?.length ? product.previewImages : product.images ?? [];
+    const variants = (product.variants ?? [])
+      .filter((variant: any) => !variant.hidden)
+      .sort((a: any, b: any) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
     return {
       ...product,
       images: previewImages,
       previewImages,
-      variants: (product.variants ?? [])
-        .filter((variant: any) => !variant.hidden)
-        .sort((a: any, b: any) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)),
+      variants,
     };
   }
 

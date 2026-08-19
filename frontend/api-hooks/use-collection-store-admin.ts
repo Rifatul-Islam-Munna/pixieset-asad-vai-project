@@ -15,6 +15,7 @@ import type { StoreSettingsForm } from "@/components/dashboard/collection-store-
 
 const defaults: StoreSettingsForm = {
   enabled: false,
+  printRequestsEnabled: false,
   priceSheetId: "",
   showPrintStoreNav: true,
   showBuyPhotoButton: true,
@@ -43,7 +44,8 @@ export function useCollectionStoreAdmin(collectionId: string) {
     const store = collection.settings?.store ?? {};
     setForm({
       ...defaults,
-      enabled: Boolean(store.enabled ?? store.storeStatus),
+      enabled: Boolean(store.enabled || store.storeStatus),
+      printRequestsEnabled: Boolean(store.printRequestsEnabled),
       priceSheetId: store.priceSheetId ?? "",
       showPrintStoreNav: store.showPrintStoreNav ?? defaults.showPrintStoreNav,
       showBuyPhotoButton: store.showBuyPhotoButton ?? defaults.showBuyPhotoButton,
@@ -71,34 +73,38 @@ export function useCollectionStoreAdmin(collectionId: string) {
     }
   };
 
-  const saveSettings = async () => {
+  const saveSettings = async (patch: Partial<StoreSettingsForm> = {}) => {
     if (!collection) return;
+    const nextForm = { ...form, ...patch };
     try {
-      const catalog = form.priceSheetId
-        ? { _id: form.priceSheetId }
-        : await ensureCollectionStoreCatalog(
-            collectionId,
-            Number(form.minimumOrderAmount || 0),
-          );
+      const catalog = !nextForm.enabled
+        ? null
+        : nextForm.priceSheetId
+          ? { _id: nextForm.priceSheetId }
+          : await ensureCollectionStoreCatalog(
+              collectionId,
+              Number(nextForm.minimumOrderAmount || 0),
+            );
       await updateCollection.mutateAsync({
         settings: {
           ...(collection.settings ?? {}),
           store: {
             ...(collection.settings?.store ?? {}),
-            enabled: form.enabled,
-            storeStatus: form.enabled,
-            priceSheetId: catalog._id,
-            showPrintStoreNav: form.showPrintStoreNav,
-            showBuyPhotoButton: form.showBuyPhotoButton,
-            allowBulkBuy: form.allowBulkBuy,
-            minimumOrderAmount: Number(form.minimumOrderAmount || 0),
-            currency: form.currency,
-            requireProfessionalInfo: form.requireProfessionalInfo,
+            enabled: nextForm.enabled,
+            storeStatus: nextForm.enabled,
+            printRequestsEnabled: nextForm.printRequestsEnabled,
+            priceSheetId: catalog?._id ?? nextForm.priceSheetId,
+            showPrintStoreNav: nextForm.showPrintStoreNav,
+            showBuyPhotoButton: nextForm.showBuyPhotoButton,
+            allowBulkBuy: nextForm.allowBulkBuy,
+            minimumOrderAmount: Number(nextForm.minimumOrderAmount || 0),
+            currency: nextForm.currency,
+            requireProfessionalInfo: nextForm.requireProfessionalInfo,
           },
         },
       });
       await refresh();
-      toast.success(form.enabled ? "Collection store enabled" : "Collection store disabled");
+      toast.success("Collection store settings saved");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save store settings");
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Download, Loader2, Package } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, Loader2, Package } from "lucide-react";
 import {
   cartItemPrice,
   formatMoney,
@@ -13,6 +13,7 @@ export function StoreOrderPanel({
   items,
   data,
   identifier,
+  printRequestMode = false,
   backLabel = "Back to cart",
   onBack,
   onClear,
@@ -20,6 +21,7 @@ export function StoreOrderPanel({
   items: PublicStoreCartItem[];
   data?: PublicStoreData | null;
   identifier: string;
+  printRequestMode?: boolean;
   backLabel?: string;
   onBack: () => void;
   onClear: () => void;
@@ -37,7 +39,8 @@ export function StoreOrderPanel({
   const [pricingPending, setPricingPending] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
   const [message, setMessage] = useState("");
-  const localSubtotal = items.reduce((sum, item) => sum + cartItemPrice(item) * item.quantity, 0);
+  const [requestSubmitted, setRequestSubmitted] = useState("");
+  const localSubtotal = printRequestMode ? 0 : items.reduce((sum, item) => sum + cartItemPrice(item) * item.quantity, 0);
   const requiresShipping = useMemo(
     () => items.some((item) => item.product.type !== "digital-download"),
     [items],
@@ -60,7 +63,8 @@ export function StoreOrderPanel({
   }, [availableShipping, requiresShipping, shippingMethodId]);
 
   const requestBody = () => ({
-    checkoutSource: "public-store",
+    checkoutSource: printRequestMode ? "print-request" : "public-store",
+    printRequest: printRequestMode,
     customer: {
       name: customer.name,
       email: customer.email,
@@ -144,14 +148,38 @@ export function StoreOrderPanel({
       }),
     }).catch(() => null);
     const payload = response ? await response.json().catch(() => null) : null;
-    if (!response?.ok || !payload?.data?.checkoutUrl) {
-      setMessage(payload?.message ?? "Checkout could not be created.");
+    if (!response?.ok) {
+      setMessage(payload?.message ?? (printRequestMode ? "Print request could not be submitted." : "Checkout could not be created."));
+      setPlacingOrder(false);
+      return;
+    }
+    if (printRequestMode && payload?.data?.completed) {
+      onClear();
+      setRequestSubmitted(String(payload.data.order?.orderNumber ?? "submitted"));
+      setPlacingOrder(false);
+      return;
+    }
+    if (!payload?.data?.checkoutUrl) {
+      setMessage("Checkout could not be created.");
       setPlacingOrder(false);
       return;
     }
     onClear();
     window.location.href = payload.data.checkoutUrl;
   };
+
+  if (requestSubmitted) {
+    return (
+      <div className="flex min-h-[520px] flex-1 flex-col items-center justify-center px-6 py-12 text-center">
+        <span className="flex size-16 items-center justify-center rounded-full bg-[#eaf8f4] text-[#159d8b]"><CheckCircle2 className="size-8" /></span>
+        <p className="mt-6 text-xs font-bold uppercase tracking-[0.18em] text-[#159d8b]">Print request received</p>
+        <h2 className="mt-3 text-2xl font-semibold">Your request was sent to the photographer.</h2>
+        <p className="mt-3 max-w-[430px] text-sm leading-6 text-[#666]">No payment was charged. The photographer can now see this request in their Orders and process your selected prints.</p>
+        {requestSubmitted !== "submitted" && <p className="mt-4 border bg-[#fafafa] px-4 py-2 text-xs text-[#666]">Order {requestSubmitted}</p>}
+        <button type="button" className="mt-7 h-11 bg-[#303030] px-7 text-sm font-semibold text-white" onClick={onBack}>Back to gallery</button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-7">
@@ -178,7 +206,7 @@ export function StoreOrderPanel({
         </span>
         <div>
           <p className="font-semibold">{requiresShipping ? "Physical delivery" : "Digital delivery"}</p>
-          <p className="mt-1 leading-5 text-[#666]">{requiresShipping ? "Shipping is calculated from the selected shipping method and product settings." : "No shipping fee is charged for a cart containing only digital products."}</p>
+          <p className="mt-1 leading-5 text-[#666]">{printRequestMode ? (requiresShipping ? "Choose delivery details for the request. No shipping or product payment is collected here." : "This request is free and no payment is collected.") : (requiresShipping ? "Shipping is calculated from the selected shipping method and product settings." : "No shipping fee is charged for a cart containing only digital products.")}</p>
         </div>
       </div>
 
@@ -214,37 +242,39 @@ export function StoreOrderPanel({
                   <input type="radio" name="shipping" checked={shippingMethodId === method._id} onChange={() => setShippingMethodId(method._id)} />
                   <span><span className="block font-medium">{method.name}</span>{method.region && <span className="mt-1 block text-xs text-[#777]">{method.region}</span>}</span>
                 </span>
-                <span>{formatMoney(method.price, currency)}</span>
+                <span>{printRequestMode ? "Free" : formatMoney(method.price, currency)}</span>
               </label>
             ))}
           </div>
         </Section>
       )}
-      <Section title="Coupon">
-        <div className="flex gap-2">
-          <Field placeholder="Code" value={couponCode} onChange={(value) => setCouponCode(value.toUpperCase())} />
-          <button className="h-11 border px-5 text-sm" onClick={() => void refreshPricing()}>Apply</button>
-        </div>
-      </Section>
-      <Section title="Order total">
+      {!printRequestMode && (
+        <Section title="Coupon">
+          <div className="flex gap-2">
+            <Field placeholder="Code" value={couponCode} onChange={(value) => setCouponCode(value.toUpperCase())} />
+            <button className="h-11 border px-5 text-sm" onClick={() => void refreshPricing()}>Apply</button>
+          </div>
+        </Section>
+      )}
+      <Section title={printRequestMode ? "Print request — no payment required" : "Order total"}>
         <div className="grid gap-2 text-sm">
           <PriceRow label="Subtotal" value={pricing?.subtotal ?? localSubtotal} currency={currency} />
           {(requiresShipping || Number(pricing?.shipping ?? 0) > 0) && <PriceRow label="Shipping" value={pricing?.shipping ?? 0} currency={currency} />}
           <PriceRow label="Tax" value={pricing?.tax ?? 0} currency={currency} />
           {(pricing?.discount ?? 0) > 0 && <PriceRow label="Discount" value={-pricing.discount} currency={currency} />}
           <div className="mt-2 flex justify-between border-t pt-4 text-base font-semibold">
-            <span>Total</span><span>{formatMoney(pricing?.total ?? localSubtotal, currency)}</span>
+            <span>{printRequestMode ? "Payment" : "Total"}</span><span>{printRequestMode ? "Free" : formatMoney(pricing?.total ?? localSubtotal, currency)}</span>
           </div>
         </div>
         {pricingPending && <p className="mt-3 flex items-center gap-2 text-xs text-[#777]"><Loader2 className="size-3 animate-spin" /> Recalculating totals</p>}
       </Section>
       {message && <p className="mt-5 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{message}</p>}
-      {!data?.store?.canCheckout && <p className="mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{data?.store?.checkoutMessage || "The collection owner has not finished Stripe setup."}</p>}
-      <button className="mt-6 flex h-12 w-full items-center justify-center gap-2 bg-[#303030] text-sm font-semibold text-white disabled:opacity-45" disabled={!data?.store?.canCheckout || placingOrder || pricingPending} onClick={() => void submit()}>
+      {!printRequestMode && !data?.store?.canCheckout && <p className="mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{data?.store?.checkoutMessage || "The collection owner has not finished Stripe setup."}</p>}
+      <button className="mt-6 flex h-12 w-full items-center justify-center gap-2 bg-[#303030] text-sm font-semibold text-white disabled:opacity-45" disabled={(printRequestMode ? !data?.store?.printRequestsEnabled : !data?.store?.canCheckout) || placingOrder || pricingPending} onClick={() => void submit()}>
         {placingOrder && <Loader2 className="size-4 animate-spin" />}
-        {placingOrder ? "Opening secure checkout..." : "Pay with Stripe"}
+        {placingOrder ? (printRequestMode ? "Submitting print request..." : "Opening secure checkout...") : (printRequestMode ? "Submit print request" : "Pay with Stripe")}
       </button>
-      <p className="mt-3 text-center text-[11px] text-[#888]">Payment uses the collection owner's Stripe account.</p>
+      <p className="mt-3 text-center text-[11px] text-[#888]">{printRequestMode ? "No card or payment details are required." : "Payment uses the collection owner's Stripe account."}</p>
     </div>
   );
 }

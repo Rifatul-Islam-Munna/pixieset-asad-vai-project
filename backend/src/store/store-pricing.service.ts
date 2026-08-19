@@ -45,9 +45,14 @@ export class StorePricingService {
   }
 
   async priceResolved(resolved: ResolvedCollectionStore, body: any) {
-    if (!resolved.sheet) throw new BadRequestException('No price sheet is assigned to this collection');
+    const printRequestMode = Boolean(body.printRequest);
+    if (printRequestMode && !resolved.config.printRequestsEnabled) {
+      throw new BadRequestException('Print requests are not enabled for this collection');
+    }
     const rawItems = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
     if (!rawItems.length) throw new BadRequestException('Cart is empty');
+    if (printRequestMode) return this.pricePrintRequest(resolved, rawItems, body);
+    if (!resolved.sheet) throw new BadRequestException('No price sheet is assigned to this collection');
 
     const productIdStrings = Array.from(new Set<string>(
       rawItems
@@ -177,9 +182,7 @@ export class StorePricingService {
       customer.address,
     );
     const total = Math.max(0, subtotal + shipping + tax - discount);
-    const minimumOrderAmount = Number(
-      resolved.config.minimumOrderAmount || resolved.sheet.minimumOrderAmount || 0,
-    );
+    const minimumOrderAmount = Number(resolved.config.minimumOrderAmount || resolved.sheet.minimumOrderAmount || 0);
     if (total < minimumOrderAmount) {
       throw new BadRequestException(`Minimum order amount is ${minimumOrderAmount.toFixed(2)}`);
     }
@@ -200,6 +203,56 @@ export class StorePricingService {
       coupon,
       hasPhysicalItems,
       requiresShipping: hasPhysicalItems,
+    };
+  }
+
+  private async pricePrintRequest(resolved: ResolvedCollectionStore, rawItems: any[], body: any) {
+    if (rawItems.length !== 1) {
+      throw new BadRequestException('Choose one photo per print request');
+    }
+    const raw = rawItems[0] ?? {};
+    const imageId = String(raw.imageId ?? '');
+    if (!Types.ObjectId.isValid(imageId)) {
+      throw new BadRequestException('Choose a valid collection photo');
+    }
+    const image: any = await this.imageModel.findOne({
+      _id: new Types.ObjectId(imageId),
+      collectionId: resolved.collection._id.toString(),
+    }).lean();
+    if (!image) throw new BadRequestException('The selected photo is unavailable');
+    if (image.mediaType === 'video' || String(image.mimetype || '').startsWith('video/')) {
+      throw new BadRequestException('Print requests require a photo');
+    }
+    const item = {
+      collectionId: resolved.collection._id.toString(),
+      imageId: image._id.toString(),
+      imageUrl: image.url || raw.imageUrl || '',
+      name: image.originalName ? `Print request: ${image.originalName}` : 'Print request',
+      type: 'self-fulfilled',
+      variantLabel: 'Free print request',
+      crop: this.crop(raw.crop),
+      quantity: 1,
+      unitPrice: 0,
+      extraShipping: 0,
+      total: 0,
+      fulfillmentStatus: 'pending' as const,
+    };
+    return {
+      resolved,
+      items: [item],
+      customer: this.customer(body.customer),
+      professionalInfo: undefined,
+      subtotal: 0,
+      shipping: 0,
+      tax: 0,
+      discount: 0,
+      total: 0,
+      minimumOrderAmount: 0,
+      currency: resolved.config.currency,
+      shippingMethod: null,
+      coupon: null,
+      hasPhysicalItems: false,
+      requiresShipping: false,
     };
   }
 

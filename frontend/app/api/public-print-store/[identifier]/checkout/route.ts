@@ -9,8 +9,12 @@ export async function POST(
 ) {
   const { identifier } = await params;
   const body = await request.json();
+  const explicitSiteSlug = request.nextUrl.searchParams.get("siteSlug")?.trim();
+  const tenantQuery = explicitSiteSlug
+    ? `?siteSlug=${encodeURIComponent(explicitSiteSlug)}`
+    : siteSlugQuery(request.headers.get("host"));
   const response = await fetch(
-    `${baseUrl}/public/collections/${encodeURIComponent(identifier)}/store/checkout${siteSlugQuery(request.headers.get("host"))}`,
+    `${baseUrl}/public/collections/${encodeURIComponent(identifier)}/store/checkout${tenantQuery}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

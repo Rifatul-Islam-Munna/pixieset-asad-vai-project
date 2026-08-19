@@ -134,7 +134,7 @@ export class StoreOrder {
   status: StoreOrderStatus;
 
   @Prop({ default: 'unpaid', index: true })
-  paymentStatus: 'unpaid' | 'paid' | 'refunded';
+  paymentStatus: 'unpaid' | 'paid' | 'refunded' | 'not-required';
 
   @Prop({ index: true })
   stripePaymentIntentId?: string;
@@ -146,7 +146,7 @@ export class StoreOrder {
   stripeAccountMode: 'owner';
 
   @Prop({ default: 'public-store' })
-  checkoutSource: 'public-gallery' | 'public-store' | 'buy-photo';
+  checkoutSource: 'public-gallery' | 'public-store' | 'buy-photo' | 'print-request';
 
   @Prop({ type: [String], default: [] })
   activityLogIds?: string[];

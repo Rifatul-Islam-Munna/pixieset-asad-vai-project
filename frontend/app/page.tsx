@@ -1,4 +1,4 @@
-﻿import {
+import {
   ArrowRight,
   Check,
   CloudUpload,
@@ -11,11 +11,13 @@
   Users,
 } from "lucide-react";
 import { HomeHero } from "@/components/home/home-hero";
+import { HomeMarquee } from "@/components/home/home-marquee";
+import { HomeMotion } from "@/components/home/home-motion";
 import { ClientGalleryShowcase } from "@/components/home/client-gallery-showcase";
 import { PhotographerTypesShowcase } from "@/components/home/photographer-types-showcase";
 import { getUser } from "@/actions/auth";
 import { UserType } from "@/@types/user";
-import { type FooterLink, type HomeLanguage } from "@/lib/home-cms";
+import { type FooterLink, type GalleryTab, type HomeLanguage } from "@/lib/home-cms";
 import { getHomeCms } from "@/lib/home-cms-server";
 import { cookies } from "next/headers";
 
@@ -23,6 +25,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const icons = [CloudUpload, LockKeyhole, Sparkles, ShoppingBag, Smartphone];
+
+function GalleryMedia({ item, className }: { item?: GalleryTab; className: string }) {
+  if (!item?.image) return <div className={`grid place-items-center bg-[#f4f1fa] text-xs text-[#777] ${className}`}>No media</div>;
+  if (item.mediaType === "video") return <video src={item.image} className={className} autoPlay muted loop playsInline />;
+  return <img src={item.image} alt={item.title || item.label} className={className} />;
+}
 
 function footerHref(label: string, configured?: string) {
   if (configured && configured !== "#") return configured;
@@ -59,21 +67,20 @@ export default async function Home({
       ? "gr"
       : "en";
   const t = cms.content[lang] ?? cms.content.en;
-  const images = [
-    ...t.workflow.tabs.map((x) => x.image),
-    ...t.gallery.tabs.map((x) => x.image),
-    ...t.cta.images,
-  ].filter(Boolean);
   const showcaseTabs = t.gallery.tabs.slice(0, 5);
   const features = t.featureCards.slice(0, 5);
 
   return (
-    <main className="min-h-screen bg-white text-[#111]">
+    <main className={`min-h-screen bg-white text-[#111] ${lang === "gr" ? "home-greek" : ""}`}>
+      <HomeMotion />
       <HomeHero
         initialCms={cms}
         requestedLanguage={lang}
         dashboardHref={dashboardHref}
       />
+
+      <HomeMarquee marquee={t.marquee} />
+      <ClientGalleryShowcase section={t.clientGallery} />
 
       <section className="border-y border-[#eeeaf8] bg-white px-4 py-8 sm:px-5 sm:py-10 md:px-8 md:py-12">
         <div className="mx-auto grid max-w-[1320px] gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-5">
@@ -82,6 +89,7 @@ export default async function Home({
             return (
               <article
                 key={`${feature.title}-${i}`}
+                data-home-reveal
                 className="flex gap-4 rounded-xl border border-[#ece9f3] bg-white p-4 sm:rounded-none sm:border-0 sm:p-0 lg:border-r lg:pr-5 last:border-0"
               >
                 <Icon className="mt-1 size-8 shrink-0 text-[#6844df]" />
@@ -97,15 +105,13 @@ export default async function Home({
         </div>
       </section>
 
-      <ClientGalleryShowcase section={t.clientGallery} />
-
       <section
         id="features"
         className="relative overflow-hidden bg-[#fbfaff] px-4 py-16 sm:px-5 sm:py-20 md:px-8 md:py-28"
       >
         <div className="absolute inset-y-0 right-0 w-1/3 bg-[radial-gradient(circle,rgba(104,68,223,.12),transparent_65%)]" />
         <div className="relative mx-auto grid max-w-[1320px] items-center gap-10 sm:gap-12 lg:grid-cols-[.82fr_1.18fr]">
-          <div>
+          <div data-home-reveal>
             <p className="text-[11px] font-bold uppercase tracking-[.12em] text-[#6541d7]">
               {t.showcase.eyebrow}
             </p>
@@ -131,7 +137,7 @@ export default async function Home({
             </a>
           </div>
           <div className="grid grid-cols-1 items-center gap-5 sm:grid-cols-[.8fr_1.2fr_.8fr]">
-            <div className="hidden gap-7 sm:grid">
+            <div data-home-reveal className="hidden gap-7 sm:grid">
               {showcaseTabs.slice(1, 3).map((item, i) => (
                 <a
                   key={`${item.value}-${i}`}
@@ -140,33 +146,21 @@ export default async function Home({
                   rel="noopener noreferrer"
                   className="group overflow-hidden rounded-xl bg-white shadow-[0_15px_30px_rgba(35,20,80,.14)]"
                 >
-                  <img
-                    src={item.image}
-                    alt={item.title || item.label}
-                    className="aspect-[1.35] w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                  />
+                  <GalleryMedia item={item} className="aspect-[1.35] w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                   <p className="truncate p-3 text-xs font-medium text-[#4f4960]">
                     {item.title || item.label}
                   </p>
                 </a>
               ))}
             </div>
-            <div className="mx-auto w-full max-w-[420px] overflow-hidden rounded-xl bg-white shadow-[0_20px_45px_rgba(35,20,80,.18)] sm:max-w-none">
+            <div data-home-reveal className="mx-auto w-full max-w-[420px] overflow-hidden rounded-xl bg-white shadow-[0_20px_45px_rgba(35,20,80,.18)] sm:max-w-none">
               <a
                 href={showcaseTabs[0]?.href || "/register"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group block"
               >
-                <img
-                  src={showcaseTabs[0]?.image}
-                  alt={
-                    showcaseTabs[0]?.title ||
-                    showcaseTabs[0]?.label ||
-                    "Gallery"
-                  }
-                  className="aspect-[.95] w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                />
+                <GalleryMedia item={showcaseTabs[0]} className="aspect-[.95] w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
                 <div className="p-5 text-center">
                   <h3 className="text-xl font-medium">
                     {showcaseTabs[0]?.title || t.showcase.cardTitle}
@@ -180,7 +174,7 @@ export default async function Home({
                 </div>
               </a>
             </div>
-            <div className="hidden gap-7 sm:grid">
+            <div data-home-reveal className="hidden gap-7 sm:grid">
               {showcaseTabs.slice(3, 5).map((item, i) => (
                 <a
                   key={`${item.value}-${i}`}
@@ -189,11 +183,7 @@ export default async function Home({
                   rel="noopener noreferrer"
                   className="group overflow-hidden rounded-xl bg-white shadow-[0_15px_30px_rgba(35,20,80,.14)]"
                 >
-                  <img
-                    src={item.image}
-                    alt={item.title || item.label}
-                    className="aspect-[1.35] w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                  />
+                  <GalleryMedia item={item} className="aspect-[1.35] w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                   <p className="truncate p-3 text-xs font-medium text-[#4f4960]">
                     {item.title || item.label}
                   </p>
@@ -210,6 +200,7 @@ export default async function Home({
             return (
               <div
                 key={`${stat.label}-${i}`}
+                data-home-reveal
                 className="flex items-center justify-start gap-5 border-b border-[#ece8f5] px-6 py-5 sm:justify-center sm:border-b-0 sm:py-3 lg:border-r last:border-0"
               >
                 <I className="size-9 text-[#6944dc]" />
@@ -228,7 +219,7 @@ export default async function Home({
       <section className="relative overflow-hidden bg-[#f5f0ff] px-4 py-14 sm:px-5 sm:py-16 md:px-8 md:py-24">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(117,78,233,.28),transparent_48%)]" />
         <div className="relative mx-auto grid max-w-[930px] items-center gap-8 md:grid-cols-2">
-          <div>
+          <div data-home-reveal>
             <h2 className="whitespace-pre-line text-3xl font-bold tracking-[-.04em] sm:text-4xl">
               {t.cta.title}
             </h2>
@@ -236,7 +227,7 @@ export default async function Home({
               {t.cta.subtitle}
             </p>
           </div>
-          <div>
+          <div data-home-reveal>
             <a
               href={dashboardHref ?? "/login"}
               className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-lg bg-[#603bd8] px-6 text-sm font-semibold text-white sm:w-auto"
@@ -262,10 +253,12 @@ export default async function Home({
                 key={i}
                 src={logo.image}
                 alt={logo.name}
-                className="max-h-8 max-w-28 object-contain grayscale"
+                data-home-reveal
+                className="home-logo-reveal max-h-8 max-w-28 object-contain grayscale hover:grayscale-0"
+                style={{ transitionDelay: `${i * 90}ms` }}
               />
             ) : (
-              <span key={i} className="text-xl font-bold text-[#888]">
+              <span key={i} data-home-reveal className="home-logo-reveal text-xl font-bold text-[#888]" style={{ transitionDelay: `${i * 90}ms` }}>
                 {logo.name}
               </span>
             ),
@@ -278,7 +271,7 @@ export default async function Home({
         className="bg-[#171918] px-4 py-10 text-white sm:px-5 sm:py-12 md:px-8 md:py-16"
       >
         <div className="mx-auto grid max-w-[1320px] gap-10 lg:grid-cols-[1.15fr_1.85fr]">
-          <div>
+          <div data-home-reveal>
             {t.footer.logoUrl ? (
               <img src={t.footer.logoUrl} alt="" className="h-12 w-auto max-w-[240px] object-contain" />
             ) : t.footer.brandText ? (
@@ -291,7 +284,7 @@ export default async function Home({
           </div>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {t.footer.columns.slice(0, 4).map((column, i) => (
-              <div key={i}>
+              <div key={i} data-home-reveal>
                 <h3 className="text-sm font-bold">{column.title}</h3>
                 <ul className="mt-5 grid gap-3 text-sm text-white/70">
                   {column.links.map((link: FooterLink, j) => {

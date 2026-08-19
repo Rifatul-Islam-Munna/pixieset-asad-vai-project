@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
-import { useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, ChartNoAxesCombined, Eye, EyeOff, ImageIcon, Loader2, LockKeyhole, Mail, Phone, ShieldCheck, UserRound, VenusAndMars } from "lucide-react";
-import { loginUser, registerUser } from "@/actions/auth";
+import { loginUser, loginWithMagic, loginWithPin, registerUser } from "@/actions/auth";
 import { GoogleLoginButton } from "@/components/auth/google-login-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,15 +14,29 @@ import type { AuthCms, BrandSettings } from "@/lib/home-cms";
 export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSettings }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ phoneNumber: "", password: "" });
+  const [form, setForm] = useState({ phoneNumber: "", password: "", pin: "" });
+  const [mode, setMode] = useState<"password" | "pin">("password");
   const [showPassword, setShowPassword] = useState(false);
+  const searchParams = useSearchParams();
+  const magicAttempted = useRef(false);
+
+  useEffect(() => {
+    const token = searchParams.get("magic");
+    if (!token || magicAttempted.current) return;
+    magicAttempted.current = true;
+    startTransition(async () => {
+      const result = await loginWithMagic(token);
+      if (result.error) { setError(result.error.message); return; }
+      window.location.replace(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery");
+    });
+  }, [searchParams]);
   const [remember, setRemember] = useState(true);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     startTransition(async () => {
-      const result = await loginUser(form.phoneNumber, form.password);
+      const result = mode === "pin" ? await loginWithPin(form.phoneNumber, form.pin) : await loginUser(form.phoneNumber, form.password);
       if (result.error) {
         setError(result.error.message);
         return;
@@ -42,7 +57,9 @@ export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSe
               <h1 className="mt-3 font-serif text-[38px] leading-[1.08] tracking-[-.025em] text-[#111] sm:text-[42px]">{auth.loginTitle}</h1>
               <p className="mt-4 max-w-[390px] text-[17px] leading-7 text-[#69686d]">{auth.loginSubtitle}</p>
 
-              <div className="mt-9 grid gap-6">
+              <div className="mt-8 grid grid-cols-2 overflow-hidden rounded-[9px] border border-[#dedde1] bg-[#f7f6f3] p-1 text-sm font-semibold"><button type="button" onClick={() => setMode("password")} className={mode === "password" ? "rounded-[7px] bg-white px-3 py-2.5 text-[#5f35c8] shadow-sm" : "px-3 py-2.5 text-[#77767b]"}>Password</button><button type="button" onClick={() => setMode("pin")} className={mode === "pin" ? "rounded-[7px] bg-white px-3 py-2.5 text-[#5f35c8] shadow-sm" : "px-3 py-2.5 text-[#77767b]"}>One-time PIN</button></div>
+
+              <div className="mt-6 grid gap-6">
                 <label className="grid gap-2.5">
                   <span className="text-[15px] font-medium">Email or Phone Number</span>
                   <div className="flex h-[60px] items-center rounded-[9px] border border-[#6f43d6] bg-white px-4 shadow-[0_0_0_1px_rgba(111,67,214,.06)] focus-within:ring-2 focus-within:ring-[#6f43d6]/10">
@@ -51,16 +68,11 @@ export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSe
                   </div>
                 </label>
 
-                <label className="grid gap-2.5">
-                  <span className="text-[15px] font-medium">Password</span>
-                  <div className="flex h-[60px] items-center rounded-[9px] border border-[#dedde1] bg-white px-4 focus-within:border-[#6f43d6] focus-within:ring-2 focus-within:ring-[#6f43d6]/10">
-                    <LockKeyhole className="mr-4 size-5 text-[#747378]" />
-                    <Input value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Password" type={showPassword ? "text" : "password"} className="h-12 rounded-none border-0 px-0 text-[16px] shadow-none focus-visible:ring-0" required />
-                    <button type="button" onClick={() => setShowPassword((value) => !value)} className="ml-3 text-[#77767b]" aria-label={showPassword ? "Hide password" : "Show password"}>
-                      {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
-                    </button>
-                  </div>
-                </label>
+                {mode === "password" ? (
+                  <label className="grid gap-2.5"><span className="text-[15px] font-medium">Password</span><div className="flex h-[60px] items-center rounded-[9px] border border-[#dedde1] bg-white px-4 focus-within:border-[#6f43d6]"><LockKeyhole className="mr-4 size-5 text-[#747378]" /><Input value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Password" type={showPassword ? "text" : "password"} className="h-12 rounded-none border-0 px-0 text-[16px] shadow-none focus-visible:ring-0" required={mode === "password"} /><button type="button" onClick={() => setShowPassword((value) => !value)} className="ml-3 text-[#77767b]" aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}</button></div></label>
+                ) : (
+                  <label className="grid gap-2.5"><span className="text-[15px] font-medium">6-digit PIN from your login email</span><div className="flex h-[60px] items-center rounded-[9px] border border-[#dedde1] bg-white px-4 focus-within:border-[#6f43d6]"><ShieldCheck className="mr-4 size-5 text-[#747378]" /><Input value={form.pin} onChange={(event) => setForm({ ...form, pin: event.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="000000" inputMode="numeric" className="h-12 rounded-none border-0 px-0 text-[20px] tracking-[.3em] shadow-none focus-visible:ring-0" required={mode === "pin"} /></div><span className="text-xs leading-5 text-[#77767b]">The PIN and direct link use the expiry chosen by your administrator and work once.</span></label>
+                )}
               </div>
 
               <div className="mt-5 flex items-center justify-between gap-4 text-[14px]">

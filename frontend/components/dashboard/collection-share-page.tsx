@@ -29,7 +29,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { DashboardSection } from "@/components/dashboard/client-dashboard";
-import type { EmailTemplateItem } from "@/lib/dashboard-store";
+import { baseEmailTemplates, type EmailTemplateItem } from "@/lib/dashboard-store";
 import type { BrandSettings } from "@/lib/home-cms";
 import { publicCollectionUrl } from "@/lib/public-site-url";
 
@@ -39,6 +39,7 @@ const defaultBranding: BrandSettings = {
   brandImageUrl: "",
   accentColor: "#22bda7",
 };
+
 
 function mediaUrl(value?: string) {
   const url = String(value ?? "").trim();
@@ -96,13 +97,16 @@ export function CollectionSharePage({
 
   const collection = collectionQuery.data?.data;
   const images = collection?.images ?? [];
-  const templates = useMemo(
-    () =>
-      Array.isArray(emailTemplateSettings.query.data?.data)
-        ? emailTemplateSettings.query.data.data.map((setting) => setting.data)
-        : [],
-    [emailTemplateSettings.query.data?.data],
-  );
+  const emailTemplateRows = emailTemplateSettings.query.data?.data;
+  const templates = useMemo(() => {
+    const custom = Array.isArray(emailTemplateRows)
+      ? emailTemplateRows.map((setting) => setting.data)
+      : [];
+    return [
+      ...baseEmailTemplates.map((builtIn) => custom.find((item) => item.id === builtIn.id) ?? builtIn),
+      ...custom.filter((item) => !baseEmailTemplates.some((builtIn) => builtIn.id === item.id)),
+    ];
+  }, [emailTemplateRows]);
   const branding =
     brandingSettings.query.data?.data?.[0]?.data ?? defaultBranding;
 

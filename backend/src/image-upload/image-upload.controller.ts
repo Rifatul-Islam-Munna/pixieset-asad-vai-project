@@ -28,6 +28,7 @@ const allowedMimeTypes = [
   'image/webp',
   'image/avif',
   'image/jpg',
+  'image/gif',
   'application/pdf',
   'video/mp4',
   'video/webm',

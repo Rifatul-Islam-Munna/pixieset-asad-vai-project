@@ -5,6 +5,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { Model } from 'mongoose';
+import { createHash } from 'node:crypto';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { MobileGalleryImage, MobileGalleryImageDocument } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -109,6 +110,33 @@ export class UserService implements OnModuleInit {
     const { password, ...safeUser } = user;
     const access_token = await this.signToken(safeUser);
 
+    return { message: 'User logged in successfully', access_token, user: safeUser };
+  }
+
+  async loginWithPin(loginValue: string, pin: string) {
+    const login = loginValue.trim().toLowerCase();
+    const user = await this.userModel.findOne({ $or: [{ phoneNumber: login }, { email: login }] });
+    if (!user || !user.loginPinHash || !user.loginExpiresAt || user.loginExpiresAt.getTime() < Date.now())
+      throw new HttpException('PIN is invalid or expired', HttpStatus.BAD_REQUEST);
+    if ((user.loginAttempts ?? 0) >= 5) throw new HttpException('PIN is locked. Ask for a new login email.', HttpStatus.TOO_MANY_REQUESTS);
+    const valid = await bcrypt.compare(pin, user.loginPinHash);
+    if (!valid) { user.loginAttempts = (user.loginAttempts ?? 0) + 1; await user.save(); throw new HttpException('PIN is invalid or expired', HttpStatus.BAD_REQUEST); }
+    return this.finishPasswordlessLogin(user);
+  }
+
+  async loginWithMagicLink(token: string) {
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const user = await this.userModel.findOne({ loginTokenHash: tokenHash });
+    if (!user || !user.loginExpiresAt || user.loginExpiresAt.getTime() < Date.now())
+      throw new HttpException('Login link is invalid or expired', HttpStatus.BAD_REQUEST);
+    return this.finishPasswordlessLogin(user);
+  }
+
+  private async finishPasswordlessLogin(user: UserDocument) {
+    user.loginPinHash = undefined; user.loginTokenHash = undefined; user.loginExpiresAt = undefined; user.loginAttempts = 0;
+    await user.save();
+    const raw = user.toObject(); const { password, loginPinHash, loginTokenHash, ...safeUser } = raw as any;
+    const access_token = await this.signToken(safeUser);
     return { message: 'User logged in successfully', access_token, user: safeUser };
   }
 
