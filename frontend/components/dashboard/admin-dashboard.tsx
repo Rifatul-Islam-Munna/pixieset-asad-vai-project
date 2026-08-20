@@ -990,6 +990,7 @@ function AdminNav({ tab, setTab }: { tab: AdminTab; setTab: (tab: AdminTab) => v
       ))}
       <div className="my-2 border-t" />
       <Link href="/admin/cover-templates" className={navClass(false)}><FileImage className="size-4" />Cover Templates</Link>
+      <Link href="/admin/email-templates" className={navClass(false)}><Mail className="size-4" />Email Templates</Link>
       <Link href="/admin/default-products" className={navClass(false)}><ShoppingBag className="size-4" />Default Products</Link>
       <Link href="/admin/blogs" className={navClass(false)}><Newspaper className="size-4" />Blog Posts</Link>
     </nav>

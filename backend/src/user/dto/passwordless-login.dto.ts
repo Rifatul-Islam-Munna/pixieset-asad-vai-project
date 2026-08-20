@@ -1,4 +1,4 @@
-import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class PinLoginDto {
   @IsString()
@@ -15,4 +15,10 @@ export class MagicLoginDto {
   @MinLength(32)
   @MaxLength(256)
   token: string;
+}
+
+export class ForgotPasswordDto {
+  @IsEmail()
+  @MaxLength(240)
+  email: string;
 }

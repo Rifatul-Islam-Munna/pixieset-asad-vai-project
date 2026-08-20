@@ -22,6 +22,12 @@ export class StorePriceSheet {
 
   @Prop({ default: 'self-fulfilled', enum: ['self-fulfilled', 'auto'] })
   fulfillment: 'self-fulfilled' | 'auto';
+
+  @Prop({ type: [String], default: ['4 x 6', '5 x 7', '8 x 10', '8 x 12'] })
+  freePrintSizes: string[];
+
+  @Prop({ type: [String], default: ['Glossy', 'Matte'] })
+  freePrintPapers: string[];
 }
 
 export const StorePriceSheetSchema =

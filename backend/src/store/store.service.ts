@@ -227,9 +227,18 @@ export class StoreService {
       .find({ userId, priceSheetId: id })
       .sort({ type: 1, category: 1, createdAt: -1 })
       .lean();
+    const freePrintEnabled = Boolean(await this.collectionModel.exists({
+      userId,
+      'settings.store.printRequestsEnabled': true,
+      $or: [
+        { 'settings.store.priceSheetId': id },
+        { _id: { $in: sheet.collectionIds ?? [] } },
+      ],
+    }));
 
     return {
       ...sheet,
+      freePrintEnabled,
       productCount: products.length,
       collectionCount: sheet.collectionIds?.length ?? 0,
       products,
@@ -484,6 +493,8 @@ export class StoreService {
     if (dto.collectionIds !== undefined) sheet.collectionIds = dto.collectionIds;
     if (dto.minimumOrderAmount !== undefined) sheet.minimumOrderAmount = dto.minimumOrderAmount;
     if (dto.fulfillment !== undefined) sheet.fulfillment = dto.fulfillment;
+    if (dto.freePrintSizes !== undefined) sheet.freePrintSizes = dto.freePrintSizes.map((value) => value.trim()).filter(Boolean);
+    if (dto.freePrintPapers !== undefined) sheet.freePrintPapers = dto.freePrintPapers.map((value) => value.trim()).filter(Boolean);
     await sheet.save();
     return sheet.toObject();
   }

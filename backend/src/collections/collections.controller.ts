@@ -47,6 +47,7 @@ export class PublicCollectionsController {
   async findPublic(
     @Param('identifier') identifier: string,
     @Query('email') email?: string,
+    @Query('pin') pin?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('siteSlug') siteSlug?: string,
@@ -54,6 +55,7 @@ export class PublicCollectionsController {
     const data = await this.collectionsService.findPublic(
       identifier,
       email,
+      pin,
       limit,
       offset,
       siteSlug,
@@ -79,6 +81,7 @@ export class PublicCollectionsController {
   async findPublicImages(
     @Param('identifier') identifier: string,
     @Query('email') email?: string,
+    @Query('pin') pin?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('siteSlug') siteSlug?: string,
@@ -86,6 +89,7 @@ export class PublicCollectionsController {
     const data = await this.collectionsService.findPublicImages(
       identifier,
       email,
+      pin,
       limit,
       offset,
       siteSlug,
@@ -409,6 +413,22 @@ export class CollectionsController {
     @Query('offset') offset?: string,
   ) {
     const data = await this.collectionsService.findOne(
+      req.user.id,
+      id,
+      limit,
+      offset,
+    );
+    return { data };
+  }
+
+  @Get(':id/owner-preview')
+  async ownerPreview(
+    @Param('id') id: string,
+    @Req() req: ExpressRequest,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const data = await this.collectionsService.findOwnerPreview(
       req.user.id,
       id,
       limit,

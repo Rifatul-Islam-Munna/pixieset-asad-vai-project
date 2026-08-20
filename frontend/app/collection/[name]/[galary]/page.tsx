@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "crypto";
 import type { Metadata } from "next";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { PublicGallery } from "@/components/dashboard/public-gallery";
@@ -25,6 +25,22 @@ async function getCollection(identifier: string, siteSlug: string) {
     `${baseUrl}/public/collections/${encodeURIComponent(identifier)}?limit=48&offset=0&siteSlug=${encodeURIComponent(siteSlug)}`,
     {
       cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    },
+  ).catch(() => null);
+  const payload = response?.ok ? await response.json() : null;
+  return payload?.data ?? null;
+}
+
+async function getOwnerPreview(collectionId?: string) {
+  if (!collectionId) return null;
+  const token = (await cookies()).get("access_token")?.value;
+  if (!token) return null;
+  const response = await fetch(
+    `${baseUrl}/collections/${encodeURIComponent(collectionId)}/owner-preview?limit=48&offset=0`,
+    {
+      cache: "no-store",
+      headers: { access_token: token },
       signal: AbortSignal.timeout(8000),
     },
   ).catch(() => null);
@@ -103,16 +119,20 @@ function gaIdFrom(data: any) {
 
 export default async function CollectionGalleryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ name: string; galary: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }) {
   const { name, galary } = await params;
+  const { preview } = await searchParams;
   const [collection, visitorCode] = await Promise.all([
-    getCollection(galary, name),
+    getOwnerPreview(preview).then((ownerCollection) => ownerCollection ?? getCollection(galary, name)),
     visitorWatermarkCode(),
   ]);
   if (!collection) notFound();
-  const gaId = gaIdFrom(collection);
+  const isOwnerPreview = collection?.ownerPreview === true;
+  const gaId = isOwnerPreview ? "" : gaIdFrom(collection);
   const viewToken = randomUUID();
   const studio = decodeURIComponent(name);
   const title = collection?.name ?? decodeURIComponent(galary);
@@ -135,11 +155,13 @@ export default async function CollectionGalleryPage({
     <>
       {gaId && <GoogleAnalytics gaId={gaId} />}
       <JsonLdScript data={jsonLd} id="gallery-json-ld" />
-      <PublicGalleryViewTracker
-        identifier={galary}
-        siteSlug={name}
-        viewToken={viewToken}
-      />
+      {!isOwnerPreview && (
+        <PublicGalleryViewTracker
+          identifier={galary}
+          siteSlug={name}
+          viewToken={viewToken}
+        />
+      )}
       <PublicGalleryHashOpener />
       <PublicGallery
         name={name}

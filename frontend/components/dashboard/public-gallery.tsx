@@ -41,6 +41,7 @@ type PublicFace = {
 
 type PublicCollection = {
   _id: string;
+  ownerPreview?: boolean;
   name: string;
   slug?: string;
   eventDate?: string;
@@ -64,7 +65,7 @@ type PublicCollection = {
     download?: Partial<PresetDownloadSettings>;
     favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string };
     store?: { storeStatus?: boolean; enabled?: boolean; printRequestsEnabled?: boolean; showPrintStoreNav?: boolean; showBuyPhotoButton?: boolean };
-    access?: { emailRequired?: boolean; emailAuthorized?: boolean; emailStatus?: string; email?: string };
+    access?: { emailRequired?: boolean; emailAuthorized?: boolean; emailStatus?: string; email?: string; pinRequired?: boolean; pinAuthorized?: boolean };
   };
   preferences?: {
     filenameDisplay?: "show" | "hide";
@@ -203,6 +204,7 @@ export function PublicGallery({
     ...(collection?.design ?? fallbackPresetDesign),
   };
   const studioName = decodeRouteText(name);
+  const ownerPreview = collection?.ownerPreview === true;
   const aiFaceSearchEnabled = collection?.planCapabilities?.aiFaceSearch !== false;
   const advancedFaceSearchEnabled = collection?.planCapabilities?.advancedFaceSearch === true;
   const title = collection?.name ?? decodeRouteText(galary);
@@ -235,8 +237,8 @@ export function PublicGallery({
   const slideshowAutoLoop = boolSetting(generalSettings.slideshowAutoLoop ?? true);
   const socialSharingEnabled = boolSetting(generalSettings.socialSharing ?? true);
   const galleryAssistEnabled = boolSetting(generalSettings.galleryAssist);
-  const emailRegistrationEnabled = boolSetting(generalSettings.emailRegistration);
-  const marketingSubscriptionEnabled = boolSetting(
+  const emailRegistrationEnabled = !ownerPreview && boolSetting(generalSettings.emailRegistration);
+  const marketingSubscriptionEnabled = !ownerPreview && boolSetting(
     generalSettings.marketingSubscription ?? true,
   );
   const marketing = collection?.marketing ?? {};
@@ -280,9 +282,7 @@ export function PublicGallery({
   const [visitorEmailSaved, setVisitorEmailSaved] = useState(false);
   const [visitorMarketingOptIn, setVisitorMarketingOptIn] = useState(true);
   const [downloadMarketingOptIn, setDownloadMarketingOptIn] = useState(true);
-  const [popupOpen, setPopupOpen] = useState(() =>
-    Boolean(marketingSubscriptionEnabled && marketingPopupEnabled),
-  );
+  const [popupOpen, setPopupOpen] = useState(false);
   const [popupEmail, setPopupEmail] = useState("");
   const [privateImageIds, setPrivateImageIds] = useState<Set<string>>(() => new Set());
   const [privateImageBusy, setPrivateImageBusy] = useState("");
@@ -311,11 +311,18 @@ export function PublicGallery({
     { type: "single"; photo: PublicImage; index: number } | { type: "all" } | null
   >(null);
   const [accessEmail, setAccessEmail] = useState("");
+  const [accessPin, setAccessPin] = useState("");
   const [accessReason, setAccessReason] = useState("");
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessNotice, setAccessNotice] = useState("");
   const accessSettings = collection?.settings?.access;
-  const emailAccessLocked = Boolean(collection && emailRegistrationEnabled && !accessSettings?.emailAuthorized);
+  const pinAccessLocked = Boolean(collection && accessSettings?.pinRequired && !accessSettings?.pinAuthorized);
+  const emailAccessLocked = Boolean(
+    collection &&
+      !accessSettings?.pinRequired &&
+      (accessSettings?.emailRequired || emailRegistrationEnabled) &&
+      !accessSettings?.emailAuthorized,
+  );
   const activeGalleryImages = showSetTabs
     ? galleryImages.filter((image) => imageSetId(image) === activeSetId)
     : galleryImages;
@@ -340,7 +347,7 @@ export function PublicGallery({
   const videoDownloadsEnabled = boolSetting(download.videoDownload);
   const galleryDownloadEnabled = download.galleryDownload !== false;
   const singlePhotoDownloadEnabled = download.singlePhotoDownload !== false;
-  const singlePhotoDownloadEmailTracking = download.singlePhotoDownloadEmailTracking !== false;
+  const singlePhotoDownloadEmailTracking = !ownerPreview && download.singlePhotoDownloadEmailTracking !== false;
   const restrictedSinglePhotoDownloadSize = Boolean(download.restrictedSinglePhotoDownloadSize);
   const preferences = collection?.preferences ?? {};
   const showFilenames =
@@ -375,9 +382,9 @@ export function PublicGallery({
   const canLoadMoreImages = Boolean(collection && !favoritesPanelOpen && !faceResults && imagesHasMore);
   const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
   const slideshowPosition = slideshowIndex ?? 0;
-  const pinRequired = (photoDownloadsEnabled || videoDownloadsEnabled) && boolSetting(download.downloadPin);
+  const pinRequired = !ownerPreview && (photoDownloadsEnabled || videoDownloadsEnabled) && boolSetting(download.downloadPin);
   const pinOk = !pinRequired || enteredPin.trim() === String(download.downloadPinCode ?? "").trim();
-  const limitOk = !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
+  const limitOk = ownerPreview || !boolSetting(download.limitDownloads) || maxDownloads <= 0 || downloadCount < maxDownloads;
   const canDownloadPhoto = photoDownloadsEnabled && pinOk && limitOk;
   const canDownloadVideo = videoDownloadsEnabled && pinOk && limitOk;
   const canDownloadAll = canDownloadPhoto && galleryDownloadEnabled;
@@ -520,8 +527,8 @@ export function PublicGallery({
   };
   const downloadAllImages = async (emailOverride = "") => {
     if (!canDownloadAll || zipDownloading) return;
-    const email = ensureDownloadEmail({ type: "all" }, emailOverride);
-    if (!email) return;
+    const email = ownerPreview ? "" : ensureDownloadEmail({ type: "all" }, emailOverride);
+    if (!ownerPreview && !email) return;
     let allImages = galleryImages.filter((photo) => !isVideo(photo));
     if (collection && imagesHasMore) {
       setZipStage("Loading remaining gallery photos");
@@ -532,7 +539,11 @@ export function PublicGallery({
         const params = new URLSearchParams({ limit: "120", offset: String(offset), siteSlug: name });
         const email = accessSettings?.email || visitorEmail || accessEmail;
         if (email) params.set("email", email);
-        const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(collection.slug ?? galary)}/images?${params.toString()}`).catch(() => null);
+    if (accessPin) params.set("pin", accessPin);
+        const pageUrl = ownerPreview
+          ? `/api/collections/${encodeURIComponent(collection._id)}/owner-preview?${params.toString()}`
+          : `${apiBase}/public/collections/${encodeURIComponent(collection.slug ?? galary)}/images?${params.toString()}`;
+        const response = await fetch(pageUrl).catch(() => null);
         const payload = response?.ok ? await response.json().catch(() => null) : null;
         const page = payload?.data;
         if (!page?.items?.length) break;
@@ -550,7 +561,7 @@ export function PublicGallery({
         setImagesHasMore(false);
       }
     }
-    const remaining = boolSetting(download.limitDownloads) && maxDownloads > 0
+    const remaining = !ownerPreview && boolSetting(download.limitDownloads) && maxDownloads > 0
       ? Math.max(0, maxDownloads - downloadCount)
       : allImages.length;
     const downloadable = allImages.slice(0, remaining || allImages.length);
@@ -558,15 +569,17 @@ export function PublicGallery({
     setZipDownloading(true);
     setZipStage("Collecting gallery photos");
     try {
-      await recordDownloadActivity(
-        email,
-        downloadable.map((photo, index) => ({
-          imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
-          imageName: photo.originalName || `photo-${index + 1}`,
-          imageUrl: imageSrc(photo.url),
-        })),
-        "all",
-      );
+      if (!ownerPreview) {
+        await recordDownloadActivity(
+          email,
+          downloadable.map((photo, index) => ({
+            imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
+            imageName: photo.originalName || `photo-${index + 1}`,
+            imageUrl: imageSrc(photo.url),
+          })),
+          "all",
+        );
+      }
     } catch (error) {
       setZipDownloading(false);
       setShareNotice(error instanceof Error ? error.message : "Download activity failed");
@@ -640,7 +653,10 @@ export function PublicGallery({
     const email = accessSettings?.email || visitorEmail || accessEmail;
     if (email) params.set("email", email);
     const identifier = collection.slug ?? galary;
-    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(identifier)}/images?${params.toString()}`).catch(() => null);
+    const pageUrl = ownerPreview
+      ? `/api/collections/${encodeURIComponent(collection._id)}/owner-preview?${params.toString()}`
+      : `${apiBase}/public/collections/${encodeURIComponent(identifier)}/images?${params.toString()}`;
+    const response = await fetch(pageUrl).catch(() => null);
     const payload = response?.ok ? await response.json().catch(() => null) : null;
     const page = payload?.data;
     if (page?.items?.length) {
@@ -662,12 +678,42 @@ export function PublicGallery({
     observer.observe(target);
     return () => observer.disconnect();
   }, [canLoadMoreImages, loadedImages.length, imagesLoadingMore]);
+  const verifyAccessPin = async () => {
+    const pin = accessPin.trim();
+    if (!pin || accessBusy) return;
+    setAccessBusy(true); setAccessNotice("");
+    try {
+      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?pin=${encodeURIComponent(pin)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
+      const payload = response ? await response.json().catch(() => null) : null;
+      if (!response?.ok || !payload?.data?.settings?.access?.pinAuthorized) {
+        setAccessNotice("Incorrect PIN"); return;
+      }
+      setCollection(payload.data);
+      setLoadedImages(payload.data?.images ?? []);
+      setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
+      window.sessionStorage.setItem(`collection-access-pin:${galary}`, pin);
+    } finally { setAccessBusy(false); }
+  };
+
   const verifyAccessEmail = async () => {
     const email = accessEmail.trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(email) || accessBusy) return;
     setAccessBusy(true);
     setAccessNotice("");
     try {
+      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
+      const payload = response ? await response.json().catch(() => null) : null;
+      if (!response?.ok || !payload?.data) {
+        setAccessNotice(payload?.message ?? "Access check failed");
+        return;
+      }
+      if (!payload.data?.settings?.access?.emailAuthorized) {
+        setCollection(payload.data);
+        setLoadedImages([]);
+        setImagesHasMore(false);
+        setAccessNotice("This email is not allowed to view this collection.");
+        return;
+      }
       await recordEmailRegistration(
         email,
         Boolean(
@@ -677,12 +723,6 @@ export function PublicGallery({
         ),
         "email-registration",
       );
-      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
-      const payload = response ? await response.json().catch(() => null) : null;
-      if (!response?.ok || !payload?.data) {
-        setAccessNotice(payload?.message ?? "Access check failed");
-        return;
-      }
       setCollection(payload.data);
       setLoadedImages(payload.data?.images ?? []);
       setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
@@ -692,7 +732,7 @@ export function PublicGallery({
       window.localStorage.setItem(`collection-access-email:${galary}`, email);
       setAccessNotice("");
     } catch (error) {
-      setAccessNotice(error instanceof Error ? error.message : "Email registration failed");
+      setAccessNotice(error instanceof Error ? error.message : "Email access failed");
     } finally {
       setAccessBusy(false);
     }
@@ -711,11 +751,6 @@ export function PublicGallery({
     setAccessBusy(false);
     setAccessNotice(response?.ok ? "Access request sent. You will be approved by gallery owner." : payload?.message ?? "Request failed");
   };
-  useEffect(() => {
-    if (!emailAccessLocked || accessEmail || accessBusy) return;
-    const saved = window.localStorage.getItem(`collection-access-email:${galary}`) || "";
-    if (saved) setAccessEmail(saved);
-  }, [accessBusy, accessEmail, emailAccessLocked, galary]);
   const currentPublicUrl = (photoId?: string) => {
     const url = `${window.location.origin}${window.location.pathname}`;
     return photoId ? `${url}#photo-${encodeURIComponent(photoId)}` : url;
@@ -981,10 +1016,17 @@ export function PublicGallery({
         collection &&
           marketingSubscriptionEnabled &&
           marketingPopupEnabled &&
-          !emailAccessLocked,
+          !emailAccessLocked &&
+          !pinAccessLocked,
       ),
     );
-  }, [collection?._id, emailAccessLocked, marketingPopupEnabled, marketingSubscriptionEnabled]);
+  }, [
+    collection?._id,
+    emailAccessLocked,
+    pinAccessLocked,
+    marketingPopupEnabled,
+    marketingSubscriptionEnabled,
+  ]);
 
   const closeMarketingPopup = () => setPopupOpen(false);
 
@@ -1035,7 +1077,18 @@ export function PublicGallery({
           </div>
         </div>
       )}
-      {emailAccessLocked ? (
+      {pinAccessLocked ? (
+      <main className="relative flex min-h-screen items-center justify-center bg-[#f6f6f4] p-6">
+        <section className="w-full max-w-md bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.14)]">
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#6337d8]">PIN Access</p>
+          <h1 className="mt-4 text-2xl font-semibold">{title}</h1>
+          <p className="mt-3 text-sm leading-6 text-[#666]">Enter the gallery PIN to view this collection.</p>
+          <Input type="password" value={accessPin} onChange={(event) => setAccessPin(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void verifyAccessPin(); }} placeholder="Gallery PIN" className="mt-6 h-11 rounded-none" autoFocus />
+          <Button className="mt-5 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-white" disabled={accessBusy || !accessPin.trim()} onClick={() => void verifyAccessPin()}>{accessBusy ? "Opening..." : "View collection"}</Button>
+          {accessNotice && <p className="mt-4 text-sm font-semibold text-red-600">{accessNotice}</p>}
+        </section>
+      </main>
+      ) : emailAccessLocked ? (
       <main className="relative flex min-h-screen items-center justify-center bg-[#f6f6f4] p-6">
         <section className="w-full max-w-md bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.14)]">
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#6337d8]">Email registration</p>

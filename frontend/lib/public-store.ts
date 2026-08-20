@@ -76,6 +76,8 @@ export type PublicStoreData = {
     allowBulkBuy?: boolean;
     minimumOrderAmount?: number;
     requireProfessionalInfo?: boolean;
+    freePrintSizes?: string[];
+    freePrintPapers?: string[];
     currency?: string;
     canCheckout?: boolean;
     checkoutMessage?: string;

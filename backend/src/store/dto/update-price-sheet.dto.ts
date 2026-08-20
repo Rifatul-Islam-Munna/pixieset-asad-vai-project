@@ -20,4 +20,14 @@ export class UpdatePriceSheetDto {
   @IsIn(['self-fulfilled', 'auto'])
   @IsOptional()
   fulfillment?: 'self-fulfilled' | 'auto';
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  freePrintSizes?: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  freePrintPapers?: string[];
 }

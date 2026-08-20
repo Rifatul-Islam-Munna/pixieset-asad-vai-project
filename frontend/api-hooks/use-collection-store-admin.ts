@@ -77,7 +77,7 @@ export function useCollectionStoreAdmin(collectionId: string) {
     if (!collection) return;
     const nextForm = { ...form, ...patch };
     try {
-      const catalog = !nextForm.enabled
+      const catalog = !(nextForm.enabled || nextForm.printRequestsEnabled)
         ? null
         : nextForm.priceSheetId
           ? { _id: nextForm.priceSheetId }

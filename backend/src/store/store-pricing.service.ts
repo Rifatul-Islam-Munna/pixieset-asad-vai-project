@@ -223,15 +223,20 @@ export class StorePricingService {
     if (image.mediaType === 'video' || String(image.mimetype || '').startsWith('video/')) {
       throw new BadRequestException('Print requests require a photo');
     }
+    const size = String(raw.size ?? '').trim();
+    const paper = String(raw.paper ?? '').trim();
+    const quantity = Math.min(100, Math.max(1, Math.floor(Number(raw.quantity ?? 1) || 1)));
+    if (!resolved.config.freePrintSizes.includes(size)) throw new BadRequestException('Choose a valid print size');
+    if (!resolved.config.freePrintPapers.includes(paper)) throw new BadRequestException('Choose a valid paper type');
     const item = {
       collectionId: resolved.collection._id.toString(),
       imageId: image._id.toString(),
       imageUrl: image.url || raw.imageUrl || '',
       name: image.originalName ? `Print request: ${image.originalName}` : 'Print request',
       type: 'self-fulfilled',
-      variantLabel: 'Free print request',
-      crop: this.crop(raw.crop),
-      quantity: 1,
+      variantLabel: `${size} - ${paper}`,
+      options: { Size: size, Paper: paper },
+      quantity,
       unitPrice: 0,
       extraShipping: 0,
       total: 0,

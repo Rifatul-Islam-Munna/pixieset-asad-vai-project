@@ -25,6 +25,8 @@ export type CollectionStoreConfig = {
   minimumOrderAmount: number;
   currency: string;
   requireProfessionalInfo: boolean;
+  freePrintSizes: string[];
+  freePrintPapers: string[];
 };
 
 export type ResolvedCollectionStore = {
@@ -249,6 +251,8 @@ export class StoreCatalogService {
       minimumOrderAmount: Number(raw.minimumOrderAmount ?? 0),
       currency: 'EUR',
       requireProfessionalInfo: Boolean(raw.requireProfessionalInfo),
+      freePrintSizes: Array.isArray(sheet?.freePrintSizes) && sheet.freePrintSizes.length ? sheet.freePrintSizes : ['4 x 6', '5 x 7', '8 x 10', '8 x 12'],
+      freePrintPapers: Array.isArray(sheet?.freePrintPapers) && sheet.freePrintPapers.length ? sheet.freePrintPapers : ['Glossy', 'Matte'],
     };
     if (requireEnabled && !config.enabled) throw new NotFoundException('Store is not enabled for this collection');
     return { collection, userId, settings, config, sheet };

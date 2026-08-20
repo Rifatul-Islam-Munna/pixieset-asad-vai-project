@@ -5,7 +5,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { Model } from 'mongoose';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { MobileGalleryImage, MobileGalleryImageDocument } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -14,6 +14,7 @@ import { User, UserDocument, UserType } from './entities/user.entity';
 import { FreePlanSettingService } from 'src/admin/free-plan-setting.service';
 import { HomepageService } from 'src/homepage/homepage.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class UserService implements OnModuleInit {
@@ -25,6 +26,7 @@ export class UserService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly freePlanSettings: FreePlanSettingService,
     private readonly homepageService: HomepageService,
+    private readonly mailService: MailService,
   ) {}
 
   async onModuleInit() {
@@ -111,6 +113,31 @@ export class UserService implements OnModuleInit {
     const access_token = await this.signToken(safeUser);
 
     return { message: 'User logged in successfully', access_token, user: safeUser };
+  }
+
+  async requestPasswordlessAccess(emailValue: string) {
+    const email = emailValue.trim().toLowerCase();
+    const genericResponse = { message: 'If an account exists for that email, a login link and PIN have been sent.' };
+    const user = await this.userModel.findOne({ email });
+    if (!user || !user.email) return genericResponse;
+    const pin = String(Math.floor(100000 + Math.random() * 900000));
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    user.loginPinHash = await bcrypt.hash(pin, 10);
+    user.loginTokenHash = createHash('sha256').update(token).digest('hex');
+    user.loginExpiresAt = expiresAt;
+    user.loginAttempts = 0;
+    await user.save();
+    const appUrl = (this.configService.get<string>('FRONTEND_URL') || this.configService.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '');
+    const link = `${appUrl}/login?magic=${encodeURIComponent(token)}`;
+    const expiryText = expiresAt.toLocaleString();
+    const text = `Hello ${user.name || 'there'},\n\nYou requested access to your account.\n\nYour 6-digit login PIN is: ${pin}\n\nOr use this direct login link:\n${link}\n\nThis access is valid for 30 days, until ${expiryText}, and can only be used once.\n\nIf you did not request this email, you can ignore it.`;
+    const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    const safeLink = escapeHtml(link);
+    const safeName = escapeHtml(user.name || 'there');
+    const html = `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:32px;line-height:1.65;color:#1f1f1f"><h2 style="margin:0 0 18px">Your secure login access</h2><p>Hello ${safeName},</p><p>You requested access to your account.</p><p>Your 6-digit login PIN is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:8px 0 22px">${pin}</p><p><a href="${safeLink}" style="display:inline-block;background:#6337d8;color:#fff;text-decoration:none;padding:12px 18px;border-radius:7px;font-weight:600">Log in directly</a></p><p style="margin-top:24px">This access is valid for 30 days, until ${escapeHtml(expiryText)}, and can only be used once.</p><p>If you did not request this email, you can ignore it.</p></div>`;
+    await this.mailService.send({ to: user.email, subject: 'Your secure login access', text, html });
+    return genericResponse;
   }
 
   async loginWithPin(loginValue: string, pin: string) {

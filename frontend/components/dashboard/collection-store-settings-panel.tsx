@@ -75,7 +75,7 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
             <span>{form.printRequestsEnabled ? "On" : "Off"}</span>
           </span>
           <span className="block text-sm leading-6 text-[#56635f]">
-            Adds a Print Request button to each photo. Visitors adjust the photo and send a free request with notes. Store products and prices stay unchanged.
+            Adds a Print Request button to each photo. Visitors choose print size, paper, quantity, and send a free request with notes. Store products and prices stay unchanged.
           </span>
         </label>
         <label className="block text-sm font-medium">

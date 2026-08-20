@@ -284,7 +284,7 @@ export class CollectionsService {
           o.paymentStatus === 'paid'
             ? 'Payment received'
             : 'New order received',
-        detail: `${o.orderNumber} · €${Number(o.total || 0).toFixed(2)}`,
+        detail: `${o.orderNumber} Â· â‚¬${Number(o.total || 0).toFixed(2)}`,
         createdAt: o.createdAt,
       })),
       ...allDownloads.slice(0, 10).map((d: any) => ({
@@ -362,15 +362,17 @@ export class CollectionsService {
   async findPublic(
     identifier: string,
     email?: string,
+    pin?: string,
     limit?: string,
     offset?: string,
     siteSlug?: string,
+    allowUnpublished = false,
   ) {
     const collection = await this.findCollectionByIdentifier(
       identifier,
       siteSlug,
     );
-    if (!this.isPublicCollectionVisible(collection))
+    if (!allowUnpublished && !this.isPublicCollectionVisible(collection))
       throw new NotFoundException('Collection not found');
     const preset = collection.presetId
       ? await this.settingModel
@@ -389,8 +391,14 @@ export class CollectionsService {
         ...((collection.settings as any)?.general ?? {}),
       },
     };
-    const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
-    if (emailAccess.required && emailAccess.authorized && emailAccess.email) {
+    const accessRaw = (accessSourceSettings as any)?.access ?? {};
+    const pinRequired = this.boolSetting(accessRaw.pinEnabled);
+    const pinAuthorized = !pinRequired || (String(pin ?? '').trim() && String(pin ?? '').trim() === String(accessRaw.pinCode ?? '').trim());
+    const emailAccess = pinRequired
+      ? { required: false, authorized: true, status: 'pin-mode', email: '' }
+      : this.resolveEmailAccess(accessSourceSettings, email);
+    const galleryAuthorized = pinAuthorized && emailAccess.authorized;
+    if (emailAccess.required && galleryAuthorized && emailAccess.email) {
       await this.saveEmailRegistration(
         collection,
         emailAccess.email,
@@ -398,8 +406,17 @@ export class CollectionsService {
         'email-registration',
       );
     }
-    const imagesPage = emailAccess.authorized
-      ? await this.findPublicImages(identifier, email, limit, offset, siteSlug)
+    const imagesPage = galleryAuthorized
+      ? allowUnpublished
+        ? await this.findImagesPage(
+            {
+              collectionId: collection._id.toString(),
+              userId: collection.userId.toString(),
+            },
+            limit,
+            offset,
+          )
+        : await this.findPublicImages(identifier, email, pin, limit, offset, siteSlug)
       : {
           items: [],
           total: 0,
@@ -407,7 +424,7 @@ export class CollectionsService {
           offset: this.pageOffset(offset),
           hasMore: false,
         };
-    if (emailAccess.authorized)
+    if (galleryAuthorized)
       void this.ensureCollectionPreviews(collection._id.toString());
     const branding = await this.settingModel
       .findOne({
@@ -465,6 +482,8 @@ export class CollectionsService {
         emailAuthorized: emailAccess.authorized,
         emailStatus: emailAccess.status,
         email: emailAccess.email,
+        pinRequired,
+        pinAuthorized: Boolean(pinAuthorized),
       },
     };
 
@@ -513,6 +532,34 @@ export class CollectionsService {
       },
       marketing: (marketing?.data as any) ?? {},
       branding: (branding?.data as any) ?? {},
+      images: imagesPage.items,
+      imagesPage,
+    };
+  }
+
+  async findOwnerPreview(
+    userId: string,
+    id: string,
+    limit?: string,
+    offset?: string,
+  ) {
+    await this.findOne(userId, id, '1', '0');
+    const [publicCollection, imagesPage] = await Promise.all([
+      this.findPublic(id, undefined, undefined, limit, offset, undefined, true),
+      this.findImages(userId, id, limit, offset),
+    ]);
+
+    return {
+      ...publicCollection,
+      ownerPreview: true,
+      settings: {
+        ...(publicCollection.settings ?? {}),
+        access: {
+          emailRequired: false,
+          emailAuthorized: true,
+          emailStatus: 'owner-preview',
+        },
+      },
       images: imagesPage.items,
       imagesPage,
     };
@@ -582,6 +629,7 @@ export class CollectionsService {
   async findPublicImages(
     identifier: string,
     email?: string,
+    pin?: string,
     limit?: string,
     offset?: string,
     siteSlug?: string,
@@ -609,8 +657,13 @@ export class CollectionsService {
         ...((collection.settings as any)?.general ?? {}),
       },
     };
-    const emailAccess = this.resolveEmailAccess(accessSourceSettings, email);
-    if (!emailAccess.authorized) {
+    const accessRaw = (accessSourceSettings as any)?.access ?? {};
+    const pinRequired = this.boolSetting(accessRaw.pinEnabled);
+    const pinAuthorized = !pinRequired || (String(pin ?? '').trim() && String(pin ?? '').trim() === String(accessRaw.pinCode ?? '').trim());
+    const emailAccess = pinRequired
+      ? { required: false, authorized: true, status: 'pin-mode', email: '' }
+      : this.resolveEmailAccess(accessSourceSettings, email);
+    if (!pinAuthorized || !emailAccess.authorized) {
       return {
         items: [],
         total: 0,
@@ -2914,21 +2967,26 @@ export class CollectionsService {
 
   private resolveEmailAccess(settings: any, email?: string) {
     const general = settings?.general ?? {};
+    const access = settings?.access ?? {};
     const required = this.boolSetting(general.emailRegistration);
     if (!required)
       return { required: false, authorized: true, status: 'open', email: '' };
     const clean = this.cleanEmail(email);
     if (!clean)
-      return {
-        required: true,
-        authorized: false,
-        status: 'required',
-        email: '',
-      };
+      return { required: true, authorized: false, status: 'required', email: '' };
+    const allowedEmails = Array.isArray(access.allowedEmails)
+      ? access.allowedEmails.map((value: unknown) => this.cleanEmail(String(value ?? ''))).filter(Boolean)
+      : [];
+    const approvedRequests = Array.isArray(access.requests)
+      ? access.requests.some((request: any) =>
+          request?.status === 'approved' && this.cleanEmail(request?.email) === clean,
+        )
+      : false;
+    const authorized = allowedEmails.includes(clean) || approvedRequests;
     return {
       required: true,
-      authorized: true,
-      status: 'registered',
+      authorized,
+      status: authorized ? 'allowed' : 'not-allowed',
       email: clean,
     };
   }

@@ -62,6 +62,9 @@ export type StorePriceSheetRecord = {
   collectionIds?: string[];
   minimumOrderAmount?: number;
   fulfillment?: "self-fulfilled" | "auto";
+  freePrintEnabled?: boolean;
+  freePrintSizes?: string[];
+  freePrintPapers?: string[];
   productCount?: number;
   collectionCount?: number;
   products?: StoreProductRecord[];

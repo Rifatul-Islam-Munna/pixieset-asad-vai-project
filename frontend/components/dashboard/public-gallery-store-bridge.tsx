@@ -108,7 +108,7 @@ export function PublicGalleryStoreBridge({
   };
 
   useEffect(() => {
-    if (!paidStoreEnabled) return;
+    if (!enabled) return;
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
     fetch(`${baseUrl}/public/collections/${encodeURIComponent(galary)}/store?siteSlug=${encodeURIComponent(name)}`, {
       cache: "no-store",
@@ -116,7 +116,7 @@ export function PublicGalleryStoreBridge({
       .then((response) => (response.ok ? response.json() : null))
       .then((payload) => setStoreData(payload?.data ?? null))
       .catch(() => setStoreData(null));
-  }, [galary, name, paidStoreEnabled]);
+  }, [enabled, galary, name]);
 
   useEffect(() => {
     if (!paidStoreEnabled) return;
@@ -352,6 +352,8 @@ export function PublicGalleryStoreBridge({
           image={selectedImage}
           identifier={galary}
           siteSlug={name}
+          sizes={storeData?.store?.freePrintSizes}
+          papers={storeData?.store?.freePrintPapers}
           onClose={() => setPrintRequestOpen(false)}
         />
       )}

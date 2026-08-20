@@ -64,6 +64,7 @@ import {
   PanelTop,
   Pencil,
   PlusCircle,
+  Printer,
   Lock,
   QrCode,
   RefreshCw,
@@ -493,10 +494,26 @@ export function ClientDashboard({
     campaignBuilderOpen,
     wizardOpen,
     closeCampaignBuilder,
+    hydrateGlobalEmailTemplates,
     startWizard,
     setActiveNav,
     toggleCollapsed,
   } = useDashboardStore();
+  const globalEmailTemplatesQuery = useQuery({
+    queryKey: ["global-email-templates"],
+    queryFn: async () => {
+      const response = await fetch("/api/home-cms", { cache: "no-store" });
+      if (!response.ok) throw new Error("Pre-built templates could not be loaded");
+      const payload = (await response.json()) as { data?: HomeCmsData };
+      return payload.data?.emailTemplates ?? [];
+    },
+    staleTime: 60_000,
+  });
+  useEffect(() => {
+    if (globalEmailTemplatesQuery.data) {
+      hydrateGlobalEmailTemplates(globalEmailTemplatesQuery.data);
+    }
+  }, [globalEmailTemplatesQuery.data, hydrateGlobalEmailTemplates]);
   const activeNav =
     page === "dashboard"
       ? "Dashboard"
@@ -1169,7 +1186,7 @@ export function ClientDashboard({
             bypass={section !== "store-gallery"}
           >
             {campaignBuilderOpen ? (
-              <CampaignBuilder onClose={closeCampaignBuilder} />
+              <CampaignBuilder section={section} onClose={closeCampaignBuilder} />
             ) : wizardOpen ? (
               <CollectionWizard />
             ) : page === "library" ? (
@@ -3075,7 +3092,8 @@ function TemplateGrid({
   );
 }
 
-function CampaignBuilder({ onClose }: { onClose: () => void }) {
+function CampaignBuilder({ section, onClose }: { section: DashboardSection; onClose: () => void }) {
+  const router = useRouter();
   const {
     campaignButtonColor,
     campaignButtonLink,
@@ -3103,7 +3121,11 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
     setCampaignSubject,
     setCampaignTemplate,
     toggleRecipient,
+    addEmailTemplateDraft,
+    updateEmailTemplate,
+    saveEmailTemplate,
   } = useDashboardStore();
+  const { saveSetting } = useDashboardSettings<EmailTemplateItem>("email-template");
   const [sendPending, startSendTransition] = useTransition();
   const [sendError, setSendError] = useState("");
   const [recipientSearch, setRecipientSearch] = useState("");
@@ -3155,6 +3177,35 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
     }
     missing.forEach((email) => toggleRecipient(email));
   };
+  const saveAsMyTemplate = async () => {
+    addEmailTemplateDraft();
+    const id = useDashboardStore.getState().activeEmailTemplateId;
+    updateEmailTemplate({
+      name: campaignTemplate.trim() || "Untitled Template",
+      subject: campaignSubject,
+      previewText: campaignPreviewText,
+      title: campaignTemplate.trim() || "Untitled Template",
+      message: campaignMessage,
+      buttonText: campaignButtonText,
+      buttonLink: campaignButtonLink,
+      buttonColor: campaignButtonColor,
+      footerText: campaignFooterText,
+      image: campaignImage,
+      eyebrowText: campaignEyebrowText,
+      showImage: campaignShowImage,
+    });
+    saveEmailTemplate();
+    const saved = useDashboardStore.getState().emailTemplates.find((item) => item.id === id);
+    if (!saved) return;
+    await saveSetting.mutateAsync({ localId: id, name: saved.name, data: { ...saved, source: "user" } });
+    toast.success("Saved to My Templates");
+  };
+
+  const createNewTemplate = () => {
+    onClose();
+    router.push(`/dashboard/${section}/settings/email-templates/new`);
+  };
+
   const sendNow = () => {
     setSendError("");
     startSendTransition(async () => {
@@ -3201,12 +3252,14 @@ function CampaignBuilder({ onClose }: { onClose: () => void }) {
             DRAFT
           </span>
         </div>
-        <div className="flex items-center gap-8">
-          <button className="text-sm font-semibold">Send Test</button>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" className="h-10 rounded-none px-4 text-sm font-bold" onClick={createNewTemplate}><PlusCircle className="size-4" /> New Template</Button>
+          <Button variant="outline" className="h-10 rounded-none px-4 text-sm font-bold" disabled={saveSetting.isPending} onClick={() => void saveAsMyTemplate()}><Save className="size-4" /> {saveSetting.isPending ? "Saving..." : "Save as My Template"}</Button>
+          <button className="px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40" disabled={!selectedEmails.length}>Send Test</button>
           <Button
             className="h-12 rounded-none bg-[#6337d8] px-9 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={sendNow}
-            disabled={sendPending}
+            disabled={sendPending || !selectedEmails.length}
           >
             {sendPending ? (
               <Loader2 className="size-4 animate-spin" />
@@ -4973,6 +5026,14 @@ function EmailTemplatesPanel({
   }, [addEmailTemplateDraft, editorId, selectEmailTemplate]);
   const saveActiveTemplate = () => {
     if (!activeTemplate) return;
+    if (activeTemplate.source !== "user") {
+      updateEmailTemplate({});
+    }
+    const templateToSave =
+      useDashboardStore.getState().emailTemplates.find(
+        (template) =>
+          template.id === useDashboardStore.getState().activeEmailTemplateId,
+      ) ?? activeTemplate;
     const updatedAt = new Date().toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -4981,18 +5042,18 @@ function EmailTemplatesPanel({
 
     saveEmailTemplate();
     saveSetting.mutate({
-      localId: activeTemplate.id,
-      name: activeTemplate.name,
-      data: { ...activeTemplate, updatedAt },
+      localId: templateToSave.id,
+      name: templateToSave.name,
+      data: { ...templateToSave, source: "user", updatedAt },
     });
-    if (editorId === "new") {
+    if (editorId === "new" || editorId !== templateToSave.id) {
       router.replace(
-        `/dashboard/${section}/settings/email-templates/${encodeURIComponent(activeTemplate.id)}`,
+        `/dashboard/${section}/settings/email-templates/${encodeURIComponent(templateToSave.id)}`,
       );
     }
   };
   const deleteActiveTemplate = () => {
-    if (!activeTemplate) return;
+    if (!activeTemplate || activeTemplate.source !== "user") return;
     deleteEmailTemplate(activeTemplate.id);
     deleteSetting.mutate(activeTemplate.id);
     router.push(`/dashboard/${section}/settings/email-templates`);
@@ -5077,7 +5138,7 @@ function EmailTemplatesPanel({
                   </span>
                   <span>
                     <span className="rounded-full bg-[#f4f4f4] px-6 py-2 text-xs font-bold uppercase text-[#777]">
-                      Draft
+                      {template.source === "user" ? "My Template" : "Pre-built"}
                     </span>
                   </span>
                   <span>{template.updatedAt || "-"}</span>
@@ -5139,9 +5200,9 @@ function EmailTemplatesPanel({
             onClick={saveActiveTemplate}
           >
             <Save className="size-4" />
-            Save Template
+            {activeTemplate.source === "user" ? "Save Template" : "Save as My Template"}
           </Button>
-          {emailTemplates.length > 1 && (
+          {activeTemplate.source === "user" && (
             <button
               className="flex items-center gap-2 text-sm font-bold text-red-600"
               onClick={deleteActiveTemplate}
@@ -5161,7 +5222,9 @@ function EmailTemplatesPanel({
             </p>
             <h2 className="mt-2 text-2xl font-semibold">Email template</h2>
             <p className="mt-2 text-sm leading-6 text-[#666]">
-              Shape subject, message, action, and footer in one clean editor.
+              {activeTemplate.source === "user"
+                ? "Shape subject, message, action, and footer in one clean editor."
+                : "Edit this pre-built design. Your first change creates a private copy; admin original stays unchanged."}
             </p>
           </div>
           <FieldGroup className="gap-6">
@@ -5307,8 +5370,10 @@ function EmailTemplatesPanel({
             buttonColor={activeTemplate.buttonColor}
             buttonLink={activeTemplate.buttonLink}
             buttonText={activeTemplate.buttonText}
+            eyebrowText={activeTemplate.eyebrowText ?? "Client Gallery"}
             footerText={activeTemplate.footerText}
             image={activeTemplate.image}
+            showImage={activeTemplate.showImage ?? true}
             message={activeTemplate.message}
             previewText={activeTemplate.previewText}
             subject={activeTemplate.subject}
@@ -8389,6 +8454,15 @@ function StoreOrdersPanel() {
                         <p>Unit: {money(item.unitPrice, currency)}</p>
                         <p>Image: {item.imageId || "-"}</p>
                       </div>
+                      {item.options && Object.keys(item.options).length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          {Object.entries(item.options).map(([label, value]) => (
+                            <span key={label} className="border bg-[#fafafa] px-2.5 py-1.5 text-[#555]">
+                              <strong>{label}:</strong> {value}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {item.crop && (
                         <p className="mt-3 text-xs text-[#777]">
                           Crop: {item.crop.aspectRatio || "custom"} / zoom{" "}
@@ -10378,6 +10452,8 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
   const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(
     null,
   );
+  const [freePrintConfigOpen, setFreePrintConfigOpen] = useState(false);
+  const [freePrintForm, setFreePrintForm] = useState({ sizes: '', papers: '' });
 
   useEffect(() => {
     if (!sheet) return;
@@ -10409,6 +10485,18 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
       },
       { onSuccess: () => setSettingsOpen(false) },
     );
+  };
+
+  const saveFreePrintConfig = () => {
+    const sizes = optionValueList(freePrintForm.sizes);
+    const papers = optionValueList(freePrintForm.papers);
+    if (!sizes.length || !papers.length) {
+      toast.error('Add at least one size and one paper option');
+      return;
+    }
+    updatePriceSheet.mutate({ freePrintSizes: sizes, freePrintPapers: papers }, {
+      onSuccess: () => { setFreePrintConfigOpen(false); toast.success('Free print options saved'); },
+    });
   };
 
   if (!sheet) {
@@ -10503,6 +10591,12 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                     </span>
                   </DropdownMenuItem>
                 ))}
+                {sheet.freePrintEnabled && (
+                  <DropdownMenuItem className="cursor-pointer items-start gap-4 rounded-none p-2" onClick={() => { setFreePrintForm({ sizes: (sheet.freePrintSizes ?? ['4 x 6', '5 x 7', '8 x 10', '8 x 12']).join(', '), papers: (sheet.freePrintPapers ?? ['Glossy', 'Matte']).join(', ') }); setFreePrintConfigOpen(true); }}>
+                    <Printer className="mt-1 size-5 text-[#159d8b]" />
+                    <span><span className="block font-bold text-[#222]">Free Print Size</span><span className="mt-1 block text-sm leading-5 text-[#7a828c]">Configure size and paper choices used only by Free Print Requests.</span></span>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -10563,6 +10657,18 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
           </p>
         </div>
       )}
+
+      <Dialog open={freePrintConfigOpen} onOpenChange={setFreePrintConfigOpen}>
+        <DialogContent className="rounded-none sm:max-w-[580px]">
+          <DialogHeader><DialogTitle>FREE PRINT SIZE</DialogTitle><DialogDescription>These choices are only used by Free Print Requests. They are not normal store products and do not appear in paid checkout.</DialogDescription></DialogHeader>
+          <FieldGroup className="gap-6">
+            <Field><FieldLabel className="font-bold">Sizes</FieldLabel><Input value={freePrintForm.sizes} onChange={(event) => setFreePrintForm((value) => ({ ...value, sizes: event.target.value }))} placeholder="4 x 6, 5 x 7, 8 x 10" className="h-12 rounded-none" /><p className="text-sm text-[#777]">Enter size labels separated by commas. Visitors will see these in a dropdown.</p></Field>
+            <Field><FieldLabel className="font-bold">Paper</FieldLabel><Input value={freePrintForm.papers} onChange={(event) => setFreePrintForm((value) => ({ ...value, papers: event.target.value }))} placeholder="Glossy, Matte" className="h-12 rounded-none" /><p className="text-sm text-[#777]">Enter paper labels separated by commas. Visitors will see these in a dropdown.</p></Field>
+            <p className="border bg-[#fafafa] px-4 py-3 text-sm text-[#666]">Quantity is chosen by the visitor when they submit a free print request.</p>
+          </FieldGroup>
+          <DialogFooter><Button variant="outline" className="rounded-none" onClick={() => setFreePrintConfigOpen(false)}>Cancel</Button><Button className="rounded-none bg-[#6337d8] text-white" disabled={updatePriceSheet.isPending} onClick={saveFreePrintConfig}>{updatePriceSheet.isPending ? 'Saving...' : 'Save'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="rounded-none sm:max-w-[630px]">
@@ -11937,13 +12043,9 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       return toast.error(
         "Homepage address is still loading. Try Preview again.",
       );
-    const url = publicCollectionUrl(
-      siteSlug,
-      collection.slug ?? collection._id,
-      window.location.origin,
-    );
+    const previewUrl = `${window.location.origin}/collection/${encodeURIComponent(siteSlug)}/${encodeURIComponent(collection.slug ?? collection._id)}?preview=${encodeURIComponent(collection._id)}`;
     if (collection.status === "published") {
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(previewUrl, "_blank", "noopener,noreferrer");
       return;
     }
     setPublishConfirmCollection(collection);
@@ -11953,11 +12055,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
     const collection = publishConfirmCollection;
     if (!collection) return;
     const siteSlug = homepage.data?.data?.slug;
-    const url = publicCollectionUrl(
-      siteSlug!,
-      collection.slug ?? collection._id,
-      window.location.origin,
-    );
+    const previewUrl = `${window.location.origin}/collection/${encodeURIComponent(siteSlug!)}/${encodeURIComponent(collection.slug ?? collection._id)}?preview=${encodeURIComponent(collection._id)}`;
     setPublishConfirmOpen(false);
     setPublishConfirmCollection(null);
     const previewTab = window.open("about:blank", "_blank");
@@ -11965,8 +12063,8 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
       { collectionId: collection._id, payload: { status: "published" } },
       {
         onSuccess: () => {
-          if (previewTab) previewTab.location.href = url;
-          else window.location.assign(url);
+          if (previewTab) previewTab.location.href = previewUrl;
+          else window.location.assign(previewUrl);
         },
         onError: (error) => {
           previewTab?.close();
@@ -12904,7 +13002,7 @@ function CollectionDetailView({
     "download" | "favorite" | "orders" | "email" | "contacts" | "private"
   >("favorite");
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<
-    "general" | "privacy" | "download" | "favorite" | "store"
+    "general" | "privacy" | "email-access" | "pin-access" | "download" | "favorite" | "store"
   >("general");
   const [activeSetId, setActiveSetId] = useState("highlights");
   const [detailCollapsed, setDetailCollapsed] = useState(false);
@@ -12926,6 +13024,9 @@ function CollectionDetailView({
   const [shareButtonText, setShareButtonText] = useState("View Gallery");
   const [shareFooterText, setShareFooterText] = useState("");
   const [shareSending, setShareSending] = useState(false);
+  const [galleryPinDraft, setGalleryPinDraft] = useState(
+    String((collection?.settings?.access as CollectionAccessSettings | undefined)?.pinCode ?? ""),
+  );
   const [photoSort, setPhotoSort] = useState<
     | "uploaded-new-old"
     | "uploaded-old-new"
@@ -13110,6 +13211,7 @@ function CollectionDetailView({
   const publicLink = homepageSlug
     ? publicCollectionUrl(homepageSlug, collectionSlug, pageOrigin)
     : `${pageOrigin}/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collectionSlug)}`;
+  const ownerPreviewLink = `${pageOrigin}/collection/${encodeURIComponent(homepageSlug ?? collection?.name ?? collectionId)}/${encodeURIComponent(collectionSlug)}?preview=${encodeURIComponent(collectionId)}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicLink)}`;
   const selectedTargetCollection = collections.find(
     (item) => item._id === imageTargetCollectionId,
@@ -13931,8 +14033,8 @@ function CollectionDetailView({
               <DropdownMenuItem
                 className="h-11 rounded-none"
                 onSelect={() => {
-                  setActiveTab("download");
-                  setActivityPage("email");
+                  setActiveTab("settings");
+                  setActiveSettingsPanel("email-access");
                 }}
               >
                 <RefreshCw className="size-4" />
@@ -13968,7 +14070,7 @@ function CollectionDetailView({
           <button
             className="font-medium text-[#222]"
             onClick={() =>
-              window.open(publicLink, "_blank", "noopener,noreferrer")
+              window.open(ownerPreviewLink, "_blank", "noopener,noreferrer")
             }
             type="button"
           >
@@ -14878,6 +14980,8 @@ function CollectionDetailView({
                 [
                   ["general", Wrench, "General", ""],
                   ["privacy", Lock, "Privacy", ""],
+                  ["email-access", Mail, "Email Access", form.general.emailRegistration ? "On" : "Off"],
+                  ["pin-access", Lock, "PIN Access", (collection.settings?.access as CollectionAccessSettings | undefined)?.pinEnabled ? "On" : "Off"],
                   [
                     "download",
                     Download,
@@ -14955,17 +15059,6 @@ function CollectionDetailView({
               >
                 <ShoppingCart className="size-4" />
                 Store Orders
-              </button>
-              <button
-                className={cn(
-                  "flex h-14 w-full items-center gap-3 px-5 text-left",
-                  activityPage === "email" && "bg-[#f3f3f3] font-medium",
-                )}
-                onClick={() => setActivityPage("email")}
-                type="button"
-              >
-                <Mail className="size-4" />
-                Email Access
               </button>
               <button
                 className={cn(
@@ -15699,7 +15792,7 @@ function CollectionDetailView({
             </div>
           )}
 
-          {activeTab === "settings" && (
+          {activeTab === "settings" && activeSettingsPanel !== "email-access" && (
             <div className="max-w-[760px]">
               {activeSettingsPanel === "general" && (
                 <>
@@ -16135,7 +16228,35 @@ function CollectionDetailView({
             </div>
           )}
 
-          {activeTab === "download" && (
+          {activeTab === "settings" && activeSettingsPanel === "pin-access" && (
+            <section className="min-w-0 p-6">
+              <div className="mx-auto max-w-[760px] border bg-white p-6">
+                <h2 className="text-2xl font-medium">PIN Access</h2>
+                <p className="mt-2 text-sm text-[#666]">Require one gallery PIN before visitors can see this collection. PIN Access and Email Access cannot be enabled together.</p>
+                <label className="mt-6 flex items-center justify-between border p-4">
+                  <span><span className="block font-bold">Enable PIN Access</span><span className="mt-1 block text-sm text-[#777]">Visitors must enter the PIN before gallery content loads.</span></span>
+                  <Switch checked={Boolean((collection.settings?.access as CollectionAccessSettings | undefined)?.pinEnabled)} onCheckedChange={async (pinEnabled) => {
+                    const access = { ...((collection.settings?.access as CollectionAccessSettings | undefined) ?? {}), pinEnabled, pinCode: galleryPinDraft.trim() };
+                    const general = { ...form.general, emailRegistration: pinEnabled ? false : form.general.emailRegistration };
+                    setForm((value) => ({ ...value, general }));
+                    await updateCollection.mutateAsync({ settings: { ...(collection.settings ?? {}), general, access } });
+                    await collectionQuery.refetch();
+                  }} />
+                </label>
+                <Field className="mt-6"><FieldLabel>Gallery PIN</FieldLabel><Input value={galleryPinDraft} onChange={(event) => setGalleryPinDraft(event.target.value.replace(/\s/g, "").slice(0, 32))} placeholder="Enter PIN" className="mt-2 h-11 rounded-none" /></Field>
+                <Button className="mt-5 rounded-none bg-[#6337d8] text-white" disabled={!galleryPinDraft.trim() || updateCollection.isPending} onClick={async () => {
+                  const access = { ...((collection.settings?.access as CollectionAccessSettings | undefined) ?? {}), pinEnabled: true, pinCode: galleryPinDraft.trim() };
+                  const general = { ...form.general, emailRegistration: false };
+                  setForm((value) => ({ ...value, general }));
+                  await updateCollection.mutateAsync({ settings: { ...(collection.settings ?? {}), general, access } });
+                  await collectionQuery.refetch(); toast.success("PIN access saved");
+                }}>Save PIN</Button>
+              </div>
+            </section>
+          )}
+
+          {(activeTab === "download" ||
+            (activeTab === "settings" && activeSettingsPanel === "email-access")) && (
             <CollectionActivityPanel
               loading={activityQuery.isLoading}
               favoriteLists={
@@ -16162,13 +16283,21 @@ function CollectionDetailView({
               collectionName={collection.name}
               collectionImages={images}
               publicLink={publicLink}
-              activityPage={activityPage}
+              activityPage={activeTab === "settings" ? "email" : activityPage}
               emailTemplates={emailTemplates}
               favoriteSettings={form.favorite}
               accessSettings={
                 (collection.settings?.access as
                   CollectionAccessSettings | undefined) ?? {}
               }
+              emailAccessEnabled={Boolean(form.general.emailRegistration)}
+              setEmailAccessEnabled={async (enabled) => {
+                const general = { ...form.general, emailRegistration: enabled };
+                const access = { ...((collection.settings?.access as CollectionAccessSettings | undefined) ?? {}), pinEnabled: enabled ? false : Boolean((collection.settings?.access as CollectionAccessSettings | undefined)?.pinEnabled) };
+                setForm((value) => ({ ...value, general }));
+                await updateCollection.mutateAsync({ settings: { ...(collection.settings ?? {}), general, access } });
+                await collectionQuery.refetch();
+              }}
               saveFavoriteSettings={async (favorite) => {
                 const nextFavorite = { ...form.favorite, ...favorite };
                 setForm((value) => ({ ...value, favorite: nextFavorite }));
@@ -16290,6 +16419,8 @@ function CollectionActivityPanel({
   emailTemplates = [],
   favoriteSettings,
   accessSettings = {},
+  emailAccessEnabled,
+  setEmailAccessEnabled,
   saveFavoriteSettings,
   saveAccessSettings,
   deleteFavoriteInfo,
@@ -16313,6 +16444,8 @@ function CollectionActivityPanel({
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
   accessSettings: CollectionAccessSettings;
+  emailAccessEnabled: boolean;
+  setEmailAccessEnabled: (enabled: boolean) => Promise<void>;
   saveFavoriteSettings: (
     favorite: Partial<PresetFavoriteSettings>,
   ) => Promise<void>;
@@ -16715,9 +16848,12 @@ function CollectionActivityPanel({
               <div>
                 <h2 className="text-2xl font-medium">Email Access</h2>
                 <p className="mt-2 text-sm text-[#666]">
-                  Only listed or approved emails can open this gallery when
-                  Email Registration is on.
+                  Only listed or approved emails can open this gallery when Email Access is on. PIN Access will be turned off automatically.
                 </p>
+                <label className="mt-3 inline-flex items-center gap-3 text-sm font-bold">
+                  <Switch checked={emailAccessEnabled} onCheckedChange={(enabled) => void setEmailAccessEnabled(enabled)} />
+                  {emailAccessEnabled ? "Email Access On" : "Email Access Off"}
+                </label>
               </div>
               <label className="inline-flex h-9 cursor-pointer items-center gap-2 border bg-white px-3 text-sm font-bold">
                 <FileUp className="size-4" />
@@ -17502,6 +17638,8 @@ type CollectionAccessRequest = {
 type CollectionAccessSettings = {
   allowedEmails?: string[];
   requests?: CollectionAccessRequest[];
+  pinEnabled?: boolean;
+  pinCode?: string;
 };
 
 type CollectionFormState = {

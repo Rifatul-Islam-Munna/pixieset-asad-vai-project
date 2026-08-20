@@ -28,6 +28,11 @@ export const loginUser = async (phoneNumber: string, password: string) => {
 
 }
 
+export const requestPasswordlessAccess = async (email: string) => {
+    const [data, error] = await PostRequestAxios<{ message: string }>("/user/forgot-password", { email });
+    return { data, error };
+}
+
 export const loginWithPin = async (login: string, pin: string) => {
     const [data, error] = await PostRequestAxios<userData>("/user/login-with-pin", { login, pin });
     if (data) { const cookie = await cookies(); cookie.set("access_token", data.access_token || "", cookieOptions); cookie.set("user", JSON.stringify(data.user) || "", cookieOptions); }

@@ -6,6 +6,7 @@ export type HomeCmsData = {
   brand: BrandSettings;
   legal: Record<HomeLanguage, LegalPages>;
   coverTemplates: CustomCoverTemplate[];
+  emailTemplates: EmailTemplateItem[];
   content: Record<HomeLanguage, HomeContent>;
   media: {
     heroMediaType: "image" | "video";
@@ -50,6 +51,31 @@ export type CustomCoverTemplate = {
   lineOpacity: number;
   elements: CustomCoverElement[];
 };
+
+export type EmailTemplateItem = {
+  id: string;
+  name: string;
+  subject: string;
+  previewText: string;
+  title: string;
+  message: string;
+  buttonText: string;
+  buttonLink: string;
+  buttonColor: string;
+  footerText: string;
+  image: string;
+  eyebrowText?: string;
+  showImage?: boolean;
+  updatedAt: string;
+  source?: "admin" | "user";
+  sourceTemplateId?: string;
+};
+
+export const defaultEmailTemplates: EmailTemplateItem[] = [
+  { id: "admin-gallery-ready", name: "Gallery Ready", subject: "Your photos are ready", previewText: "Your gallery is ready to view.", title: "Your photos are ready", message: "Your gallery is ready. We hope you love reliving these moments. Use the button below to view and download your photos.", buttonText: "View Gallery", buttonLink: "Collection URL", buttonColor: "#1C1C1C", footerText: "Thank you for trusting us with your memories.", image: "", updatedAt: "Pre-built", source: "admin" },
+  { id: "admin-friendly-reminder", name: "Friendly Reminder", subject: "A quick reminder about your gallery", previewText: "Your gallery is still waiting for you.", title: "Your gallery is waiting", message: "Just a friendly reminder that your photo gallery is ready. Open it anytime to view your images, choose favorites, and download the moments you love.", buttonText: "Open Gallery", buttonLink: "Collection URL", buttonColor: "#6F57D9", footerText: "Questions? Reply to this email and we'll be happy to help.", image: "", updatedAt: "Pre-built", source: "admin" },
+  { id: "admin-thank-you", name: "Thank You", subject: "Thank you — your gallery is here", previewText: "A small thank-you and your finished gallery.", title: "Thank you", message: "Thank you for choosing us to photograph your story. Your finished gallery is now available and ready to share with the people you love.", buttonText: "See Your Photos", buttonLink: "Collection URL", buttonColor: "#B48A58", footerText: "With gratitude, your photography team.", image: "", updatedAt: "Pre-built", source: "admin" },
+];
 
 export type SiteSeo = {
   siteTitle: string;
@@ -224,6 +250,7 @@ export const defaultHomeCms: HomeCmsData = {
     accentColor: "#22bda7",
   },
   coverTemplates: [],
+  emailTemplates: defaultEmailTemplates,
   legal: {
     en: {
       terms: {
@@ -904,6 +931,10 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     coverTemplates: Array.isArray(data?.coverTemplates)
       ? data.coverTemplates
       : [],
+    emailTemplates:
+      Array.isArray(data?.emailTemplates) && data.emailTemplates.length
+        ? data.emailTemplates.map((template) => ({ ...template, source: "admin" as const }))
+        : defaultEmailTemplates,
     media,
     content,
   };

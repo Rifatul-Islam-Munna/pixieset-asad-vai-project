@@ -4,7 +4,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { FindOneTokenDto, LoginDto, OtpstringDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { MagicLoginDto, PinLoginDto } from './dto/passwordless-login.dto';
+import { ForgotPasswordDto, MagicLoginDto, PinLoginDto } from './dto/passwordless-login.dto';
 
 @Controller('user')
 export class UserController {
@@ -28,6 +28,11 @@ export class UserController {
   @Post('login-with-pin')
   loginWithPin(@Body() dto: PinLoginDto) {
     return this.userService.loginWithPin(dto.login, dto.pin);
+  }
+
+  @Post('forgot-password')
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.userService.requestPasswordlessAccess(dto.email);
   }
 
   @Post('login-with-link')

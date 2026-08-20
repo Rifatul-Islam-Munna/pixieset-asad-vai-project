@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { CustomCoverTemplate } from "@/lib/home-cms";
+import {
+  defaultEmailTemplates,
+  type CustomCoverTemplate,
+  type EmailTemplateItem as CmsEmailTemplateItem,
+} from "@/lib/home-cms";
+
+export type EmailTemplateItem = CmsEmailTemplateItem;
 
 export type PresetEditorPanel =
   | "general"
@@ -122,21 +128,6 @@ export type WatermarkItem = {
   applyDownloads: boolean;
 };
 
-export type EmailTemplateItem = {
-  id: string;
-  name: string;
-  subject: string;
-  previewText: string;
-  title: string;
-  message: string;
-  buttonText: string;
-  buttonLink: string;
-  buttonColor: string;
-  footerText: string;
-  image: string;
-  updatedAt: string;
-};
-
 export type DashboardSettingRecord<T = unknown> = {
   _id: string;
   type: "watermark" | "preset" | "email-template" | "branding" | "preference" | "integration" | "marketing";
@@ -195,6 +186,8 @@ type DashboardState = {
   presetItems: PresetItem[];
   activePresetId: string;
   emailTemplates: EmailTemplateItem[];
+  globalEmailTemplates: EmailTemplateItem[];
+  userEmailTemplates: EmailTemplateItem[];
   activeEmailTemplateId: string;
   emailTemplateSaved: boolean;
   setActiveNav: (value: string) => void;
@@ -253,6 +246,7 @@ type DashboardState = {
   updateEmailTemplate: (value: Partial<EmailTemplateItem>) => void;
   saveEmailTemplate: () => void;
   deleteEmailTemplate: (id: string) => void;
+  hydrateGlobalEmailTemplates: (templates: EmailTemplateItem[]) => void;
   hydrateDashboardSettings: (settings: DashboardSettingRecord[]) => void;
 };
 
@@ -264,15 +258,14 @@ const samplePhotos = [
 
 const defaultFooterText = "";
 
-export const baseEmailTemplates: EmailTemplateItem[] = [
-  { id: "base-gallery-ready", name: "Gallery Ready", subject: "Your photos are ready", previewText: "Your gallery is ready to view.", title: "Your photos are ready", message: "Your gallery is ready. We hope you love reliving these moments. Use the button below to view and download your photos.", buttonText: "View Gallery", buttonLink: "Collection URL", buttonColor: "#1C1C1C", footerText: "Thank you for trusting us with your memories.", image: "", updatedAt: "Built in" },
-  { id: "base-friendly-reminder", name: "Friendly Reminder", subject: "A quick reminder about your gallery", previewText: "Your gallery is still waiting for you.", title: "Your gallery is waiting", message: "Just a friendly reminder that your photo gallery is ready. Open it anytime to view your images, choose favorites, and download the moments you love.", buttonText: "Open Gallery", buttonLink: "Collection URL", buttonColor: "#6F57D9", footerText: "Questions? Reply to this email and we’ll be happy to help.", image: "", updatedAt: "Built in" },
-  { id: "base-thank-you", name: "Thank You", subject: "Thank you — your gallery is here", previewText: "A small thank-you and your finished gallery.", title: "Thank you", message: "Thank you for choosing us to photograph your story. Your finished gallery is now available and ready to share with the people you love.", buttonText: "See Your Photos", buttonLink: "Collection URL", buttonColor: "#B48A58", footerText: "With gratitude, your photography team.", image: "", updatedAt: "Built in" },
-];
+export const baseEmailTemplates: EmailTemplateItem[] = defaultEmailTemplates;
 
-const mergeEmailTemplates = (templates: EmailTemplateItem[]) => [
-  ...baseEmailTemplates.map((builtIn) => templates.find((item) => item.id === builtIn.id) ?? builtIn),
-  ...templates.filter((item) => !baseEmailTemplates.some((builtIn) => builtIn.id === item.id)),
+const mergeEmailTemplates = (
+  userTemplates: EmailTemplateItem[],
+  globalTemplates: EmailTemplateItem[] = baseEmailTemplates,
+) => [
+  ...globalTemplates.map((template) => ({ ...template, source: "admin" as const })),
+  ...userTemplates.map((template) => ({ ...template, source: "user" as const })),
 ];
 
 const emptyPresetGeneral: PresetGeneralSettings = {
@@ -499,6 +492,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
   presetItems: defaultPresetItems,
   activePresetId: defaultPresetItems[0].id,
   emailTemplates: initialEmailTemplates,
+  globalEmailTemplates: baseEmailTemplates,
+  userEmailTemplates: [],
   activeEmailTemplateId: initialEmailTemplates[0]?.id ?? "",
   emailTemplateSaved: true,
   setActiveNav: (value) => set({ activeNav: value }),
@@ -528,8 +523,8 @@ export const useDashboardStore = create<DashboardState>((set) => {
           campaignButtonColor: savedTemplate.buttonColor,
           campaignFooterText: savedTemplate.footerText,
           campaignImage: savedTemplate.image,
-          campaignEyebrowText: "Client Gallery",
-          campaignShowImage: true,
+          campaignEyebrowText: savedTemplate.eyebrowText ?? "Client Gallery",
+          campaignShowImage: savedTemplate.showImage ?? true,
           campaignTab: "email",
           showCampaignTemplates: false,
         };
@@ -810,14 +805,19 @@ export const useDashboardStore = create<DashboardState>((set) => {
         buttonColor: "#22bda7",
         footerText: defaultFooterText,
         image: "",
+        eyebrowText: "Client Gallery",
+        showImage: true,
         updatedAt: "Draft",
+        source: "user",
       };
 
-      const emailTemplates = [template, ...state.emailTemplates];
+      const userEmailTemplates = [template, ...state.userEmailTemplates];
+      const emailTemplates = mergeEmailTemplates(userEmailTemplates, state.globalEmailTemplates);
       writeEmailTemplates(emailTemplates);
 
       return {
         emailTemplates,
+        userEmailTemplates,
         activeEmailTemplateId: id,
         emailTemplateSaved: false,
       };
@@ -825,40 +825,81 @@ export const useDashboardStore = create<DashboardState>((set) => {
   selectEmailTemplate: (id) => set({ activeEmailTemplateId: id, emailTemplateSaved: true }),
   updateEmailTemplate: (value) =>
     set((state) => {
-      const emailTemplates = state.emailTemplates.map((template) =>
-        template.id === state.activeEmailTemplateId
-          ? { ...template, ...value }
-          : template,
+      const active = state.emailTemplates.find(
+        (template) => template.id === state.activeEmailTemplateId,
       );
+      if (!active) return state;
+      const editingGlobal = active.source !== "user";
+      const cloneId = editingGlobal ? `tpl-${Date.now()}` : active.id;
+      const edited: EmailTemplateItem = {
+        ...active,
+        ...(editingGlobal
+          ? {
+              id: cloneId,
+              name: `${active.name || "Untitled Template"} Copy`,
+              source: "user" as const,
+              sourceTemplateId: active.id,
+              updatedAt: "Draft",
+            }
+          : {}),
+        ...value,
+      };
+      const userEmailTemplates = editingGlobal
+        ? [edited, ...state.userEmailTemplates]
+        : state.userEmailTemplates.map((template) =>
+            template.id === active.id ? edited : template,
+          );
+      const emailTemplates = mergeEmailTemplates(userEmailTemplates, state.globalEmailTemplates);
       writeEmailTemplates(emailTemplates);
 
       return {
         emailTemplates,
+        userEmailTemplates,
+        activeEmailTemplateId: cloneId,
         emailTemplateSaved: false,
       };
     }),
   saveEmailTemplate: () =>
     set((state) => {
-      const emailTemplates = state.emailTemplates.map((template) =>
+      const userEmailTemplates = state.userEmailTemplates.map((template) =>
         template.id === state.activeEmailTemplateId
           ? { ...template, updatedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) }
           : template,
       );
+      const emailTemplates = mergeEmailTemplates(userEmailTemplates, state.globalEmailTemplates);
       writeEmailTemplates(emailTemplates);
 
       return {
         emailTemplates,
+        userEmailTemplates,
         emailTemplateSaved: true,
       };
     }),
   deleteEmailTemplate: (id) =>
     set((state) => {
-      const emailTemplates = state.emailTemplates.filter((template) => template.id !== id);
+      const userEmailTemplates = state.userEmailTemplates.filter((template) => template.id !== id);
+      const emailTemplates = mergeEmailTemplates(userEmailTemplates, state.globalEmailTemplates);
       writeEmailTemplates(emailTemplates);
       return {
         emailTemplates,
+        userEmailTemplates,
         activeEmailTemplateId: emailTemplates[0]?.id ?? "",
         emailTemplateSaved: true,
+      };
+    }),
+  hydrateGlobalEmailTemplates: (templates) =>
+    set((state) => {
+      const globalEmailTemplates = (templates.length ? templates : baseEmailTemplates).map(
+        (template) => ({ ...template, source: "admin" as const }),
+      );
+      const emailTemplates = mergeEmailTemplates(state.userEmailTemplates, globalEmailTemplates);
+      return {
+        globalEmailTemplates,
+        emailTemplates,
+        activeEmailTemplateId:
+          emailTemplates.some((template) => template.id === state.activeEmailTemplateId)
+            ? state.activeEmailTemplateId
+            : emailTemplates[0]?.id ?? "",
       };
     }),
   hydrateDashboardSettings: (settings) =>
@@ -866,10 +907,21 @@ export const useDashboardStore = create<DashboardState>((set) => {
       const watermarks = settings
         .filter((setting) => setting.type === "watermark")
         .map((setting) => setting.data as WatermarkItem);
-      const emailTemplates = settings
-        .filter((setting) => setting.type === "email-template")
-        .map((setting) => setting.data as EmailTemplateItem);
-      const combinedEmailTemplates = mergeEmailTemplates(emailTemplates);
+      const hasEmailTemplateSettings = settings.some(
+        (setting) => setting.type === "email-template",
+      );
+      const emailTemplates = hasEmailTemplateSettings
+        ? settings
+            .filter((setting) => setting.type === "email-template")
+            .map((setting) => ({
+              ...(setting.data as EmailTemplateItem),
+              source: "user" as const,
+            }))
+        : state.userEmailTemplates;
+      const combinedEmailTemplates = mergeEmailTemplates(
+        emailTemplates,
+        state.globalEmailTemplates,
+      );
       const presetItems = settings
         .filter((setting) => setting.type === "preset")
         .map((setting) => {
@@ -905,7 +957,12 @@ export const useDashboardStore = create<DashboardState>((set) => {
         watermarkItems: watermarks.length ? watermarks : state.watermarkItems,
         activeWatermarkId: watermarks[0]?.id ?? state.activeWatermarkId,
         emailTemplates: combinedEmailTemplates,
-        activeEmailTemplateId: combinedEmailTemplates[0]?.id ?? state.activeEmailTemplateId,
+        userEmailTemplates: emailTemplates,
+        activeEmailTemplateId: combinedEmailTemplates.some(
+          (template) => template.id === state.activeEmailTemplateId,
+        )
+          ? state.activeEmailTemplateId
+          : combinedEmailTemplates[0]?.id ?? "",
         presetItems: combinedPresets,
         activePresetId: activePreset?.id ?? state.activePresetId,
         presetName: activePreset?.name ?? state.presetName,

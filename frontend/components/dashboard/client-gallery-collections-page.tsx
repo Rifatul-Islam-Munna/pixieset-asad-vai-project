@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { useCollections, type CollectionRecord } from "@/api-hooks/use-collections";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
-import { publicCollectionUrl } from "@/lib/public-site-url";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "grid" | "list";
@@ -270,8 +269,8 @@ function CollectionMeta({ collection }: { collection: CollectionRecord }) {
 }
 
 function publicPath(collection: CollectionRecord, siteSlug: string) {
-  if (siteSlug) return publicCollectionUrl(siteSlug, collection.slug ?? collection._id);
-  return `/collection/${encodeURIComponent(collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
+  const path = `/collection/${encodeURIComponent(siteSlug || collection.name)}/${encodeURIComponent(collection.slug ?? collection._id)}`;
+  return `${path}?preview=${encodeURIComponent(collection._id)}`;
 }
 
 function imageSrc(url: string) {

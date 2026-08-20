@@ -342,6 +342,7 @@ export async function updateHomeCms(payload: HomeCmsData) {
   });
   revalidatePath("/", "layout");
   revalidatePath("/admin");
+  revalidatePath("/admin/email-templates");
   revalidatePath("/login");
   revalidatePath("/register");
   revalidatePath("/terms-of-service");

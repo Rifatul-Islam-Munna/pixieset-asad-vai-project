@@ -27,6 +27,12 @@ export class HomeCms {
   @Prop({ type: [Object], required: true, default: () => [] })
   coverTemplates: Record<string, unknown>[];
 
+  @Prop({ type: [Object], required: true, default: () => [] })
+  emailTemplates: Record<string, unknown>[];
+
+  @Prop({ type: [Object], required: true, default: () => [] })
+  fonts: Record<string, unknown>[];
+
   @Prop({ type: Object, required: true, default: () => ({ heroMediaType: 'image', heroMediaUrl: '' }) })
   media: { heroMediaType: 'image' | 'video'; heroMediaUrl: string };
 

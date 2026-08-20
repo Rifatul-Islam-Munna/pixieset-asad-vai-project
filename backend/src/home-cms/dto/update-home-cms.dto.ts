@@ -25,6 +25,9 @@ export class UpdateHomeCmsDto {
   coverTemplates?: Record<string, any>[];
 
   @IsOptional()
+  emailTemplates?: Record<string, any>[];
+
+  @IsOptional()
   @IsObject()
   media?: {
     heroMediaType?: 'image' | 'video';

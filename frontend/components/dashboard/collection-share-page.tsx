@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   FileUp,
@@ -30,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { DashboardSection } from "@/components/dashboard/client-dashboard";
 import { baseEmailTemplates, type EmailTemplateItem } from "@/lib/dashboard-store";
-import type { BrandSettings } from "@/lib/home-cms";
+import type { BrandSettings, HomeCmsData } from "@/lib/home-cms";
 import { publicCollectionUrl } from "@/lib/public-site-url";
 
 const defaultBranding: BrandSettings = {
@@ -94,6 +95,16 @@ export function CollectionSharePage({
   const emailTemplateSettings = useDashboardSettings<EmailTemplateItem>("email-template");
   const brandingSettings = useDashboardSettings<BrandSettings>("branding");
   const homepageQuery = useHomepageSettings().query;
+  const globalTemplatesQuery = useQuery({
+    queryKey: ["global-email-templates"],
+    queryFn: async () => {
+      const response = await fetch("/api/home-cms", { cache: "no-store" });
+      if (!response.ok) throw new Error("Pre-built templates could not be loaded");
+      const payload = (await response.json()) as { data?: HomeCmsData };
+      return payload.data?.emailTemplates ?? baseEmailTemplates;
+    },
+    staleTime: 60_000,
+  });
 
   const collection = collectionQuery.data?.data;
   const images = collection?.images ?? [];
@@ -102,11 +113,12 @@ export function CollectionSharePage({
     const custom = Array.isArray(emailTemplateRows)
       ? emailTemplateRows.map((setting) => setting.data)
       : [];
+    const global = globalTemplatesQuery.data ?? baseEmailTemplates;
     return [
-      ...baseEmailTemplates.map((builtIn) => custom.find((item) => item.id === builtIn.id) ?? builtIn),
-      ...custom.filter((item) => !baseEmailTemplates.some((builtIn) => builtIn.id === item.id)),
+      ...global.map((template) => ({ ...template, source: "admin" as const })),
+      ...custom.map((template) => ({ ...template, source: "user" as const })),
     ];
-  }, [emailTemplateRows]);
+  }, [emailTemplateRows, globalTemplatesQuery.data]);
   const branding =
     brandingSettings.query.data?.data?.[0]?.data ?? defaultBranding;
 
