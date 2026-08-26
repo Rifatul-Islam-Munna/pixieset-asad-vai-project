@@ -8,6 +8,7 @@ import { StoreOrder, StoreOrderDocument } from './entities/store-order.entity';
 import { StoreSetting, StoreSettingDocument } from './entities/store-setting.entity';
 import { StoreCatalogService, type ResolvedCollectionStore } from './store-catalog.service';
 import { StoreStripeService } from './store-stripe.service';
+import { PrintLabNotificationService } from './print-lab-notification.service';
 
 @Injectable()
 export class StorePaymentVerifyService {
@@ -24,6 +25,7 @@ export class StorePaymentVerifyService {
     private readonly settingModel: Model<StoreSettingDocument>,
     @InjectModel(StoreActivity.name)
     private readonly activityModel: Model<StoreActivityDocument>,
+    private readonly printLabNotification: PrintLabNotificationService,
   ) {}
 
   async checkoutSession(sessionId: string) {
@@ -57,6 +59,9 @@ export class StorePaymentVerifyService {
       }
     }
     await order.save();
+    if (becamePaid) {
+      void this.printLabNotification.notify(order._id.toString(), 'paid').catch(() => undefined);
+    }
     if (becamePaid && session.metadata?.couponId) {
       await this.couponModel.updateOne({ _id: session.metadata.couponId }, { $inc: { usageCount: 1 } });
     }
@@ -117,6 +122,7 @@ export class StorePaymentVerifyService {
     }
     await order.save();
     if (becamePaid) {
+      void this.printLabNotification.notify(order._id.toString(), 'paid').catch(() => undefined);
       await this.recalculateCustomer(order.userId, order.customer?.email);
     }
     return {

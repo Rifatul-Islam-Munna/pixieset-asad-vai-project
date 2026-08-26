@@ -1,5 +1,7 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+﻿import { Body, Controller, Get, NotFoundException, Param, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { PublicStoreService } from './public-store.service';
+import { PrintLabNotificationService } from './print-lab-notification.service';
 
 @Controller('public/collections')
 export class PublicPrintStoreController {
@@ -48,5 +50,36 @@ export class PublicPrintStoreController {
   @Post(':identifier/store/activity')
   async activity(@Param('identifier') identifier: string, @Body() body: any, @Query('siteSlug') siteSlug?: string) {
     return { data: await this.store.saveActivity(identifier, body, siteSlug) };
+  }
+}
+
+
+
+@Controller('public/print-lab')
+export class PublicPrintLabController {
+  constructor(private readonly printLab: PrintLabNotificationService) {}
+
+  @Get('orders/:orderId')
+  async printLabOrder(
+    @Param('orderId') orderId: string,
+    @Query('token') token?: string,
+  ) {
+    if (!token) throw new NotFoundException('Print order unavailable');
+    return { data: await this.printLab.getPublicOrder(orderId, token) };
+  }
+
+  @Get('orders/:orderId/images/:imageId')
+  async printLabImage(
+    @Param('orderId') orderId: string,
+    @Param('imageId') imageId: string,
+    @Query('token') token: string | undefined,
+    @Res() response: Response,
+  ) {
+    if (!token) throw new NotFoundException('Print order unavailable');
+    const asset = await this.printLab.authorizeImage(orderId, imageId, token);
+    const filename = asset.filename.replace(/["\r\n]/g, '_');
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    response.setHeader('Cache-Control', 'private, no-store');
+    return response.redirect(asset.url);
   }
 }

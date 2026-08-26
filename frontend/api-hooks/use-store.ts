@@ -124,6 +124,10 @@ export type StoreOrderRecord = {
   trackingNumber?: string;
   trackingUrl?: string;
   note?: string;
+  printLabNotificationStatus?: 'not-requested' | 'pending' | 'sent' | 'failed';
+  printLabNotificationRecipient?: string;
+  printLabNotificationSentAt?: string;
+  printLabNotificationError?: string;
   createdAt?: string;
 };
 
@@ -533,6 +537,18 @@ export function useStoreOrders() {
     },
   });
 
+  const resendPrintLabOrder = useMutation({
+    mutationFn: async (orderId: string) => {
+      const [data, error] = await PostRequestAxios<ListResponse<StoreOrderRecord> & { message: string }>(
+        `/store/orders/${orderId}/print-lab/resend`,
+        {},
+      );
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['store-orders'] }),
+  });
+
   const deleteOrder = useMutation({
     mutationFn: async (orderId: string) => {
       const [data, error] = await DeleteRequestAxios<
@@ -548,7 +564,7 @@ export function useStoreOrders() {
     },
   });
 
-  return { ordersQuery, createOrder, updateOrder, deleteOrder };
+  return { ordersQuery, createOrder, updateOrder, resendPrintLabOrder, deleteOrder };
 }
 
 export function useStoreCustomers() {

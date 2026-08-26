@@ -6,6 +6,7 @@ import { StoreOrder, StoreOrderDocument } from './entities/store-order.entity';
 import { StoreCatalogService } from './store-catalog.service';
 import { StorePricingService } from './store-pricing.service';
 import { StoreStripeService } from './store-stripe.service';
+import { PrintLabNotificationService } from './print-lab-notification.service';
 
 @Injectable()
 export class StoreOrderCreateService {
@@ -17,6 +18,7 @@ export class StoreOrderCreateService {
     private readonly orderModel: Model<StoreOrderDocument>,
     @InjectModel(StoreCustomer.name)
     private readonly customerModel: Model<StoreCustomerDocument>,
+    private readonly printLabNotification: PrintLabNotificationService,
   ) {}
 
   async checkout(identifier: string, body: any, siteSlug?: string) {
@@ -80,6 +82,7 @@ export class StoreOrderCreateService {
     order.activityLogIds = logs.map((entry) => entry?._id?.toString()).filter(Boolean) as string[];
     if (printRequestMode) {
       await order.save();
+      void this.printLabNotification.notify(order._id.toString(), 'free').catch(() => undefined);
       return {
         order: order.toObject(),
         paymentUnavailable: false,

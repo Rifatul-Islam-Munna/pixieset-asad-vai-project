@@ -14,9 +14,9 @@ import { StoreProduct, StoreProductDocument } from './entities/store-product.ent
 import { StoreSetting, StoreSettingDocument } from './entities/store-setting.entity';
 import { StoreShipping, StoreShippingDocument } from './entities/store-shipping.entity';
 import { StoreTax, StoreTaxDocument } from './entities/store-tax.entity';
-import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
+import { Collection, CollectionDocument } from '../collections/entities/collection.entity';
 import { StoreDefaultProductService } from './store-default-product.service';
-import { User, UserDocument } from 'src/user/entities/user.entity';
+import { User, UserDocument } from '../user/entities/user.entity';
 
 @Injectable()
 export class StoreService {

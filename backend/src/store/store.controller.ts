@@ -9,6 +9,7 @@ import { StoreCollectionCatalogService } from './store-collection-catalog.servic
 import { StoreCollectionProductService } from './store-collection-product.service';
 import { PublicStoreService } from './public-store.service';
 import { StoreService } from './store.service';
+import { PrintLabNotificationService } from './print-lab-notification.service';
 
 @Controller('public/store')
 export class PublicStoreController {
@@ -42,6 +43,7 @@ export class StoreController {
     private readonly collectionCatalogService: StoreCollectionCatalogService,
     private readonly collectionProductService: StoreCollectionProductService,
     private readonly printStore: PublicStoreService,
+    private readonly printLabNotification: PrintLabNotificationService,
   ) {}
 
   @Get('dashboard')
@@ -247,6 +249,12 @@ export class StoreController {
   async findOrders(@Req() req: ExpressRequest) {
     const data = await this.storeService.findOrders(req.user.id);
     return { data };
+  }
+
+  @Post('orders/:id/print-lab/resend')
+  async resendPrintLabOrder(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.printLabNotification.resend(req.user.id, id);
+    return { message: 'Print company email resent', data };
   }
 
   @Post('orders')

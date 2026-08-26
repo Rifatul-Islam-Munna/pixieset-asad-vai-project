@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
+import { CollectionImageSchema } from '../collections/entities/collection-image.entity';
 import { StoreOrderSchema } from './entities/store-order.entity';
 import { PrintLabNotificationService } from './print-lab-notification.service';
 

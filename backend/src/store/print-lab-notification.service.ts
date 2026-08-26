@@ -2,12 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Model, Types } from 'mongoose';
-import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
+import { Collection, CollectionDocument } from '../collections/entities/collection.entity';
 import {
   CollectionImage,
   CollectionImageDocument,
-} from 'src/collections/entities/collection-image.entity';
-import { MailService } from 'src/mail/mail.service';
+} from '../collections/entities/collection-image.entity';
+import { MailService } from '../mail/mail.service';
 import { StoreOrder, StoreOrderDocument } from './entities/store-order.entity';
 
 export type PrintLabDeliveryResult = {

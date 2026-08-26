@@ -11,7 +11,7 @@ import { StoreTax, StoreTaxSchema } from './entities/store-tax.entity';
 import { StoreActivity, StoreActivitySchema } from './entities/store-activity.entity';
 import { StoreDefaultProduct, StoreDefaultProductSchema } from './entities/store-default-product.entity';
 import { PublicStoreController, StoreController } from './store.controller';
-import { PublicPrintStoreController } from './public-print-store.controller';
+import { PublicPrintLabController, PublicPrintStoreController } from './public-print-store.controller';
 import { StorePrintAdminController } from './store-print-admin.controller';
 import { StoreService } from './store.service';
 import { PublicStoreService } from './public-store.service';
@@ -54,6 +54,7 @@ import { DashboardSetting, DashboardSettingSchema } from 'src/settings/entities/
     PublicStoreController,
     StoreController,
     PublicPrintStoreController,
+    PublicPrintLabController,
     StorePrintAdminController,
   ],
   providers: [

@@ -8308,7 +8308,7 @@ async function downloadStoreOrderImages(order: StoreOrderRecord) {
 }
 
 function StoreOrdersPanel() {
-  const { ordersQuery, createOrder, updateOrder, deleteOrder } =
+  const { ordersQuery, createOrder, updateOrder, resendPrintLabOrder, deleteOrder } =
     useStoreOrders();
   const { rulesQuery: shippingQuery } =
     useStoreRules<StoreShippingRecord>("shipping");
@@ -8499,6 +8499,26 @@ function StoreOrdersPanel() {
                   </p>
                 </div>
               </div>
+              {viewOrder.printLabNotificationStatus && viewOrder.printLabNotificationStatus !== "not-requested" && (
+                <div className="mt-4 border p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Print company delivery</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <StatusBadge value={viewOrder.printLabNotificationStatus} />
+                        {viewOrder.printLabNotificationRecipient && <span className="text-xs text-[#666]">{viewOrder.printLabNotificationRecipient}</span>}
+                      </div>
+                      {viewOrder.printLabNotificationError && <p className="mt-2 text-xs text-red-600">{viewOrder.printLabNotificationError}</p>}
+                    </div>
+                    {["sent", "failed"].includes(viewOrder.printLabNotificationStatus) && (
+                      <button type="button" className="inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold disabled:opacity-50" disabled={resendPrintLabOrder.isPending} onClick={() => resendPrintLabOrder.mutate(viewOrder._id, { onSuccess: () => toast.success("Print company email resent"), onError: (error) => toast.error(error.message) })}>
+                        <Send className="size-4" />
+                        {resendPrintLabOrder.isPending ? "Sending..." : "Resend to print company"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               {viewOrder.note && (
                 <div className="mt-4 border border-[#d9eee9] bg-[#f4fbf9] p-4 text-sm">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#159d8b]">Request note</p>
