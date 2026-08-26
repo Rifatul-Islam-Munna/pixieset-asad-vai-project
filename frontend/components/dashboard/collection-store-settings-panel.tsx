@@ -7,6 +7,9 @@ import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 export type StoreSettingsForm = {
   enabled: boolean;
   printRequestsEnabled: boolean;
+  printLabEmail: string;
+  notifyPrintLabForFreeRequests: boolean;
+  notifyPrintLabForPaidOrders: boolean;
   priceSheetId: string;
   showPrintStoreNav: boolean;
   showBuyPhotoButton: boolean;
@@ -78,6 +81,42 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
             Adds a Print Request button to each photo. Visitors choose print size, paper, quantity, and send a free request with notes. Store products and prices stay unchanged.
           </span>
         </label>
+        <div className="grid gap-4 border border-[#d9eee9] bg-[#f4fbf9] p-5">
+          <div>
+            <p className="font-bold">Print-company notifications</p>
+            <p className="mt-2 text-sm leading-6 text-[#56635f]">
+              Send print requests and paid order notifications to your print company.
+            </p>
+          </div>
+          <label className="block text-sm font-medium">
+            <span className="font-bold">Print-company email</span>
+            <input
+              type="email"
+              value={form.printLabEmail}
+              onChange={(event) => onChange({ printLabEmail: event.target.value })}
+              className="mt-3 h-12 w-full border bg-white px-4 text-sm outline-none focus:border-[#555]"
+              placeholder="orders@example.com"
+            />
+          </label>
+          <label className="flex cursor-pointer items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={form.notifyPrintLabForFreeRequests}
+              onChange={(event) => onChange({ notifyPrintLabForFreeRequests: event.target.checked })}
+              className="size-5 accent-[#22bda7]"
+            />
+            <span>Notify for free print requests</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={form.notifyPrintLabForPaidOrders}
+              onChange={(event) => onChange({ notifyPrintLabForPaidOrders: event.target.checked })}
+              className="size-5 accent-[#22bda7]"
+            />
+            <span>Notify for paid orders</span>
+          </label>
+        </div>
         <label className="block text-sm font-medium">
           <span className="font-bold">Price Sheet</span>
           <select

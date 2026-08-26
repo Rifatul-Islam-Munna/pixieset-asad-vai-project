@@ -12,10 +12,14 @@ import {
   hideCollectionStoreProduct,
 } from "./collection-store-api";
 import type { StoreSettingsForm } from "@/components/dashboard/collection-store-settings-panel";
+import { validatePrintLabSettings } from "@/lib/print-lab-settings";
 
 const defaults: StoreSettingsForm = {
   enabled: false,
   printRequestsEnabled: false,
+  printLabEmail: "",
+  notifyPrintLabForFreeRequests: false,
+  notifyPrintLabForPaidOrders: false,
   priceSheetId: "",
   showPrintStoreNav: true,
   showBuyPhotoButton: true,
@@ -46,6 +50,9 @@ export function useCollectionStoreAdmin(collectionId: string) {
       ...defaults,
       enabled: Boolean(store.enabled || store.storeStatus),
       printRequestsEnabled: Boolean(store.printRequestsEnabled),
+      printLabEmail: String(store.printLabEmail ?? ""),
+      notifyPrintLabForFreeRequests: Boolean(store.notifyPrintLabForFreeRequests),
+      notifyPrintLabForPaidOrders: Boolean(store.notifyPrintLabForPaidOrders),
       priceSheetId: store.priceSheetId ?? "",
       showPrintStoreNav: store.showPrintStoreNav ?? defaults.showPrintStoreNav,
       showBuyPhotoButton: store.showBuyPhotoButton ?? defaults.showBuyPhotoButton,
@@ -76,6 +83,11 @@ export function useCollectionStoreAdmin(collectionId: string) {
   const saveSettings = async (patch: Partial<StoreSettingsForm> = {}) => {
     if (!collection) return;
     const nextForm = { ...form, ...patch };
+    const validationError = validatePrintLabSettings(nextForm);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
     try {
       const catalog = !(nextForm.enabled || nextForm.printRequestsEnabled)
         ? null
@@ -93,6 +105,9 @@ export function useCollectionStoreAdmin(collectionId: string) {
             enabled: nextForm.enabled,
             storeStatus: nextForm.enabled,
             printRequestsEnabled: nextForm.printRequestsEnabled,
+            printLabEmail: nextForm.printLabEmail.trim(),
+            notifyPrintLabForFreeRequests: nextForm.notifyPrintLabForFreeRequests,
+            notifyPrintLabForPaidOrders: nextForm.notifyPrintLabForPaidOrders,
             priceSheetId: catalog?._id ?? nextForm.priceSheetId,
             showPrintStoreNav: nextForm.showPrintStoreNav,
             showBuyPhotoButton: nextForm.showBuyPhotoButton,
