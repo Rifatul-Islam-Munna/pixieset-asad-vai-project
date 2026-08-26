@@ -641,7 +641,7 @@ export class StoreService {
   async updateOrder(userId: string, id: string, dto: any) {
     const order = await this.orderModel.findOne({ _id: id, userId });
     if (!order) throw new NotFoundException('Order not found');
-    Object.assign(order, dto);
+    if (dto.status !== undefined) order.status = dto.status;
     await order.save();
     if (order.customer?.email) await this.recalculateCustomer(userId, order.customer.email);
     return order.toObject();

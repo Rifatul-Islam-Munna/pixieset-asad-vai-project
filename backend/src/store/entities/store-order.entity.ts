@@ -172,6 +172,9 @@ export class StoreOrder {
   printLabNotificationStatus: PrintLabNotificationStatus;
 
   @Prop()
+  printLabNotificationClaimedAt?: Date;
+
+  @Prop()
   printLabNotificationSentAt?: Date;
 
   @Prop({ default: '' })

@@ -1,5 +1,12 @@
 import { NotFoundException } from '@nestjs/common';
+import { CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
+import { StoreOrderSchema } from './entities/store-order.entity';
 import { PrintLabNotificationService } from './print-lab-notification.service';
+
+const ORDER_ID = '64f000000000000000000001';
+const COLLECTION_ID = '64f000000000000000000011';
+const IMAGE_ID = '64f000000000000000000021';
+const OTHER_IMAGE_ID = '64f000000000000000000022';
 
 describe('PrintLabNotificationService', () => {
   const initialFrontendUrl = process.env.FRONTEND_URL;
@@ -17,10 +24,10 @@ describe('PrintLabNotificationService', () => {
   beforeEach(() => {
     process.env.FRONTEND_URL = 'https://gallery.test';
     order = {
-      id: 'order-1',
-      _id: 'order-1',
+      id: ORDER_ID,
+      _id: ORDER_ID,
       userId: 'owner-1',
-      collectionId: 'collection-1',
+      collectionId: COLLECTION_ID,
       orderNumber: 'ORD-<101>',
       customer: {
         name: 'Ana & <script>alert(1)</script>',
@@ -30,7 +37,7 @@ describe('PrintLabNotificationService', () => {
       },
       items: [
         {
-          imageId: 'image-1',
+          imageId: IMAGE_ID,
           imageUrl: 'https://storage.test/private-original.jpg',
           name: 'Fine Art <Print>',
           type: 'print',
@@ -49,8 +56,8 @@ describe('PrintLabNotificationService', () => {
       createdAt: new Date('2026-08-26T12:00:00.000Z'),
     };
     collection = {
-      id: 'collection-1',
-      _id: 'collection-1',
+      id: COLLECTION_ID,
+      _id: COLLECTION_ID,
       userId: 'owner-1',
       name: 'Wedding <Gallery>',
       settings: {
@@ -63,20 +70,20 @@ describe('PrintLabNotificationService', () => {
     };
     images = [
       {
-        id: 'image-1',
-        _id: 'image-1',
+        id: IMAGE_ID,
+        _id: IMAGE_ID,
         userId: 'owner-1',
-        collectionId: 'collection-1',
+        collectionId: COLLECTION_ID,
         url: 'https://storage.test/private-original.jpg',
         thumbnailUrl: 'https://storage.test/thumb.jpg',
         originalName: 'ceremony & vows.jpg',
         filename: 'stored-image.jpg',
       },
       {
-        id: 'image-2',
-        _id: 'image-2',
+        id: OTHER_IMAGE_ID,
+        _id: OTHER_IMAGE_ID,
         userId: 'owner-1',
-        collectionId: 'collection-1',
+        collectionId: COLLECTION_ID,
         url: 'https://storage.test/not-ordered.jpg',
         originalName: 'not-ordered.jpg',
       },
@@ -86,32 +93,23 @@ describe('PrintLabNotificationService', () => {
       findOne: jest.fn((filter: any) =>
         query(
           String(filter._id) === order.id && (!filter.userId || filter.userId === order.userId)
-            ? order
+            ? snapshot(order)
             : null,
         ),
       ),
       findOneAndUpdate: jest.fn((filter: any, update: any) => {
-        const normalEligible =
-          order.printLabNotificationStatus === undefined ||
-          order.printLabNotificationStatus === 'not-requested';
-        const forceEligible = order.printLabNotificationStatus !== 'pending';
-        const eligible = filter.$or ? normalEligible : forceEligible;
-        if (String(filter._id) !== order.id || !eligible) return query(null);
+        if (!matches(filter, order)) return query(null);
         Object.assign(order, update.$set || {});
         for (const key of Object.keys(update.$unset || {})) delete order[key];
         return query(order);
       }),
       updateOne: jest.fn(async (filter: any, update: any) => {
-        if (
-          String(filter._id) === order.id &&
-          (!filter.printLabAccessTokenHash ||
-            filter.printLabAccessTokenHash === order.printLabAccessTokenHash)
-        ) {
+        if (matches(filter, order)) {
           Object.assign(order, update.$set || {});
           for (const key of Object.keys(update.$unset || {})) delete order[key];
-          return { modifiedCount: 1 };
+          return { acknowledged: true, matchedCount: 1, modifiedCount: 1 };
         }
-        return { modifiedCount: 0 };
+        return { acknowledged: true, matchedCount: 0, modifiedCount: 0 };
       }),
     };
     collectionModel = {
@@ -175,6 +173,8 @@ describe('PrintLabNotificationService', () => {
 
       await service.notify(order.id, 'free');
       order.printLabNotificationStatus = 'not-requested';
+      order.checkoutSource = 'public-store';
+      order.paymentStatus = 'paid';
       await service.notify(order.id, 'paid');
 
       expect(mail.send).toHaveBeenCalledTimes(expectedSends);
@@ -226,7 +226,7 @@ describe('PrintLabNotificationService', () => {
     expect(view).not.toHaveProperty('paymentStatus');
     expect(view).not.toHaveProperty('activityLogIds');
     expect(view.items[0]).toMatchObject({
-      imageId: 'image-1',
+      imageId: IMAGE_ID,
       filename: 'ceremony & vows.jpg',
       quantity: 2,
       options: { Size: '8 x 10', Paper: 'Matte', Frame: 'Black & Gold' },
@@ -269,21 +269,21 @@ describe('PrintLabNotificationService', () => {
   it('authorizes only an image item belonging to the token order', async () => {
     const result = await service.notify(order.id, 'free');
 
-    await expect(service.authorizeImage(order.id, 'image-1', result.token!)).resolves.toEqual({
+    await expect(service.authorizeImage(order.id, IMAGE_ID, result.token!)).resolves.toEqual({
       url: 'https://storage.test/private-original.jpg',
       filename: 'ceremony & vows.jpg',
     });
-    await expect(service.authorizeImage(order.id, 'image-2', result.token!)).rejects.toBeInstanceOf(
+    await expect(service.authorizeImage(order.id, OTHER_IMAGE_ID, result.token!)).rejects.toBeInstanceOf(
       NotFoundException,
     );
-    await expect(service.authorizeImage(order.id, 'image-1', 'wrong-token')).rejects.toThrow(
+    await expect(service.authorizeImage(order.id, IMAGE_ID, 'wrong-token')).rejects.toThrow(
       'Print order unavailable',
     );
   });
 
   it('marks deleted order photos unavailable without exposing a storage URL', async () => {
     order.items.push({
-      imageId: 'deleted-image',
+      imageId: '64f000000000000000000099',
       imageUrl: 'https://storage.test/deleted-private-original.jpg',
       name: 'Deleted photo',
       type: 'print',
@@ -294,8 +294,11 @@ describe('PrintLabNotificationService', () => {
 
     const view = await service.getPublicOrder(order.id, result.token!);
 
-    expect(view.items[0]).toMatchObject({ imageId: 'image-1', available: true });
-    expect(view.items[1]).toMatchObject({ imageId: 'deleted-image', available: false });
+    expect(view.items[0]).toMatchObject({ imageId: IMAGE_ID, available: true });
+    expect(view.items[1]).toMatchObject({
+      imageId: '64f000000000000000000099',
+      available: false,
+    });
     expect(view.items[1]).not.toHaveProperty('imageUrl');
   });
 
@@ -316,7 +319,7 @@ describe('PrintLabNotificationService', () => {
     expect(payload.html).toContain('Crop around &amp; preserve faces');
     expect(payload.html).not.toContain('https://storage.test/private-original.jpg');
     expect(payload.html).toContain(
-      `https://gallery.test/print-lab/orders/order-1?token=${encodeURIComponent(result.token!)}`,
+      `https://gallery.test/print-lab/orders/${ORDER_ID}?token=${encodeURIComponent(result.token!)}`,
     );
     expect(payload.text).toContain('ceremony & vows.jpg');
     expect(payload.text).toContain('Quantity: 2');
@@ -332,4 +335,245 @@ describe('PrintLabNotificationService', () => {
     expect(second.token).not.toBe(first.token);
     expect(mail.send).toHaveBeenCalledTimes(2);
   });
+
+  it('permits resend only for sent or failed orders with the current mode enabled', async () => {
+    for (const status of ['not-requested', 'pending'] as const) {
+      order.printLabNotificationStatus = status;
+      await expect(service.resend(order.userId, order.id)).rejects.toThrow(
+        'Print lab notification cannot be resent',
+      );
+    }
+
+    order.printLabNotificationStatus = 'failed';
+    collection.settings.store.notifyPrintLabForFreeRequests = false;
+    await expect(service.resend(order.userId, order.id)).rejects.toThrow(
+      'Print lab notification is disabled',
+    );
+
+    collection.settings.store.notifyPrintLabForFreeRequests = true;
+    await expect(service.resend(order.userId, order.id)).resolves.toMatchObject({ status: 'sent' });
+    order.printLabNotificationStatus = 'sent';
+    await expect(service.resend(order.userId, order.id)).resolves.toMatchObject({ status: 'sent' });
+  });
+
+  it('rejects resend for an unpaid paid order', async () => {
+    order.checkoutSource = 'public-store';
+    order.paymentStatus = 'unpaid';
+    order.printLabNotificationStatus = 'failed';
+
+    await expect(service.resend(order.userId, order.id)).rejects.toThrow(
+      'Paid order is not paid',
+    );
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it('rejects resend when current recipient is invalid', async () => {
+    order.printLabNotificationStatus = 'failed';
+    collection.settings.store.printLabEmail = 'bad-address';
+
+    await expect(service.resend(order.userId, order.id)).rejects.toThrow(
+      'Print lab recipient is invalid',
+    );
+    expect(orderModel.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keeps owner, resendable state, mode, and payment in the atomic paid resend claim', async () => {
+    order.checkoutSource = 'public-store';
+    order.paymentStatus = 'paid';
+    order.printLabNotificationStatus = 'failed';
+
+    await service.resend(order.userId, order.id);
+
+    expect(orderModel.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _id: order.id,
+        userId: order.userId,
+        checkoutSource: { $ne: 'print-request' },
+        paymentStatus: 'paid',
+        printLabNotificationStatus: { $in: ['sent', 'failed'] },
+      }),
+      expect.any(Object),
+      expect.any(Object),
+    );
+  });
+
+  it('recovers a bounded stale pending claim to failed without automatically resending', async () => {
+    order.printLabNotificationStatus = 'pending';
+    order.printLabNotificationClaimedAt = new Date(Date.now() - 16 * 60 * 1000);
+
+    const result = await service.notify(order.id, 'free');
+
+    expect(result).toMatchObject({ status: 'skipped', reason: 'stale-claim-recovered' });
+    expect(order.printLabNotificationStatus).toBe('failed');
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it('keeps a fresh pending claim locked', async () => {
+    order.printLabNotificationStatus = 'pending';
+    order.printLabNotificationClaimedAt = new Date(Date.now() - 14 * 60 * 1000);
+
+    const result = await service.notify(order.id, 'free');
+
+    expect(result).toMatchObject({ status: 'skipped', reason: 'already-claimed' });
+    expect(order.printLabNotificationStatus).toBe('pending');
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it('records failed when image loading fails after claim', async () => {
+    imageModel.find.mockReturnValueOnce({ lean: jest.fn().mockRejectedValue(new Error('catalog down')) });
+
+    await expect(service.notify(order.id, 'free')).resolves.toMatchObject({ status: 'failed' });
+    expect(order.printLabNotificationStatus).toBe('failed');
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it('records failed when payload construction fails after claim', async () => {
+    collection.name = { toString: () => { throw new Error('bad gallery value'); } };
+
+    await expect(service.notify(order.id, 'free')).resolves.toMatchObject({ status: 'failed' });
+    expect(order.printLabNotificationStatus).toBe('failed');
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it('records failed when SMTP rejects after claim', async () => {
+    mail.send.mockRejectedValueOnce(new Error('socket closed'));
+
+    await expect(service.notify(order.id, 'free')).resolves.toMatchObject({
+      status: 'failed',
+      statePersisted: true,
+    });
+    expect(order.printLabNotificationStatus).toBe('failed');
+  });
+
+  it('retries failed-state persistence on zero-match writes', async () => {
+    const zero = { acknowledged: true, matchedCount: 0, modifiedCount: 0 };
+    const defaultUpdate = orderModel.updateOne.getMockImplementation();
+    orderModel.updateOne
+      .mockResolvedValueOnce(zero)
+      .mockResolvedValueOnce(zero)
+      .mockImplementation(defaultUpdate);
+    mail.send.mockResolvedValueOnce({ sent: false, reason: 'SMTP_SEND_FAILED' });
+
+    const result = await service.notify(order.id, 'free');
+
+    expect(result).toMatchObject({ status: 'failed', statePersisted: true });
+    expect(order.printLabNotificationStatus).toBe('failed');
+    expect(orderModel.updateOne).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries sent-state persistence and never labels confirmed SMTP delivery failed', async () => {
+    const defaultUpdate = orderModel.updateOne.getMockImplementation();
+    orderModel.updateOne
+      .mockRejectedValueOnce(new Error('db unavailable'))
+      .mockRejectedValueOnce(new Error('db unavailable'))
+      .mockRejectedValueOnce(new Error('db unavailable'))
+      .mockImplementation(defaultUpdate);
+
+    const result = await service.notify(order.id, 'free');
+
+    expect(result).toMatchObject({ status: 'sent', statePersisted: false });
+    expect(order.printLabNotificationStatus).toBe('pending');
+    expect(orderModel.updateOne).toHaveBeenCalledTimes(3);
+  });
+
+  it('treats zero-match terminal writes as failures and retries them', async () => {
+    const zero = { acknowledged: true, matchedCount: 0, modifiedCount: 0 };
+    const defaultUpdate = orderModel.updateOne.getMockImplementation();
+    orderModel.updateOne
+      .mockResolvedValueOnce(zero)
+      .mockResolvedValueOnce(zero)
+      .mockImplementation(defaultUpdate);
+
+    const result = await service.notify(order.id, 'free');
+
+    expect(result).toMatchObject({ status: 'sent', statePersisted: true });
+    expect(order.printLabNotificationStatus).toBe('sent');
+    expect(orderModel.updateOne).toHaveBeenCalledTimes(3);
+  });
+
+  it('allows only one SMTP send across overlapping notify calls', async () => {
+    let release!: () => void;
+    mail.send.mockImplementation(
+      () => new Promise((resolve) => { release = () => resolve({ sent: true }); }),
+    );
+
+    const first = service.notify(order.id, 'free');
+    const second = service.notify(order.id, 'free');
+    await new Promise((resolve) => setImmediate(resolve));
+    release();
+    const results = await Promise.all([first, second]);
+
+    expect(mail.send).toHaveBeenCalledTimes(1);
+    expect(results.map((result) => result.status).sort()).toEqual(['sent', 'skipped']);
+  });
+
+  it('returns the generic unavailable error for malformed ObjectIds before querying', async () => {
+    expect(() => StoreOrderSchema.path('_id')!.cast('not-an-object-id')).toThrow();
+    expect(() => CollectionImageSchema.path('_id')!.cast('not-an-object-id')).toThrow();
+    orderModel.findOne.mockClear();
+
+    await expect(service.getPublicOrder('not-an-object-id', 'token')).rejects.toThrow(
+      'Print order unavailable',
+    );
+    await expect(service.authorizeImage(order.id, 'bad-image-id', 'token')).rejects.toThrow(
+      'Print order unavailable',
+    );
+    expect(orderModel.findOne).not.toHaveBeenCalled();
+    expect(imageModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('keeps phone and address behind the secure view instead of persisting them in email', async () => {
+    const result = await service.notify(order.id, 'free');
+    const payload = mail.send.mock.calls[0][0];
+
+    expect(payload.html).not.toContain('555-0100');
+    expect(payload.html).not.toContain('12 &lt;Main&gt; Street');
+    expect(payload.text).not.toContain('555-0100');
+    expect(payload.text).not.toContain('12 <Main> Street');
+    await expect(service.getPublicOrder(order.id, result.token!)).resolves.toMatchObject({
+      customer: { phone: '555-0100', address: { line1: '12 <Main> Street' } },
+    });
+  });
+
+  it('returns bounded header-safe filenames', async () => {
+    images[0].originalName = 'evil";\r\nname?.jpg';
+    const result = await service.notify(order.id, 'free');
+    await expect(service.authorizeImage(order.id, IMAGE_ID, result.token!)).resolves.toEqual({
+      url: 'https://storage.test/private-original.jpg',
+      filename: 'evil_name_.jpg',
+    });
+
+    images[0].originalName = 'CON.txt';
+    await expect(service.authorizeImage(order.id, IMAGE_ID, result.token!)).resolves.toMatchObject({
+      filename: '_CON.txt',
+    });
+
+    images[0].originalName = `${'a'.repeat(200)}.jpg... `;
+    const bounded = await service.authorizeImage(order.id, IMAGE_ID, result.token!);
+    expect(bounded.filename).toHaveLength(120);
+    expect(bounded.filename).toMatch(/\.jpg$/);
+    expect(bounded.filename).not.toMatch(/[. ]$/);
+  });
 });
+
+function matches(filter: any, value: any): boolean {
+  return Object.entries(filter).every(([key, condition]: [string, any]) => {
+    if (key === '$or') return condition.some((entry: any) => matches(entry, value));
+    const actual = value[key];
+    if (condition && typeof condition === 'object' && !Array.isArray(condition)) {
+      if ('$exists' in condition) return condition.$exists ? actual !== undefined : actual === undefined;
+      if ('$in' in condition) return condition.$in.includes(actual);
+      if ('$ne' in condition) return actual !== condition.$ne;
+      if ('$lte' in condition) return new Date(actual).getTime() <= new Date(condition.$lte).getTime();
+    }
+    return String(actual) === String(condition);
+  });
+}
+
+function snapshot(value: any) {
+  return {
+    ...value,
+    customer: value.customer ? { ...value.customer } : value.customer,
+    items: (value.items ?? []).map((item: any) => ({ ...item, options: { ...(item.options ?? {}) } })),
+  };
+}

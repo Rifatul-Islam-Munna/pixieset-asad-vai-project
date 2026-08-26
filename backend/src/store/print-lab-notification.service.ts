@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import {
   CollectionImage,
@@ -13,7 +13,13 @@ import { StoreOrder, StoreOrderDocument } from './entities/store-order.entity';
 export type PrintLabDeliveryResult = {
   status: 'sent' | 'failed' | 'skipped';
   token?: string;
-  reason?: 'disabled' | 'invalid-recipient' | 'already-claimed';
+  reason?:
+    | 'disabled'
+    | 'invalid-recipient'
+    | 'already-claimed'
+    | 'ineligible-order'
+    | 'stale-claim-recovered';
+  statePersisted?: boolean;
 };
 
 export type PrintLabPublicOrder = {
@@ -45,6 +51,8 @@ export type PrintLabPublicOrder = {
 };
 
 type NotificationMode = 'free' | 'paid';
+const CLAIM_STALE_AFTER_MS = 15 * 60 * 1000;
+const TERMINAL_WRITE_ATTEMPTS = 3;
 
 @Injectable()
 export class PrintLabNotificationService {
@@ -63,6 +71,7 @@ export class PrintLabNotificationService {
     mode: NotificationMode,
     force = false,
   ): Promise<PrintLabDeliveryResult> {
+    if (!Types.ObjectId.isValid(orderId)) throw new NotFoundException('Order not found');
     const order = await this.orderModel.findOne({ _id: orderId }).lean();
     if (!order) throw new NotFoundException('Order not found');
 
@@ -81,70 +90,127 @@ export class PrintLabNotificationService {
       mode === 'free'
         ? settings.notifyPrintLabForFreeRequests === true
         : settings.notifyPrintLabForPaidOrders === true;
-    if (!force && !enabled) return { status: 'skipped', reason: 'disabled' };
+    if (!enabled) return { status: 'skipped', reason: 'disabled' };
+
+    if (!modeMatchesOrder(order, mode)) {
+      return { status: 'skipped', reason: 'ineligible-order' };
+    }
+    if (!force && order.printLabNotificationStatus === 'pending') {
+      const recovered = await this.recoverStaleClaim(orderId);
+      return recovered
+        ? { status: 'skipped', reason: 'stale-claim-recovered' }
+        : { status: 'skipped', reason: 'already-claimed' };
+    }
+
+    return this.deliver(orderId, order, collection, mode, recipient, force);
+  }
+
+  private async deliver(
+    orderId: string,
+    order: any,
+    collection: any,
+    mode: NotificationMode,
+    recipient: string,
+    force: boolean,
+    ownerId?: string,
+  ): Promise<PrintLabDeliveryResult> {
 
     const token = randomBytes(32).toString('base64url');
     const tokenHash = hashToken(token);
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const claimedAt = new Date();
     const claimUpdate = {
       $set: {
         printLabAccessTokenHash: tokenHash,
         printLabAccessExpiresAt: expiresAt,
         printLabNotificationStatus: 'pending' as const,
+        printLabNotificationClaimedAt: claimedAt,
         printLabNotificationError: '',
         printLabNotificationRecipient: recipient,
       },
       $unset: { printLabNotificationSentAt: 1 },
     };
-    const claimQuery = force
-      ? this.orderModel.findOneAndUpdate(
-          { _id: orderId, printLabNotificationStatus: { $ne: 'pending' } },
-          claimUpdate,
-          { returnDocument: 'after' },
-        )
-      : this.orderModel.findOneAndUpdate(
-          {
-            _id: orderId,
-            $or: [
-              { printLabNotificationStatus: { $exists: false } },
-              { printLabNotificationStatus: 'not-requested' },
-            ],
-          },
-          claimUpdate,
-          { returnDocument: 'after' },
-        );
+    let claimQuery;
+    if (force && mode === 'free') {
+      claimQuery = this.orderModel.findOneAndUpdate(
+        {
+          _id: orderId,
+          ...(ownerId ? { userId: ownerId } : {}),
+          checkoutSource: 'print-request',
+          printLabNotificationStatus: { $in: ['sent', 'failed'] },
+        },
+        claimUpdate,
+        { returnDocument: 'after' },
+      );
+    } else if (force) {
+      claimQuery = this.orderModel.findOneAndUpdate(
+        {
+          _id: orderId,
+          ...(ownerId ? { userId: ownerId } : {}),
+          checkoutSource: { $ne: 'print-request' },
+          paymentStatus: 'paid',
+          printLabNotificationStatus: { $in: ['sent', 'failed'] },
+        },
+        claimUpdate,
+        { returnDocument: 'after' },
+      );
+    } else if (mode === 'free') {
+      claimQuery = this.orderModel.findOneAndUpdate(
+        {
+          _id: orderId,
+          checkoutSource: 'print-request',
+          $or: [
+            { printLabNotificationStatus: { $exists: false } },
+            { printLabNotificationStatus: 'not-requested' },
+          ],
+        },
+        claimUpdate,
+        { returnDocument: 'after' },
+      );
+    } else {
+      claimQuery = this.orderModel.findOneAndUpdate(
+        {
+          _id: orderId,
+          checkoutSource: { $ne: 'print-request' },
+          paymentStatus: 'paid',
+          $or: [
+            { printLabNotificationStatus: { $exists: false } },
+            { printLabNotificationStatus: 'not-requested' },
+          ],
+        },
+        claimUpdate,
+        { returnDocument: 'after' },
+      );
+    }
     const claimed = await claimQuery.lean();
     if (!claimed) return { status: 'skipped', reason: 'already-claimed' };
 
-    const imageMap = await this.loadImages(claimed);
-    const link = this.secureLink(orderId, token);
-    const payload = buildMailPayload(claimed, collection, imageMap, mode, recipient, link, expiresAt);
-
+    let delivery: Awaited<ReturnType<MailService['send']>>;
     try {
-      const delivery = await this.mailService.send(payload);
-      if (!delivery.sent) {
-        await this.markFailed(orderId, tokenHash);
-        return { status: 'failed', token };
-      }
-      await this.orderModel.updateOne(
-        {
-          _id: orderId,
-          printLabNotificationStatus: 'pending',
-          printLabAccessTokenHash: tokenHash,
-        },
-        {
-          $set: {
-            printLabNotificationStatus: 'sent',
-            printLabNotificationSentAt: new Date(),
-            printLabNotificationError: '',
-          },
-        },
+      const imageMap = await this.loadImages(claimed);
+      const link = this.secureLink(orderId, token);
+      const payload = buildMailPayload(
+        claimed,
+        collection,
+        imageMap,
+        mode,
+        recipient,
+        link,
+        expiresAt,
       );
-      return { status: 'sent', token };
+      delivery = await this.mailService.send(payload);
     } catch {
-      await this.markFailed(orderId, tokenHash);
-      return { status: 'failed', token };
+      const statePersisted = await this.persistTerminal(orderId, tokenHash, 'failed');
+      return { status: 'failed', token, statePersisted };
     }
+
+    if (!delivery.sent) {
+      const statePersisted = await this.persistTerminal(orderId, tokenHash, 'failed');
+      return { status: 'failed', token, statePersisted };
+    }
+
+    const statePersisted = await this.persistTerminal(orderId, tokenHash, 'sent');
+    return { status: 'sent', token, statePersisted };
   }
 
   async getPublicOrder(orderId: string, token: string): Promise<PrintLabPublicOrder> {
@@ -195,6 +261,7 @@ export class PrintLabNotificationService {
     imageId: string,
     token: string,
   ): Promise<{ url: string; filename: string }> {
+    if (!Types.ObjectId.isValid(orderId) || !Types.ObjectId.isValid(imageId)) throw unavailable();
     const order = await this.validatedOrder(orderId, token);
     const ownsImage = (order.items ?? []).some(
       (item: any) => item.imageId && String(item.imageId) === String(imageId),
@@ -216,13 +283,49 @@ export class PrintLabNotificationService {
   }
 
   async resend(userId: string, orderId: string): Promise<PrintLabDeliveryResult> {
+    if (!Types.ObjectId.isValid(orderId)) throw new NotFoundException('Order not found');
     const order = await this.orderModel.findOne({ _id: orderId, userId }).lean();
     if (!order) throw new NotFoundException('Order not found');
+    if (!['sent', 'failed'].includes(String(order.printLabNotificationStatus))) {
+      throw new BadRequestException('Print lab notification cannot be resent');
+    }
     const mode: NotificationMode = order.checkoutSource === 'print-request' ? 'free' : 'paid';
-    return this.notify(orderId, mode, true);
+    if (mode === 'paid' && order.paymentStatus !== 'paid') {
+      throw new BadRequestException('Paid order is not paid');
+    }
+    const collection = order.collectionId
+      ? await this.collectionModel
+          .findOne({ _id: order.collectionId, userId: order.userId })
+          .lean()
+      : null;
+    const settings = ((collection?.settings as any)?.store ?? {}) as Record<string, unknown>;
+    const recipient = String(settings.printLabEmail ?? '').trim();
+    if (!isValidEmail(recipient)) {
+      throw new BadRequestException('Print lab recipient is invalid');
+    }
+    const enabled =
+      mode === 'free'
+        ? settings.notifyPrintLabForFreeRequests === true
+        : settings.notifyPrintLabForPaidOrders === true;
+    if (!enabled) throw new BadRequestException('Print lab notification is disabled');
+
+    const result = await this.deliver(
+      orderId,
+      order,
+      collection,
+      mode,
+      recipient,
+      true,
+      userId,
+    );
+    if (result.status === 'skipped') {
+      throw new BadRequestException('Print lab notification cannot be resent');
+    }
+    return result;
   }
 
   private async validatedOrder(orderId: string, token: string): Promise<any> {
+    if (!Types.ObjectId.isValid(orderId)) throw unavailable();
     const order = await this.orderModel.findOne({ _id: orderId }).lean();
     if (!order) throw unavailable();
 
@@ -260,20 +363,70 @@ export class PrintLabNotificationService {
     return `${frontendUrl.replace(/\/+$/, '')}/print-lab/orders/${encodeURIComponent(orderId)}?token=${encodeURIComponent(token)}`;
   }
 
-  private async markFailed(orderId: string, tokenHash: string) {
-    await this.orderModel.updateOne(
-      {
-        _id: orderId,
-        printLabNotificationStatus: 'pending',
-        printLabAccessTokenHash: tokenHash,
-      },
-      {
-        $set: {
-          printLabNotificationStatus: 'failed',
-          printLabNotificationError: 'Print lab email delivery failed.',
-        },
-      },
-    );
+  private async persistTerminal(
+    orderId: string,
+    tokenHash: string,
+    status: 'sent' | 'failed',
+  ) {
+    const update =
+      status === 'sent'
+        ? {
+            $set: {
+              printLabNotificationStatus: 'sent' as const,
+              printLabNotificationSentAt: new Date(),
+              printLabNotificationError: '',
+            },
+            $unset: { printLabNotificationClaimedAt: 1 },
+          }
+        : {
+            $set: {
+              printLabNotificationStatus: 'failed' as const,
+              printLabNotificationError: 'Print lab email delivery failed.',
+            },
+            $unset: { printLabNotificationClaimedAt: 1, printLabNotificationSentAt: 1 },
+          };
+    for (let attempt = 0; attempt < TERMINAL_WRITE_ATTEMPTS; attempt += 1) {
+      try {
+        const result = await this.orderModel.updateOne(
+          {
+            _id: orderId,
+            printLabNotificationStatus: 'pending',
+            printLabAccessTokenHash: tokenHash,
+          },
+          update,
+        );
+        if (writeMatched(result)) return true;
+      } catch {
+        // Bounded immediate retry keeps SMTP outcome separate from database persistence.
+      }
+    }
+    return false;
+  }
+
+  private async recoverStaleClaim(orderId: string) {
+    const cutoff = new Date(Date.now() - CLAIM_STALE_AFTER_MS);
+    for (let attempt = 0; attempt < TERMINAL_WRITE_ATTEMPTS; attempt += 1) {
+      try {
+        const result = await this.orderModel.updateOne(
+          {
+            _id: orderId,
+            printLabNotificationStatus: 'pending',
+            printLabNotificationClaimedAt: { $lte: cutoff },
+          },
+          {
+            $set: {
+              printLabNotificationStatus: 'failed',
+              printLabNotificationError: 'Previous print lab delivery attempt did not complete.',
+            },
+            $unset: { printLabNotificationClaimedAt: 1 },
+          },
+        );
+        if (writeMatched(result)) return true;
+      } catch {
+        // Leave claim locked when recovery persistence is unavailable.
+      }
+    }
+    return false;
   }
 }
 
@@ -289,7 +442,6 @@ function buildMailPayload(
   const modeLabel = mode === 'free' ? 'Free print request' : 'Paid print order';
   const galleryName = String(collection?.name ?? 'Gallery');
   const customer = order.customer ?? {};
-  const address = formatAddress(customer.address);
   const items = (order.items ?? []).map((item: any, index: number) => {
     const image = item.imageId ? images.get(String(item.imageId)) : undefined;
     return {
@@ -330,7 +482,7 @@ function buildMailPayload(
     subject: sanitizeLine(`${modeLabel}: ${order.orderNumber} — ${galleryName}`),
     html: [
       `<h1>${escapeHtml(modeLabel)}</h1>`,
-      `<p>Gallery: ${escapeHtml(galleryName)}<br>Order: ${escapeHtml(order.orderNumber)}<br>Customer: ${escapeHtml(customer.name)} (${escapeHtml(customer.email)})${customer.phone ? `<br>Phone: ${escapeHtml(customer.phone)}` : ''}${address ? `<br>Address: ${escapeHtml(address)}` : ''}</p>`,
+      `<p>Gallery: ${escapeHtml(galleryName)}<br>Order: ${escapeHtml(order.orderNumber)}<br>Customer: ${escapeHtml(customer.name)} (${escapeHtml(customer.email)})</p>`,
       `<table><thead><tr><th>#</th><th>Filename</th><th>Product</th><th>Options</th><th>Quantity</th></tr></thead><tbody>${htmlItems}</tbody></table>`,
       notes ? `<p>Notes: ${escapeHtml(notes)}</p>` : '',
       `<p><a href="${escapeHtml(link)}">Open print order</a></p>`,
@@ -341,8 +493,6 @@ function buildMailPayload(
       `Gallery: ${galleryName}`,
       `Order: ${order.orderNumber}`,
       `Customer: ${customer.name} (${customer.email})`,
-      customer.phone ? `Phone: ${customer.phone}` : '',
-      address ? `Address: ${address}` : '',
       textItems,
       notes ? `Notes: ${notes}` : '',
       `Open print order: ${link}`,
@@ -387,24 +537,25 @@ function filenameFor(image: any, item: any) {
 }
 
 function safeFilename(value: unknown) {
-  const filename = String(value ?? '')
-    .replace(/[\u0000-\u001f\u007f]/g, '')
-    .replace(/[\\/]/g, '-')
-    .trim();
+  const leaf = String(value ?? '').split(/[\\/]/).pop() ?? '';
+  let filename = leaf
+    .replace(/[^A-Za-z0-9._() &+-]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .replace(/^[. ]+|[. ]+$/g, '');
+  if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(filename)) {
+    filename = `_${filename}`;
+  }
+  if (filename.length > 120) {
+    const dot = filename.lastIndexOf('.');
+    const extension = dot > 0 && filename.length - dot <= 10 ? filename.slice(dot) : '';
+    filename = `${filename.slice(0, 120 - extension.length).replace(/[. ]+$/g, '')}${extension}`;
+  }
   return filename || 'image';
 }
 
 function finiteNumber(value: unknown, fallback: number) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
-}
-
-function formatAddress(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
-  return Object.values(value as Record<string, unknown>)
-    .filter((part) => part !== undefined && part !== null && String(part).trim())
-    .map(String)
-    .join(', ');
 }
 
 function escapeHtml(value: unknown) {
@@ -422,4 +573,14 @@ function sanitizeLine(value: unknown) {
 
 function sanitizeText(value: unknown) {
   return String(value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+}
+
+function modeMatchesOrder(order: any, mode: NotificationMode) {
+  return mode === 'free'
+    ? order.checkoutSource === 'print-request'
+    : order.checkoutSource !== 'print-request' && order.paymentStatus === 'paid';
+}
+
+function writeMatched(result: any) {
+  return Number(result?.matchedCount ?? result?.modifiedCount ?? 0) > 0;
 }
