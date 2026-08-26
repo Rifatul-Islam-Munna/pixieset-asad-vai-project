@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, type ReactNode } from "react";
 import { animate, inView } from "motion";
@@ -6,13 +6,7 @@ import { motion, useReducedMotion } from "motion/react";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
-export function HomeReveal({
-  children,
-  className,
-  delay = 0,
-  y = 34,
-  amount = 0.18,
-}: {
+export function HomeReveal({ children, className, delay = 0, y = 34, amount = 0.18 }: {
   children: ReactNode;
   className?: string;
   delay?: number;
@@ -24,24 +18,16 @@ export function HomeReveal({
     <motion.div
       className={className}
       initial={reduceMotion ? false : { opacity: 0, y, filter: "blur(8px)" }}
-      whileInView={
-        reduceMotion ? undefined : { opacity: 1, y: 0, filter: "blur(0px)" }
-      }
+      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0, filter: "blur(0px)" }}
       viewport={{ once: true, amount }}
-      transition={{ duration: 0.78, delay, ease }}
+      transition={{ duration: 0.82, delay, ease }}
     >
       {children}
     </motion.div>
   );
 }
 
-export function HomeHoverLift({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function HomeHoverLift({ children, className }: { children: ReactNode; className?: string }) {
   const reduceMotion = useReducedMotion();
   return (
     <motion.div
@@ -62,132 +48,158 @@ export function HomeMotion() {
     const root = document.querySelector<HTMLElement>("main");
     if (!root) return;
 
-    const selector =
-      "main > section:not(:first-of-type):not([data-home-motion-managed]), main > footer";
-    const revealSelector = "[data-home-reveal]";
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>(selector));
-    const revealNodes = Array.from(
-      document.querySelectorAll<HTMLElement>(revealSelector),
-    );
-    nodes.forEach((node) => {
+    const sectionSelector = "main > section:not(:first-of-type):not([data-home-motion-managed]), main > footer";
+    const scrollSectionSelector = "main > section:not([data-home-motion-managed]), main > footer";
+    const explicitRevealSelector = "[data-home-reveal]";
+    const sections = Array.from(document.querySelectorAll<HTMLElement>(sectionSelector));
+    const scrollSections = Array.from(document.querySelectorAll<HTMLElement>(scrollSectionSelector));
+    const explicitReveals = Array.from(document.querySelectorAll<HTMLElement>(explicitRevealSelector));
+
+    sections.forEach((node) => {
       node.style.opacity = "0";
-      node.style.transform = "translateY(52px) scale(.992)";
-      node.style.clipPath = "inset(7% 0 0 0 round 16px)";
-      node.style.willChange = "transform, opacity, clip-path";
+      node.style.transform = "translateY(64px) scale(.986)";
+      node.style.clipPath = "inset(9% 0 0 0 round 24px)";
+      node.style.filter = "blur(5px)";
+      node.style.willChange = "transform, opacity, clip-path, filter, translate";
     });
 
+    const autoRevealNodes = sections.flatMap((section) =>
+      Array.from(section.querySelectorAll<HTMLElement>("h2, h3, h4, p, li, a, button"))
+        .filter((node) => !node.closest("[data-home-reveal]") && !node.closest("nav") && !node.closest("footer nav")),
+    );
+    const revealNodes = [...new Set([...explicitReveals, ...autoRevealNodes])];
     revealNodes.forEach((node) => {
-      const siblingIndex = Array.from(
-        node.parentElement?.children ?? [],
-      ).indexOf(node);
-      node.dataset.homeMotionIndex = String(Math.max(0, siblingIndex));
+      const siblings = Array.from(node.parentElement?.children ?? []);
+      const siblingIndex = Math.max(0, siblings.indexOf(node));
+      node.dataset.homeMotionIndex = String(siblingIndex);
       node.style.opacity = "0";
-      node.style.transform = "translateY(32px) scale(.985)";
-      node.style.filter = "blur(7px)";
-      node.style.willChange = "transform, opacity, filter";
+      node.style.translate = `0 ${Math.min(42, 20 + siblingIndex * 3)}px`;
+      node.style.filter = "blur(8px)";
+      node.style.willChange = "opacity, translate, filter";
     });
 
-    const stop = inView(
-      selector,
-      (element) => {
-        animate(
-          element,
-          {
-            opacity: 1,
-            transform: "translateY(0px) scale(1)",
-            clipPath: "inset(0% 0 0 0 round 0px)",
-          },
-          { duration: 1.05, ease },
-        );
-      },
-      { amount: 0.1, margin: "0px 0px -8% 0px" },
-    );
-
-    const stopReveal = inView(
-      revealSelector,
-      (element) => {
-        const node = element as HTMLElement;
-        const delay = Math.min(
-          0.28,
-          Number(node.dataset.homeMotionIndex ?? 0) * 0.055,
-        );
-        node.dataset.homeVisible = "true";
-        animate(
-          element,
-          {
-            opacity: 1,
-            transform: "translateY(0px) scale(1)",
-            filter: "blur(0px)",
-          },
-          { duration: 0.78, delay, ease },
-        );
-      },
-      { amount: 0.14, margin: "0px 0px -5% 0px" },
-    );
-
-    const mediaNodes = Array.from(
-      root.querySelectorAll<HTMLElement>(
-        "section:not(:first-of-type) img, section:not(:first-of-type) video",
-      ),
-    ).filter((node) => !node.closest("footer"));
-
+    const mediaNodes = Array.from(root.querySelectorAll<HTMLElement>(
+      "section:not([data-home-motion-managed]) img, section:not([data-home-motion-managed]) video",
+    ));
     mediaNodes.forEach((node) => {
-      node.style.willChange = "transform";
       node.dataset.homeParallax = "true";
+      node.style.willChange = "translate, scale, rotate";
+      node.style.transformOrigin = "50% 50%";
     });
+
+    const stopSections = inView(sectionSelector, (element) => {
+      animate(element, {
+        opacity: 1,
+        transform: "translateY(0px) scale(1)",
+        clipPath: "inset(0% 0 0 0 round 0px)",
+        filter: "blur(0px)",
+      }, { duration: 1.12, ease });
+    }, { amount: 0.08, margin: "0px 0px -5% 0px" });
+
+    const stopReveal = inView(revealNodes, (element) => {
+      const node = element as HTMLElement;
+      const delay = Math.min(0.34, Number(node.dataset.homeMotionIndex ?? 0) * 0.052);
+      node.dataset.homeVisible = "true";
+      animate(element, {
+        opacity: 1,
+        translate: "0 0px",
+        filter: "blur(0px)",
+      }, { duration: 0.86, delay, ease });
+    }, { amount: 0.12, margin: "0px 0px -4% 0px" });
 
     let frame = 0;
-    const updateParallax = () => {
+    let currentScroll = window.scrollY;
+    let targetScroll = currentScroll;
+    let settling = false;
+
+    const applyScrollMotion = () => {
       frame = 0;
+      currentScroll += (targetScroll - currentScroll) * 0.16;
       const viewportHeight = window.innerHeight || 1;
+
+      scrollSections.forEach((section, index) => {
+        const rect = section.getBoundingClientRect();
+        if (rect.bottom < -viewportHeight * 0.35 || rect.top > viewportHeight * 1.35) return;
+        const center = rect.top + rect.height / 2;
+        const range = Math.max(viewportHeight, (viewportHeight + rect.height) / 2);
+        const progress = Math.max(-1, Math.min(1, (center - viewportHeight / 2) / range));
+        const y = progress * (index % 2 === 0 ? 11 : -11);
+        section.style.translate = `0 ${y.toFixed(2)}px`;
+      });
+
       mediaNodes.forEach((node, index) => {
         const rect = node.getBoundingClientRect();
-        if (rect.bottom < -120 || rect.top > viewportHeight + 120) return;
+        if (rect.bottom < -180 || rect.top > viewportHeight + 180) return;
         const center = rect.top + rect.height / 2;
-        const progress = Math.max(
-          -1,
-          Math.min(1, (center - viewportHeight / 2) / viewportHeight),
-        );
-        const y = progress * (index % 2 === 0 ? -18 : 18);
-        const scale = 1.018 + Math.abs(progress) * 0.012;
-        node.style.transform = `translate3d(0, ${y.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
+        const progress = Math.max(-1, Math.min(1, (center - viewportHeight / 2) / viewportHeight));
+        const direction = index % 2 === 0 ? -1 : 1;
+        const y = progress * 38 * direction;
+        const x = progress * (index % 3 === 0 ? 12 : index % 3 === 1 ? -8 : 5);
+        const scale = 1.028 + Math.abs(progress) * 0.028;
+        const rotate = progress * direction * 0.42;
+        node.style.translate = `${x.toFixed(2)}px ${y.toFixed(2)}px`;
+        node.style.scale = scale.toFixed(4);
+        node.style.rotate = `${rotate.toFixed(3)}deg`;
       });
+
+      revealNodes.forEach((node, index) => {
+        if (node.dataset.homeVisible !== "true") return;
+        const rect = node.getBoundingClientRect();
+        if (rect.bottom < -100 || rect.top > viewportHeight + 100) return;
+        const center = rect.top + rect.height / 2;
+        const progress = Math.max(-1, Math.min(1, (center - viewportHeight / 2) / viewportHeight));
+        const drift = progress * (index % 2 === 0 ? 5 : -5);
+        node.style.translate = `0 ${drift.toFixed(2)}px`;
+      });
+
+      const distance = Math.abs(targetScroll - currentScroll);
+      settling = distance > 0.25;
+      if (settling) frame = window.requestAnimationFrame(applyScrollMotion);
     };
 
-    const requestParallax = () => {
-      if (frame) return;
-      frame = window.requestAnimationFrame(updateParallax);
+    const requestMotion = () => {
+      targetScroll = window.scrollY;
+      if (!frame) frame = window.requestAnimationFrame(applyScrollMotion);
+    };
+    const requestResize = () => {
+      targetScroll = window.scrollY;
+      currentScroll = targetScroll;
+      if (!frame) frame = window.requestAnimationFrame(applyScrollMotion);
     };
 
-    updateParallax();
-    window.addEventListener("scroll", requestParallax, { passive: true });
-    window.addEventListener("resize", requestParallax);
+    applyScrollMotion();
+    window.addEventListener("scroll", requestMotion, { passive: true });
+    window.addEventListener("resize", requestResize);
 
     return () => {
-      stop();
+      stopSections();
       stopReveal();
-      window.removeEventListener("scroll", requestParallax);
-      window.removeEventListener("resize", requestParallax);
+      window.removeEventListener("scroll", requestMotion);
+      window.removeEventListener("resize", requestResize);
       if (frame) window.cancelAnimationFrame(frame);
 
+      scrollSections.forEach((node) => node.style.removeProperty("translate"));
+      sections.forEach((node) => {
+        node.style.removeProperty("opacity");
+        node.style.removeProperty("transform");
+        node.style.removeProperty("clip-path");
+        node.style.removeProperty("filter");
+        node.style.removeProperty("will-change");
+      });
       revealNodes.forEach((node) => {
         delete node.dataset.homeVisible;
         delete node.dataset.homeMotionIndex;
         node.style.removeProperty("opacity");
-        node.style.removeProperty("transform");
+        node.style.removeProperty("translate");
         node.style.removeProperty("filter");
-        node.style.removeProperty("will-change");
-      });
-
-      nodes.forEach((node) => {
-        node.style.removeProperty("opacity");
-        node.style.removeProperty("transform");
-        node.style.removeProperty("clip-path");
         node.style.removeProperty("will-change");
       });
       mediaNodes.forEach((node) => {
         delete node.dataset.homeParallax;
-        node.style.removeProperty("transform");
+        node.style.removeProperty("translate");
+        node.style.removeProperty("scale");
+        node.style.removeProperty("rotate");
+        node.style.removeProperty("transform-origin");
         node.style.removeProperty("will-change");
       });
     };

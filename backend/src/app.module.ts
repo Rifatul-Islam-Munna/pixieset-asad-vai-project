@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ImageUploadModule } from './image-upload/image-upload.module';
@@ -17,10 +18,12 @@ import { MailModule } from './mail/mail.module';
 import { HomepageModule } from './homepage/homepage.module';
 import { BlogModule } from './blog/blog.module';
 import { SupportModule } from './support/support.module';
+import { MarketingScheduleModule } from './marketing-schedule/marketing-schedule.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     MailModule,
     JwtModule.registerAsync({
       global: true,
@@ -46,6 +49,7 @@ import { SupportModule } from './support/support.module';
     HomepageModule,
     BlogModule,
     SupportModule,
+    MarketingScheduleModule,
   ],
   controllers: [AppController],
   providers: [AppService],

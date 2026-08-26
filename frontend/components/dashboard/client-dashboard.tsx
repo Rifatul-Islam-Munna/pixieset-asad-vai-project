@@ -254,9 +254,11 @@ import { SupportChat } from "@/components/dashboard/support-chat";
 import { CollectionStoreSettingsPanel } from "@/components/dashboard/collection-store-settings-panel";
 import { CollectionRegistrationActivity } from "@/components/dashboard/collection-registration-activity";
 import { MarketingContactsGrid } from "@/components/dashboard/marketing-contacts-grid";
+import { MarketingScheduleDialog } from "@/components/dashboard/marketing-schedule-dialog";
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { publicCollectionUrl } from "@/lib/public-site-url";
+import { useMarketingSchedules, type MarketingScheduleRecord } from "@/api-hooks/use-marketing-schedules";
 import {
   checkUsername,
   useAccount,
@@ -1560,7 +1562,7 @@ function AccountPanel() {
                     : "text-red-600",
               )}
             >
-              {usernameState === "checking" ? "Checking…" : usernameMessage}
+              {usernameState === "checking" ? "CheckingÃ¢â‚¬Â¦" : usernameMessage}
             </p>
           )}
           <FieldInput
@@ -1594,11 +1596,11 @@ function AccountPanel() {
                   <div>
                     <b>{purchase.planName}</b>
                     <p className="mt-1 text-xs capitalize text-[#888]">
-                      {purchase.source} · {purchase.status}
+                      {purchase.source} Ã‚Â· {purchase.status}
                     </p>
                   </div>
                   <div className="text-right">
-                    <b>€{Number(purchase.amount).toFixed(2)}</b>
+                    <b>Ã¢â€šÂ¬{Number(purchase.amount).toFixed(2)}</b>
                     <p className="mt-1 text-xs text-[#888]">
                       {new Date(purchase.createdAt).toLocaleDateString()}
                     </p>
@@ -2017,7 +2019,7 @@ function StoragePlanPanel() {
                 <div className="flex justify-between">
                   <span>Price</span>
                   <b>
-                    €{monthlyEquivalent.toFixed(2)}{" "}
+                    Ã¢â€šÂ¬{monthlyEquivalent.toFixed(2)}{" "}
                     {billingInterval === "year" ? "/yearly" : "/month"}
                   </b>
                 </div>
@@ -2026,7 +2028,7 @@ function StoragePlanPanel() {
                     <span>Billed</span>
                     <b>
                       {yearlyAvailable
-                        ? `€${Number(plan.priceYearly).toFixed(2)} yearly`
+                        ? `Ã¢â€šÂ¬${Number(plan.priceYearly).toFixed(2)} yearly`
                         : "Unavailable"}
                     </b>
                   </div>
@@ -2468,6 +2470,19 @@ function optimiseMarketingPopupImage(file: File) {
 function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
   const [campaignStatus, setCampaignStatus] = useState("all");
   const [campaignSort, setCampaignSort] = useState("newest");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const marketingSchedules = useMarketingSchedules();
+  const scheduledCampaigns = Array.isArray(marketingSchedules.query.data?.data)
+    ? marketingSchedules.query.data.data
+    : [];
+  const cancelScheduledCampaign = async (id: string) => {
+    try {
+      await marketingSchedules.cancel.mutateAsync(id);
+      toast.success("Scheduled campaign cancelled");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not cancel schedule");
+    }
+  };
   const {
     campaignSearch,
     hydrateDashboardSettings,
@@ -2528,6 +2543,7 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
         sort={campaignSort}
         status={campaignStatus}
         onNew={() => setShowCampaignTemplates(true)}
+        onSchedule={() => setScheduleOpen(true)}
         onQueryChange={setCampaignSearch}
         onSortChange={setCampaignSort}
         onStatusChange={setCampaignStatus}
@@ -2548,9 +2564,11 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
           query={campaignSearch}
           sort={campaignSort}
           status={campaignStatus}
-          onEdit={(name) => startCampaignBuilder(name)}
+          schedules={scheduledCampaigns}
+          onCancelSchedule={cancelScheduledCampaign}
         />
       )}
+      <MarketingScheduleDialog open={scheduleOpen} onOpenChange={setScheduleOpen} />
     </div>
   );
 }
@@ -2563,7 +2581,7 @@ function MarketingSettingsPanel({
   saveSetting: any;
 }) {
   const saved =
-    query.data?.data?.find((item) => item.localId === "gallery-marketing")
+    query.data?.data?.find((item: { localId: string; data: MarketingSettings }) => item.localId === "gallery-marketing")
       ?.data ?? defaultMarketingSettings;
   const [form, setForm] = useState<MarketingSettings>(saved);
   const [popupImageUploading, setPopupImageUploading] = useState(false);
@@ -2660,8 +2678,8 @@ function MarketingSettingsPanel({
                       Email registration subscription
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[#5d6b68]">
-                      Show an optional â€œSubscribe to updates and special
-                      offersâ€ checkbox inside the collection email-registration
+                      Show an optional ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œSubscribe to updates and special
+                      offersÃƒÂ¢Ã¢â€šÂ¬Ã‚Â checkbox inside the collection email-registration
                       modal.
                     </p>
                   </div>
@@ -2678,7 +2696,7 @@ function MarketingSettingsPanel({
               This appears only when both <strong>Email Registration</strong>{" "}
               and
               <strong> Marketing Subscription</strong> are enabled in that
-              collectionâ€™s Privacy settings.
+              collectionÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢s Privacy settings.
             </div>
           </section>
 
@@ -2876,6 +2894,7 @@ function CampaignListHeader({
   sort,
   status,
   onNew,
+  onSchedule,
   onQueryChange,
   onSortChange,
   onStatusChange,
@@ -2884,6 +2903,7 @@ function CampaignListHeader({
   sort: string;
   status: string;
   onNew: () => void;
+  onSchedule: () => void;
   onQueryChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onStatusChange: (value: string) => void;
@@ -2905,12 +2925,17 @@ function CampaignListHeader({
             />
           </div>
         </div>
-        <Button
-          className="h-10 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white hover:bg-[#542bc2]"
-          onClick={onNew}
-        >
-          New Campaign
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="h-10 rounded-none border-[#6337d8] px-5 text-sm font-bold text-[#6337d8] hover:bg-[#f4f0ff]" onClick={onSchedule}>
+            <CalendarDays className="size-4" /> New Schedule
+          </Button>
+          <Button
+            className="h-10 rounded-none bg-[#6337d8] px-7 text-sm font-bold text-white hover:bg-[#542bc2]"
+            onClick={onNew}
+          >
+            New Campaign
+          </Button>
+        </div>
       </div>
       <div className="mt-7 flex items-center justify-between">
         <DropdownMenu>
@@ -2941,7 +2966,7 @@ function CampaignListHeader({
             <DropdownMenuRadioGroup value={sort} onValueChange={onSortChange}>
               <DropdownMenuRadioItem value="newest">Newest first</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="oldest">Oldest first</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="name">Name A–Z</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="name">Name AÃ¢â‚¬â€œZ</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -2954,84 +2979,73 @@ function CampaignTable({
   query,
   sort,
   status,
-  onEdit,
+  schedules,
+  onCancelSchedule,
 }: {
   query: string;
   sort: string;
   status: string;
-  onEdit: (name: string) => void;
+  schedules: MarketingScheduleRecord[];
+  onCancelSchedule: (id: string) => void | Promise<void>;
 }) {
-  const campaigns = [
-    {
-      name: "Travel Dates",
-      status: "Draft",
-      sendDate: "-",
-      recipients: "0",
-      openRate: "-",
-      created: "Jun 14, 2026",
-    },
-  ]
+  const campaigns = [...schedules]
     .filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
-    .filter((item) => status === "all" || item.status.toLowerCase() === status)
+    .filter((item) => status === "all" || item.status === status)
     .sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
-
-      const direction = sort === "oldest" ? 1 : -1;
-      return direction * (Date.parse(a.created) - Date.parse(b.created));
+      const left = Date.parse(a.createdAt || a.scheduledAt || "") || 0;
+      const right = Date.parse(b.createdAt || b.scheduledAt || "") || 0;
+      return (sort === "oldest" ? 1 : -1) * (left - right);
     });
 
   if (!campaigns.length) {
     return (
-      <div className="mt-12 flex min-h-[520px] flex-col items-center justify-center text-center">
+      <div className="mt-12 flex min-h-[420px] flex-col items-center justify-center text-center">
         <div className="relative">
           <div className="size-28 rounded-full bg-[#eee8ff]" />
           <Mail className="absolute -left-3 top-3 size-10 text-[#444]" />
-          <MailCheck className="absolute left-12 top-14 size-9 text-[#444]" />
+          <CalendarDays className="absolute left-12 top-14 size-9 text-[#6337d8]" />
         </div>
-        <h2 className="mt-10 text-lg font-bold">
-          Create your first email campaign
-        </h2>
-        <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#333]">
-          Power up your marketing with email campaigns to opted-in contacts.
-        </p>
+        <h2 className="mt-10 text-lg font-bold">No scheduled campaigns yet</h2>
+        <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#333]">Create a schedule to send a saved template automatically to selected contacts or a full contact category.</p>
       </div>
     );
   }
 
   return (
     <div className="mt-8">
-      <div className="hidden grid-cols-[2fr_130px_1.2fr_1.2fr_1.2fr_1.4fr_40px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777] md:grid">
-        <span>Name</span>
-        <span />
-        <span>Send Date</span>
-        <span># of Recipients</span>
-        <span>Open Rate</span>
-        <span>Date Created</span>
-        <span />
+      <div className="hidden grid-cols-[2fr_130px_1.7fr_1fr_1.5fr_60px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777] md:grid">
+        <span>Name</span><span>Status</span><span>Send Date</span><span>Recipients</span><span>Collection</span><span />
       </div>
       {campaigns.map((campaign) => (
-        <button
-          key={campaign.name}
-          className="grid w-full gap-2 border-b py-5 text-left text-sm md:grid-cols-[2fr_130px_1.2fr_1.2fr_1.2fr_1.4fr_40px] md:items-center md:gap-0"
-          onClick={() => onEdit(campaign.name)}
-        >
-          <span className="font-bold">{campaign.name}</span>
-          <span>
-            <span className="rounded-full bg-[#f4f4f4] px-6 py-2 text-xs font-bold uppercase text-[#777]">
-              {campaign.status}
-            </span>
+        <div key={campaign._id} className="grid gap-3 border-b py-5 text-left text-sm md:grid-cols-[2fr_130px_1.7fr_1fr_1.5fr_60px] md:items-center md:gap-0">
+          <span className="min-w-0">
+            <span className="block truncate font-bold">{campaign.name}</span>
+            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.recipientCategory ? ` ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${campaign.recipientCategory}` : ""}</span>
+            {campaign.lastError && <span className="mt-1 block line-clamp-1 text-xs font-semibold text-red-600" title={campaign.lastError}>{campaign.lastError}</span>}
           </span>
-          <span>{campaign.sendDate}</span>
-          <span>{campaign.recipients}</span>
-          <span>{campaign.openRate}</span>
-          <span>{campaign.created}</span>
-          <MoreHorizontal className="size-5 text-[#777]" />
-        </button>
+          <span><span className={cn("rounded-full px-4 py-2 text-[10px] font-bold uppercase", campaign.status === "sent" ? "bg-emerald-50 text-emerald-700" : campaign.status === "failed" ? "bg-red-50 text-red-700" : campaign.status === "cancelled" ? "bg-[#f1f1f1] text-[#777]" : campaign.status === "sending" ? "bg-amber-50 text-amber-700" : "bg-[#f1ecff] text-[#6337d8]")}>{campaign.status}</span></span>
+          <span>{formatScheduleLocal(campaign.scheduledLocal, campaign.timeZone)}</span>
+          <span>{campaign.recipientsCount}</span>
+          <span className="truncate pr-3">{campaign.collectionName || "-"}</span>
+          <span className="flex justify-end">
+            {["scheduled", "failed"].includes(campaign.status) ? (
+              <button type="button" onClick={() => void onCancelSchedule(campaign._id)} className="text-xs font-bold text-red-600 hover:underline">Cancel</button>
+            ) : (
+              <MoreHorizontal className="size-5 text-[#aaa]" />
+            )}
+          </span>
+        </div>
       ))}
     </div>
   );
 }
 
+function formatScheduleLocal(value: string, timeZone: string) {
+  if (!value) return "-";
+  const [date, time] = value.split("T");
+  return `${date} ${time || ""} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${timeZone}`;
+}
 function TemplateGrid({
   isLoading,
   onSelect,
@@ -7914,7 +7928,7 @@ function StoreDashboardPanel() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-[-.03em]">
-            Store Dashboard 👋
+            Store Dashboard Ã°Å¸â€˜â€¹
           </h1>
           <p className="mt-2 text-sm text-[#716c7b]">
             Overview of your store performance and key metrics.
@@ -8012,7 +8026,7 @@ function StoreDashboardPanel() {
                     <td className="px-5 py-4 text-[#77727f]">
                       {order.createdAt
                         ? new Date(order.createdAt).toLocaleDateString()
-                        : "—"}
+                        : "Ã¢â‚¬â€"}
                     </td>
                   </tr>
                 ))}
@@ -9883,7 +9897,7 @@ function money(value: number, currency = "EUR") {
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   } catch {
-    return `€${Number(value || 0).toFixed(2)}`;
+    return `Ã¢â€šÂ¬${Number(value || 0).toFixed(2)}`;
   }
 }
 
@@ -11015,7 +11029,7 @@ function ProductTile({
           </p>
           <p className="mt-1 text-xs text-[#999]">
             {productTypeLabels[product.type]}
-            {product.active === false ? " Ã¢€Â¢ Hidden" : ""}
+            {product.active === false ? " ÃƒÆ’Ã‚Â¢Ã¢â€šÂ¬Ãƒâ€šÃ‚Â¢ Hidden" : ""}
           </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#6337d8]" />
@@ -12366,7 +12380,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             />
           </label>
           <p className="hidden">
-            Manage your collections Ã¢€â€ create, view, and organize your
+            Manage your collections ÃƒÆ’Ã‚Â¢Ã¢â€šÂ¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â create, view, and organize your
             photos.
           </p>
         </div>
@@ -15213,10 +15227,10 @@ function CollectionDetailView({
                     </p>
                     {(
                       [
-                        ["uploaded-new-old", "Uploaded: New â†’ Old"],
-                        ["uploaded-old-new", "Uploaded: Old â†’ New"],
-                        ["taken-new-old", "Date Taken: New â†’ Old"],
-                        ["taken-old-new", "Date Taken: Old â†’ New"],
+                        ["uploaded-new-old", "Uploaded: New ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Old"],
+                        ["uploaded-old-new", "Uploaded: Old ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ New"],
+                        ["taken-new-old", "Date Taken: New ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Old"],
+                        ["taken-old-new", "Date Taken: Old ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ New"],
                         ["name-az", "Name: A-Z"],
                         ["name-za", "Name: Z-A"],
                         ["random", "Random"],
@@ -15412,7 +15426,7 @@ function CollectionDetailView({
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-[#999]">
-                  âŒ˜/Ctrl + A selects all · Delete removes selected · Esc
+                  ÃƒÂ¢Ã…â€™Ã‹Å“/Ctrl + A selects all Ã‚Â· Delete removes selected Ã‚Â· Esc
                   clears
                 </p>
                 {deletingImages && (
@@ -17043,7 +17057,7 @@ function CollectionActivityPanel({
                             (isAllowed ? "allowed" : "pending")}
                         </TableCell>
                         <TableCell className="max-w-80 whitespace-normal text-[#666]">
-                          {request?.reason || "—"}
+                          {request?.reason || "Ã¢â‚¬â€"}
                         </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
