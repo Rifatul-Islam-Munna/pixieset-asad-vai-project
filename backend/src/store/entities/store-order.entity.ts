@@ -10,6 +10,8 @@ export type StoreOrderStatus =
   | 'delivered'
   | 'cancelled';
 
+export type PrintLabNotificationStatus = 'not-requested' | 'pending' | 'sent' | 'failed';
+
 export type StoreCropData = {
   x: number;
   y: number;
@@ -159,6 +161,24 @@ export class StoreOrder {
 
   @Prop({ default: '' })
   note: string;
+
+  @Prop()
+  printLabAccessTokenHash?: string;
+
+  @Prop()
+  printLabAccessExpiresAt?: Date;
+
+  @Prop({ default: 'not-requested', index: true })
+  printLabNotificationStatus: PrintLabNotificationStatus;
+
+  @Prop()
+  printLabNotificationSentAt?: Date;
+
+  @Prop({ default: '' })
+  printLabNotificationError: string;
+
+  @Prop({ default: '' })
+  printLabNotificationRecipient: string;
 }
 
 export const StoreOrderSchema = SchemaFactory.createForClass(StoreOrder);

@@ -23,6 +23,7 @@ import { StoreStripeService } from './store-stripe.service';
 import { StoreOrderCreateService } from './store-order-create.service';
 import { StorePaymentVerifyService } from './store-payment-verify.service';
 import { StoreDefaultProductService } from './store-default-product.service';
+import { PrintLabNotificationService } from './print-lab-notification.service';
 import { Collection, CollectionSchema } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
@@ -66,7 +67,8 @@ import { DashboardSetting, DashboardSettingSchema } from 'src/settings/entities/
     StoreOrderCreateService,
     StorePaymentVerifyService,
     StoreDefaultProductService,
+    PrintLabNotificationService,
   ],
-  exports: [StoreDefaultProductService],
+  exports: [StoreDefaultProductService, PrintLabNotificationService],
 })
 export class StoreModule {}
