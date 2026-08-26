@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { BrandSettings, CustomCoverTemplate } from "@/lib/home-cms";
+import { coverFocalStyle } from "@/lib/cover-focal";
 
 export const coverOptions = [
   ["Center", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80"],
@@ -75,9 +76,10 @@ export function CoverPreview({
   className?: string;
 }) {
   const src = image || coverImage(design.cover);
-  const focalX = Math.min(100, Math.max(0, Number(design.coverFocalX ?? 50)));
-  const focalY = Math.min(100, Math.max(0, Number(design.coverFocalY ?? 50)));
-  const imageStyle = { objectPosition: `${focalX}% ${focalY}%` };
+  const imageStyle = coverFocalStyle(design.coverFocalX, design.coverFocalY);
+  const [focalX, focalY] = String(imageStyle.objectPosition)
+    .split(" ")
+    .map((value) => Number.parseFloat(value));
   if (design.customCoverTemplate) {
     return (
       <CustomCoverPreview

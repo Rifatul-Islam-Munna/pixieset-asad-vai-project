@@ -6155,6 +6155,12 @@ function PresetDesignPanel({
   activePanel,
   onChange,
   coverImage,
+  images = [],
+  coverImageLocked,
+  imagesHasMore,
+  imagesLoadingMore,
+  onCoverImageChange,
+  onLoadMoreImages,
 }: {
   design: {
     cover: string;
@@ -6193,12 +6199,19 @@ function PresetDesignPanel({
   activePanel: "cover" | "typography" | "color" | "grid";
   onChange: (value: Partial<typeof design>) => void;
   coverImage?: string;
+  images?: CollectionImageRecord[];
+  coverImageLocked?: boolean;
+  imagesHasMore?: boolean;
+  imagesLoadingMore?: boolean;
+  onCoverImageChange?: (image: CollectionImageRecord) => void;
+  onLoadMoreImages?: () => void;
 }) {
   type UploadedFont = { name: string; url: string; fileName: string };
   const [adminCoverTemplates, setAdminCoverTemplates] = useState<
     CustomCoverTemplate[]
   >([]);
   const [fontUploading, setFontUploading] = useState(false);
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const fontLibrary = useDashboardSettings<UploadedFont>("branding");
   const uploadedFonts = (fontLibrary.query.data?.data ?? []).filter((item) =>
     item.localId.startsWith("font:"),
@@ -6258,6 +6271,94 @@ function PresetDesignPanel({
       {activePanel === "cover" && (
         <>
           <h2 className="text-2xl font-medium">Cover</h2>
+          {onCoverImageChange && <OptionSection title="Cover Photo">
+            <div className="overflow-hidden border bg-muted">
+              {coverImage ? (
+                <img
+                  src={imageSrc(coverImage)}
+                  alt="Current cover"
+                  className="aspect-[8/3] w-full object-cover"
+                  style={{
+                    objectPosition: `${design.coverFocalX ?? 50}% ${design.coverFocalY ?? 50}%`,
+                  }}
+                />
+              ) : (
+                <div className="grid aspect-[8/3] place-items-center text-sm text-muted-foreground">
+                  No cover photo selected
+                </div>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 rounded-none"
+              disabled={coverImageLocked}
+              onClick={() => setCoverPickerOpen(true)}
+            >
+              <Images data-icon="inline-start" />
+              Change cover photo
+            </Button>
+            <Dialog open={coverPickerOpen} onOpenChange={setCoverPickerOpen}>
+              <DialogContent className="max-h-[90dvh] overflow-hidden rounded-none sm:max-w-[920px]">
+                <DialogHeader>
+                  <DialogTitle>Change cover photo</DialogTitle>
+                  <DialogDescription>
+                    Choose any uploaded photo. Video files cannot be used as covers.
+                  </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[65dvh] pr-3">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {images
+                      .filter((image) => image.mediaType !== "video")
+                      .map((image) => {
+                        const selected = imageSrc(image.url) === imageSrc(coverImage || "");
+                        return (
+                          <button
+                            key={image._id}
+                            type="button"
+                            aria-label={`Use ${image.originalName || "photo"} as cover`}
+                            aria-pressed={selected}
+                            className={cn(
+                              "group relative overflow-hidden border-2 bg-muted text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring",
+                              selected ? "border-[#6337d8]" : "border-transparent hover:border-foreground/30",
+                            )}
+                            onClick={() => {
+                              onCoverImageChange(image);
+                              setCoverPickerOpen(false);
+                            }}
+                          >
+                            <img
+                              src={imageSrc(image.thumbnailUrl || image.url)}
+                              alt=""
+                              className="aspect-square w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                            />
+                            {selected && (
+                              <span className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-[#6337d8] text-white shadow-md">
+                                <Check className="size-4" />
+                                <span className="sr-only">Current cover</span>
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                  </div>
+                  {imagesHasMore && (
+                    <div className="flex justify-center py-5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={imagesLoadingMore}
+                        onClick={onLoadMoreImages}
+                      >
+                        {imagesLoadingMore && <Loader2 data-icon="inline-start" className="animate-spin" />}
+                        {imagesLoadingMore ? "Loading..." : "Load more photos"}
+                      </Button>
+                    </div>
+                  )}
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+          </OptionSection>}
           <OptionSection title="Cover Text">
             <FieldGroup className="gap-5">
               {(
@@ -15761,6 +15862,23 @@ function CollectionDetailView({
                   coverImage={
                     form.coverImage ||
                     images.find((image) => image.mediaType !== "video")?.url
+                  }
+                  images={images}
+                  coverImageLocked={coverImageAccess.locked}
+                  imagesHasMore={imagesHasMore}
+                  imagesLoadingMore={imagesLoadingMore}
+                  onLoadMoreImages={() => void loadMoreCollectionImages()}
+                  onCoverImageChange={(image) =>
+                    setForm((current) => ({
+                      ...current,
+                      coverImage: image.url,
+                      presetId: "",
+                      design: {
+                        ...current.design,
+                        coverFocalX: 50,
+                        coverFocalY: 50,
+                      },
+                    }))
                   }
                   onChange={(value) =>
                     setForm((current) => ({

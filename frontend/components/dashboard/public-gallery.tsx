@@ -1131,16 +1131,18 @@ export function PublicGallery({
       ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={galleryLanguageCode(generalSettings.language)} dir={galleryLanguageCode(generalSettings.language) === "ar" ? "rtl" : "ltr"}>
       <section className="px-3 pb-7 pt-3 sm:px-5 sm:pb-10 md:px-10">
-        <CoverPreview
-          design={{
-            ...design,
-            coverTitle: design.coverTitle || title,
-            coverSmallTitle: design.coverSmallTitle || studioName,
-            branding: collection?.branding,
-          }}
-          image={coverPhoto}
-          className="mx-auto max-w-[1180px]"
-        />
+        <div className="mx-auto aspect-[4/3] w-full max-w-[1180px] overflow-hidden sm:aspect-[8/3]">
+          <CoverPreview
+            design={{
+              ...design,
+              coverTitle: design.coverTitle || title,
+              coverSmallTitle: design.coverSmallTitle || studioName,
+              branding: collection?.branding,
+            }}
+            image={coverPhoto}
+            className="h-full min-h-0"
+          />
+        </div>
       </section>
 
       <section className="px-0 py-0">
