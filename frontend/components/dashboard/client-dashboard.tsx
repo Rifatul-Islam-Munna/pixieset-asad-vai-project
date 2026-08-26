@@ -6212,6 +6212,12 @@ function PresetDesignPanel({
   >([]);
   const [fontUploading, setFontUploading] = useState(false);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
+  const [coverFocalOpen, setCoverFocalOpen] = useState(false);
+  const [coverPickerPage, setCoverPickerPage] = useState(0);
+  const coverPickerPageSize = 20;
+  const coverPickerImages = images.filter((image) => image.mediaType !== "video");
+  const coverPickerPageCount = Math.max(1, Math.ceil(coverPickerImages.length / coverPickerPageSize));
+  const coverPickerVisible = coverPickerImages.slice(coverPickerPage * coverPickerPageSize, (coverPickerPage + 1) * coverPickerPageSize);
   const fontLibrary = useDashboardSettings<UploadedFont>("branding");
   const uploadedFonts = (fontLibrary.query.data?.data ?? []).filter((item) =>
     item.localId.startsWith("font:"),
@@ -6277,27 +6283,23 @@ function PresetDesignPanel({
                 <img
                   src={imageSrc(coverImage)}
                   alt="Current cover"
-                  className="aspect-[8/3] w-full object-cover"
+                  className="aspect-video w-full object-cover"
                   style={{
                     objectPosition: `${design.coverFocalX ?? 50}% ${design.coverFocalY ?? 50}%`,
                   }}
                 />
               ) : (
-                <div className="grid aspect-[8/3] place-items-center text-sm text-muted-foreground">
+                <div className="grid aspect-video place-items-center text-sm text-muted-foreground">
                   No cover photo selected
                 </div>
               )}
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4 rounded-none"
-              disabled={coverImageLocked}
-              onClick={() => setCoverPickerOpen(true)}
-            >
-              <Images data-icon="inline-start" />
-              Change cover photo
-            </Button>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button type="button" variant="outline" className="rounded-none" disabled={coverImageLocked} onClick={() => { setCoverPickerPage(0); setCoverPickerOpen(true); }}>
+                <Images data-icon="inline-start" /> Change cover photo
+              </Button>
+              {coverImage && <Button type="button" variant="outline" className="rounded-none" onClick={() => setCoverFocalOpen(true)}>Change focal point</Button>}
+            </div>
             <Dialog open={coverPickerOpen} onOpenChange={setCoverPickerOpen}>
               <DialogContent className="max-h-[90dvh] overflow-hidden rounded-none sm:max-w-[920px]">
                 <DialogHeader>
@@ -6308,9 +6310,7 @@ function PresetDesignPanel({
                 </DialogHeader>
                 <ScrollArea className="max-h-[65dvh] pr-3">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {images
-                      .filter((image) => image.mediaType !== "video")
-                      .map((image) => {
+                    {coverPickerVisible.map((image) => {
                         const selected = imageSrc(image.url) === imageSrc(coverImage || "");
                         return (
                           <button
@@ -6342,19 +6342,13 @@ function PresetDesignPanel({
                         );
                       })}
                   </div>
-                  {imagesHasMore && (
-                    <div className="flex justify-center py-5">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={imagesLoadingMore}
-                        onClick={onLoadMoreImages}
-                      >
-                        {imagesLoadingMore && <Loader2 data-icon="inline-start" className="animate-spin" />}
-                        {imagesLoadingMore ? "Loading..." : "Load more photos"}
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between gap-3 py-5">
+                    <Button type="button" variant="outline" disabled={coverPickerPage <= 0} onClick={() => setCoverPickerPage((page) => Math.max(0, page - 1))}>Previous</Button>
+                    <span className="text-xs text-[#777]">Page {coverPickerPage + 1} of {coverPickerPageCount}{imagesHasMore ? "+" : ""}</span>
+                    <Button type="button" variant="outline" disabled={imagesLoadingMore || (coverPickerPage >= coverPickerPageCount - 1 && !imagesHasMore)} onClick={() => { if (coverPickerPage < coverPickerPageCount - 1) setCoverPickerPage((page) => page + 1); else if (imagesHasMore) { onLoadMoreImages?.(); setCoverPickerPage((page) => page + 1); } }}>
+                      {imagesLoadingMore && <Loader2 data-icon="inline-start" className="animate-spin" />}Next
+                    </Button>
+                  </div>
                 </ScrollArea>
               </DialogContent>
             </Dialog>
@@ -6502,47 +6496,24 @@ function PresetDesignPanel({
               </button>
             ))}
           </div>
-          <OptionSection title="Cover Photo Focal Point">
-            <p className="mb-4 text-sm leading-6 text-[#666]">
-              Drag directly on the cover to choose the part of the photo that should stay in focus.
-            </p>
-            <div
-              className="relative aspect-[1.75] cursor-crosshair touch-none overflow-hidden border bg-[#111] select-none"
-              onPointerDown={updateFocalFromPointer}
-              onPointerMove={updateFocalFromPointer}
-              role="slider"
-              aria-label="Cover photo focal point"
-              aria-valuetext={`${Math.round(Number(design.coverFocalX ?? 50))}% horizontal, ${Math.round(Number(design.coverFocalY ?? 50))}% vertical`}
-            >
-              <CoverPreview
-                design={design}
-                image={coverImage}
-                compact
-                className="pointer-events-none min-h-0 h-full"
-              />
-              <span
-                className="pointer-events-none absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/25 shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_4px_16px_rgba(0,0,0,0.35)]"
-                style={{
-                  left: `${design.coverFocalX ?? 50}%`,
-                  top: `${design.coverFocalY ?? 50}%`,
-                }}
-              >
-                <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
-              </span>
-            </div>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {([['Horizontal', 'coverFocalX'], ['Vertical', 'coverFocalY']] as const).map(([label, key]) => (
-                <Field key={key}>
-                  <div className="flex items-center justify-between gap-3">
-                    <FieldLabel className="font-bold">{label}</FieldLabel>
-                    <span className="text-xs text-[#777]">{Math.round(Number(design[key] ?? 50))}%</span>
-                  </div>
-                  <input type="range" min={0} max={100} value={design[key] ?? 50} onChange={(event) => onChange({ [key]: Number(event.target.value) } as Partial<typeof design>)} className="mt-3 w-full accent-[#6337d8]" />
-                </Field>
-              ))}
-            </div>
-            <button type="button" className="mt-4 text-sm font-bold text-[#6337d8]" onClick={() => onChange({ coverFocalX: 50, coverFocalY: 50 })}>Reset focal point</button>
-          </OptionSection>
+          <Dialog open={coverFocalOpen} onOpenChange={setCoverFocalOpen}>
+            <DialogContent className="max-h-[96dvh] overflow-y-auto rounded-none sm:max-w-[1180px]">
+              <DialogHeader>
+                <DialogTitle>Change focal point</DialogTitle>
+                <DialogDescription>Drag the focal marker directly on the 16:9 cover. The public collection uses this exact crop.</DialogDescription>
+              </DialogHeader>
+              <div className="relative aspect-video w-full cursor-crosshair touch-none overflow-hidden bg-black select-none" onPointerDown={updateFocalFromPointer} onPointerMove={updateFocalFromPointer}>
+                {coverImage && <img src={imageSrc(coverImage)} alt="Cover focal preview" className="pointer-events-none h-full w-full object-cover" style={{ objectPosition: `${design.coverFocalX ?? 50}% ${design.coverFocalY ?? 50}%` }} />}
+                <span className="pointer-events-none absolute size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/30 shadow-xl" style={{ left: `${design.coverFocalX ?? 50}%`, top: `${design.coverFocalY ?? 50}%` }}>
+                  <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+                </span>
+              </div>
+              <DialogFooter className="gap-2 sm:justify-between">
+                <Button type="button" variant="outline" onClick={() => onChange({ coverFocalX: 50, coverFocalY: 50 })}>Center focal point</Button>
+                <Button type="button" onClick={() => setCoverFocalOpen(false)}>Done</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       )}
 

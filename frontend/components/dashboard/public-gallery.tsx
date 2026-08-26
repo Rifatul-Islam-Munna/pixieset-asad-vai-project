@@ -287,6 +287,7 @@ export function PublicGallery({
   const [privateImageIds, setPrivateImageIds] = useState<Set<string>>(() => new Set());
   const [privateImageBusy, setPrivateImageBusy] = useState("");
   const [zipDownloading, setZipDownloading] = useState(false);
+  const [downloadScopeOpen, setDownloadScopeOpen] = useState(false);
   const [zipStage, setZipStage] = useState("Preparing your photos");
   const [faceBusy, setFaceBusy] = useState(false);
   const [faceError, setFaceError] = useState("");
@@ -308,7 +309,7 @@ export function PublicGallery({
   const [downloadEmailOpen, setDownloadEmailOpen] = useState(false);
   const [quickShareDownload, setQuickShareDownload] = useState<string | null>(null);
   const [pendingDownload, setPendingDownload] = useState<
-    { type: "single"; photo: PublicImage; index: number } | { type: "all" } | null
+    { type: "single"; photo: PublicImage; index: number } | { type: "all"; scope: "all" | "set" | "favorites" } | null
   >(null);
   const [accessEmail, setAccessEmail] = useState("");
   const [accessPin, setAccessPin] = useState("");
@@ -466,7 +467,7 @@ export function PublicGallery({
     setDownloadEmailOpen(false);
     setPendingDownload(null);
     if (pending?.type === "single") void downloadPhoto(pending.photo, pending.index, email);
-    if (pending?.type === "all") void downloadAllImages(email);
+    if (pending?.type === "all") void downloadAllImages(email, pending.scope);
   };
   const ensureDownloadEmail = (pending: typeof pendingDownload, emailOverride = "") => {
     const existing = emailOverride || savedDownloadEmail();
@@ -525,9 +526,9 @@ export function PublicGallery({
     link.remove();
     onDownload();
   };
-  const downloadAllImages = async (emailOverride = "") => {
+  const downloadAllImages = async (emailOverride = "", scope: "all" | "set" | "favorites" = "all") => {
     if (!canDownloadAll || zipDownloading) return;
-    const email = ownerPreview ? "" : ensureDownloadEmail({ type: "all" }, emailOverride);
+    const email = ownerPreview ? "" : ensureDownloadEmail({ type: "all", scope }, emailOverride);
     if (!ownerPreview && !email) return;
     let allImages = galleryImages.filter((photo) => !isVideo(photo));
     if (collection && imagesHasMore) {
@@ -560,6 +561,11 @@ export function PublicGallery({
         });
         setImagesHasMore(false);
       }
+    }
+    if (scope === "set") {
+      allImages = allImages.filter((photo) => imageSetId(photo) === activeSetId);
+    } else if (scope === "favorites") {
+      allImages = allImages.filter((photo) => favoriteImageIds.has(photo._id));
     }
     const remaining = !ownerPreview && boolSetting(download.limitDownloads) && maxDownloads > 0
       ? Math.max(0, maxDownloads - downloadCount)
@@ -611,7 +617,8 @@ export function PublicGallery({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${safeDownloadName(title)}.zip`;
+      const suffix = scope === "set" ? `-${safeDownloadName(gallerySets.find((set) => set.id === activeSetId)?.name || "set")}` : scope === "favorites" ? "-favorites" : "";
+      link.download = `${safeDownloadName(title)}${suffix}.zip`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1173,7 +1180,7 @@ export function PublicGallery({
               <Star className={cn("size-5", favoritesPanelOpen && "fill-current text-amber-500")} />
             </button>
             {canDownloadAll && (
-              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8] disabled:opacity-50" onClick={() => void downloadAllImages()} disabled={zipDownloading} type="button" title="Download all" aria-label={zipDownloading ? "Preparing download" : "Download all"}>
+              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8] disabled:opacity-50" onClick={() => setDownloadScopeOpen(true)} disabled={zipDownloading} type="button" title="Download" aria-label={zipDownloading ? "Preparing download" : "Choose download"}>
                 {zipDownloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
               </button>
             )}
@@ -1362,6 +1369,21 @@ export function PublicGallery({
       )}
 
       {favoriteTools.overlays}
+      {downloadScopeOpen && (
+        <div className="fixed inset-0 z-[71] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white p-6 text-[#202326] shadow-[0_28px_90px_rgba(0,0,0,0.32)]">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#777]">Download photos</p><h2 className="mt-2 text-2xl font-semibold">What would you like to download?</h2></div>
+              <button type="button" onClick={() => setDownloadScopeOpen(false)} aria-label="Close download options"><X className="size-5" /></button>
+            </div>
+            <div className="mt-6 grid gap-3">
+              <button type="button" className="border px-4 py-4 text-left transition hover:border-[#6337d8] hover:bg-[#f7f4ff]" onClick={() => { setDownloadScopeOpen(false); void downloadAllImages("", "all"); }}><span className="block font-semibold">Full gallery</span><span className="mt-1 block text-xs text-[#666]">Download every available photo.</span></button>
+              <button type="button" className="border px-4 py-4 text-left transition hover:border-[#6337d8] hover:bg-[#f7f4ff]" onClick={() => { setDownloadScopeOpen(false); void downloadAllImages("", "set"); }}><span className="block font-semibold">Current set</span><span className="mt-1 block text-xs text-[#666]">Download only {gallerySets.find((set) => set.id === activeSetId)?.name || "this set"}.</span></button>
+              <button type="button" disabled={!favoriteImageIds.size} className="border px-4 py-4 text-left transition hover:border-[#6337d8] hover:bg-[#f7f4ff] disabled:cursor-not-allowed disabled:opacity-40" onClick={() => { setDownloadScopeOpen(false); void downloadAllImages("", "favorites"); }}><span className="block font-semibold">Favorites</span><span className="mt-1 block text-xs text-[#666]">Download your {favoriteImageIds.size} favorite photo{favoriteImageIds.size === 1 ? "" : "s"}.</span></button>
+            </div>
+          </div>
+        </div>
+      )}
       {zipDownloading && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-white p-7 text-center text-[#202326] shadow-[0_28px_90px_rgba(0,0,0,0.32)]">
