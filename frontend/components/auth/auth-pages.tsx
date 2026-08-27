@@ -27,7 +27,7 @@ export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSe
     startTransition(async () => {
       const result = await loginWithMagic(token);
       if (result.error) { setError(result.error.message); return; }
-      window.location.replace(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery");
+      window.location.replace(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery/dashboard");
     });
   }, [searchParams]);
   const [remember, setRemember] = useState(true);
@@ -41,7 +41,7 @@ export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSe
         setError(result.error.message);
         return;
       }
-      window.location.assign(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery");
+      window.location.assign(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery/dashboard");
     });
   };
 
@@ -156,7 +156,7 @@ export function RegisterPageClient({ auth, brand }: { auth: AuthCms; brand: Bran
         setError(result.error.message);
         return;
       }
-      window.location.assign("/dashboard/client-gallery");
+      window.location.assign("/dashboard/client-gallery/dashboard");
     });
   };
 

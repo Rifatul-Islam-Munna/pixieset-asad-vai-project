@@ -48,7 +48,9 @@ function footerHref(label: string, configured?: string) {
 async function getDashboardHref() {
   const user = await getUser();
   if (!user) return undefined;
-  return user.role === UserType.ADMIN ? "/admin" : "/dashboard/overview";
+  return user.role === UserType.ADMIN
+    ? "/admin"
+    : "/dashboard/client-gallery/dashboard";
 }
 
 export default async function Home({

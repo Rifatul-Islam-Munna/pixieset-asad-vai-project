@@ -6181,6 +6181,7 @@ function PresetDesignPanel({
   imagesHasMore,
   imagesLoadingMore,
   onCoverImageChange,
+  onCoverUpload,
   onLoadMoreImages,
 }: {
   design: {
@@ -6225,6 +6226,7 @@ function PresetDesignPanel({
   imagesHasMore?: boolean;
   imagesLoadingMore?: boolean;
   onCoverImageChange?: (image: CollectionImageRecord) => void;
+  onCoverUpload?: (file: File) => Promise<CollectionImageRecord | undefined>;
   onLoadMoreImages?: () => void;
 }) {
   type UploadedFont = { name: string; url: string; fileName: string };
@@ -6233,6 +6235,7 @@ function PresetDesignPanel({
   >([]);
   const [fontUploading, setFontUploading] = useState(false);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
   const [coverFocalOpen, setCoverFocalOpen] = useState(false);
   const [coverPickerPage, setCoverPickerPage] = useState(0);
   const coverPickerPageSize = 20;
@@ -6326,10 +6329,44 @@ function PresetDesignPanel({
                 <DialogHeader>
                   <DialogTitle>Change cover photo</DialogTitle>
                   <DialogDescription>
-                    Choose any uploaded photo. Video files cannot be used as covers.
+                    Upload a new cover or choose an uploaded photo. Video files cannot be used as covers.
                   </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[65dvh] pr-3">
+                  {onCoverUpload && (
+                    <div className="mb-5 border border-dashed border-[#cfcfcf] bg-[#fafafa] p-5 text-center">
+                      <label className={cn(
+                        "inline-flex h-10 cursor-pointer items-center gap-2 bg-[#6337d8] px-5 text-sm font-bold text-white hover:bg-[#542bc2]",
+                        coverUploading && "pointer-events-none opacity-60",
+                      )}>
+                        {coverUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                        {coverUploading ? "Uploading..." : "Upload cover photo"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          disabled={coverUploading}
+                          onChange={async (event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = "";
+                            if (!file) return;
+                            setCoverUploading(true);
+                            try {
+                              const image = await onCoverUpload(file);
+                              if (!image) throw new Error("Cover upload failed");
+                              onCoverImageChange?.(image);
+                              setCoverPickerOpen(false);
+                              toast.success("Cover photo uploaded");
+                            } catch (error) {
+                              toast.error(error instanceof Error ? error.message : "Cover upload failed");
+                            } finally {
+                              setCoverUploading(false);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {coverPickerVisible.map((image) => {
                         const selected = imageSrc(image.url) === imageSrc(coverImage || "");
@@ -15882,6 +15919,21 @@ function CollectionDetailView({
                   imagesHasMore={imagesHasMore}
                   imagesLoadingMore={imagesLoadingMore}
                   onLoadMoreImages={() => void loadMoreCollectionImages()}
+                  onCoverUpload={async (file) => {
+                    const response = await uploadImages.mutateAsync({
+                      files: [file],
+                      setId: activeSetId,
+                    });
+                    const image = response.data?.[0];
+                    if (image) {
+                      setLoadedImages((current) =>
+                        current.some((item) => item._id === image._id)
+                          ? current
+                          : [...current, image],
+                      );
+                    }
+                    return image;
+                  }}
                   onCoverImageChange={(image) =>
                     setForm((current) => ({
                       ...current,

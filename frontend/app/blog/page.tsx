@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function BlogPage() {
   const [posts, cms, user] = await Promise.all([getBlogs().catch(() => []), getHomeCms(), getUser()]);
   const t = cms.content.en;
-  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard/overview") : undefined;
+  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard/client-gallery/dashboard") : undefined;
   return (
     <main className="min-h-screen bg-[#fbfaff] text-[#111]">
       <SiteNav brand={cms.brand} nav={t.nav} lang="en" dashboardHref={dashboardHref} />
