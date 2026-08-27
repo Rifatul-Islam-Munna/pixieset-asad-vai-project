@@ -1137,8 +1137,8 @@ export function PublicGallery({
       </main>
       ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={galleryLanguageCode(generalSettings.language)} dir={galleryLanguageCode(generalSettings.language) === "ar" ? "rtl" : "ltr"}>
-      <section className="px-3 pb-7 pt-3 sm:px-5 sm:pb-10 md:px-10">
-        <div className="mx-auto aspect-[4/3] w-full max-w-[1180px] overflow-hidden sm:aspect-[8/3]">
+      <section className="w-full p-0">
+        <div className="aspect-video w-full overflow-hidden">
           <CoverPreview
             design={{
               ...design,

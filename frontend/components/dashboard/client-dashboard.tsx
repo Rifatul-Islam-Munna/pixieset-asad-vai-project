@@ -6521,13 +6521,15 @@ function PresetDesignPanel({
             <DialogContent className="max-h-[96dvh] overflow-y-auto rounded-none sm:max-w-[1180px]">
               <DialogHeader>
                 <DialogTitle>Change focal point</DialogTitle>
-                <DialogDescription>Drag the focal marker directly on the 16:9 cover. The public collection uses this exact crop.</DialogDescription>
+                <DialogDescription>Drag the focal marker on the full photo. The public collection keeps this point in focus inside the full-width 16:9 cover.</DialogDescription>
               </DialogHeader>
-              <div className="relative aspect-video w-full cursor-crosshair touch-none overflow-hidden bg-black select-none" onPointerDown={updateFocalFromPointer} onPointerMove={updateFocalFromPointer}>
-                {coverImage && <img src={imageSrc(coverImage)} alt="Cover focal preview" className="pointer-events-none h-full w-full object-cover" style={{ objectPosition: `${design.coverFocalX ?? 50}% ${design.coverFocalY ?? 50}%` }} />}
-                <span className="pointer-events-none absolute size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/30 shadow-xl" style={{ left: `${design.coverFocalX ?? 50}%`, top: `${design.coverFocalY ?? 50}%` }}>
-                  <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
-                </span>
+              <div className="flex max-h-[74dvh] w-full items-center justify-center overflow-hidden bg-black/95 p-2 sm:p-4">
+                <div className="relative w-fit max-w-full cursor-crosshair touch-none select-none" onPointerDown={updateFocalFromPointer} onPointerMove={updateFocalFromPointer}>
+                  {coverImage && <img src={imageSrc(coverImage)} alt="Cover focal preview" className="pointer-events-none block h-auto max-h-[68dvh] w-auto max-w-full select-none" />}
+                  <span className="pointer-events-none absolute size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/35 shadow-xl" style={{ left: `${design.coverFocalX ?? 50}%`, top: `${design.coverFocalY ?? 50}%` }}>
+                    <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+                  </span>
+                </div>
               </div>
               <DialogFooter className="gap-2 sm:justify-between">
                 <Button type="button" variant="outline" onClick={() => onChange({ coverFocalX: 50, coverFocalY: 50 })}>Center focal point</Button>
