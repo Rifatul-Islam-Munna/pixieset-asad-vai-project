@@ -19,7 +19,7 @@ export function HomeReveal({ children, className, delay = 0, y = 34, amount = 0.
       className={className}
       initial={reduceMotion ? false : { opacity: 0, y, filter: "blur(8px)" }}
       whileInView={reduceMotion ? undefined : { opacity: 1, y: 0, filter: "blur(0px)" }}
-      viewport={{ once: true, amount }}
+      viewport={{ once: false, amount }}
       transition={{ duration: 0.82, delay, ease }}
     >
       {children}
@@ -107,16 +107,6 @@ export function HomeMotion() {
       }, { duration: 1.12, ease });
     }, { amount: 0.08, margin: "0px 0px -5% 0px" });
 
-    const stopReveal = inView(revealNodes, (element) => {
-      const node = element as HTMLElement;
-      const delay = Math.min(0.34, Number(node.dataset.homeMotionIndex ?? 0) * 0.052);
-      node.dataset.homeVisible = "true";
-      animate(element, {
-        opacity: 1,
-        translate: "0 0px",
-        filter: "blur(0px)",
-      }, { duration: 0.86, delay, ease });
-    }, { amount: 0.12, margin: "0px 0px -4% 0px" });
 
     let frame = 0;
     let currentScroll = window.scrollY;
@@ -177,13 +167,19 @@ export function HomeMotion() {
       });
 
       revealNodes.forEach((node, index) => {
-        if (node.dataset.homeVisible !== "true") return;
         const rect = node.getBoundingClientRect();
-        if (rect.bottom < -100 || rect.top > viewportHeight + 100) return;
         const center = rect.top + rect.height / 2;
-        const progress = Math.max(-1, Math.min(1, (center - viewportHeight / 2) / viewportHeight));
-        const drift = progress * (index % 2 === 0 ? 5 : -5);
-        node.style.translate = `0 ${drift.toFixed(2)}px`;
+        const progress = Math.max(-1.25, Math.min(1.25, (center - viewportHeight / 2) / viewportHeight));
+        const distance = Math.min(1, Math.abs(progress));
+        const visibility = Math.max(0, 1 - Math.max(0, distance - 0.58) / 0.42);
+        const direction = index % 2 === 0 ? 1 : -1;
+        const driftX = progress * direction * (6 + (index % 4) * 2);
+        const driftY = progress * (10 + (index % 3) * 3);
+        const scale = 1 - Math.min(0.05, distance * 0.035);
+        node.style.opacity = visibility.toFixed(3);
+        node.style.translate = `${driftX.toFixed(2)}px ${driftY.toFixed(2)}px`;
+        node.style.scale = scale.toFixed(4);
+        node.style.filter = `blur(${((1 - visibility) * 8).toFixed(2)}px)`;
       });
 
       const distance = Math.abs(targetScroll - currentScroll);
@@ -207,7 +203,6 @@ export function HomeMotion() {
 
     return () => {
       stopSections();
-      stopReveal();
       window.removeEventListener("scroll", requestMotion);
       window.removeEventListener("resize", requestResize);
       if (frame) window.cancelAnimationFrame(frame);
@@ -234,10 +229,10 @@ export function HomeMotion() {
         node.style.removeProperty("will-change");
       });
       revealNodes.forEach((node) => {
-        delete node.dataset.homeVisible;
         delete node.dataset.homeMotionIndex;
         node.style.removeProperty("opacity");
         node.style.removeProperty("translate");
+        node.style.removeProperty("scale");
         node.style.removeProperty("filter");
         node.style.removeProperty("will-change");
       });
