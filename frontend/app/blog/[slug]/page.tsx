@@ -26,7 +26,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
   const [post, cms, user] = await Promise.all([getBlog(slug).catch(() => null), getHomeCms(), getUser()]);
   if (!post) notFound();
   const t = cms.content.en;
-  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard/client-gallery/dashboard") : undefined;
+  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard/client-gallery") : undefined;
   return (
     <main className="min-h-screen bg-white text-[#111]">
       <SiteNav brand={cms.brand} nav={t.nav} lang="en" dashboardHref={dashboardHref} />

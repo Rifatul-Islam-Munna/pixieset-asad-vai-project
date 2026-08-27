@@ -26,7 +26,7 @@ export function GoogleLoginButton() {
       return;
     }
 
-    window.location.assign(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery/dashboard");
+    window.location.assign(result.data?.user?.role === "admin" ? "/admin" : "/dashboard/client-gallery");
   };
 
   if (!clientId) {

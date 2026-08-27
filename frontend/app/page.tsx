@@ -50,7 +50,7 @@ async function getDashboardHref() {
   if (!user) return undefined;
   return user.role === UserType.ADMIN
     ? "/admin"
-    : "/dashboard/client-gallery/dashboard";
+    : "/dashboard/client-gallery";
 }
 
 export default async function Home({
