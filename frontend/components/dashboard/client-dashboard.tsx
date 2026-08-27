@@ -2952,6 +2952,8 @@ function CampaignListHeader({
               <DropdownMenuRadioItem value="draft">Draft</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="sent">Sent</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="failed">Failed</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="cancelled">Cancelled</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -2966,7 +2968,7 @@ function CampaignListHeader({
             <DropdownMenuRadioGroup value={sort} onValueChange={onSortChange}>
               <DropdownMenuRadioItem value="newest">Newest first</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="oldest">Oldest first</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="name">Name AÃ¢â‚¬â€œZ</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="name">Name A-Z</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -2988,30 +2990,34 @@ function CampaignTable({
   schedules: MarketingScheduleRecord[];
   onCancelSchedule: (id: string) => void | Promise<void>;
 }) {
-  const campaigns = [...schedules]
+  const regularCampaigns = [
+    { _id: "draft-travel-dates", kind: "campaign" as const, name: "Travel Dates", status: "draft", sendDate: "-", recipients: 0, collectionName: "-", createdAt: "2026-06-14T00:00:00.000Z", templateName: "Campaign draft" },
+  ];
+  const scheduledCampaigns = schedules.map((item) => ({
+    _id: item._id, kind: "schedule" as const, name: item.name, status: item.status,
+    sendDate: formatScheduleLocal(item.scheduledLocal, item.timeZone), recipients: item.recipientsCount,
+    collectionName: item.collectionName || "-", createdAt: item.createdAt || item.scheduledAt || "",
+    templateName: item.templateName, recipientCategory: item.recipientCategory, lastError: item.lastError,
+  }));
+  const campaigns = [...regularCampaigns, ...scheduledCampaigns]
     .filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
     .filter((item) => status === "all" || item.status === status)
     .sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
-      const left = Date.parse(a.createdAt || a.scheduledAt || "") || 0;
-      const right = Date.parse(b.createdAt || b.scheduledAt || "") || 0;
+      const left = Date.parse(a.createdAt || "") || 0;
+      const right = Date.parse(b.createdAt || "") || 0;
       return (sort === "oldest" ? 1 : -1) * (left - right);
     });
 
   if (!campaigns.length) {
     return (
       <div className="mt-12 flex min-h-[420px] flex-col items-center justify-center text-center">
-        <div className="relative">
-          <div className="size-28 rounded-full bg-[#eee8ff]" />
-          <Mail className="absolute -left-3 top-3 size-10 text-[#444]" />
-          <CalendarDays className="absolute left-12 top-14 size-9 text-[#6337d8]" />
-        </div>
-        <h2 className="mt-10 text-lg font-bold">No scheduled campaigns yet</h2>
-        <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#333]">Create a schedule to send a saved template automatically to selected contacts or a full contact category.</p>
+        <div className="relative"><div className="size-28 rounded-full bg-[#eee8ff]" /><Mail className="absolute -left-3 top-3 size-10 text-[#444]" /><CalendarDays className="absolute left-12 top-14 size-9 text-[#6337d8]" /></div>
+        <h2 className="mt-10 text-lg font-bold">No campaigns found</h2>
+        <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#333]">Create a campaign now or schedule one to send automatically later.</p>
       </div>
     );
   }
-
   return (
     <div className="mt-8">
       <div className="hidden grid-cols-[2fr_130px_1.7fr_1fr_1.5fr_60px] border-b pb-4 text-[11px] font-bold uppercase tracking-widest text-[#777] md:grid">
@@ -3021,15 +3027,15 @@ function CampaignTable({
         <div key={campaign._id} className="grid gap-3 border-b py-5 text-left text-sm md:grid-cols-[2fr_130px_1.7fr_1fr_1.5fr_60px] md:items-center md:gap-0">
           <span className="min-w-0">
             <span className="block truncate font-bold">{campaign.name}</span>
-            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.recipientCategory ? ` ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${campaign.recipientCategory}` : ""}</span>
-            {campaign.lastError && <span className="mt-1 block line-clamp-1 text-xs font-semibold text-red-600" title={campaign.lastError}>{campaign.lastError}</span>}
+            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.kind === "schedule" && campaign.recipientCategory ? ` · ${campaign.recipientCategory}` : ""}</span>
+            {campaign.kind === "schedule" && campaign.lastError && <span className="mt-1 block line-clamp-1 text-xs font-semibold text-red-600" title={campaign.lastError}>{campaign.lastError}</span>}
           </span>
-          <span><span className={cn("rounded-full px-4 py-2 text-[10px] font-bold uppercase", campaign.status === "sent" ? "bg-emerald-50 text-emerald-700" : campaign.status === "failed" ? "bg-red-50 text-red-700" : campaign.status === "cancelled" ? "bg-[#f1f1f1] text-[#777]" : campaign.status === "sending" ? "bg-amber-50 text-amber-700" : "bg-[#f1ecff] text-[#6337d8]")}>{campaign.status}</span></span>
-          <span>{formatScheduleLocal(campaign.scheduledLocal, campaign.timeZone)}</span>
-          <span>{campaign.recipientsCount}</span>
-          <span className="truncate pr-3">{campaign.collectionName || "-"}</span>
+          <span><span className={cn("rounded-full px-4 py-2 text-[10px] font-bold uppercase", campaign.status === "sent" ? "bg-emerald-50 text-emerald-700" : campaign.status === "failed" ? "bg-red-50 text-red-700" : campaign.status === "cancelled" ? "bg-[#f1f1f1] text-[#777]" : campaign.status === "sending" ? "bg-amber-50 text-amber-700" : campaign.status === "draft" ? "bg-[#f4f4f4] text-[#555]" : "bg-[#f1ecff] text-[#6337d8]")}>{campaign.status}</span></span>
+          <span>{campaign.sendDate}</span>
+          <span>{campaign.recipients}</span>
+          <span className="truncate pr-3">{campaign.collectionName}</span>
           <span className="flex justify-end">
-            {["scheduled", "failed"].includes(campaign.status) ? (
+            {campaign.kind === "schedule" && ["scheduled", "failed"].includes(campaign.status) ? (
               <button type="button" onClick={() => void onCancelSchedule(campaign._id)} className="text-xs font-bold text-red-600 hover:underline">Cancel</button>
             ) : (
               <MoreHorizontal className="size-5 text-[#aaa]" />
@@ -3044,8 +3050,9 @@ function CampaignTable({
 function formatScheduleLocal(value: string, timeZone: string) {
   if (!value) return "-";
   const [date, time] = value.split("T");
-  return `${date} ${time || ""} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${timeZone}`;
+  return `${date} ${time || ""} · ${timeZone}`;
 }
+
 function TemplateGrid({
   isLoading,
   onSelect,

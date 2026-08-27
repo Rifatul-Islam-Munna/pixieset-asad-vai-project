@@ -83,7 +83,18 @@ export function HomeMotion() {
     ));
     mediaNodes.forEach((node) => {
       node.dataset.homeParallax = "true";
-      node.style.willChange = "translate, scale, rotate";
+      node.style.willChange = "translate, scale, rotate, transform";
+      node.style.transformOrigin = "50% 50%";
+    });
+
+    const depthNodes = sections.flatMap((section) =>
+      Array.from(section.querySelectorAll<HTMLElement>(
+        ":scope > div, :scope > article, :scope > figure, .grid > article, .grid > div[data-home-reveal]",
+      )),
+    ).filter((node) => !node.closest("[data-home-motion-managed]"));
+    depthNodes.forEach((node, index) => {
+      node.dataset.homeDepthIndex = String(index);
+      node.style.willChange = "translate, scale, rotate, transform";
       node.style.transformOrigin = "50% 50%";
     });
 
@@ -123,8 +134,27 @@ export function HomeMotion() {
         const center = rect.top + rect.height / 2;
         const range = Math.max(viewportHeight, (viewportHeight + rect.height) / 2);
         const progress = Math.max(-1, Math.min(1, (center - viewportHeight / 2) / range));
-        const y = progress * (index % 2 === 0 ? 11 : -11);
-        section.style.translate = `0 ${y.toFixed(2)}px`;
+        const y = progress * (index % 2 === 0 ? 16 : -16);
+        const x = progress * (index % 3 === 0 ? 8 : index % 3 === 1 ? -6 : 4);
+        const scale = 1 - Math.min(0.022, Math.abs(progress) * 0.018);
+        section.style.translate = `${x.toFixed(2)}px ${y.toFixed(2)}px`;
+        section.style.scale = scale.toFixed(4);
+        section.style.setProperty("--home-scroll-progress", progress.toFixed(4));
+      });
+
+      depthNodes.forEach((node, index) => {
+        const rect = node.getBoundingClientRect();
+        if (rect.bottom < -160 || rect.top > viewportHeight + 160) return;
+        const center = rect.top + rect.height / 2;
+        const progress = Math.max(-1, Math.min(1, (center - viewportHeight / 2) / viewportHeight));
+        const direction = index % 2 === 0 ? 1 : -1;
+        const x = progress * direction * (10 + (index % 4) * 2);
+        const y = progress * (8 + (index % 3) * 3);
+        const rotate = progress * direction * 0.32;
+        const scale = 1 - Math.min(0.018, Math.abs(progress) * 0.014);
+        node.style.translate = `${x.toFixed(2)}px ${y.toFixed(2)}px`;
+        node.style.rotate = `${rotate.toFixed(3)}deg`;
+        node.style.scale = scale.toFixed(4);
       });
 
       mediaNodes.forEach((node, index) => {
@@ -135,11 +165,15 @@ export function HomeMotion() {
         const direction = index % 2 === 0 ? -1 : 1;
         const y = progress * 38 * direction;
         const x = progress * (index % 3 === 0 ? 12 : index % 3 === 1 ? -8 : 5);
-        const scale = 1.028 + Math.abs(progress) * 0.028;
-        const rotate = progress * direction * 0.42;
+        const scale = 1.032 + Math.abs(progress) * 0.034;
+        const rotate = progress * direction * 0.55;
+        const tiltX = progress * direction * -1.15;
+        const tiltY = progress * (index % 3 === 0 ? 1.2 : -0.8);
+        const depth = Math.max(0, 16 - Math.abs(progress) * 12);
         node.style.translate = `${x.toFixed(2)}px ${y.toFixed(2)}px`;
         node.style.scale = scale.toFixed(4);
         node.style.rotate = `${rotate.toFixed(3)}deg`;
+        node.style.transform = `perspective(1000px) rotateX(${tiltX.toFixed(3)}deg) rotateY(${tiltY.toFixed(3)}deg) translateZ(${depth.toFixed(2)}px)`;
       });
 
       revealNodes.forEach((node, index) => {
@@ -178,7 +212,20 @@ export function HomeMotion() {
       window.removeEventListener("resize", requestResize);
       if (frame) window.cancelAnimationFrame(frame);
 
-      scrollSections.forEach((node) => node.style.removeProperty("translate"));
+      scrollSections.forEach((node) => {
+        node.style.removeProperty("translate");
+        node.style.removeProperty("scale");
+        node.style.removeProperty("--home-scroll-progress");
+      });
+      depthNodes.forEach((node) => {
+        delete node.dataset.homeDepthIndex;
+        node.style.removeProperty("translate");
+        node.style.removeProperty("scale");
+        node.style.removeProperty("rotate");
+        node.style.removeProperty("transform");
+        node.style.removeProperty("transform-origin");
+        node.style.removeProperty("will-change");
+      });
       sections.forEach((node) => {
         node.style.removeProperty("opacity");
         node.style.removeProperty("transform");
@@ -199,6 +246,7 @@ export function HomeMotion() {
         node.style.removeProperty("translate");
         node.style.removeProperty("scale");
         node.style.removeProperty("rotate");
+        node.style.removeProperty("transform");
         node.style.removeProperty("transform-origin");
         node.style.removeProperty("will-change");
       });
