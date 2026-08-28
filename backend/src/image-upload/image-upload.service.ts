@@ -13,9 +13,12 @@ export class ImageUploadService {
       throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
     }
 
-    const url = await this.minioService.uploadFile(file);
-    await this.safeUnlink(file.path);
-    return { message: 'File uploaded successfully', data: url };
+    try {
+      const url = await this.minioService.uploadFile(file);
+      return { message: 'File uploaded successfully', data: url };
+    } finally {
+      await this.safeUnlink(file.path);
+    }
   }
 
   async uploadImages(files: Express.Multer.File[]) {
@@ -25,9 +28,11 @@ export class ImageUploadService {
 
     const data = await Promise.all(
       files.map(async (file) => {
-        const url = await this.minioService.uploadFile(file);
-        await this.safeUnlink(file.path);
-        return url;
+        try {
+          return await this.minioService.uploadFile(file);
+        } finally {
+          await this.safeUnlink(file.path);
+        }
       }),
     );
 

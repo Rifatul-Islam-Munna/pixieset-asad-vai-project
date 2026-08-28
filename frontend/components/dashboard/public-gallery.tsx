@@ -272,6 +272,7 @@ export function PublicGallery({
   }, [collection?.sets]);
   const showSetTabs = gallerySets.length > 0;
   const coverPhoto = imageSrc(collection?.coverImage || images.find((image) => !isVideo(image))?.url || "");
+  const coverMediaType = coverMatch?.mediaType ?? design.coverMediaType;
   const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
@@ -335,10 +336,16 @@ export function PublicGallery({
   const fontFamily = customFontName
     ? `"${customFontName.replace(/"/g, "")}", ${fallbackFontFamily}`
     : fallbackFontFamily;
-  const masonryGapPx = design.gridSpacing === "Large" ? 8 : 3;
+  const masonryGapPx = design.gridSpacing === "Large" ? 20 : 4;
   const masonryColumns = design.thumbnailSize === "Large"
     ? "columns-1 sm:columns-2"
-    : "columns-1 sm:columns-2 lg:columns-3";
+    : "columns-1 sm:columns-2 lg:columns-3 xl:columns-4";
+  const galleryLayout =
+    design.gridStyle === "Art"
+      ? "art"
+      : design.gridStyle === "Horizontal"
+        ? "classic"
+        : "masonry";
   const photoDownloadsEnabled =
     quickShareDownload === "1"
       ? true
@@ -1147,6 +1154,7 @@ export function PublicGallery({
               branding: collection?.branding,
             }}
             image={coverPhoto}
+            mediaType={coverMediaType}
             className="h-full min-h-0"
           />
         </div>
@@ -1317,28 +1325,45 @@ export function PublicGallery({
           id="gallery"
           className="mt-0 bg-white p-0"
         >
-          <div className={masonryColumns} style={{ columnGap: `${masonryGapPx}px` }}>
+          <div
+            className={cn(
+              galleryLayout === "masonry" && masonryColumns,
+              galleryLayout === "classic" && "grid grid-cols-1 sm:grid-cols-2",
+              galleryLayout === "classic" && design.thumbnailSize !== "Large" && "lg:grid-cols-3 xl:grid-cols-4",
+              galleryLayout === "art" && "grid auto-rows-[minmax(180px,46vw)] grid-cols-2 sm:auto-rows-[260px] lg:grid-cols-4 lg:auto-rows-[300px]",
+            )}
+            style={{ gap: galleryLayout === "masonry" ? undefined : `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
+          >
             {visibleImages.map((photo, index) => (
-              <GalleryTile
+              <div
                 key={photo._id}
-                photo={photo}
-                spacing={masonryGapPx}
-                canFavorite={favoritesEnabled}
-                canDownload={canDownloadMedia(photo)}
-                canShare={socialSharingEnabled}
-                sharpeningLevel={sharpeningLevel}
-                favoriteBusy={favoriteImageBusy === photo._id}
-                favorited={favoriteImageIds.has(photo._id)}
-                privatePhoto={privateImageIds.has(photo._id)}
-                privateBusy={privateImageBusy === photo._id}
-                showFilename={showFilenames}
-                priority={index < 4}
-                onPrivate={togglePrivatePhoto}
-                onDownload={downloadPhoto}
-                onFavorite={toggleImageFavorite}
-                onPreview={setActiveImage}
-                onShare={sharePhoto}
-              />
+                className={cn(
+                  "min-w-0 break-inside-avoid",
+                  galleryLayout === "classic" && "aspect-square",
+                  galleryLayout === "art" && index % 7 === 0 && "col-span-2 row-span-2",
+                )}
+              >
+                <GalleryTile
+                  photo={photo}
+                  spacing={galleryLayout === "masonry" ? masonryGapPx : 0}
+                  crop={galleryLayout !== "masonry"}
+                  canFavorite={favoritesEnabled}
+                  canDownload={canDownloadMedia(photo)}
+                  canShare={socialSharingEnabled}
+                  sharpeningLevel={sharpeningLevel}
+                  favoriteBusy={favoriteImageBusy === photo._id}
+                  favorited={favoriteImageIds.has(photo._id)}
+                  privatePhoto={privateImageIds.has(photo._id)}
+                  privateBusy={privateImageBusy === photo._id}
+                  showFilename={showFilenames}
+                  priority={index < 4}
+                  onPrivate={togglePrivatePhoto}
+                  onDownload={downloadPhoto}
+                  onFavorite={toggleImageFavorite}
+                  onPreview={setActiveImage}
+                  onShare={sharePhoto}
+                />
+              </div>
             ))}
           </div>
           {canLoadMoreImages && (
@@ -1751,6 +1776,7 @@ function safeDownloadName(value: string) {
 function GalleryTile({
   photo,
   spacing,
+  crop,
   canFavorite,
   canDownload,
   canShare,
@@ -1769,6 +1795,7 @@ function GalleryTile({
 }: {
   photo: PublicImage;
   spacing: number;
+  crop: boolean;
   canFavorite: boolean;
   canDownload: boolean;
   canShare: boolean;
@@ -1788,16 +1815,19 @@ function GalleryTile({
   return (
     <div
       id={`photo-${photo._id}`}
-      className="group relative mb-0 w-full break-inside-avoid bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
+      className={cn(
+        "group relative mb-0 w-full break-inside-avoid bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]",
+        crop && "h-full overflow-hidden",
+      )}
       style={{
         marginBottom: `${spacing}px`,
         contentVisibility: "auto",
         containIntrinsicSize: "420px 320px",
       }}
     >
-      <button className="block w-full" onClick={() => onPreview(photo)} type="button" aria-label={`Open ${displayFilename(photo) || "photo"}`}>
+      <button className={cn("block w-full", crop && "h-full")} onClick={() => onPreview(photo)} type="button" aria-label={`Open ${displayFilename(photo) || "photo"}`}>
         {isVideo(photo) ? (
-          <span className="relative block aspect-video w-full bg-black">
+          <span className={cn("relative block w-full bg-black", crop ? "h-full" : "aspect-video")}>
             <video src={imageSrc(photo.url)} className="h-full w-full object-cover opacity-80" preload={priority ? "metadata" : "none"} muted />
             <span className="absolute inset-0 flex items-center justify-center text-white">
               <Play className="size-10 fill-current" />
@@ -1808,14 +1838,14 @@ function GalleryTile({
             src={imageSrc(displayImageUrl(photo))}
             fallbackSrc={imageSrc(photo.url)}
             alt={photo.originalName ?? ""}
-            className="block h-auto w-full"
+            className={crop ? "block h-full w-full object-cover" : "block h-auto w-full"}
             style={sharpenStyle(sharpeningLevel)}
             priority={priority}
           />
         )}
       </button>
       {showFilename && displayFilename(photo) && (
-        <p className="truncate border-t border-black/5 bg-white px-3 py-2 text-xs text-[#555]">
+        <p className={cn("truncate border-t border-black/5 bg-white px-3 py-2 text-xs text-[#555]", crop && "absolute inset-x-0 bottom-0 bg-white/90 backdrop-blur")}>
           {displayFilename(photo)}
         </p>
       )}
@@ -1954,4 +1984,3 @@ function formatPublicDate(value: string) {
     year: "numeric",
   });
 }
-

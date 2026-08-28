@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import type { BrandSettings, CustomCoverTemplate } from "@/lib/home-cms";
 import { coverFocalStyle } from "@/lib/cover-focal";
@@ -52,6 +53,7 @@ export type CoverPreviewSettings = {
   textColor?: string;
   coverFocalX?: number;
   coverFocalY?: number;
+  coverMediaType?: "image" | "video";
   showCoverSmallTitle?: boolean;
   showCoverTitle?: boolean;
   showCoverDate?: boolean;
@@ -64,18 +66,53 @@ export function coverImage(name: string) {
   return coverOptions.find(([item]) => item === name)?.[1] ?? coverOptions[0][1];
 }
 
+function CoverMedia({
+  src,
+  mediaType,
+  className,
+  style,
+}: {
+  src: string;
+  mediaType?: "image" | "video";
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const video =
+    mediaType === "video" || /\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(src);
+  return video ? (
+    <video
+      src={src}
+      className={className}
+      style={style}
+      autoPlay
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      aria-label="Animated gallery cover"
+    />
+  ) : (
+    <img src={src} alt="" className={className} style={style} />
+  );
+}
+
 export function CoverPreview({
   design,
   image,
+  mediaType,
   compact = false,
   className,
 }: {
   design: CoverPreviewSettings;
   image?: string;
+  mediaType?: "image" | "video";
   compact?: boolean;
   className?: string;
 }) {
   const src = image || coverImage(design.cover);
+  const resolvedMediaType = image
+    ? mediaType ?? design.coverMediaType
+    : "image";
   const imageStyle = coverFocalStyle(design.coverFocalX, design.coverFocalY);
   const [focalX, focalY] = String(imageStyle.objectPosition)
     .split(" ")
@@ -86,6 +123,7 @@ export function CoverPreview({
         template={design.customCoverTemplate}
         branding={design.branding}
         image={image}
+        mediaType={resolvedMediaType}
         compact={compact}
         className={className}
         title={design.coverTitle}
@@ -145,7 +183,7 @@ export function CoverPreview({
   if (design.cover === "Ceremony Wide") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-gradient-to-r from-black/38 via-black/10 to-black/20" />
         <div className={cn("absolute left-5 top-[58%] max-w-[82%] -translate-y-1/2 sm:left-8 sm:max-w-[72%]", compact && "left-3 max-w-[68%]")}>
           {!compact && showSmall && <p className="mb-3 font-semibold uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }}>{smallTitle}</p>}
@@ -164,7 +202,7 @@ export function CoverPreview({
   if (design.cover === "Cinematic") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-black text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover opacity-80" style={imageStyle} />
+        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover opacity-80" style={imageStyle} />
         <div className="absolute inset-x-0 top-0 h-[16%] bg-black/55" />
         <div className="absolute inset-x-0 bottom-0 h-[16%] bg-black/55" />
         <div className="absolute inset-x-[8%] top-[19%] border-t border-white/70" />
@@ -177,7 +215,7 @@ export function CoverPreview({
   if (design.cover === "Lower Left" || design.cover === "Lower Split") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#1c1c1c] text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
         {design.cover === "Lower Split" && <div className="absolute bottom-0 left-0 right-0 h-[34%] bg-white/92" />}
         <div className={cn("absolute bottom-5 left-5 max-w-[82%] sm:bottom-8 sm:left-8 sm:max-w-[64%]", design.cover === "Lower Split" && "text-[#222] [text-shadow:none]", compact && "bottom-3 left-3 max-w-[75%]")}>{text}</div>
@@ -188,7 +226,7 @@ export function CoverPreview({
   if (design.cover === "Top Frame" || design.cover === "Side Button") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-black/24" />
         <div className={cn("absolute inset-6 border border-white/75", compact && "inset-2")} />
         <div className={cn("absolute left-5 top-5 max-w-[82%] sm:left-8 sm:top-8 sm:max-w-[70%]", compact && "left-3 top-3 max-w-[74%]")}>{text}</div>
@@ -204,9 +242,9 @@ export function CoverPreview({
   if (["Soft Center", "Edge Title", "Fine Art", "Magazine", "Mono Frame", "Quiet Luxury"].includes(design.cover)) {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#f8f5f1] text-white", compact && "min-h-0", className)}>
-        <img
+        <CoverMedia
           src={src}
-          alt=""
+          mediaType={resolvedMediaType}
           style={imageStyle}
           className={cn(
             "h-full w-full object-cover",
@@ -240,7 +278,7 @@ export function CoverPreview({
     return (
       <div className={cn("relative grid h-full min-h-[62vh] grid-cols-1 bg-white text-[#222] sm:grid-cols-2", compact && "min-h-0", className)}>
         <div className={cn("flex items-center justify-center p-4 text-center", compact && "p-2")}>{text}</div>
-        <img src={src} alt="" style={imageStyle} className={cn("h-full w-full object-cover p-3", compact && "p-2")} />
+        <CoverMedia src={src} mediaType={resolvedMediaType} style={imageStyle} className={cn("h-full w-full object-cover p-3", compact && "p-2")} />
       </div>
     );
   }
@@ -248,7 +286,7 @@ export function CoverPreview({
   if (design.cover === "Split" || design.cover === "Journal" || design.cover === "Editorial") {
     return (
       <div className={cn("relative grid h-full min-h-[62vh] grid-cols-1 bg-white text-[#222] sm:grid-cols-2", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className={cn("flex items-center p-6", design.cover === "Journal" ? "justify-start" : "justify-center text-center", compact && "p-2")}>{text}</div>
       </div>
     );
@@ -257,7 +295,7 @@ export function CoverPreview({
   if (design.cover === "Stamp" || design.cover === "Minimal") {
     return (
       <div className={cn("relative flex h-full min-h-[62vh] flex-col items-center justify-center gap-5 bg-white text-center text-[#222]", compact && "min-h-0 gap-2", className)}>
-        <img src={src} alt="" style={imageStyle} className={cn("aspect-square w-[34%] object-cover", compact && "w-[32%]")} />
+        <CoverMedia src={src} mediaType={resolvedMediaType} style={imageStyle} className={cn("aspect-square w-[34%] object-cover", compact && "w-[32%]")} />
         {text}
       </div>
     );
@@ -266,7 +304,7 @@ export function CoverPreview({
   if (design.cover === "Stripe") {
     return (
       <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-black/28" />
         <div className="absolute left-[12%] right-[12%] top-[22%] border-t border-white" />
         <div className="absolute bottom-[22%] left-[12%] right-[12%] border-t border-white" />
@@ -288,7 +326,7 @@ export function CoverPreview({
 
   return (
     <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-      <img src={src} alt="" className="h-full w-full object-cover" style={imageStyle} />
+      <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
       <div className={cn("absolute inset-0", design.cover === "Vintage" ? "bg-white/55" : "bg-black/28")} />
       {design.cover === "Frame" && <div className={cn("absolute inset-4 border border-white", compact && "inset-2")} />}
       {design.cover === "Divider" && <div className="absolute bottom-0 left-1/2 top-0 border-l border-white" />}
@@ -324,6 +362,7 @@ function CustomCoverPreview({
   focalX,
   focalY,
   image,
+  mediaType,
   subtitle,
   template,
   textColor,
@@ -341,6 +380,7 @@ function CustomCoverPreview({
   textColor?: string;
   textColors?: Partial<Record<"title" | "subtitle" | "date" | "button", string>>;
   image?: string;
+  mediaType?: "image" | "video";
   subtitle?: string;
   template: CustomCoverTemplate;
   title?: string;
@@ -358,7 +398,7 @@ function CustomCoverPreview({
 
   return (
     <div className={cn("relative h-full min-h-[62vh] overflow-hidden bg-[#111] text-white", compact && "min-h-0", className)}>
-      <img src={src} alt="" className="h-full w-full object-cover" style={{ objectPosition: `${Math.min(100, Math.max(0, Number(focalX ?? 50)))}% ${Math.min(100, Math.max(0, Number(focalY ?? 50)))}%` }} />
+      <CoverMedia src={src} mediaType={mediaType} className="h-full w-full object-cover" style={{ objectPosition: `${Math.min(100, Math.max(0, Number(focalX ?? 50)))}% ${Math.min(100, Math.max(0, Number(focalY ?? 50)))}%` }} />
       <div className="absolute inset-0 bg-black" style={{ opacity: template.overlayOpacity / 100 }} />
       {template.gridOpacity > 0 && (
         <div

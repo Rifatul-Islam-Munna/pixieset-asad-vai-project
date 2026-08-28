@@ -16,7 +16,7 @@ import { randomUUID } from 'crypto';
 import { extname, join } from 'path';
 import { cwd } from 'process';
 import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
+import { finished, pipeline } from 'stream/promises';
 
 const DEFAULT_BUCKET_NAME = 'gallerista.app';
 const IMAGE_MAX_BYTES = 150 * 1024 * 1024;
@@ -116,20 +116,24 @@ export class MinioService implements OnModuleInit {
   }
 
   async uploadFile(file: Express.Multer.File) {
+    const body = createReadStream(file.path);
     try {
       if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
       await this.s3.send(
         new PutObjectCommand({
           Bucket: this.bucketName,
           Key: file.filename,
-          Body: createReadStream(file.path),
+          Body: body,
           ContentType: file.mimetype,
         }),
       );
+      await finished(body);
       return `${this.configService.get('MINIO_URL')}/${this.bucketName}/${file.filename}`;
     } catch (error) {
       this.logger.error(`Error uploading file: ${error instanceof Error ? error.message : String(error)}`);
       throw new HttpException('Failed to upload file', HttpStatus.INTERNAL_SERVER_ERROR);
+    } finally {
+      body.destroy();
     }
   }
 

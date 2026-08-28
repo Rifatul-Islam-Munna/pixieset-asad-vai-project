@@ -43,8 +43,9 @@ export type PresetDesignSettings = {
   textColor?: string;
   coverFocalX?: number;
   coverFocalY?: number;
+  coverMediaType?: "image" | "video";
   color: string;
-  gridStyle: "Vertical" | "Horizontal";
+  gridStyle: "Vertical" | "Horizontal" | "Art";
   thumbnailSize: "Regular" | "Large";
   gridSpacing: "Regular" | "Large";
   navigationStyle: "Icon Only" | "Icon & Text";
@@ -444,7 +445,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
 
   return ({
   activeNav: "Collections",
-  collapsed: true,
+  collapsed: false,
   wizardOpen: false,
   wizardStep: 1,
   collectionName: "",

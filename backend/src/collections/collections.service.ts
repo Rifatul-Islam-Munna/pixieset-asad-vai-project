@@ -12,6 +12,7 @@ import { join } from 'path';
 import { cwd } from 'process';
 import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
+import { setTimeout as delay } from 'timers/promises';
 import { MinioService } from 'src/lib/minio.service';
 import { FaceSearchService } from 'src/face-search/face-search.service';
 import {
@@ -2525,19 +2526,20 @@ export class CollectionsService {
     const outputPath = join(cwd(), 'uploads', `wm-${file.filename}`);
     const outputFilename = `wm-${file.filename}`;
 
-    if (watermark.type === 'text') {
-      const text = this.escapeSvg(watermark.text || 'Watermark');
-      const fontFamily = this.watermarkFontFamily(watermark.font);
-      const fontSize = this.watermarkTextSize(width, watermark.scale);
-      const estimatedTextWidth =
-        (watermark.text || 'Watermark').length * fontSize * 0.55;
-      const padX = Math.min(45, Math.max(5, (estimatedTextWidth / width) * 50));
-      const padY = Math.min(45, Math.max(5, (fontSize / height) * 60));
-      const position = {
-        x: this.clampPercent(rawPosition.x, padX, 100 - padX),
-        y: this.clampPercent(rawPosition.y, padY, 100 - padY),
-      };
-      const svg = Buffer.from(`
+    try {
+      if (watermark.type === 'text') {
+        const text = this.escapeSvg(watermark.text || 'Watermark');
+        const fontFamily = this.watermarkFontFamily(watermark.font);
+        const fontSize = this.watermarkTextSize(width, watermark.scale);
+        const estimatedTextWidth =
+          (watermark.text || 'Watermark').length * fontSize * 0.55;
+        const padX = Math.min(45, Math.max(5, (estimatedTextWidth / width) * 50));
+        const padY = Math.min(45, Math.max(5, (fontSize / height) * 60));
+        const position = {
+          x: this.clampPercent(rawPosition.x, padX, 100 - padX),
+          y: this.clampPercent(rawPosition.y, padY, 100 - padY),
+        };
+        const svg = Buffer.from(`
         <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
           <style>
             .watermark-text {
@@ -2552,43 +2554,47 @@ export class CollectionsService {
         </svg>
       `);
 
+        await image
+          .composite([{ input: svg, left: 0, top: 0 }])
+          .toFile(outputPath);
+        return { path: outputPath, filename: outputFilename };
+      }
+
+      const overlay = await this.readWatermarkImage(watermark.image);
+      if (!overlay) return null;
+
+      const overlayWidth = this.watermarkImageWidth(width, watermark.scale);
+      const overlayBuffer = await sharp(overlay)
+        .resize({ width: overlayWidth, withoutEnlargement: true })
+        .ensureAlpha(opacity)
+        .toBuffer();
+      const overlayMeta = await sharp(overlayBuffer).metadata();
+      const overlayHeight = overlayMeta.height ?? overlayWidth;
+      const position = {
+        x: this.clampPercent(
+          rawPosition.x,
+          ((overlayMeta.width ?? overlayWidth) / width) * 50,
+          100 - ((overlayMeta.width ?? overlayWidth) / width) * 50,
+        ),
+        y: this.clampPercent(
+          rawPosition.y,
+          (overlayHeight / height) * 50,
+          100 - (overlayHeight / height) * 50,
+        ),
+      };
+      const left = Math.round(
+        (position.x / 100) * width - (overlayMeta.width ?? overlayWidth) / 2,
+      );
+      const top = Math.round((position.y / 100) * height - overlayHeight / 2);
+
       await image
-        .composite([{ input: svg, left: 0, top: 0 }])
+        .composite([{ input: overlayBuffer, left, top }])
         .toFile(outputPath);
       return { path: outputPath, filename: outputFilename };
+    } catch (error) {
+      await this.safeUnlink(outputPath);
+      throw error;
     }
-
-    const overlay = await this.readWatermarkImage(watermark.image);
-    if (!overlay) return null;
-
-    const overlayWidth = this.watermarkImageWidth(width, watermark.scale);
-    const overlayBuffer = await sharp(overlay)
-      .resize({ width: overlayWidth, withoutEnlargement: true })
-      .ensureAlpha(opacity)
-      .toBuffer();
-    const overlayMeta = await sharp(overlayBuffer).metadata();
-    const overlayHeight = overlayMeta.height ?? overlayWidth;
-    const position = {
-      x: this.clampPercent(
-        rawPosition.x,
-        ((overlayMeta.width ?? overlayWidth) / width) * 50,
-        100 - ((overlayMeta.width ?? overlayWidth) / width) * 50,
-      ),
-      y: this.clampPercent(
-        rawPosition.y,
-        (overlayHeight / height) * 50,
-        100 - (overlayHeight / height) * 50,
-      ),
-    };
-    const left = Math.round(
-      (position.x / 100) * width - (overlayMeta.width ?? overlayWidth) / 2,
-    );
-    const top = Math.round((position.y / 100) * height - overlayHeight / 2);
-
-    await image
-      .composite([{ input: overlayBuffer, left, top }])
-      .toFile(outputPath);
-    return { path: outputPath, filename: outputFilename };
   }
 
   private async readWatermarkImage(image?: string) {
@@ -2606,10 +2612,16 @@ export class CollectionsService {
   }
 
   private async safeUnlink(path: string) {
-    try {
-      await unlink(path);
-    } catch {
-      return;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        await unlink(path);
+        return;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === 'ENOENT') return;
+        if (!['EBUSY', 'EPERM'].includes(code ?? '') || attempt === 4) return;
+        await delay(50 * 2 ** attempt);
+      }
     }
   }
 

@@ -63,6 +63,7 @@ import {
   Palette,
   PanelTop,
   Pencil,
+  Play,
   PlusCircle,
   Printer,
   Lock,
@@ -6212,8 +6213,9 @@ function PresetDesignPanel({
     textColor?: string;
     coverFocalX?: number;
     coverFocalY?: number;
+    coverMediaType?: "image" | "video";
     color: string;
-    gridStyle: "Vertical" | "Horizontal";
+    gridStyle: "Vertical" | "Horizontal" | "Art";
     thumbnailSize: "Regular" | "Large";
     gridSpacing: "Regular" | "Large";
     navigationStyle: "Icon Only" | "Icon & Text";
@@ -6239,7 +6241,7 @@ function PresetDesignPanel({
   const [coverFocalOpen, setCoverFocalOpen] = useState(false);
   const [coverPickerPage, setCoverPickerPage] = useState(0);
   const coverPickerPageSize = 20;
-  const coverPickerImages = images.filter((image) => image.mediaType !== "video");
+  const coverPickerImages = images;
   const coverPickerPageCount = Math.max(1, Math.ceil(coverPickerImages.length / coverPickerPageSize));
   const coverPickerVisible = coverPickerImages.slice(coverPickerPage * coverPickerPageSize, (coverPickerPage + 1) * coverPickerPageSize);
   const fontLibrary = useDashboardSettings<UploadedFont>("branding");
@@ -6304,13 +6306,11 @@ function PresetDesignPanel({
           {onCoverImageChange && <OptionSection title="Cover Photo">
             <div className="overflow-hidden border bg-muted">
               {coverImage ? (
-                <img
-                  src={imageSrc(coverImage)}
-                  alt="Current cover"
-                  className="aspect-video w-full object-cover"
-                  style={{
-                    objectPosition: `${design.coverFocalX ?? 50}% ${design.coverFocalY ?? 50}%`,
-                  }}
+                <CoverPreview
+                  design={design}
+                  image={imageSrc(coverImage)}
+                  mediaType={design.coverMediaType}
+                  className="aspect-video min-h-0 w-full"
                 />
               ) : (
                 <div className="grid aspect-video place-items-center text-sm text-muted-foreground">
@@ -6322,14 +6322,14 @@ function PresetDesignPanel({
               <Button type="button" variant="outline" className="rounded-none" disabled={coverImageLocked} onClick={() => { setCoverPickerPage(0); setCoverPickerOpen(true); }}>
                 <Images data-icon="inline-start" /> Change cover photo
               </Button>
-              {coverImage && <Button type="button" variant="outline" className="rounded-none" onClick={() => setCoverFocalOpen(true)}>Change focal point</Button>}
+              {coverImage && design.coverMediaType !== "video" && <Button type="button" variant="outline" className="rounded-none" onClick={() => setCoverFocalOpen(true)}>Change focal point</Button>}
             </div>
             <Dialog open={coverPickerOpen} onOpenChange={setCoverPickerOpen}>
               <DialogContent className="max-h-[90dvh] overflow-hidden rounded-none sm:max-w-[920px]">
                 <DialogHeader>
                   <DialogTitle>Change cover photo</DialogTitle>
                   <DialogDescription>
-                    Upload a new cover or choose an uploaded photo. Video files cannot be used as covers.
+                    Upload or choose a photo or video. Videos play automatically as animated covers.
                   </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[65dvh] pr-3">
@@ -6340,10 +6340,10 @@ function PresetDesignPanel({
                         coverUploading && "pointer-events-none opacity-60",
                       )}>
                         {coverUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-                        {coverUploading ? "Uploading..." : "Upload cover photo"}
+                        {coverUploading ? "Uploading..." : "Upload cover media"}
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,video/mp4,video/webm,video/quicktime"
                           className="sr-only"
                           disabled={coverUploading}
                           onChange={async (event) => {
@@ -6356,7 +6356,7 @@ function PresetDesignPanel({
                               if (!image) throw new Error("Cover upload failed");
                               onCoverImageChange?.(image);
                               setCoverPickerOpen(false);
-                              toast.success("Cover photo uploaded");
+                              toast.success("Cover media uploaded");
                             } catch (error) {
                               toast.error(error instanceof Error ? error.message : "Cover upload failed");
                             } finally {
@@ -6385,11 +6385,18 @@ function PresetDesignPanel({
                               setCoverPickerOpen(false);
                             }}
                           >
-                            <img
-                              src={imageSrc(image.thumbnailUrl || image.url)}
-                              alt=""
-                              className="aspect-square w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                            />
+                            {image.mediaType === "video" ? (
+                              <span className="relative block">
+                                <video src={imageSrc(image.url)} className="aspect-square w-full object-cover" muted preload="metadata" />
+                                <span className="absolute inset-0 grid place-items-center bg-black/15 text-white"><Play className="size-8 fill-current" /></span>
+                              </span>
+                            ) : (
+                              <img
+                                src={imageSrc(image.thumbnailUrl || image.url)}
+                                alt=""
+                                className="aspect-square w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                              />
+                            )}
                             {selected && (
                               <span className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-[#6337d8] text-white shadow-md">
                                 <Check className="size-4" />
@@ -6780,7 +6787,30 @@ function PresetDesignPanel({
 
       {activePanel === "grid" && (
         <PlanFeatureLock feature="layouts" label="Layouts">
-          <h2 className="text-2xl font-medium">Grid</h2>
+          <h2 className="text-2xl font-medium">Gallery Layout</h2>
+          <OptionSection title="Layout Style">
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ["Vertical", "Masonry"],
+                ["Horizontal", "Classic"],
+                ["Art", "Fine Art"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onChange({ gridStyle: value })}
+                  className={cn(
+                    "border px-2 py-4 text-sm font-semibold transition",
+                    design.gridStyle === value
+                      ? "border-[#6337d8] bg-[#f5f1ff] text-[#6337d8]"
+                      : "bg-white hover:border-[#999]",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </OptionSection>
           <OptionSection title="Thumbnail Size">
             <TwoOption
               value={design.thumbnailSize}
@@ -6840,11 +6870,20 @@ function CollectionDesignLivePreview({
   storeEnabled: boolean;
   branding?: Partial<BrandSettings>;
 }) {
-  const previewImages = images.length ? images.slice(0, 6) : [];
+  const previewImages = images.length ? images.slice(0, 12) : [];
   const firstSets = sets.slice(0, 5);
-  const masonryGapPx = design.gridSpacing === "Large" ? 8 : 3;
+  const masonryGapPx = design.gridSpacing === "Large" ? 20 : 4;
   const masonryColumns =
-    design.thumbnailSize === "Large" ? "columns-2" : "columns-3";
+    design.thumbnailSize === "Large" ? "columns-2" : "columns-4";
+  const layoutLabel =
+    design.gridStyle === "Art"
+      ? "Fine Art Gallery"
+      : design.gridStyle === "Horizontal"
+        ? "Classic Gallery"
+        : "Masonry Gallery";
+  const coverMediaType = images.find(
+    (image) => imageSrc(image.url) === imageSrc(coverImage),
+  )?.mediaType ?? design.coverMediaType;
   const [bg, fg, accent] =
     collectionPreviewThemeMap[
       design.color as keyof typeof collectionPreviewThemeMap
@@ -6863,7 +6902,7 @@ function CollectionDesignLivePreview({
   const isMobilePreview = previewDevice === "mobile";
 
   return (
-    <aside className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-hidden bg-[#f4f4f4] px-8 py-6 xl:block">
+    <aside className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-y-auto bg-[#f4f4f4] px-8 py-6 xl:block">
       <div className="mb-4 flex items-center justify-center gap-4 text-[#777]">
         <button
           className={cn(
@@ -6922,6 +6961,7 @@ function CollectionDesignLivePreview({
                   branding,
                 }}
                 image={coverImage ? imageSrc(coverImage) : undefined}
+                mediaType={coverMediaType}
                 className="min-h-full"
               />
             </div>
@@ -6931,7 +6971,7 @@ function CollectionDesignLivePreview({
                   className="text-[7px] uppercase tracking-[0.24em]"
                   style={{ color: accent }}
                 >
-                  Masonry Gallery
+                  {layoutLabel}
                 </p>
                 <p className="mt-1 truncate font-semibold" style={{ fontSize: `${design.galleryTitleFontSizePx ?? 16}px`, color: design.galleryTitleColor || undefined }}>
                   {collectionName}
@@ -6968,31 +7008,46 @@ function CollectionDesignLivePreview({
               )}
             </div>
             <div
-              className={isMobilePreview ? "columns-2" : masonryColumns}
-              style={{ columnGap: `${masonryGapPx}px` }}
+              className={cn(
+                design.gridStyle === "Vertical"
+                  ? isMobilePreview ? "columns-2" : masonryColumns
+                  : "grid grid-cols-2",
+                design.gridStyle === "Art" && !isMobilePreview && "grid-cols-4",
+                design.gridStyle === "Horizontal" && !isMobilePreview && (design.thumbnailSize === "Large" ? "grid-cols-2" : "grid-cols-3"),
+              )}
+              style={{ gap: `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
             >
               {previewImages.length
                 ? previewImages.map((image, index) => (
                     <div
                       key={image._id}
-                      className="break-inside-avoid overflow-hidden bg-[#ececec]"
-                      style={{ marginBottom: `${masonryGapPx}px` }}
+                      className={cn(
+                        "break-inside-avoid overflow-hidden bg-[#ececec]",
+                        design.gridStyle === "Art" && !isMobilePreview && index % 7 === 0 && "col-span-2 row-span-2",
+                      )}
+                      style={{ marginBottom: design.gridStyle === "Vertical" ? `${masonryGapPx}px` : undefined }}
                     >
-                      <img
-                        src={imageSrc(image.thumbnailUrl || image.url)}
-                        alt=""
-                        className={cn(
-                          "block w-full object-cover",
-                          index % 3 === 0
-                            ? "aspect-[0.82]"
-                            : index % 3 === 1
-                              ? "aspect-[1.3]"
-                              : "aspect-square",
-                        )}
-                      />
+                      {image.mediaType === "video" ? (
+                        <video src={imageSrc(image.url)} className="aspect-square h-full w-full object-cover" muted autoPlay loop playsInline />
+                      ) : (
+                        <img
+                          src={imageSrc(image.thumbnailUrl || image.url)}
+                          alt=""
+                          className={cn(
+                            "block w-full object-cover",
+                            design.gridStyle === "Vertical"
+                              ? index % 3 === 0
+                                ? "aspect-[0.82]"
+                                : index % 3 === 1
+                                  ? "aspect-[1.3]"
+                                  : "aspect-square"
+                              : "aspect-square h-full",
+                          )}
+                        />
+                      )}
                     </div>
                   ))
-                : Array.from({ length: 6 }).map((_, index) => (
+                : Array.from({ length: 12 }).map((_, index) => (
                     <div
                       key={index}
                       className={cn(
@@ -15941,6 +15996,8 @@ function CollectionDetailView({
                       presetId: "",
                       design: {
                         ...current.design,
+                        coverMediaType:
+                          image.mediaType === "video" ? "video" : "image",
                         coverFocalX: 50,
                         coverFocalY: 50,
                       },
