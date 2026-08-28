@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, ShoppingBag, X } from "lucide-react";
+import { ChevronRight, ShoppingBag, Store, X } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import {
   displayPrice,
   formatMoney,
@@ -50,6 +51,7 @@ export function PublicGalleryStoreBridge({
   collection?: {
     _id?: string;
     images?: GalleryImage[];
+    design?: { navigationStyle?: "Icon Only" | "Icon & Text" };
     settings?: { store?: GalleryStoreSettings };
   } | null;
 }) {
@@ -59,6 +61,7 @@ export function PublicGalleryStoreBridge({
   const enabled = paidStoreEnabled || printRequestsEnabled;
   const showPrintStoreNav = storeSettings.showPrintStoreNav !== false;
   const showBuyPhotoButton = storeSettings.showBuyPhotoButton !== false;
+  const navigationWithText = collection?.design?.navigationStyle === "Icon & Text";
   const [storeData, setStoreData] = useState<PublicStoreData | null>(null);
   const [navHost, setNavHost] = useState<HTMLElement | null>(null);
   const [cartHost, setCartHost] = useState<HTMLElement | null>(null);
@@ -264,10 +267,12 @@ export function PublicGalleryStoreBridge({
             <button
               type="button"
               data-print-store-reference="true"
-              className="inline-flex h-10 items-center whitespace-nowrap border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em] text-black/70 transition-colors hover:text-black"
+              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em] text-black/70 transition-colors hover:text-black"
               onClick={() => setStoreOpen(true)}
+              aria-label="Print Store"
             >
-              Print Store
+              <Store className="size-5" />
+              {navigationWithText && <span>Print Store</span>}
             </button>
           </div>,
           navHost,
@@ -277,11 +282,15 @@ export function PublicGalleryStoreBridge({
         createPortal(
           <button
             type="button"
-            className="relative inline-flex size-10 items-center justify-center text-black/70 transition hover:text-black"
+            className={cn(
+              "relative inline-flex h-10 items-center justify-center text-black/70 transition hover:text-black",
+              navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10",
+            )}
             onClick={() => setCartOpen(true)}
             aria-label="Open cart"
           >
             <ShoppingBag className="size-5" />
+            {navigationWithText && <span>Cart</span>}
             {cartCount > 0 && (
               <span className="absolute right-0 top-0 flex min-w-4 items-center justify-center rounded-full bg-[#202326] px-1 text-[10px] font-bold text-white">
                 {cartCount}

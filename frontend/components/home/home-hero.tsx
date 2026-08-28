@@ -244,8 +244,8 @@ export function HomeHero({
                       Video is not configured yet.
                     </p>
                     <p className="mt-2 text-sm text-white/65">
-                      Add a YouTube, Vimeo, MP4, WebM, or OGG URL in Admin â†’
-                      Homepage CMS â†’ Hero section.
+                      Add a YouTube, Vimeo, MP4, WebM, or OGG URL in Admin →
+                      Homepage CMS → Hero section.
                     </p>
                   </div>
                 </div>

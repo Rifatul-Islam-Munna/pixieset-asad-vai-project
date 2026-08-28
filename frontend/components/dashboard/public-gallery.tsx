@@ -203,6 +203,7 @@ export function PublicGallery({
     ...defaultDesign,
     ...(collection?.design ?? fallbackPresetDesign),
   };
+  const navigationWithText = design.navigationStyle === "Icon & Text";
   const studioName = decodeRouteText(name);
   const ownerPreview = collection?.ownerPreview === true;
   const aiFaceSearchEnabled = collection?.planCapabilities?.aiFaceSearch !== false;
@@ -1184,36 +1185,42 @@ export function PublicGallery({
           <div className="flex min-w-0 items-center justify-end gap-2">
             {storeStatus && <span data-print-store-nav-host="true" />}
             <span data-public-store-cart-host="true" />
-            <button className="inline-flex size-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-[#6337d8]" onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Starred" aria-label="My Starred">
+            <button className={cn("inline-flex h-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-[#6337d8]", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Starred" aria-label="My Starred">
               <Star className={cn("size-5", favoritesPanelOpen && "fill-current text-amber-500")} />
+              {navigationWithText && <span>Favorites</span>}
             </button>
             {canDownloadAll && (
-              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8] disabled:opacity-50" onClick={() => setDownloadScopeOpen(true)} disabled={zipDownloading} type="button" title="Download" aria-label={zipDownloading ? "Preparing download" : "Choose download"}>
+              <button className={cn("inline-flex h-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8] disabled:opacity-50", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} onClick={() => setDownloadScopeOpen(true)} disabled={zipDownloading} type="button" title="Download" aria-label={zipDownloading ? "Preparing download" : "Choose download"}>
                 {zipDownloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
+                {navigationWithText && <span>Download</span>}
               </button>
             )}
             {socialSharingEnabled && (
-              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]" onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
+              <button className={cn("inline-flex h-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} onClick={() => void shareCollection()} type="button" title="Share" aria-label="Share">
                 <Share2 className="size-5" />
+                {navigationWithText && <span>Share</span>}
               </button>
             )}
             {slideshowEnabled && (
-              <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]" onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
+              <button className={cn("inline-flex h-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} onClick={startSlideshow} type="button" title="Slideshow" aria-label="Slideshow">
                 <Play className="size-5" />
+                {navigationWithText && <span>Slideshow</span>}
               </button>
             )}
             {aiFaceSearchEnabled && (
               <>
-                <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center text-black/70 transition hover:text-[#6337d8]" title={faceBusy ? "Searching" : "Find me"} aria-label="Find me">
+                <label className={cn("inline-flex h-10 shrink-0 cursor-pointer items-center justify-center text-black/70 transition hover:text-[#6337d8]", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} title={faceBusy ? "Searching" : "Find me"} aria-label="Find me">
                   {faceBusy ? <Search className="size-5 animate-pulse" /> : <Camera className="size-5" />}
+                  {navigationWithText && <span>{faceBusy ? "Searching" : "Find me"}</span>}
                   <input type="file" accept="image/*" capture="user" disabled={faceBusy} className="hidden" onChange={(event) => {
                     void searchByFace(event.target.files?.[0]);
                     event.target.value = "";
                   }} />
                 </label>
                 {advancedFaceSearchEnabled && (
-                  <button className="inline-flex size-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]" onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
+                  <button className={cn("inline-flex h-10 shrink-0 items-center justify-center text-black/70 transition hover:text-[#6337d8]", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} onClick={() => void loadFaces()} type="button" title="Faces" aria-label="Faces">
                     <Search className="size-5" />
+                    {navigationWithText && <span>Faces</span>}
                   </button>
                 )}
               </>

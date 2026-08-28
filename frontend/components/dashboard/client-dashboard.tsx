@@ -1563,7 +1563,7 @@ function AccountPanel() {
                     : "text-red-600",
               )}
             >
-              {usernameState === "checking" ? "CheckingÃ¢â‚¬Â¦" : usernameMessage}
+              {usernameState === "checking" ? "Checking…" : usernameMessage}
             </p>
           )}
           <FieldInput
@@ -1597,11 +1597,11 @@ function AccountPanel() {
                   <div>
                     <b>{purchase.planName}</b>
                     <p className="mt-1 text-xs capitalize text-[#888]">
-                      {purchase.source} Ã‚Â· {purchase.status}
+                      {purchase.source} · {purchase.status}
                     </p>
                   </div>
                   <div className="text-right">
-                    <b>Ã¢â€šÂ¬{Number(purchase.amount).toFixed(2)}</b>
+                    <b>€{Number(purchase.amount).toFixed(2)}</b>
                     <p className="mt-1 text-xs text-[#888]">
                       {new Date(purchase.createdAt).toLocaleDateString()}
                     </p>
@@ -2020,7 +2020,7 @@ function StoragePlanPanel() {
                 <div className="flex justify-between">
                   <span>Price</span>
                   <b>
-                    Ã¢â€šÂ¬{monthlyEquivalent.toFixed(2)}{" "}
+                    €{monthlyEquivalent.toFixed(2)}{" "}
                     {billingInterval === "year" ? "/yearly" : "/month"}
                   </b>
                 </div>
@@ -2029,7 +2029,7 @@ function StoragePlanPanel() {
                     <span>Billed</span>
                     <b>
                       {yearlyAvailable
-                        ? `Ã¢â€šÂ¬${Number(plan.priceYearly).toFixed(2)} yearly`
+                        ? `€${Number(plan.priceYearly).toFixed(2)} yearly`
                         : "Unavailable"}
                     </b>
                   </div>
@@ -2679,8 +2679,8 @@ function MarketingSettingsPanel({
                       Email registration subscription
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[#5d6b68]">
-                      Show an optional ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œSubscribe to updates and special
-                      offersÃƒÂ¢Ã¢â€šÂ¬Ã‚Â checkbox inside the collection email-registration
+                      Show an optional “Subscribe to updates and special
+                      offers” checkbox inside the collection email-registration
                       modal.
                     </p>
                   </div>
@@ -2697,7 +2697,7 @@ function MarketingSettingsPanel({
               This appears only when both <strong>Email Registration</strong>{" "}
               and
               <strong> Marketing Subscription</strong> are enabled in that
-              collectionÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢s Privacy settings.
+              collection’s Privacy settings.
             </div>
           </section>
 
@@ -6900,6 +6900,7 @@ function CollectionDesignLivePreview({
     "desktop",
   );
   const isMobilePreview = previewDevice === "mobile";
+  const navigationWithText = design.navigationStyle === "Icon & Text";
 
   return (
     <aside className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-y-auto bg-[#f4f4f4] px-8 py-6 xl:block">
@@ -6987,10 +6988,26 @@ function CollectionDesignLivePreview({
                 className="flex items-center gap-2"
                 style={{ color: accent }}
               >
-                {favoriteEnabled && <Heart className="size-3" />}
-                <Download className="size-3" />
-                <Share2 className="size-3" />
-                {storeEnabled && <ShoppingBag className="size-3" />}
+                {favoriteEnabled && (
+                  <span className="inline-flex items-center gap-1">
+                    <Heart className="size-3" />
+                    {navigationWithText && <span className="text-[7px]">Favorites</span>}
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1">
+                  <Download className="size-3" />
+                  {navigationWithText && <span className="text-[7px]">Download</span>}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Share2 className="size-3" />
+                  {navigationWithText && <span className="text-[7px]">Share</span>}
+                </span>
+                {storeEnabled && (
+                  <span className="inline-flex items-center gap-1">
+                    <ShoppingBag className="size-3" />
+                    {navigationWithText && <span className="text-[7px]">Store</span>}
+                  </span>
+                )}
               </div>
             </div>
             <div
@@ -8029,7 +8046,7 @@ function StoreDashboardPanel() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-[-.03em]">
-            Store Dashboard Ã°Å¸â€˜â€¹
+            Store Dashboard 👋
           </h1>
           <p className="mt-2 text-sm text-[#716c7b]">
             Overview of your store performance and key metrics.
@@ -8127,7 +8144,7 @@ function StoreDashboardPanel() {
                     <td className="px-5 py-4 text-[#77727f]">
                       {order.createdAt
                         ? new Date(order.createdAt).toLocaleDateString()
-                        : "Ã¢â‚¬â€"}
+                        : "—"}
                     </td>
                   </tr>
                 ))}
@@ -9998,7 +10015,7 @@ function money(value: number, currency = "EUR") {
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   } catch {
-    return `Ã¢â€šÂ¬${Number(value || 0).toFixed(2)}`;
+    return `€${Number(value || 0).toFixed(2)}`;
   }
 }
 
@@ -10039,6 +10056,105 @@ function pickPrimaryPricingSheet(
   }, null);
 }
 
+const defaultFreePrintSizes = ["4 x 6", "5 x 7", "8 x 10", "8 x 12"];
+const defaultFreePrintPapers = ["Glossy", "Matte"];
+
+type FreePrintConfigForm = { sizes: string; papers: string };
+
+function freePrintConfigForm(
+  sheet?: StorePriceSheetRecord | null,
+): FreePrintConfigForm {
+  return {
+    sizes: (sheet?.freePrintSizes?.length
+      ? sheet.freePrintSizes
+      : defaultFreePrintSizes
+    ).join(", "),
+    papers: (sheet?.freePrintPapers?.length
+      ? sheet.freePrintPapers
+      : defaultFreePrintPapers
+    ).join(", "),
+  };
+}
+
+function FreePrintConfigDialog({
+  open,
+  form,
+  pending,
+  onOpenChange,
+  onFormChange,
+  onSave,
+}: {
+  open: boolean;
+  form: FreePrintConfigForm;
+  pending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onFormChange: (form: FreePrintConfigForm) => void;
+  onSave: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-none sm:max-w-[580px]">
+        <DialogHeader>
+          <DialogTitle>FREE PRINT SIZE</DialogTitle>
+          <DialogDescription>
+            Configure size and paper choices shown in Free Print Requests. Paid
+            store products stay unchanged.
+          </DialogDescription>
+        </DialogHeader>
+        <FieldGroup className="gap-6">
+          <Field>
+            <FieldLabel className="font-bold">Sizes</FieldLabel>
+            <Input
+              value={form.sizes}
+              onChange={(event) =>
+                onFormChange({ ...form, sizes: event.target.value })
+              }
+              placeholder="4 x 6, 5 x 7, 8 x 10"
+              className="h-12 rounded-none"
+            />
+            <p className="text-sm text-[#777]">
+              Comma-separated size labels shown to visitors.
+            </p>
+          </Field>
+          <Field>
+            <FieldLabel className="font-bold">Paper</FieldLabel>
+            <Input
+              value={form.papers}
+              onChange={(event) =>
+                onFormChange({ ...form, papers: event.target.value })
+              }
+              placeholder="Glossy, Matte"
+              className="h-12 rounded-none"
+            />
+            <p className="text-sm text-[#777]">
+              Comma-separated paper labels shown to visitors.
+            </p>
+          </Field>
+          <p className="border bg-[#fafafa] px-4 py-3 text-sm text-[#666]">
+            Visitor chooses quantity when submitting request.
+          </p>
+        </FieldGroup>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            className="rounded-none"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="rounded-none bg-[#6337d8] text-white"
+            disabled={pending}
+            onClick={onSave}
+          >
+            {pending ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function StorePricingPanel() {
   const router = useRouter();
   const { priceSheetsQuery, createPriceSheet } = useStorePriceSheets();
@@ -10058,11 +10174,16 @@ function StorePricingPanel() {
         Boolean(sheet),
     );
   const pricingSheet = pickPrimaryPricingSheet(sheets, detailedSheets);
+  const { updatePriceSheet } = useStorePriceSheet(pricingSheet?._id);
   const products = detailedSheets.flatMap((sheet) => sheet.products ?? []);
   const creatingDefault = useRef(false);
   const pricingLoading = priceSheetDetails.some((query) => query.isLoading);
   const [deleteTarget, setDeleteTarget] = useState<StoreProductRecord | null>(
     null,
+  );
+  const [freePrintConfigOpen, setFreePrintConfigOpen] = useState(false);
+  const [freePrintForm, setFreePrintForm] = useState<FreePrintConfigForm>(() =>
+    freePrintConfigForm(),
   );
 
   useEffect(() => {
@@ -10117,6 +10238,24 @@ function StorePricingPanel() {
   const goAdd = (type: StoreProductType) => {
     if (!pricingSheet?._id) return;
     router.push(`/dashboard/store-gallery/pricing/new?type=${type}`);
+  };
+
+  const saveFreePrintConfig = () => {
+    const sizes = optionValueList(freePrintForm.sizes);
+    const papers = optionValueList(freePrintForm.papers);
+    if (!sizes.length || !papers.length) {
+      toast.error("Add at least one size and one paper option");
+      return;
+    }
+    updatePriceSheet.mutate(
+      { freePrintSizes: sizes, freePrintPapers: papers },
+      {
+        onSuccess: () => {
+          setFreePrintConfigOpen(false);
+          toast.success("Free print options saved");
+        },
+      },
+    );
   };
 
   if (
@@ -10217,6 +10356,23 @@ function StorePricingPanel() {
                   </span>
                 </span>
               </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer items-start gap-4 rounded-none p-2"
+                onClick={() => {
+                  setFreePrintForm(freePrintConfigForm(pricingSheet));
+                  setFreePrintConfigOpen(true);
+                }}
+              >
+                <Printer className="mt-1 size-5 text-[#159d8b]" />
+                <span>
+                  <span className="block font-bold text-[#222]">
+                    Free Print Request
+                  </span>
+                  <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
+                    Configure free-request paper sizes and paper types.
+                  </span>
+                </span>
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -10274,6 +10430,14 @@ function StorePricingPanel() {
             { onSuccess: () => setDeleteTarget(null) },
           );
         }}
+      />
+      <FreePrintConfigDialog
+        open={freePrintConfigOpen}
+        form={freePrintForm}
+        pending={updatePriceSheet.isPending}
+        onOpenChange={setFreePrintConfigOpen}
+        onFormChange={setFreePrintForm}
+        onSave={saveFreePrintConfig}
       />
     </div>
   );
@@ -10660,7 +10824,9 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
     null,
   );
   const [freePrintConfigOpen, setFreePrintConfigOpen] = useState(false);
-  const [freePrintForm, setFreePrintForm] = useState({ sizes: '', papers: '' });
+  const [freePrintForm, setFreePrintForm] = useState<FreePrintConfigForm>(() =>
+    freePrintConfigForm(),
+  );
 
   useEffect(() => {
     if (!sheet) return;
@@ -10798,12 +10964,23 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
                     </span>
                   </DropdownMenuItem>
                 ))}
-                {sheet.freePrintEnabled && (
-                  <DropdownMenuItem className="cursor-pointer items-start gap-4 rounded-none p-2" onClick={() => { setFreePrintForm({ sizes: (sheet.freePrintSizes ?? ['4 x 6', '5 x 7', '8 x 10', '8 x 12']).join(', '), papers: (sheet.freePrintPapers ?? ['Glossy', 'Matte']).join(', ') }); setFreePrintConfigOpen(true); }}>
-                    <Printer className="mt-1 size-5 text-[#159d8b]" />
-                    <span><span className="block font-bold text-[#222]">Free Print Size</span><span className="mt-1 block text-sm leading-5 text-[#7a828c]">Configure size and paper choices used only by Free Print Requests.</span></span>
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem
+                  className="cursor-pointer items-start gap-4 rounded-none p-2"
+                  onClick={() => {
+                    setFreePrintForm(freePrintConfigForm(sheet));
+                    setFreePrintConfigOpen(true);
+                  }}
+                >
+                  <Printer className="mt-1 size-5 text-[#159d8b]" />
+                  <span>
+                    <span className="block font-bold text-[#222]">
+                      Free Print Request
+                    </span>
+                    <span className="mt-1 block text-sm leading-5 text-[#7a828c]">
+                      Configure free-request paper sizes and paper types.
+                    </span>
+                  </span>
+                </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -10865,17 +11042,14 @@ function StorePriceSheetDetail({ priceSheetId }: { priceSheetId: string }) {
         </div>
       )}
 
-      <Dialog open={freePrintConfigOpen} onOpenChange={setFreePrintConfigOpen}>
-        <DialogContent className="rounded-none sm:max-w-[580px]">
-          <DialogHeader><DialogTitle>FREE PRINT SIZE</DialogTitle><DialogDescription>These choices are only used by Free Print Requests. They are not normal store products and do not appear in paid checkout.</DialogDescription></DialogHeader>
-          <FieldGroup className="gap-6">
-            <Field><FieldLabel className="font-bold">Sizes</FieldLabel><Input value={freePrintForm.sizes} onChange={(event) => setFreePrintForm((value) => ({ ...value, sizes: event.target.value }))} placeholder="4 x 6, 5 x 7, 8 x 10" className="h-12 rounded-none" /><p className="text-sm text-[#777]">Enter size labels separated by commas. Visitors will see these in a dropdown.</p></Field>
-            <Field><FieldLabel className="font-bold">Paper</FieldLabel><Input value={freePrintForm.papers} onChange={(event) => setFreePrintForm((value) => ({ ...value, papers: event.target.value }))} placeholder="Glossy, Matte" className="h-12 rounded-none" /><p className="text-sm text-[#777]">Enter paper labels separated by commas. Visitors will see these in a dropdown.</p></Field>
-            <p className="border bg-[#fafafa] px-4 py-3 text-sm text-[#666]">Quantity is chosen by the visitor when they submit a free print request.</p>
-          </FieldGroup>
-          <DialogFooter><Button variant="outline" className="rounded-none" onClick={() => setFreePrintConfigOpen(false)}>Cancel</Button><Button className="rounded-none bg-[#6337d8] text-white" disabled={updatePriceSheet.isPending} onClick={saveFreePrintConfig}>{updatePriceSheet.isPending ? 'Saving...' : 'Save'}</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FreePrintConfigDialog
+        open={freePrintConfigOpen}
+        form={freePrintForm}
+        pending={updatePriceSheet.isPending}
+        onOpenChange={setFreePrintConfigOpen}
+        onFormChange={setFreePrintForm}
+        onSave={saveFreePrintConfig}
+      />
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="rounded-none sm:max-w-[630px]">
@@ -11130,7 +11304,7 @@ function ProductTile({
           </p>
           <p className="mt-1 text-xs text-[#999]">
             {productTypeLabels[product.type]}
-            {product.active === false ? " ÃƒÆ’Ã‚Â¢Ã¢â€šÂ¬Ãƒâ€šÃ‚Â¢ Hidden" : ""}
+            {product.active === false ? " · Hidden" : ""}
           </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#6337d8]" />
@@ -12481,7 +12655,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             />
           </label>
           <p className="hidden">
-            Manage your collections ÃƒÆ’Ã‚Â¢Ã¢â€šÂ¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â create, view, and organize your
+            Manage your collections — create, view, and organize your
             photos.
           </p>
         </div>
@@ -15328,10 +15502,10 @@ function CollectionDetailView({
                     </p>
                     {(
                       [
-                        ["uploaded-new-old", "Uploaded: New ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Old"],
-                        ["uploaded-old-new", "Uploaded: Old ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ New"],
-                        ["taken-new-old", "Date Taken: New ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Old"],
-                        ["taken-old-new", "Date Taken: Old ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ New"],
+                        ["uploaded-new-old", "Uploaded: New → Old"],
+                        ["uploaded-old-new", "Uploaded: Old → New"],
+                        ["taken-new-old", "Date Taken: New → Old"],
+                        ["taken-old-new", "Date Taken: Old → New"],
                         ["name-az", "Name: A-Z"],
                         ["name-za", "Name: Z-A"],
                         ["random", "Random"],
@@ -15527,7 +15701,7 @@ function CollectionDetailView({
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-[#999]">
-                  ÃƒÂ¢Ã…â€™Ã‹Å“/Ctrl + A selects all Ã‚Â· Delete removes selected Ã‚Â· Esc
+                  ⌘/Ctrl + A selects all · Delete removes selected · Esc
                   clears
                 </p>
                 {deletingImages && (
@@ -17175,7 +17349,7 @@ function CollectionActivityPanel({
                             (isAllowed ? "allowed" : "pending")}
                         </TableCell>
                         <TableCell className="max-w-80 whitespace-normal text-[#666]">
-                          {request?.reason || "Ã¢â‚¬â€"}
+                          {request?.reason || "—"}
                         </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
