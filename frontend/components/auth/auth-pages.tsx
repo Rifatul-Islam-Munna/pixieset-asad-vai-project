@@ -53,7 +53,7 @@ export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSe
 
           <div className="flex flex-1 items-center py-10 lg:py-8">
             <form onSubmit={submit} className="w-full max-w-[460px]">
-              <p className="text-[17px] font-medium text-[#5f35c8]">Welcome back! 👋</p>
+              <p className="text-[17px] font-medium text-[#5f35c8]">Welcome back!</p>
               <h1 className="mt-3 font-serif text-[38px] leading-[1.08] tracking-[-.025em] text-[#111] sm:text-[42px]">{auth.loginTitle}</h1>
               <p className="mt-4 max-w-[390px] text-[17px] leading-7 text-[#69686d]">{auth.loginSubtitle}</p>
 
@@ -168,7 +168,7 @@ export function RegisterPageClient({ auth, brand }: { auth: AuthCms; brand: Bran
 
           <div className="flex flex-1 items-center py-8 lg:py-6">
             <form onSubmit={submit} className="w-full max-w-[470px]">
-              <p className="text-[17px] font-medium text-[#5f35c8]">Start creating today ✨</p>
+              <p className="text-[17px] font-medium text-[#5f35c8]">Start creating today</p>
               <h1 className="mt-3 font-serif text-[38px] leading-[1.08] tracking-[-.025em] text-[#111] sm:text-[42px]">{auth.registerTitle}</h1>
               <p className="mt-4 max-w-[410px] text-[17px] leading-7 text-[#69686d]">{auth.registerSubtitle}</p>
 

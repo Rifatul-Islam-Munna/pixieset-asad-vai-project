@@ -36,8 +36,8 @@ export class StoreSetting {
   @Prop({ type: [{ label: String, url: String }], default: [] })
   links: { label: string; url: string }[];
 
-  @Prop({ type: Object, default: {} })
-  domain: { hostname?: string; dnsTarget?: string; verified?: boolean };
+  @Prop({ type: Object, required: false })
+  domain?: { hostname?: string; dnsTarget?: string; verified?: boolean };
 
   @Prop({ default: '' })
   giftCardSharingEmail: string;

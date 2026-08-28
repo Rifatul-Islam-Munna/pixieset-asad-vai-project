@@ -205,7 +205,7 @@ export type StoreSettingsRecord = {
     };
   };
   links: { label: string; url: string }[];
-  domain: { hostname?: string; dnsTarget?: string; verified?: boolean };
+  domain?: { hostname?: string; dnsTarget?: string; verified?: boolean };
   giftCardSharingEmail: string;
   termsOfSale: string;
   digitalImageLicense: string;

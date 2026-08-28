@@ -192,7 +192,7 @@ export function HomeHero({
             <img
               key={hero}
               src={hero}
-              alt="Nikoset hero media"
+              alt="Gallerista hero media"
               className="block h-auto w-full object-contain"
             />
           )}

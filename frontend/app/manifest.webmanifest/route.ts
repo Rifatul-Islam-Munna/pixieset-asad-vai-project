@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const safeStart = start.startsWith("/") && !start.startsWith("//") ? start : "/";
   const icon = cms.seo.faviconUrl.trim();
   const iconQuery = icon ? `&src=${encodeURIComponent(icon)}` : "";
-  const name = cms.seo.siteTitle.trim() || cms.content.nav.brand || "Nikoset";
+  const name = cms.seo.siteTitle.trim() || cms.content.nav.brand || "Gallerista";
 
   return new NextResponse(JSON.stringify({
     name,

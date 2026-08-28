@@ -145,7 +145,7 @@ export function ClientGalleryOverview({
       <header className="flex flex-col gap-5 border-b border-[#efedf5] bg-white px-5 py-6 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-[-.03em] text-[#18171d]">
-            Good morning, {displayName} 👋
+            Good morning, {displayName}
           </h1>
           <p className="mt-1 text-sm text-[#77727f]">
             Here&apos;s what&apos;s happening with your business today.

@@ -18,7 +18,7 @@ export default function MailPreviewPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const raw = window.sessionStorage.getItem("nikoset-mail-preview");
+    const raw = window.sessionStorage.getItem("gallerista-mail-preview");
     setPayload(raw ? JSON.parse(raw) as PreviewPayload : null);
   }, []);
 

@@ -245,7 +245,7 @@ export const defaultHomeCms: HomeCmsData = {
   defaultLanguage: "en",
   brand: {
     logoUrl: "",
-    brandText: "Nikoset",
+    brandText: "Gallerista",
     brandImageUrl: "",
     accentColor: "#22bda7",
   },
@@ -278,7 +278,7 @@ export const defaultHomeCms: HomeCmsData = {
     },
   },
   seo: {
-    siteTitle: "Nikoset",
+    siteTitle: "Gallerista",
     siteDescription:
       "An all-in-one platform for modern photographers with client galleries, websites, stores, and studio tools.",
     siteKeywords:
@@ -291,16 +291,16 @@ export const defaultHomeCms: HomeCmsData = {
     extraMetaTags: [],
     jsonLd: "",
     faviconUrl: "",
-    loginTitle: "Log in | Nikoset",
-    loginDescription: "Log in to your Nikoset workspace.",
-    loginKeywords: "Nikoset login, photographer workspace login",
-    registerTitle: "Create account | Nikoset",
-    registerDescription: "Create your Nikoset photography workspace.",
+    loginTitle: "Log in | Gallerista",
+    loginDescription: "Log in to your Gallerista workspace.",
+    loginKeywords: "Gallerista login, photographer workspace login",
+    registerTitle: "Create account | Gallerista",
+    registerDescription: "Create your Gallerista photography workspace.",
     registerKeywords:
       "create photography website, client gallery account, photographer store",
   },
   auth: {
-    brand: "Nikoset",
+    brand: "Gallerista",
     loginTitle: "Log in to your workspace",
     loginSubtitle: "Client Gallery",
     loginImageUrl:
@@ -320,7 +320,7 @@ export const defaultHomeCms: HomeCmsData = {
   content: {
     en: {
       nav: {
-        brand: "NIKOSET",
+        brand: "GALLERISTA",
         products: "Products",
         examples: "Examples",
         pricing: "Pricing",
@@ -328,7 +328,7 @@ export const defaultHomeCms: HomeCmsData = {
         cta: "Get Started",
       },
       hero: {
-        eyebrow: "NIKOSET PHOTOGRAPHER PLATFORM",
+        eyebrow: "GALLERISTA PHOTOGRAPHER PLATFORM",
         title: "Your Moments.",
         accentTitle: "Beautifully",
         endingTitle: "Presented.",
@@ -483,7 +483,7 @@ export const defaultHomeCms: HomeCmsData = {
         eyebrow: "DESIGNED FOR EVERY WORKFLOW",
         title: "Made for all photographers.",
         subtitle:
-          "From weddings to landscapes and everything in between, Nikoset is built to elevate your business - and make your work look its best.",
+          "From weddings to landscapes and everything in between, Gallerista is built to elevate your business - and make your work look its best.",
         cardText: "Booking, payment, and client details in one polished flow.",
         tabs: [
           {
@@ -544,7 +544,7 @@ export const defaultHomeCms: HomeCmsData = {
       photographerTypes: {
         eyebrow: "DESIGNED FOR EVERY WORKFLOW",
         title: "Made for all photographers.",
-        subtitle: "From weddings to landscapes and everything in between, Nikoset is built to elevate your business—and make your work look its best.",
+        subtitle: "From weddings to landscapes and everything in between, Gallerista is built to elevate your business—and make your work look its best.",
         tabs: [
           { value: "wedding", label: "Wedding", image: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1500&q=85" },
           { value: "portrait", label: "Portrait", image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=1500&q=85" },
@@ -568,7 +568,7 @@ export const defaultHomeCms: HomeCmsData = {
             image:
               "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80",
             quote:
-              "The four main Nikoset tools we currently use are essential in providing a seamless and professional experience for our clients.",
+              "The four main Gallerista tools we currently use are essential in providing a seamless and professional experience for our clients.",
           },
           {
             name: "Bek Rogers",
@@ -576,7 +576,7 @@ export const defaultHomeCms: HomeCmsData = {
             image:
               "https://images.unsplash.com/photo-1534751516642-a1af1ef26a56?auto=format&fit=crop&w=120&q=80",
             quote:
-              "Nikoset has given me the ease of delivering galleries through the same platform that houses my website.",
+              "Gallerista has given me the ease of delivering galleries through the same platform that houses my website.",
           },
           {
             name: "Chris Joubert",
@@ -598,7 +598,7 @@ export const defaultHomeCms: HomeCmsData = {
         { name: "Adobe", image: "", url: "" },
       ],
       cta: {
-        title: "Start using Nikoset today for free",
+        title: "Start using Gallerista today for free",
         subtitle: "Free forever. Upgrade when you need to.",
         button: "Get Started",
         trialText: "14-day free trial",
@@ -618,11 +618,11 @@ export const defaultHomeCms: HomeCmsData = {
         ],
       },
       footer: {
-        brandText: "Nikoset",
+        brandText: "Gallerista",
         logoUrl: "",
         description:
           "An all-in-one platform for modern photographers, offering client photo galleries, websites, online stores and studio management software tools.",
-        copyright: "Copyright 2026 Nikoset. Made with love in Vancity.",
+        copyright: "Copyright 2026 Gallerista. Made with love in Vancity.",
         columns: [
           {
             title: "Products",

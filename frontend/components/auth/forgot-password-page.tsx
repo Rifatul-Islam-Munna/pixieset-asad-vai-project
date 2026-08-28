@@ -24,7 +24,7 @@ export function ForgotPasswordPageClient({ auth, brand }: { auth: AuthCms; brand
     });
   };
   const logoUrl = brand.logoUrl?.trim() || brand.brandImageUrl?.trim() || "";
-  const brandText = brand.brandText?.trim() || "Nikoset";
+  const brandText = brand.brandText?.trim() || "Gallerista";
 
   return (
     <main className="min-h-screen bg-[#f7f6f3] px-4 py-4 text-[#111] sm:px-7 sm:py-7 lg:px-10 lg:py-10">

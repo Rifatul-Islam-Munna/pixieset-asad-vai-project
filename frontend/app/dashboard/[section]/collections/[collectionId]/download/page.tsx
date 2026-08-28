@@ -20,7 +20,7 @@ export default function FavoriteDownloadPage() {
   const imageCount = payload?.images.length ?? 0;
 
   useEffect(() => {
-    const raw = window.sessionStorage.getItem("nikoset-favorite-download");
+    const raw = window.sessionStorage.getItem("gallerista-favorite-download");
     const parsed = raw ? JSON.parse(raw) as DownloadPayload : null;
     setPayload(parsed);
     if (!parsed?.images?.length) {

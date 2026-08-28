@@ -6035,7 +6035,7 @@ function PresetStorePanel({
         <div className="mt-8 bg-[#f5f1ff] p-6">
           <p className="font-bold">Activate Store</p>
           <p className="mt-4 text-sm leading-7 text-[#222]">
-            Setup Nikoset Store to start selling prints, digital downloads, and
+            Setup Gallerista Store to start selling prints, digital downloads, and
             more directly from your collections.
           </p>
           <button className="mt-3 text-sm font-semibold text-[#6337d8]">
@@ -8046,7 +8046,7 @@ function StoreDashboardPanel() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-[-.03em]">
-            Store Dashboard 👋
+            Store Dashboard
           </h1>
           <p className="mt-2 text-sm text-[#716c7b]">
             Overview of your store performance and key metrics.
@@ -9482,7 +9482,6 @@ const defaultStoreSettings: StoreSettingsRecord = {
     },
   },
   links: [],
-  domain: { hostname: "", dnsTarget: "store.nikoset.local", verified: false },
   giftCardSharingEmail: "",
   termsOfSale: "",
   digitalImageLicense: "",
@@ -9494,16 +9493,14 @@ function StoreSettingsPanel() {
 
   useEffect(() => {
     if (settingsQuery.data?.data) {
+      const visibleSettings = { ...settingsQuery.data.data };
+      delete visibleSettings.domain;
       setForm({
         ...defaultStoreSettings,
-        ...settingsQuery.data.data,
+        ...visibleSettings,
         paymentMethods: {
           ...defaultStoreSettings.paymentMethods,
           ...(settingsQuery.data.data.paymentMethods ?? {}),
-        },
-        domain: {
-          ...defaultStoreSettings.domain,
-          ...(settingsQuery.data.data.domain ?? {}),
         },
         links: settingsQuery.data.data.links ?? [],
       });
@@ -9535,7 +9532,7 @@ function StoreSettingsPanel() {
   return (
     <StorePageShell
       title="Store Settings"
-      subtitle="Checkout, payment methods, domain/DNS, terms, and digital license."
+      subtitle="Checkout, payment methods, terms, and digital license."
       action={saveSettings.isPending ? "Saving..." : "Save Settings"}
       onAction={() => saveSettings.mutate(form)}
     >
@@ -9670,32 +9667,6 @@ function StoreSettingsPanel() {
               <option>.50</option>
               <option>.99</option>
             </select>
-          </div>
-        </section>
-
-        <section className="mt-10 border bg-white p-6">
-          <h2 className="text-sm font-bold">Domain / DNS Server</h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <StoreInput
-              label="Store Domain"
-              value={form.domain.hostname ?? ""}
-              onChange={(hostname) =>
-                setForm((current) => ({
-                  ...current,
-                  domain: { ...current.domain, hostname },
-                }))
-              }
-            />
-            <StoreInput
-              label="DNS Target"
-              value={form.domain.dnsTarget ?? ""}
-              onChange={(dnsTarget) =>
-                setForm((current) => ({
-                  ...current,
-                  domain: { ...current.domain, dnsTarget },
-                }))
-              }
-            />
           </div>
         </section>
 
@@ -16987,7 +16958,7 @@ function CollectionActivityPanel({
       return;
     }
     window.sessionStorage.setItem(
-      "nikoset-favorite-download",
+      "gallerista-favorite-download",
       JSON.stringify({
         collectionName,
         listName: "All photos",
@@ -17042,7 +17013,7 @@ function CollectionActivityPanel({
     }).catch(() => null);
     if (result?.sent) toast.success("Email sent by universal SMTP");
     window.sessionStorage.setItem(
-      "nikoset-mail-preview",
+      "gallerista-mail-preview",
       JSON.stringify({
         to: mailList.email,
         collectionName,

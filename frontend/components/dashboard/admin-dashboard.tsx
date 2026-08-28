@@ -554,7 +554,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
             {homeCms.brand.logoUrl ? (
               <img src={homeCms.brand.logoUrl} alt={homeCms.brand.brandText || "Brand logo"} className="max-h-9 w-auto max-w-[170px] object-contain" />
             ) : (
-              <span className="text-base font-bold text-[#6337d8]">{homeCms.brand.brandText || "Nikoset"}</span>
+              <span className="text-base font-bold text-[#6337d8]">{homeCms.brand.brandText || "Gallerista"}</span>
             )}
           </Link>
           <AdminNav tab={tab} setTab={setTab} />
@@ -570,7 +570,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
               {homeCms.brand.logoUrl ? (
                 <img src={homeCms.brand.logoUrl} alt={homeCms.brand.brandText || "Brand logo"} className="max-h-8 w-auto max-w-[150px] object-contain" />
               ) : (
-                <span className="font-bold text-[#6337d8]">{homeCms.brand.brandText || "Nikoset"}</span>
+                <span className="font-bold text-[#6337d8]">{homeCms.brand.brandText || "Gallerista"}</span>
               )}
             </Link>
             <button className="flex size-10 items-center justify-center bg-[#6337d8] text-white" onClick={() => setAdminMenuOpen(true)} aria-label="Open admin menu">
@@ -586,7 +586,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
                     {homeCms.brand.logoUrl ? (
                       <img src={homeCms.brand.logoUrl} alt={homeCms.brand.brandText || "Brand logo"} className="max-h-8 w-auto max-w-[150px] object-contain" />
                     ) : (
-                      <span className="font-bold text-[#6337d8]">{homeCms.brand.brandText || "Nikoset"}</span>
+                      <span className="font-bold text-[#6337d8]">{homeCms.brand.brandText || "Gallerista"}</span>
                     )}
                   </Link>
                   <button className="flex size-10 items-center justify-center bg-[#f3f3f3]" onClick={() => setAdminMenuOpen(false)} aria-label="Close admin menu">
