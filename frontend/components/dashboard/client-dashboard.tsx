@@ -4097,7 +4097,7 @@ function StarredGrid({
           : (image.originalName ?? image.metadata?.filename ?? "Image");
         const subtitle = isCollection
           ? `${collection.imageCount ?? 0} images`
-          : `${image.collectionName ?? "Gallery"} / ${image.setName ?? "Highlights"}`;
+          : `${image.collectionName ?? "Gallery"} / ${image.setName ?? "Featured"}`;
 
         return (
           <button
@@ -5832,11 +5832,11 @@ function PresetGeneralPanel({
           <Input
             value={general.photoSets}
             onChange={(event) => onChange({ photoSets: event.target.value })}
-            placeholder="Highlights, Reception, Getting Ready"
+            placeholder="Featured, Reception, Getting Ready"
             className="h-12 rounded-none bg-white px-5"
           />
           <p className="text-sm leading-6 text-[#666]">
-            Separate photo sets by comma. e.g. Highlights, Reception, Getting
+            Separate photo sets by comma. e.g. Featured, Reception, Getting
             Ready
           </p>
         </Field>
@@ -6304,6 +6304,12 @@ function PresetDesignPanel({
         <>
           <h2 className="text-2xl font-medium">Cover</h2>
           {onCoverImageChange && <OptionSection title="Cover Photo">
+            <div className="mb-4 flex flex-wrap gap-3">
+              <Button type="button" variant="outline" className="rounded-none" disabled={coverImageLocked} onClick={() => { setCoverPickerPage(0); setCoverPickerOpen(true); }}>
+                <Images data-icon="inline-start" /> Change cover photo
+              </Button>
+              {coverImage && design.coverMediaType !== "video" && <Button type="button" variant="outline" className="rounded-none" onClick={() => setCoverFocalOpen(true)}>Change focal point</Button>}
+            </div>
             <div className="overflow-hidden border bg-muted">
               {coverImage ? (
                 <CoverPreview
@@ -6317,12 +6323,6 @@ function PresetDesignPanel({
                   No cover photo selected
                 </div>
               )}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Button type="button" variant="outline" className="rounded-none" disabled={coverImageLocked} onClick={() => { setCoverPickerPage(0); setCoverPickerOpen(true); }}>
-                <Images data-icon="inline-start" /> Change cover photo
-              </Button>
-              {coverImage && design.coverMediaType !== "video" && <Button type="button" variant="outline" className="rounded-none" onClick={() => setCoverFocalOpen(true)}>Change focal point</Button>}
             </div>
             <Dialog open={coverPickerOpen} onOpenChange={setCoverPickerOpen}>
               <DialogContent className="max-h-[90dvh] overflow-hidden rounded-none sm:max-w-[920px]">
@@ -7021,7 +7021,7 @@ function CollectionDesignLivePreview({
                   </span>
                 ))
               ) : (
-                <span>Highlights</span>
+                <span>Featured</span>
               )}
             </div>
             <div
@@ -13268,8 +13268,12 @@ function uniqueCollectionSets(
     if (!id || seen.has(id)) return false;
     seen.add(id);
     return true;
-  });
-  return unique.length ? unique : [{ id: "highlights", name: "Highlights" }];
+  }).map((set) =>
+    set.id === "highlights" && set.name === "Highlights"
+      ? { ...set, name: "Featured" }
+      : set,
+  );
+  return unique.length ? unique : [{ id: "highlights", name: "Featured" }];
 }
 
 function collectionFormWithUniqueSets(
@@ -13568,9 +13572,14 @@ function CollectionDetailView({
   const selectedTargetCollection = collections.find(
     (item) => item._id === imageTargetCollectionId,
   );
-  const selectedTargetSets = selectedTargetCollection?.sets?.length
+  const selectedTargetSets = (selectedTargetCollection?.sets?.length
     ? selectedTargetCollection.sets
-    : [{ id: "highlights", name: "Highlights" }];
+    : [{ id: "highlights", name: "Featured" }]
+  ).map((set) =>
+    set.id === "highlights" && set.name === "Highlights"
+      ? { ...set, name: "Featured" }
+      : set,
+  );
   const imageQuickShareLink = activeImage
     ? `${publicLink}?photo=${encodeURIComponent(activeImage._id)}&download=${imageShareAllowDownload ? "1" : "0"}`
     : publicLink;
@@ -15175,7 +15184,7 @@ function CollectionDetailView({
                   onClick={() => setAddSetOpen(true)}
                 >
                   <PlusCircle className="size-4" />
-                  Add Set
+                  Add Collection
                 </button>
               </div>
               <ReactSortable
@@ -15256,14 +15265,14 @@ function CollectionDetailView({
               <Dialog open={addSetOpen} onOpenChange={setAddSetOpen}>
                 <DialogContent className="rounded-none sm:max-w-[420px]">
                   <DialogHeader>
-                    <DialogTitle>Add Set</DialogTitle>
+                    <DialogTitle>Add Collection</DialogTitle>
                     <DialogDescription>
-                      Create a named set inside this gallery.
+                      Create a named collection inside this gallery.
                     </DialogDescription>
                   </DialogHeader>
                   <FieldGroup>
                     <Field>
-                      <FieldLabel>Set Name</FieldLabel>
+                      <FieldLabel>Collection Name</FieldLabel>
                       <Input
                         value={newSetName}
                         onChange={(event) => setNewSetName(event.target.value)}
@@ -17959,7 +17968,7 @@ const collectionDefaultDesign: PresetDesignSettings = {
 
 const collectionDefaultGeneral: PresetGeneralSettings = {
   collectionTags: "",
-  photoSets: "Highlights",
+  photoSets: "Featured",
   defaultWatermark: "No watermark",
   emailRegistration: false,
   marketingSubscription: true,
@@ -18090,7 +18099,7 @@ function collectionForm(
     expiresAt: collection?.expiresAt ? collection.expiresAt.slice(0, 10) : "",
     sets: collection?.sets?.length
       ? collection.sets
-      : [{ id: "highlights", name: "Highlights" }],
+      : [{ id: "highlights", name: "Featured" }],
     design,
     general: {
       ...collectionDefaultGeneral,
@@ -18140,7 +18149,7 @@ function syncSetsFromPhotoSets(
     .split(",")
     .map((name) => name.trim())
     .filter(Boolean);
-  const safeNames = names.length ? names : ["Highlights"];
+  const safeNames = names.length ? names : ["Featured"];
 
   return safeNames.map((name, index) => {
     const existing =

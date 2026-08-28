@@ -268,8 +268,12 @@ export function PublicGallery({
       if (!id || seen.has(id)) return false;
       seen.add(id);
       return true;
-    });
-    return unique.length ? unique : [{ id: "highlights", name: "Highlights" }];
+    }).map((set) =>
+      set.id === "highlights" && set.name === "Highlights"
+        ? { ...set, name: "Featured" }
+        : set,
+    );
+    return unique.length ? unique : [{ id: "highlights", name: "Featured" }];
   }, [collection?.sets]);
   const showSetTabs = gallerySets.length > 0;
   const coverPhoto = imageSrc(collection?.coverImage || images.find((image) => !isVideo(image))?.url || "");

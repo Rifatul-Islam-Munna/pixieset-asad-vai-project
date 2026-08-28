@@ -353,7 +353,7 @@ const defaultPresetItems: PresetItem[] = [
   {
     id: "builtin-clean-classic",
     name: "Clean Classic",
-    general: { ...emptyPresetGeneral, photoSets: "Highlights, Ceremony, Portraits" },
+    general: { ...emptyPresetGeneral, photoSets: "Featured, Ceremony, Portraits" },
     design: { ...emptyPresetDesign, cover: "Center", typography: "Classic", color: "White", gridStyle: "Vertical", gridSpacing: "Regular" },
     download: { ...emptyPresetDownload },
     favorite: { ...emptyPresetFavorite },
@@ -393,7 +393,7 @@ const defaultPresetItems: PresetItem[] = [
   {
     id: "builtin-newborn-soft",
     name: "Newborn Soft",
-    general: { ...emptyPresetGeneral, collectionTags: "Newborn", photoSets: "Highlights, Family, Baby Details", emailRegistration: true },
+    general: { ...emptyPresetGeneral, collectionTags: "Newborn", photoSets: "Featured, Family, Baby Details", emailRegistration: true },
     design: { ...emptyPresetDesign, cover: "Center", typography: "Serif", color: "Sand", gridStyle: "Vertical", gridSpacing: "Large" },
     download: { ...emptyPresetDownload, downloadPin: true },
     favorite: { ...emptyPresetFavorite, maxFavorites: "30" },
@@ -403,7 +403,7 @@ const defaultPresetItems: PresetItem[] = [
   {
     id: "builtin-event-delivery",
     name: "Event Delivery",
-    general: { ...emptyPresetGeneral, collectionTags: "Event", photoSets: "Highlights, Speakers, Guests, Details", socialSharing: true },
+    general: { ...emptyPresetGeneral, collectionTags: "Event", photoSets: "Featured, Speakers, Guests, Details", socialSharing: true },
     design: { ...emptyPresetDesign, cover: "Left", typography: "Modern", color: "White", gridStyle: "Horizontal", navigationStyle: "Icon & Text" },
     download: { ...emptyPresetDownload, webSizePx: "2048px", videoDownload: true },
     favorite: { ...emptyPresetFavorite, favoriteNotes: false },
@@ -413,7 +413,7 @@ const defaultPresetItems: PresetItem[] = [
   {
     id: "builtin-family-lifestyle",
     name: "Family Lifestyle",
-    general: { ...emptyPresetGeneral, collectionTags: "Family", photoSets: "Highlights, Kids, Parents, Full Session", emailRegistration: true },
+    general: { ...emptyPresetGeneral, collectionTags: "Family", photoSets: "Featured, Kids, Parents, Full Session", emailRegistration: true },
     design: { ...emptyPresetDesign, cover: "Center", typography: "Classic", color: "Sand", gridStyle: "Vertical" },
     download: { ...emptyPresetDownload, downloadPin: true },
     favorite: { ...emptyPresetFavorite, maxFavorites: "40" },

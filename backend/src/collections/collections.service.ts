@@ -141,7 +141,7 @@ export class CollectionsService {
       status: safeDto.status ?? 'draft',
       design: safeDto.design ?? {},
       settings: safeDto.settings ?? {},
-      sets: [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }],
+      sets: [{ id: 'highlights', name: 'Featured', createdAt: new Date() }],
       imageCount: 0,
     });
 
@@ -1482,7 +1482,7 @@ export class CollectionsService {
     if (!images.length)
       throw new BadRequestException('No favorite photos to copy');
 
-    const set = { id: 'highlights', name: 'Highlights', createdAt: new Date() };
+    const set = { id: 'highlights', name: 'Featured', createdAt: new Date() };
     const collection = await this.collectionModel.create({
       userId,
       name: name?.trim() || `${source.name} Favorites`,
@@ -1568,7 +1568,7 @@ export class CollectionsService {
       return {
         ...image,
         collectionName: collection?.name ?? 'Collection',
-        setName: set?.name ?? 'Highlights',
+        setName: set?.name ?? 'Featured',
       };
     });
   }
@@ -1606,7 +1606,7 @@ export class CollectionsService {
       );
       collection.sets = nextSets.length
         ? nextSets
-        : [{ id: 'highlights', name: 'Highlights', createdAt: new Date() }];
+        : [{ id: 'highlights', name: 'Featured', createdAt: new Date() }];
     }
     if (dto.tags !== undefined) collection.tags = dto.tags;
     if (dto.watermarkId !== undefined)
@@ -1640,7 +1640,7 @@ export class CollectionsService {
       presetId: source.presetId,
       coverImage: source.coverImage,
       sets: source.sets ?? [
-        { id: 'highlights', name: 'Highlights', createdAt: new Date() },
+        { id: 'highlights', name: 'Featured', createdAt: new Date() },
       ],
       tags: source.tags ?? [],
       watermarkId: source.watermarkId,
