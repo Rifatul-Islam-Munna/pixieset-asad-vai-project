@@ -326,6 +326,43 @@ describe('PrintLabNotificationService', () => {
     expect(payload.text).toContain('Crop around & preserve faces');
   });
 
+  it('keeps multiple size rows for the same photo in the email and secure order view', async () => {
+    order.items = [
+      {
+        imageId: IMAGE_ID,
+        imageUrl: 'https://storage.test/private-original.jpg',
+        name: 'Print request: ceremony & vows.jpg',
+        type: 'self-fulfilled',
+        variantLabel: '5 x 7 - Matte',
+        options: { Size: '5 x 7', Paper: 'Matte' },
+        quantity: 7,
+      },
+      {
+        imageId: IMAGE_ID,
+        imageUrl: 'https://storage.test/private-original.jpg',
+        name: 'Print request: ceremony & vows.jpg',
+        type: 'self-fulfilled',
+        variantLabel: '8 x 10 - Matte',
+        options: { Size: '8 x 10', Paper: 'Matte' },
+        quantity: 10,
+      },
+    ];
+
+    const result = await service.notify(order.id, 'free');
+    const payload = mail.send.mock.calls[0][0];
+
+    expect(payload.html).toContain('Size: 5 x 7');
+    expect(payload.html).toContain('Quantity: 7');
+    expect(payload.html).toContain('Size: 8 x 10');
+    expect(payload.html).toContain('Quantity: 10');
+
+    const view = await service.getPublicOrder(order.id, result.token!);
+    expect(view.items).toHaveLength(2);
+    expect(view.items.map((item) => ({ size: item.options.Size, quantity: item.quantity }))).toEqual([
+      { size: '5 x 7', quantity: 7 },
+      { size: '8 x 10', quantity: 10 },
+    ]);
+  });
   it('resends only an owner order and rotates a failed or sent attempt', async () => {
     await expect(service.resend('other-user', order.id)).rejects.toThrow('Order not found');
     const first = await service.notify(order.id, 'free');

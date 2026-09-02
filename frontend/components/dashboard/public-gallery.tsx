@@ -307,7 +307,7 @@ export function PublicGallery({
     text?: string;
     url: string;
     notice: string;
-    printImages: PublicImage[];
+    kind: "photo" | "gallery";
   } | null>(null);
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [downloadEmail, setDownloadEmail] = useState("");
@@ -777,9 +777,9 @@ export function PublicGallery({
   const shareItem = (
     share: { title: string; text?: string; url: string },
     notice: string,
-    printImages: PublicImage[],
+    kind: "photo" | "gallery",
   ) => {
-    setShareTarget({ ...share, notice, printImages });
+    setShareTarget({ ...share, notice, kind });
   };
   const copyShareLink = async () => {
     if (!shareTarget) return;
@@ -823,38 +823,6 @@ export function PublicGallery({
       if (error instanceof DOMException && error.name === "AbortError") return;
       setShareNotice("Could not open share options");
     }
-  };
-  const printSharedItem = () => {
-    if (!shareTarget) return;
-    const printableImages = shareTarget.printImages.filter(
-      (image) => !isVideo(image) || Boolean(image.thumbnailUrl),
-    );
-    if (!printableImages.length) {
-      setShareNotice("No printable photo available");
-      return;
-    }
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setShareNotice("Allow pop-ups to print");
-      return;
-    }
-    printWindow.opener = null;
-    const singlePhoto = printableImages.length === 1;
-    const photos = printableImages
-      .map((photo) => {
-        const source = imageSrc(
-          singlePhoto ? photo.url : photo.thumbnailUrl || photo.url,
-        );
-        const filename = displayFilename(photo);
-        return `<figure><img src="${escapePrintHtml(source)}" alt="${escapePrintHtml(filename)}" />${showFilenames && filename ? `<figcaption>${escapePrintHtml(filename)}</figcaption>` : ""}</figure>`;
-      })
-      .join("");
-    printWindow.document.open();
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapePrintHtml(shareTarget.title)}</title><style>
-      @page{margin:12mm}*{box-sizing:border-box}body{margin:0;color:#111;font-family:Arial,sans-serif}h1{margin:0 0 18px;font-size:20px}.photos{display:grid;grid-template-columns:${singlePhoto ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:12px}figure{margin:0;break-inside:avoid;text-align:center}img{display:block;max-width:100%;${singlePhoto ? "max-height:calc(100vh - 36mm);margin:auto;object-fit:contain" : "width:100%;height:110mm;object-fit:contain"}}figcaption{padding-top:6px;font-size:10px;color:#555}@media print{h1{display:${singlePhoto ? "none" : "block"}}}
-    </style></head><body><h1>${escapePrintHtml(shareTarget.title)}</h1><main class="photos">${photos}</main><script>window.addEventListener('load',function(){setTimeout(function(){window.print()},250)})<\/script></body></html>`);
-    printWindow.document.close();
-    setShareTarget(null);
   };
   const togglePrivatePhoto = async (photo: PublicImage) => {
     if (!isPersistedImageId(photo._id) || privateImageBusy) return;
@@ -908,13 +876,13 @@ export function PublicGallery({
     shareItem(
       { title, text: `View ${title}`, url: currentPublicUrl() },
       "Collection shared",
-      galleryImages,
+      "gallery",
     );
   const sharePhoto = (photo: PublicImage) =>
     shareItem(
       { title: photo.originalName || title, text: title, url: currentPublicUrl(photo._id) },
       "Photo shared",
-      [photo],
+      "photo",
     );
   const startSlideshow = () => {
     if (!visibleImages.length) return;
@@ -1520,7 +1488,7 @@ export function PublicGallery({
               </div>
               <div className="flex min-w-0 flex-col gap-1">
                 <DialogTitle>
-                  {shareTarget?.printImages.length === 1 ? "Share photo" : "Share gallery"}
+                  {shareTarget?.kind === "photo" ? "Share photo" : "Share gallery"}
                 </DialogTitle>
                 <DialogDescription>
                   Copy link or send it from your device.
@@ -1555,11 +1523,7 @@ export function PublicGallery({
             </InputGroup>
           </div>
 
-          <DialogFooter className="m-0 grid grid-cols-2 gap-3 rounded-none p-4 sm:grid sm:grid-cols-2 sm:justify-stretch">
-            <Button className="h-11 w-full" variant="outline" onClick={printSharedItem} type="button">
-              <Printer data-icon="inline-start" />
-              {shareTarget?.printImages.length === 1 ? "Print photo" : "Print gallery"}
-            </Button>
+          <DialogFooter className="m-0 rounded-none p-4 sm:justify-stretch">
             <Button className="h-11 w-full" onClick={() => void shareWithDevice()} type="button">
               <Share2 data-icon="inline-start" />
               Share
@@ -1750,13 +1714,7 @@ function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
 }
 
-function escapePrintHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
+
 
 function displayFilename(image: PublicImage) {
   return image.originalName || image.metadata?.filename || "";

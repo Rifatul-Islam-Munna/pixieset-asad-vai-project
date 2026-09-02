@@ -207,60 +207,27 @@ export class StorePricingService {
   }
 
   private async pricePrintRequest(resolved: ResolvedCollectionStore, rawItems: any[], body: any) {
-    if (rawItems.length !== 1) {
-      throw new BadRequestException('Choose one photo per print request');
-    }
-    const raw = rawItems[0] ?? {};
-    const imageId = String(raw.imageId ?? '');
-    if (!Types.ObjectId.isValid(imageId)) {
-      throw new BadRequestException('Choose a valid collection photo');
-    }
-    const image: any = await this.imageModel.findOne({
-      _id: new Types.ObjectId(imageId),
-      collectionId: resolved.collection._id.toString(),
-    }).lean();
+    const imageIds = rawItems.map((raw: any) => String(raw?.imageId ?? ''));
+    if (imageIds.some((id) => !Types.ObjectId.isValid(id))) throw new BadRequestException('Choose a valid collection photo');
+    const uniqueImageIds = Array.from(new Set(imageIds));
+    if (uniqueImageIds.length !== 1) throw new BadRequestException('Choose one photo per print request');
+    const image: any = await this.imageModel.findOne({ _id: new Types.ObjectId(uniqueImageIds[0]), collectionId: resolved.collection._id.toString() }).lean();
     if (!image) throw new BadRequestException('The selected photo is unavailable');
-    if (image.mediaType === 'video' || String(image.mimetype || '').startsWith('video/')) {
-      throw new BadRequestException('Print requests require a photo');
-    }
-    const size = String(raw.size ?? '').trim();
-    const paper = String(raw.paper ?? '').trim();
-    const quantity = Math.min(100, Math.max(1, Math.floor(Number(raw.quantity ?? 1) || 1)));
-    if (!resolved.config.freePrintSizes.includes(size)) throw new BadRequestException('Choose a valid print size');
-    if (!resolved.config.freePrintPapers.includes(paper)) throw new BadRequestException('Choose a valid paper type');
-    const item = {
-      collectionId: resolved.collection._id.toString(),
-      imageId: image._id.toString(),
-      imageUrl: image.url || raw.imageUrl || '',
-      name: image.originalName ? `Print request: ${image.originalName}` : 'Print request',
-      type: 'self-fulfilled',
-      variantLabel: `${size} - ${paper}`,
-      options: { Size: size, Paper: paper },
-      quantity,
-      unitPrice: 0,
-      extraShipping: 0,
-      total: 0,
-      fulfillmentStatus: 'pending' as const,
-    };
-    return {
-      resolved,
-      items: [item],
-      customer: this.customer(body.customer),
-      professionalInfo: undefined,
-      subtotal: 0,
-      shipping: 0,
-      tax: 0,
-      discount: 0,
-      total: 0,
-      minimumOrderAmount: 0,
-      currency: resolved.config.currency,
-      shippingMethod: null,
-      coupon: null,
-      hasPhysicalItems: false,
-      requiresShipping: false,
-    };
+    if (image.mediaType === 'video' || String(image.mimetype || '').startsWith('video/')) throw new BadRequestException('Print requests require a photo');
+    const seen = new Set<string>();
+    const items = rawItems.map((raw: any) => {
+      const size = String(raw.size ?? '').trim();
+      const paper = String(raw.paper ?? '').trim();
+      const quantity = Math.min(100, Math.max(1, Math.floor(Number(raw.quantity ?? 1) || 1)));
+      if (!resolved.config.freePrintSizes.includes(size)) throw new BadRequestException('Choose a valid print size');
+      if (!resolved.config.freePrintPapers.includes(paper)) throw new BadRequestException('Choose a valid paper type');
+      const key = `${size}:${paper}`;
+      if (seen.has(key)) throw new BadRequestException('Choose each print size once');
+      seen.add(key);
+      return { collectionId: resolved.collection._id.toString(), imageId: image._id.toString(), imageUrl: image.url || raw.imageUrl || '', name: image.originalName ? `Print request: ${image.originalName}` : 'Print request', type: 'self-fulfilled', variantLabel: `${size} - ${paper}`, options: { Size: size, Paper: paper }, quantity, unitPrice: 0, extraShipping: 0, total: 0, fulfillmentStatus: 'pending' as const };
+    });
+    return { resolved, items, customer: this.customer(body.customer), professionalInfo: undefined, subtotal: 0, shipping: 0, tax: 0, discount: 0, total: 0, minimumOrderAmount: 0, currency: resolved.config.currency, shippingMethod: null, coupon: null, hasPhysicalItems: false, requiresShipping: false };
   }
-
   customer(input: any): StoreCustomerInput {
     const value = input ?? {};
     return {

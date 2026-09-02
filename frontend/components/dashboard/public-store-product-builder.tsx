@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Check, ChevronDown, ImageIcon, Minus, Plus, RotateCcw, RotateCw, X } from "lucide-react";
@@ -42,6 +42,7 @@ export function PublicStoreProductBuilder({
   const [step, setStep] = useState<BuilderStep>("product");
   const [variantId, setVariantId] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [variantQuantities, setVariantQuantities] = useState<Record<string, number>>({});
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [activeCropImageId, setActiveCropImageId] = useState("");
   const [crop, setCrop] = useState<StoreCrop>(defaultCrop("4:3"));
@@ -54,6 +55,7 @@ export function PublicStoreProductBuilder({
     setStep("product");
     setVariantId(initialVariant?.id ?? "");
     setQuantity(1);
+    setVariantQuantities(initialVariant ? { [initialVariant.id]: 1 } : {});
     setSelectedImageIds(initialImageId ? [initialImageId] : []);
     setActiveCropImageId(initialImageId ?? "");
     setCrop(defaultCrop(aspectLabel(initialVariant?.label)));
@@ -62,7 +64,9 @@ export function PublicStoreProductBuilder({
 
   if (!open || !product) return null;
 
-  const selectedVariant = variants.find((variant) => variant.id === variantId) ?? variants[0];
+  const multiVariantMode = variants.length > 1 && !product.limitOnePerCheckout && product.type !== "digital-download";
+  const selectedVariants = multiVariantMode ? variants.filter((variant) => (variantQuantities[variant.id] ?? 0) > 0) : [];
+  const selectedVariant = multiVariantMode ? (selectedVariants[0] ?? variants[0]) : (variants.find((variant) => variant.id === variantId) ?? variants[0]);
   const requiresPhoto = product.requiresPhoto !== false && !product.noImageRequired;
   const canBulkSelect = Boolean(allowBulkBuy && product.allowBulkPurchase);
   const selectedImages = selectedImageIds
@@ -88,6 +92,10 @@ export function PublicStoreProductBuilder({
   };
 
   const startAdd = () => {
+    if (multiVariantMode && !selectedVariants.length) {
+      toast.error("Choose at least one size");
+      return;
+    }
     if (variants.length && !selectedVariant) {
       toast.error("Choose a product size or variation");
       return;
@@ -129,20 +137,25 @@ export function PublicStoreProductBuilder({
 
   const completeAdd = (chosen: PublicStoreImage[], customCrop?: StoreCrop, customCropsByImageId?: Record<string, StoreCrop>) => {
     const targets = requiresPhoto ? chosen : [undefined];
-    const items = targets.map((image) => ({
-      id: createCartItemId(product, selectedVariant, image),
-      product,
-      variant: selectedVariant,
-      image,
-      crop: image && product.allowCrop !== false
-        ? customCropsByImageId?.[image._id] ?? customCrop ?? defaultCrop(aspectLabel(selectedVariant?.label))
-        : undefined,
-      quantity: product.limitOnePerCheckout ? 1 : Math.max(1, quantity),
+    const selections = multiVariantMode
+      ? selectedVariants.map((variant) => ({ variant, quantity: variantQuantities[variant.id] ?? 1 }))
+      : [{ variant: selectedVariant, quantity: product.limitOnePerCheckout ? 1 : Math.max(1, quantity) }];
+    const items = targets.flatMap((image) => selections.map((selection) => {
+      const baseCrop = image && product.allowCrop !== false
+        ? customCropsByImageId?.[image._id] ?? customCrop ?? defaultCrop(aspectLabel(selection.variant?.label))
+        : undefined;
+      return {
+        id: createCartItemId(product, selection.variant, image),
+        product,
+        variant: selection.variant,
+        image,
+        crop: baseCrop ? { ...baseCrop, aspectRatio: aspectLabel(selection.variant?.label) } : undefined,
+        quantity: Math.max(1, selection.quantity),
+      };
     }));
     onAdd(items);
     onClose();
-  };
-  const saveActiveCrop = () => {
+  };  const saveActiveCrop = () => {
     if (!activeCropImage) return cropsByImageId;
     const next = { ...cropsByImageId, [activeCropImage._id]: crop };
     setCropsByImageId(next);
@@ -199,31 +212,37 @@ export function PublicStoreProductBuilder({
               {variants.length > 0 && (
                 <div className="mt-8">
                   <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#777]">Size / option</p>
+                  {multiVariantMode && <p className="mb-3 text-xs leading-5 text-[#777]">Select as many sizes as you need. Each selected size has its own quantity.</p>}
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {variants.map((variant) => (
-                      <button
-                        key={variant.id}
-                        type="button"
-                        onClick={() => {
-                          setVariantId(variant.id);
-                          setCrop(defaultCrop(aspectLabel(variant.label)));
-                        }}
-                        className={cn(
-                          "flex min-h-12 items-center justify-between border px-4 py-3 text-left text-sm transition",
-                          selectedVariant?.id === variant.id
-                            ? "border-[#6337d8] bg-[#f3efff] text-[#4f2bb7] ring-1 ring-[#6337d8]/15"
-                            : "border-[#ded8eb] hover:border-[#8a64e8]",
-                        )}
-                      >
-                        <span>{variant.label}</span>
-                        <span className="ml-3 whitespace-nowrap text-[#666]">{formatMoney(variant.price, currency)}</span>
-                      </button>
-                    ))}
+                    {variants.map((variant) => {
+                      const variantQuantity = variantQuantities[variant.id] ?? 0;
+                      const selected = multiVariantMode ? variantQuantity > 0 : selectedVariant?.id === variant.id;
+                      return <div key={variant.id} className={cn("border px-3 py-3 transition", selected ? "border-[#6337d8] bg-[#f3efff] text-[#4f2bb7] ring-1 ring-[#6337d8]/15" : "border-[#ded8eb]")}>
+                        <button type="button" onClick={() => {
+                          if (multiVariantMode) {
+                            setVariantQuantities((current) => {
+                              const next = { ...current };
+                              if ((next[variant.id] ?? 0) > 0) delete next[variant.id]; else next[variant.id] = 1;
+                              return next;
+                            });
+                          } else {
+                            setVariantId(variant.id);
+                            setCrop(defaultCrop(aspectLabel(variant.label)));
+                          }
+                        }} className="flex w-full items-center justify-between gap-3 text-left text-sm">
+                          <span>{variant.label}</span><span className="whitespace-nowrap text-[#666]">{formatMoney(variant.price, currency)}</span>
+                        </button>
+                        {multiVariantMode && selected && <div className="mt-3 flex h-10 items-center border border-[#cfc5e8] bg-white text-[#333]">
+                          <button type="button" className="flex size-10 items-center justify-center border-r" onClick={() => setVariantQuantities((current) => ({ ...current, [variant.id]: Math.max(1, variantQuantity - 1) }))}><Minus className="size-3.5" /></button>
+                          <input type="number" min={1} max={99} value={variantQuantity} onChange={(event) => setVariantQuantities((current) => ({ ...current, [variant.id]: Math.min(99, Math.max(1, Math.floor(Number(event.target.value) || 1))) }))} className="h-full min-w-0 flex-1 text-center text-sm outline-none" aria-label={`${variant.label} quantity`} />
+                          <button type="button" className="flex size-10 items-center justify-center border-l" onClick={() => setVariantQuantities((current) => ({ ...current, [variant.id]: Math.min(99, variantQuantity + 1) }))}><Plus className="size-3.5" /></button>
+                        </div>}
+                      </div>;
+                    })}
                   </div>
                 </div>
               )}
-
-              {!product.limitOnePerCheckout && (
+              {!product.limitOnePerCheckout && !multiVariantMode && (
                 <div className="mt-8">
                   <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#777]">Quantity</p>
                   <div className="inline-flex h-12 items-center rounded-[7px] border border-[#ded8eb] bg-white">
