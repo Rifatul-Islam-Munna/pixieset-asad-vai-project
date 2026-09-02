@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { ChevronRight, ShoppingBag, Store, X } from "lucide-react";
 import { toast } from "sonner";
@@ -55,6 +56,7 @@ export function PublicGalleryStoreBridge({
     settings?: { store?: GalleryStoreSettings };
   } | null;
 }) {
+  const pathname = usePathname();
   const storeSettings = collection?.settings?.store ?? {};
   const paidStoreEnabled = Boolean(storeSettings.enabled || storeSettings.storeStatus);
   const printRequestsEnabled = Boolean(storeSettings.printRequestsEnabled);
@@ -81,7 +83,9 @@ export function PublicGalleryStoreBridge({
   const selectedImage = images.find((image) => image._id === activeImageId);
   const cartKey = storeCartKey(collection?._id ?? galary);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const checkoutHref = `/${encodeURIComponent(galary)}/checkout`;
+  const checkoutHref = pathname.startsWith("/collection/")
+    ? `/collection/${encodeURIComponent(name)}/${encodeURIComponent(galary)}/checkout`
+    : `/${encodeURIComponent(galary)}/checkout`;
 
   useEffect(() => {
     try {
