@@ -362,3 +362,18 @@ body {
 .home-logo-reveal { opacity: 0; transform: translateY(18px) scale(.94); transform-origin: center; }
 .home-logo-reveal[data-home-visible="true"] { opacity: 1; transform: translateY(0) scale(1); }
 @media (prefers-reduced-motion: reduce) { .home-logo-reveal { opacity: 1 !important; transform: none !important; } }
+
+
+/* Public gallery mobile responsive tuning. Text scales from the actual cover container. */
+.cover-preview-container, .cover-preview-root { container-type: inline-size; }
+.public-gallery-scroll-row { scrollbar-width: none; -ms-overflow-style: none; }
+.public-gallery-scroll-row::-webkit-scrollbar { display: none; }
+@container (max-width: 560px) {
+  .cover-preview-root h3 { line-height: 1; }
+  .cover-preview-root p, .cover-preview-root span { line-height: 1.15; }
+  .cover-preview-root .break-words { overflow-wrap: anywhere; }
+  .cover-preview-root .uppercase { max-width: 92cqw; letter-spacing: 0.11em; }
+}
+@media (max-width: 640px) {
+  .public-gallery-page .sticky { align-items: stretch; }
+}

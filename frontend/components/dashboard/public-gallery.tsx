@@ -174,6 +174,13 @@ const defaultDownload: PresetDownloadSettings = {
   limitPinUsage: "",
 };
 
+function responsiveGalleryFont(value: number | undefined, fallback: number, minimum: number, mobileCap: number) {
+  const requested = Math.max(1, Number(value) || fallback);
+  const minPx = Math.min(requested, minimum);
+  const fluidTarget = Math.min(requested, mobileCap);
+  return `clamp(${minPx}px, ${(fluidTarget / 7.68).toFixed(3)}vw, ${requested}px)`;
+}
+
 export function PublicGallery({
   name,
   galary,
@@ -1116,9 +1123,9 @@ export function PublicGallery({
         </section>
       </main>
       ) : (
-    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="min-h-screen overflow-x-hidden scroll-smooth" lang={galleryLanguageCode(generalSettings.language)} dir={galleryLanguageCode(generalSettings.language) === "ar" ? "rtl" : "ltr"}>
+    <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="public-gallery-page min-h-screen overflow-x-hidden scroll-smooth" lang={galleryLanguageCode(generalSettings.language)} dir={galleryLanguageCode(generalSettings.language) === "ar" ? "rtl" : "ltr"}>
       <section className="w-full p-0">
-        <div className="aspect-video w-full overflow-hidden">
+        <div className="cover-preview-container aspect-video w-full overflow-hidden">
           <CoverPreview
             design={{
               ...design,
@@ -1134,12 +1141,12 @@ export function PublicGallery({
       </section>
 
       <section className="px-0 py-0">
-        <div className="sticky top-0 z-20 grid min-h-[76px] grid-cols-1 items-center gap-3 border-y border-black/10 bg-white/95 px-4 py-3 text-[#202326] shadow-[0_10px_28px_rgba(0,0,0,0.08)] backdrop-blur md:grid-cols-[minmax(180px,0.75fr)_minmax(0,1.6fr)_auto] md:px-8">
+        <div className="sticky top-0 z-20 grid min-h-[76px] grid-cols-1 items-center gap-2 border-y border-black/10 bg-white/95 px-3 py-3 text-[#202326] shadow-[0_10px_28px_rgba(0,0,0,0.08)] backdrop-blur sm:gap-3 sm:px-4 md:grid-cols-[minmax(180px,0.75fr)_minmax(0,1.6fr)_auto] md:px-8">
           <div className="min-w-0">
-            <h1 className="truncate font-bold uppercase tracking-[0.12em]" style={{ fontSize: `${design.galleryTitleFontSizePx ?? 16}px`, color: design.galleryTitleColor || undefined }}>{title}</h1>
-            <p className="mt-1 truncate text-[11px] uppercase tracking-[0.22em] text-black/45">{studioName}</p>
+            <h1 className="break-words font-bold uppercase leading-tight tracking-[0.1em]" style={{ fontSize: responsiveGalleryFont(design.galleryTitleFontSizePx, 16, 16, 36), color: design.galleryTitleColor || undefined }}>{title}</h1>
+            <p className="mt-1 break-words text-[10px] uppercase leading-tight tracking-[0.18em] text-black/45 sm:text-[11px] sm:tracking-[0.22em]">{studioName}</p>
           </div>
-          <div className="-mx-1 flex min-w-0 gap-5 overflow-x-auto px-1 font-semibold uppercase tracking-[0.12em] md:justify-center" style={{ fontSize: `${design.galleryNavigationFontSizePx ?? 12}px`, color: design.galleryNavigationColor || undefined }}>
+          <div className="public-gallery-scroll-row -mx-1 flex min-w-0 gap-4 overflow-x-auto px-1 pb-1 font-semibold uppercase tracking-[0.1em] sm:gap-5 sm:tracking-[0.12em] md:justify-center" style={{ fontSize: responsiveGalleryFont(design.galleryNavigationFontSizePx, 12, 12, 24), color: design.galleryNavigationColor || undefined }}>
             {showSetTabs && gallerySets.map((set) => (
               <button
                 key={set.id}
@@ -1154,7 +1161,7 @@ export function PublicGallery({
               </button>
             ))}
           </div>
-          <div className="flex min-w-0 items-center justify-end gap-2">
+          <div className="public-gallery-actions -mx-1 flex min-w-0 flex-wrap items-center justify-start gap-1 px-1 pb-1 sm:gap-2 md:mx-0 md:flex-nowrap md:justify-end md:px-0 md:pb-0">
             {storeStatus && <span data-print-store-nav-host="true" />}
             <span data-public-store-cart-host="true" />
             <button className={cn("inline-flex h-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-[#6337d8]", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Starred" aria-label="My Starred">
