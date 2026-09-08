@@ -105,7 +105,7 @@ export class BookingsService {
       bookingEventId: '',
     });
     const identifier = owner.username || owner._id.toString();
-    const url = this.shareLinkUrl(identifier, token);
+    const url = this.shareLinkUrl(identifier, token, body.frontendOrigin);
     let emailSent = false;
     if (this.bool(body.sendEmail) && recipientEmail) {
       const business = owner.businessName || owner.name || 'Studio';
@@ -427,13 +427,32 @@ export class BookingsService {
     return link;
   }
 
-  private shareLinkUrl(identifier: string, token: string) {
-    const base = String(
+  private shareLinkUrl(identifier: string, token: string, requestedOrigin?: unknown) {
+    const configuredBase = String(
       this.configService.get<string>('FRONTEND_URL') ||
       this.configService.get<string>('PUBLIC_APP_URL') ||
       'http://localhost:3000',
     ).replace(/\/$/, '');
+    const base = this.safeFrontendOrigin(requestedOrigin, configuredBase) || configuredBase;
     return `${base}/book/${encodeURIComponent(identifier)}?invite=${encodeURIComponent(token)}`;
+  }
+
+  private safeFrontendOrigin(value: unknown, configuredBase: string) {
+    try {
+      const candidate = new URL(String(value || ''));
+      if (!['http:', 'https:'].includes(candidate.protocol)) return '';
+      const host = candidate.hostname.toLowerCase();
+      if (candidate.protocol === 'http:' && host !== 'localhost' && host !== '127.0.0.1') return '';
+      const allowedHosts = [
+        'gallerista.app',
+        new URL(configuredBase).hostname.toLowerCase(),
+        String(this.configService.get<string>('ROOT_DOMAIN') || '').replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase(),
+      ].filter(Boolean);
+      if (!allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) return '';
+      return candidate.origin;
+    } catch {
+      return '';
+    }
   }
 
   private servicePayload(body: Record<string, unknown>, partial = false) {

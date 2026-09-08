@@ -65,7 +65,7 @@ export function useBookingManager() {
     queryFn: () => GetRequestNormal<ApiResponse<BookingOverview>>("/bookings/overview"),
   });
   const updateSettings = useMutation({ mutationFn: (payload: Partial<BookingSettings>) => patch<BookingSettings>("/bookings/settings", payload), onSuccess: invalidate });
-  const createShareLink = useMutation({ mutationFn: (payload: { recipientName?: string; recipientEmail?: string; serviceId?: string; expiresAt?: string; sendEmail?: boolean }) => post<BookingShareLinkRecord>("/bookings/share-links", payload), onSuccess: invalidate });
+  const createShareLink = useMutation({ mutationFn: (payload: { recipientName?: string; recipientEmail?: string; serviceId?: string; expiresAt?: string; sendEmail?: boolean; frontendOrigin?: string }) => post<BookingShareLinkRecord>("/bookings/share-links", payload), onSuccess: invalidate });
   const deleteShareLink = useMutation({ mutationFn: (id: string) => remove(`/bookings/share-links/${encodeURIComponent(id)}`), onSuccess: invalidate });
   const createService = useMutation({ mutationFn: (payload: Partial<BookingTypeRecord>) => post<BookingTypeRecord>("/bookings/services", payload), onSuccess: invalidate });
   const updateService = useMutation({ mutationFn: ({ id, payload }: { id: string; payload: Partial<BookingTypeRecord> }) => patch<BookingTypeRecord>(`/bookings/services/${encodeURIComponent(id)}`, payload), onSuccess: invalidate });

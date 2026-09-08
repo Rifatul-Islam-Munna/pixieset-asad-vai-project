@@ -308,7 +308,10 @@ function BookingsTab({ events, coworkers, manager, openEditEvent }: { events: Bo
 function BookingShareLinksTab({ links, services, manager }: { links: BookingShareLinkRecord[]; services: BookingTypeRecord[]; manager: ReturnType<typeof useBookingManager> }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(() => newShareLinkDraft());
+  const [frontendOrigin, setFrontendOrigin] = useState("");
   const activeServices = services.filter((item) => item.active);
+
+  useEffect(() => setFrontendOrigin(window.location.origin), []);
 
   const showCreate = () => {
     setDraft(newShareLinkDraft());
@@ -338,8 +341,9 @@ function BookingShareLinksTab({ links, services, manager }: { links: BookingShar
         serviceId: draft.serviceId || undefined,
         expiresAt: expiresAt.toISOString(),
         sendEmail: draft.sendEmail,
+        frontendOrigin: window.location.origin,
       });
-      await navigator.clipboard.writeText(result.url).catch(() => undefined);
+      await navigator.clipboard.writeText(bookingLinkAtOrigin(result.url, window.location.origin)).catch(() => undefined);
       setOpen(false);
       if (draft.sendEmail && result.emailSent) toast.success("Private booking link emailed and copied");
       else if (draft.sendEmail) toast.warning("Link created and copied, but the email could not be sent");
@@ -365,6 +369,7 @@ function BookingShareLinksTab({ links, services, manager }: { links: BookingShar
       <div className="divide-y">
         {links.map((item) => {
           const status = shareLinkStatus(item);
+          const url = bookingLinkAtOrigin(item.url, frontendOrigin);
           return (
             <div key={item._id} className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(180px,.8fr)_170px_auto] lg:items-center">
               <div className="min-w-0">
@@ -373,7 +378,7 @@ function BookingShareLinksTab({ links, services, manager }: { links: BookingShar
                   <ShareLinkStatusBadge status={status} />
                 </div>
                 <p className="mt-1 truncate text-xs text-[#777]">{item.recipientEmail || "No email lock - anyone with this private link can use it once"}</p>
-                <button type="button" onClick={() => void copy(item.url)} className="mt-2 block max-w-full truncate text-left text-xs font-medium text-[#6337d8] hover:underline">{item.url}</button>
+                <button type="button" onClick={() => void copy(url)} className="mt-2 block max-w-full truncate text-left text-xs font-medium text-[#6337d8] hover:underline">{url}</button>
               </div>
               <div className="text-sm">
                 <p className="font-medium text-[#333]">{item.serviceName || "Any active booking type"}</p>
@@ -384,8 +389,8 @@ function BookingShareLinksTab({ links, services, manager }: { links: BookingShar
                 <p className="mt-1 text-xs text-[#888]">{formatShortDate(item.expiresAt)}</p>
               </div>
               <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-                <Button size="sm" variant="outline" onClick={() => void copy(item.url)} disabled={status !== "active"}><Copy className="size-4" /> Copy</Button>
-                <Button size="icon" variant="outline" asChild={status === "active"} disabled={status !== "active"}>{status === "active" ? <a href={item.url} target="_blank" rel="noreferrer" aria-label="Open booking link"><ExternalLink className="size-4" /></a> : <ExternalLink className="size-4" />}</Button>
+                <Button size="sm" variant="outline" onClick={() => void copy(url)} disabled={status !== "active"}><Copy className="size-4" /> Copy</Button>
+                <Button size="icon" variant="outline" asChild={status === "active"} disabled={status !== "active"}>{status === "active" ? <a href={url} target="_blank" rel="noreferrer" aria-label="Open booking link"><ExternalLink className="size-4" /></a> : <ExternalLink className="size-4" />}</Button>
                 <Button size="icon" variant="ghost" onClick={() => void remove(item)} disabled={manager.deleteShareLink.isPending} aria-label="Delete booking link"><Trash2 className="size-4 text-red-500" /></Button>
               </div>
             </div>
@@ -510,7 +515,7 @@ function EventDialog({ open, setOpen, editing, draft, setDraft, coworkers, busy,
 
 function ServiceDialog({ open, setOpen, editing, draft, setDraft, coworkers, busy, onSave }: { open: boolean; setOpen: (open: boolean) => void; editing: BookingTypeRecord | null; draft: ServiceDraft; setDraft: (value: ServiceDraft) => void; coworkers: BookingCoworkerRecord[]; busy: boolean; onSave: () => void }) {
   const toggle = (id: string) => setDraft({ ...draft, coworkerIds: draft.coworkerIds.includes(id) ? draft.coworkerIds.filter((value) => value !== id) : [...draft.coworkerIds, id] });
-  return <Dialog open={open} onOpenChange={setOpen}><DialogContent className="sm:max-w-[680px]"><DialogHeader><DialogTitle>{editing ? "Edit booking type" : "New booking type"}</DialogTitle><DialogDescription>Define what clients can book and who can be assigned.</DialogDescription></DialogHeader><div className="grid gap-4"><label className="grid gap-2 text-sm font-semibold">Name<Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Portrait session" /></label><label className="grid gap-2 text-sm font-semibold">Description<Textarea rows={3} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label><div className="grid gap-4 sm:grid-cols-3"><label className="grid gap-2 text-sm font-semibold">Duration<Input type="number" min={15} value={draft.durationMinutes} onChange={(e) => setDraft({ ...draft, durationMinutes: Number(e.target.value) })} /></label><label className="grid gap-2 text-sm font-semibold">Price<Input type="number" min={0} step="0.01" value={draft.price} onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })} /></label><label className="grid gap-2 text-sm font-semibold">Currency<Input value={draft.currency} maxLength={6} onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })} /></label></div><label className="grid gap-2 text-sm font-semibold">Location<Input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder="Studio address, Online, Client location" /></label>{coworkers.length > 0 && <div><p className="mb-2 text-sm font-semibold">Available co-workers</p><div className="flex flex-wrap gap-2">{coworkers.filter((person) => person.active).map((person) => <button key={person._id} type="button" onClick={() => toggle(person._id)} className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold", draft.coworkerIds.includes(person._id) ? "border-[#6337d8] bg-[#efe9ff] text-[#6337d8]" : "bg-white text-[#666]")}>{person.name}</button>)}</div><p className="mt-2 text-xs text-[#888]">Leave everyone unselected to allow any active co-worker.</p></div>}<div className="flex items-center justify-between rounded-lg bg-[#fafafa] p-4"><div><p className="text-sm font-semibold">Available for online booking</p><p className="mt-1 text-xs text-[#777]">Hidden booking types stay in your history but clients cannot select them.</p></div><Switch checked={draft.active} onCheckedChange={(active) => setDraft({ ...draft, active })} /></div></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={onSave} disabled={busy} className="bg-[#6337d8] text-white">{busy && <Loader2 className="size-4 animate-spin" />} Save</Button></DialogFooter></DialogContent></Dialog>;
+  return <Dialog open={open} onOpenChange={setOpen}><DialogContent className="sm:max-w-[680px]"><DialogHeader><DialogTitle>{editing ? "Edit booking type" : "New booking type"}</DialogTitle><DialogDescription>Define what clients can book and who can be assigned.</DialogDescription></DialogHeader><div className="grid gap-4"><label className="grid gap-2 text-sm font-semibold">Name<Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Portrait session" /></label><label className="grid gap-2 text-sm font-semibold">Description<Textarea rows={3} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label><div className="grid gap-4 sm:grid-cols-3"><label className="grid gap-2 text-sm font-semibold">Duration <span className="relative"><Input className="pr-12" type="number" min={15} value={draft.durationMinutes} onChange={(e) => setDraft({ ...draft, durationMinutes: Number(e.target.value) })} /><span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-[#777]">min</span></span></label><label className="grid gap-2 text-sm font-semibold">Price<Input type="number" min={0} step="0.01" value={draft.price} onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })} /></label><label className="grid gap-2 text-sm font-semibold">Currency<Input value={draft.currency} maxLength={6} onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })} /></label></div><label className="grid gap-2 text-sm font-semibold">Location<Input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder="Studio address, Online, Client location" /></label>{coworkers.length > 0 && <div><p className="mb-2 text-sm font-semibold">Available co-workers</p><div className="flex flex-wrap gap-2">{coworkers.filter((person) => person.active).map((person) => <button key={person._id} type="button" onClick={() => toggle(person._id)} className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold", draft.coworkerIds.includes(person._id) ? "border-[#6337d8] bg-[#efe9ff] text-[#6337d8]" : "bg-white text-[#666]")}>{person.name}</button>)}</div><p className="mt-2 text-xs text-[#888]">Leave everyone unselected to allow any active co-worker.</p></div>}<div className="flex items-center justify-between rounded-lg bg-[#fafafa] p-4"><div><p className="text-sm font-semibold">Available for online booking</p><p className="mt-1 text-xs text-[#777]">Hidden booking types stay in your history but clients cannot select them.</p></div><Switch checked={draft.active} onCheckedChange={(active) => setDraft({ ...draft, active })} /></div></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={onSave} disabled={busy} className="bg-[#6337d8] text-white">{busy && <Loader2 className="size-4 animate-spin" />} Save</Button></DialogFooter></DialogContent></Dialog>;
 }
 
 function CoworkerDialog({ open, setOpen, editing, draft, setDraft, busy, onSave }: { open: boolean; setOpen: (open: boolean) => void; editing: BookingCoworkerRecord | null; draft: CoworkerDraft; setDraft: (value: CoworkerDraft) => void; busy: boolean; onSave: () => void }) {
@@ -546,6 +551,16 @@ function formatShortDate(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function bookingLinkAtOrigin(url: string, origin: string) {
+  if (!origin) return url;
+  try {
+    const parsed = new URL(url);
+    return `${origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return url;
+  }
 }
 
 function StatusBadge({ status }: { status: BookingEventRecord["status"] }) {
