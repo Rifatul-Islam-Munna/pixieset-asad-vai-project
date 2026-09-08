@@ -307,7 +307,7 @@ export class CollectionsService {
           o.paymentStatus === 'paid'
             ? 'Payment received'
             : 'New order received',
-        detail: `${o.orderNumber} Â· â‚¬${Number(o.total || 0).toFixed(2)}`,
+        detail: `${o.orderNumber} \u00B7 \u20AC${Number(o.total || 0).toFixed(2)}`,
         createdAt: o.createdAt,
       })),
       ...allDownloads.slice(0, 10).map((d: any) => ({
@@ -1649,7 +1649,7 @@ export class CollectionsService {
       .findOneAndUpdate(
         { _id: privatePhotoId, collectionId },
         { $set: { status } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .lean();
     if (!record) throw new NotFoundException('Private photo request not found');

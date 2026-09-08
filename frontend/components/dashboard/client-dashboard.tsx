@@ -1596,7 +1596,7 @@ function AccountPanel() {
                     : "text-red-600",
               )}
             >
-              {usernameState === "checking" ? "CheckingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" : usernameMessage}
+              {usernameState === "checking" ? "Checking..." : usernameMessage}
             </p>
           )}
           <FieldInput
@@ -1630,11 +1630,11 @@ function AccountPanel() {
                   <div>
                     <b>{purchase.planName}</b>
                     <p className="mt-1 text-xs capitalize text-[#888]">
-                      {purchase.source} Ãƒâ€šÃ‚Â· {purchase.status}
+                      {purchase.source} {" \u00B7 "} {purchase.status}
                     </p>
                   </div>
                   <div className="text-right">
-                    <b>ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬{Number(purchase.amount).toFixed(2)}</b>
+                    <b>{"\u20AC"}{Number(purchase.amount).toFixed(2)}</b>
                     <p className="mt-1 text-xs text-[#888]">
                       {new Date(purchase.createdAt).toLocaleDateString()}
                     </p>
@@ -2078,7 +2078,7 @@ function StoragePlanPanel() {
                 <div className="flex justify-between">
                   <span>Price</span>
                   <b>
-                    ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬{monthlyEquivalent.toFixed(2)}{" "}
+                    {"\u20AC"}{monthlyEquivalent.toFixed(2)}{" "}
                     {billingInterval === "year" ? "/yearly" : "/month"}
                   </b>
                 </div>
@@ -2087,7 +2087,7 @@ function StoragePlanPanel() {
                     <span>Billed</span>
                     <b>
                       {yearlyAvailable
-                        ? `ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬${Number(plan.priceYearly).toFixed(2)} yearly`
+                        ? `\u20AC${Number(plan.priceYearly).toFixed(2)} yearly`
                         : "Unavailable"}
                     </b>
                   </div>
@@ -2741,8 +2741,8 @@ function MarketingSettingsPanel({
                       Email registration subscription
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[#5d6b68]">
-                      Show an optional ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œSubscribe to updates and special
-                      offersÃƒÂ¢Ã¢â€šÂ¬Ã‚Â checkbox inside the collection email-registration
+                      Show an optional "Subscribe to updates and special
+                      offers" checkbox inside the collection email-registration
                       modal.
                     </p>
                   </div>
@@ -2759,7 +2759,7 @@ function MarketingSettingsPanel({
               This appears only when both <strong>Email Registration</strong>{" "}
               and
               <strong> Marketing Subscription</strong> are enabled in that
-              collectionÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢s Privacy settings.
+              collection's Privacy settings.
             </div>
           </section>
 
@@ -3090,7 +3090,7 @@ function CampaignTable({
         <div key={campaign._id} className="grid gap-3 border-b py-5 text-left text-sm md:grid-cols-[2fr_130px_1.7fr_1fr_1.5fr_60px] md:items-center md:gap-0">
           <span className="min-w-0">
             <span className="block truncate font-bold">{campaign.name}</span>
-            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.kind === "schedule" && campaign.recipientCategory ? ` Ãƒâ€šÃ‚Â· ${campaign.recipientCategory}` : ""}</span>
+            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.kind === "schedule" && campaign.recipientCategory ? ` \u00B7 ${campaign.recipientCategory}` : ""}</span>
             {campaign.kind === "schedule" && campaign.lastError && <span className="mt-1 block line-clamp-1 text-xs font-semibold text-red-600" title={campaign.lastError}>{campaign.lastError}</span>}
           </span>
           <span><span className={cn("rounded-full px-4 py-2 text-[10px] font-bold uppercase", campaign.status === "sent" ? "bg-emerald-50 text-emerald-700" : campaign.status === "failed" ? "bg-red-50 text-red-700" : campaign.status === "cancelled" ? "bg-[#f1f1f1] text-[#777]" : campaign.status === "sending" ? "bg-amber-50 text-amber-700" : campaign.status === "draft" ? "bg-[#f4f4f4] text-[#555]" : "bg-[#f1ecff] text-[#6337d8]")}>{campaign.status}</span></span>
@@ -3113,7 +3113,7 @@ function CampaignTable({
 function formatScheduleLocal(value: string, timeZone: string) {
   if (!value) return "-";
   const [date, time] = value.split("T");
-  return `${date} ${time || ""} Ãƒâ€šÃ‚Â· ${timeZone}`;
+  return `${date} ${time || ""} \u00B7 ${timeZone}`;
 }
 
 function TemplateGrid({
@@ -3214,6 +3214,13 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
   const [sendError, setSendError] = useState("");
   const [recipientSearch, setRecipientSearch] = useState("");
   const [recipientCategory, setRecipientCategory] = useState("all");
+  const [campaignCollectionId, setCampaignCollectionId] = useState("");
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newContactCategory, setNewContactCategory] = useState("Manual Contacts");
+  const [addContactPending, setAddContactPending] = useState(false);
+  const { collectionsQuery } = useCollections();
+  const accountQuery = useAccount().query;
   const contactsQuery = useQuery({
     queryKey: ["marketing-contacts"],
     queryFn: () =>
@@ -3229,6 +3236,23 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
   const contacts = Array.isArray(contactsQuery.data?.data)
     ? contactsQuery.data.data
     : [];
+  const campaignCollections = Array.isArray(collectionsQuery.data?.data)
+    ? collectionsQuery.data.data
+    : [];
+  const campaignSiteSlug = accountQuery.data?.data?.username || "";
+  const campaignOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const selectCampaignCollection = (collectionId: string) => {
+    setCampaignCollectionId(collectionId);
+    const selected = campaignCollections.find((item) => item._id === collectionId);
+    if (!selected || !campaignSiteSlug) return;
+    setCampaignButtonLink(
+      publicCollectionUrl(
+        campaignSiteSlug,
+        selected.slug || selected._id,
+        campaignOrigin,
+      ),
+    );
+  };
   const recipientCategories = [
     ...new Set(
       contacts
@@ -3261,6 +3285,30 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
     }
     missing.forEach((email) => toggleRecipient(email));
   };
+  const addContactFromBuilder = async () => {
+    const email = newContactEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setAddContactPending(true);
+    try {
+      const [, error] = await PostRequestAxios("/collections/marketing-contacts", {
+        contacts: [{ email, category: newContactCategory.trim() || "Manual Contacts" }],
+      });
+      if (error) throw new Error(error.message);
+      await contactsQuery.refetch();
+      if (!selectedRecipients.includes(email)) toggleRecipient(email);
+      setNewContactEmail("");
+      setAddContactOpen(false);
+      toast.success("Contact added and selected");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add contact");
+    } finally {
+      setAddContactPending(false);
+    }
+  };
+
   const saveAsMyTemplate = async () => {
     addEmailTemplateDraft();
     const id = useDashboardStore.getState().activeEmailTemplateId;
@@ -3325,18 +3373,18 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f3f3]">
-      <header className="flex h-12 items-center justify-between border-b bg-white">
-        <div className="flex items-center gap-4 px-8">
+    <div className="flex min-h-screen min-w-0 flex-col bg-[#f3f3f3]">
+      <header className="flex min-h-12 flex-col gap-3 border-b bg-white px-4 py-3 sm:px-6 md:h-12 md:flex-row md:items-center md:justify-between md:gap-4 md:py-0">
+        <div className="flex min-w-0 items-center gap-3">
           <button onClick={onClose} aria-label="Back">
             <ArrowLeft className="size-5 text-[#777]" />
           </button>
-          <h1 className="text-lg font-bold">{campaignTemplate}</h1>
+          <h1 className="min-w-0 flex-1 truncate text-base font-bold sm:text-lg">{campaignTemplate}</h1>
           <span className="rounded-full bg-[#f3f3f3] px-5 py-2 text-xs font-bold text-[#777]">
             DRAFT
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap md:gap-3">
           <Button variant="outline" className="h-10 rounded-none px-4 text-sm font-bold" onClick={createNewTemplate}><PlusCircle className="size-4" /> New Template</Button>
           <Button variant="outline" className="h-10 rounded-none px-4 text-sm font-bold" disabled={saveSetting.isPending} onClick={() => void saveAsMyTemplate()}><Save className="size-4" /> {saveSetting.isPending ? "Saving..." : "Save as My Template"}</Button>
           <button className="px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40" disabled={!selectedEmails.length}>Send Test</button>
@@ -3359,7 +3407,7 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
         </p>
       )}
 
-      <div className="grid min-h-[calc(100vh-48px)] lg:grid-cols-[468px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[468px_minmax(0,1fr)]">
         <aside className="border-r bg-white">
           <Tabs
             value={campaignTab}
@@ -3385,7 +3433,7 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="email" className="p-8">
+            <TabsContent value="email" className="p-4 sm:p-6 md:p-8">
               <h2 className="text-lg font-bold">Design Email</h2>
               <FieldGroup className="mt-8 gap-8">
                 <Field>
@@ -3507,13 +3555,29 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
                   <FieldLabel className="font-bold uppercase text-[#777]">
                     Button Link
                   </FieldLabel>
+                  <select
+                    value={campaignCollectionId}
+                    onChange={(event) => selectCampaignCollection(event.target.value)}
+                    className="h-12 w-full rounded-none border bg-white px-3 text-sm outline-none focus:border-[#6337d8]"
+                    disabled={collectionsQuery.isLoading || accountQuery.isLoading}
+                  >
+                    <option value="">Choose one of your collections</option>
+                    {campaignCollections.map((item) => (
+                      <option key={item._id} value={item._id}>{item.name}</option>
+                    ))}
+                  </select>
                   <Input
                     className="h-12 rounded-none"
                     value={campaignButtonLink}
-                    onChange={(event) =>
-                      setCampaignButtonLink(event.target.value)
-                    }
+                    onChange={(event) => {
+                      setCampaignCollectionId("");
+                      setCampaignButtonLink(event.target.value);
+                    }}
+                    placeholder="Or paste a custom URL"
                   />
+                  <p className="text-xs leading-5 text-[#888]">
+                    Choosing a collection fills its public gallery URL automatically. You can still paste a custom link.
+                  </p>
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold uppercase text-[#777]">
@@ -3558,20 +3622,21 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
               </FieldGroup>
             </TabsContent>
 
-            <TabsContent value="recipients" className="p-8">
-              <div className="flex items-start justify-between gap-4">
+            <TabsContent value="recipients" className="p-4 sm:p-6 md:p-8">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-bold">Recipients</h2>
                   <p className="mt-1 text-sm text-[#777]">
                     {selectedEmails.length} selected
                   </p>
                 </div>
-                <Link
-                  href="/dashboard/client-gallery/marketing/contacts"
-                  className="text-sm font-bold text-[#6337d8]"
+                <button
+                  type="button"
+                  onClick={() => setAddContactOpen(true)}
+                  className="inline-flex min-h-10 items-center gap-2 text-sm font-bold text-[#6337d8]"
                 >
-                  Add contacts
-                </Link>
+                  <PlusCircle className="size-4" /> Add contacts
+                </button>
               </div>
               <div className="mt-6 grid gap-4">
                 <div className="flex h-12 items-center gap-3 border px-3">
@@ -3645,6 +3710,25 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
               </div>
             </TabsContent>
           </Tabs>
+          <Dialog open={addContactOpen} onOpenChange={setAddContactOpen}>
+            <DialogContent className="w-[calc(100%-2rem)] rounded-none sm:max-w-[460px]">
+              <DialogHeader>
+                <DialogTitle>Add contact</DialogTitle>
+                <DialogDescription>Add a recipient without leaving the email builder. The new contact will be selected automatically.</DialogDescription>
+              </DialogHeader>
+              <FieldGroup className="gap-5">
+                <Field><FieldLabel>Email</FieldLabel><Input type="email" value={newContactEmail} onChange={(event) => setNewContactEmail(event.target.value)} placeholder="client@example.com" className="h-11 rounded-none" /></Field>
+                <Field><FieldLabel>Category</FieldLabel><Input value={newContactCategory} onChange={(event) => setNewContactCategory(event.target.value)} placeholder="Wedding Leads" className="h-11 rounded-none" /></Field>
+              </FieldGroup>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" className="rounded-none" onClick={() => setAddContactOpen(false)}>Cancel</Button>
+                <Button type="button" className="rounded-none bg-[#6337d8] text-white hover:bg-[#542bc2]" disabled={addContactPending || !newContactEmail.trim()} onClick={() => void addContactFromBuilder()}>
+                  {addContactPending ? <Loader2 className="size-4 animate-spin" /> : <PlusCircle className="size-4" />}
+                  {addContactPending ? "Adding..." : "Add & select"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </aside>
 
         <div className="bg-[#f3f3f3] lg:sticky lg:top-0 lg:h-[calc(100vh-48px)] lg:overflow-auto">
@@ -5241,7 +5325,7 @@ function EmailTemplatesPanel({
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-bold">{template.name || "Untitled Template"}</span>
-                    <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-wider text-[#9a8f82]">{template.category || "Gallery Delivery"} Â· {template.galleryCategory === "Custom label" ? template.customGalleryCategoryLabel || "Custom label" : template.galleryCategory || "General"} Â· {template.language || "English"}</span>
+                    <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-wider text-[#9a8f82]">{template.category || "Gallery Delivery"} {" \u00B7 "} {template.galleryCategory === "Custom label" ? template.customGalleryCategoryLabel || "Custom label" : template.galleryCategory || "General"} {" \u00B7 "} {template.language || "English"}</span>
                   </span>
                   <span className="truncate pr-8 text-[#555]">
                     {template.subject || "-"}
@@ -6321,7 +6405,7 @@ function PresetDesignPanel({
   imagesHasMore?: boolean;
   imagesLoadingMore?: boolean;
   onCoverImageChange?: (image: CollectionImageRecord) => void;
-  onCoverUpload?: (file: File) => Promise<CollectionImageRecord | undefined>;
+  onCoverUpload?: (files: File[]) => Promise<CollectionImageRecord[]>;
   onLoadMoreImages?: () => void;
 }) {
   type UploadedFont = { name: string; url: string; fileName: string; category?: GalleryFontCategory };
@@ -6439,19 +6523,25 @@ function PresetDesignPanel({
                         <input
                           type="file"
                           accept="image/*,video/mp4,video/webm,video/quicktime"
+                          multiple
                           className="sr-only"
                           disabled={coverUploading}
                           onChange={async (event) => {
-                            const file = event.target.files?.[0];
+                            const files = Array.from(event.target.files ?? []);
                             event.target.value = "";
-                            if (!file) return;
+                            if (!files.length) return;
                             setCoverUploading(true);
                             try {
-                              const image = await onCoverUpload(file);
-                              if (!image) throw new Error("Cover upload failed");
-                              onCoverImageChange?.(image);
+                              const uploaded = await onCoverUpload(files);
+                              const first = uploaded[0];
+                              if (!first) throw new Error("Cover upload failed");
+                              onCoverImageChange?.(first);
                               setCoverPickerOpen(false);
-                              toast.success("Cover media uploaded");
+                              toast.success(
+                                uploaded.length === 1
+                                  ? "Cover media uploaded"
+                                  : `${uploaded.length} media files uploaded; the first one is now the cover`,
+                              );
                             } catch (error) {
                               toast.error(error instanceof Error ? error.message : "Cover upload failed");
                             } finally {
@@ -6756,7 +6846,7 @@ function PresetDesignPanel({
                     Aa {font.data.name}
                   </span>
                   <span className="mt-3 block text-xs text-[#555]">
-                    Saved font Â· {font.data.category ?? "English"}
+                    Saved font {" \u00B7 "} {font.data.category ?? "English"}
                   </span>
                 </span>
                 <span className="mt-3 block truncate text-sm">
@@ -6772,7 +6862,7 @@ function PresetDesignPanel({
                     <span className="block text-xl" dir={font.categories.includes("Arabic") && (fontCategory === "Arabic" || font.categories.length === 1) ? "rtl" : "ltr"} style={{ fontFamily: resolveGalleryFontFamily(font.name, "sans-serif") }}>
                       {galleryFontSample(fontCategory === "All" ? font.categories[0] : fontCategory as GalleryFontCategory)}
                     </span>
-                    <span className="mt-3 block text-xs text-[#555]">{font.categories.join(" Â· ")}</span>
+                    <span className="mt-3 block text-xs text-[#555]">{font.categories.join(" \u00B7 ")}</span>
                   </span>
                   <span className="mt-3 block text-sm">{font.name}</span>
                 </button>
@@ -7029,6 +7119,71 @@ function PresetDesignPanel({
   );
 }
 
+function CollectionPreviewParallaxImage({
+  src,
+  className,
+  enabled,
+  strength,
+  scrollRoot,
+}: {
+  src: string;
+  className?: string;
+  enabled: boolean;
+  strength: number;
+  scrollRoot: { current: HTMLElement | null };
+}) {
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const frameRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    const frame = frameRef.current;
+    if (!image || !frame) return;
+    if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      image.style.transform = "";
+      image.style.willChange = "";
+      return;
+    }
+
+    let raf = 0;
+    const amount = Math.min(80, Math.max(12, Number(strength) || 36));
+    const update = () => {
+      raf = 0;
+      const rect = frame.getBoundingClientRect();
+      const rootRect = scrollRoot.current?.getBoundingClientRect();
+      const top = rootRect?.top ?? 0;
+      const height = Math.max(1, rootRect?.height ?? window.innerHeight);
+      const center = top + height / 2;
+      const progress = Math.min(1, Math.max(-1, (rect.top + rect.height / 2 - center) / (height * 0.55)));
+      const y = -progress * amount;
+      image.style.transform = `translate3d(0, ${y.toFixed(2)}px, 0) scale(1.12)`;
+    };
+    const requestUpdate = () => {
+      if (!raf) raf = window.requestAnimationFrame(update);
+    };
+
+    image.style.willChange = "transform";
+    image.style.transformOrigin = "center center";
+    update();
+    const root = scrollRoot.current;
+    root?.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      root?.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+      image.style.transform = "";
+      image.style.willChange = "";
+    };
+  }, [enabled, scrollRoot, strength]);
+
+  return (
+    <span ref={frameRef} className={cn("relative block w-full", (enabled || className?.includes("h-full")) && "overflow-hidden", className?.includes("h-full") && "h-full")}>
+      <img ref={imageRef} src={src} alt="" loading="lazy" decoding="async" className={className} />
+    </span>
+  );
+}
+
 function CollectionDesignLivePreview({
   design,
   collectionName,
@@ -7089,9 +7244,10 @@ function CollectionDesignLivePreview({
   );
   const isMobilePreview = previewDevice === "mobile";
   const navigationWithText = design.navigationStyle === "Icon & Text";
+  const previewScrollRef = useRef<HTMLElement | null>(null);
 
   return (
-    <aside className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-y-auto bg-[#f4f4f4] px-8 py-6 xl:block">
+    <aside ref={previewScrollRef} className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-y-auto bg-[#f4f4f4] px-8 py-6 xl:block">
       <div className="mb-4 flex items-center justify-center gap-4 text-[#777]">
         <button
           className={cn(
@@ -7237,9 +7393,11 @@ function CollectionDesignLivePreview({
                       {image.mediaType === "video" ? (
                         <video src={imageSrc(image.url)} className="aspect-square h-full w-full object-cover" muted autoPlay loop playsInline />
                       ) : (
-                        <img
+                        <CollectionPreviewParallaxImage
                           src={imageSrc(image.thumbnailUrl || image.url)}
-                          alt=""
+                          enabled={Boolean(design.galleryParallaxEnabled)}
+                          strength={design.galleryParallaxStrength ?? 36}
+                          scrollRoot={previewScrollRef}
                           className={cn(
                             "block w-full object-cover",
                             design.gridStyle === "Vertical"
@@ -8336,7 +8494,7 @@ function StoreDashboardPanel() {
                     <td className="px-5 py-4 text-[#77727f]">
                       {order.createdAt
                         ? new Date(order.createdAt).toLocaleDateString()
-                        : "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                        : "-"}
                     </td>
                   </tr>
                 ))}
@@ -9846,8 +10004,8 @@ function StoreSettingsPanel() {
                   onChange={(event) => setPayPal({ environment: event.target.value === "live" ? "live" : "sandbox" })}
                   className="h-11 w-full rounded-none border bg-white px-3 text-sm outline-none"
                 >
-                  <option value="sandbox">Sandbox â€” test payments</option>
-                  <option value="live">Live â€” real payments</option>
+                  <option value="sandbox">Sandbox &mdash; test payments</option>
+                  <option value="live">Live &mdash; real payments</option>
                 </select>
               </Field>
               <StoreInput
@@ -10284,7 +10442,7 @@ function money(value: number, currency = "EUR") {
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   } catch {
-    return `ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬${Number(value || 0).toFixed(2)}`;
+    return `\u20AC${Number(value || 0).toFixed(2)}`;
   }
 }
 
@@ -11573,7 +11731,7 @@ function ProductTile({
           </p>
           <p className="mt-1 text-xs text-[#999]">
             {productTypeLabels[product.type]}
-            {product.active === false ? " Ãƒâ€šÃ‚Â· Hidden" : ""}
+            {product.active === false ? " \u00B7 Hidden" : ""}
           </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#6337d8]" />
@@ -12924,7 +13082,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             />
           </label>
           <p className="hidden">
-            Manage your collections ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â create, view, and organize your
+            Manage your collections - create, view, and organize your
             photos.
           </p>
         </div>
@@ -14634,8 +14792,8 @@ function CollectionDetailView({
 
   return (
     <div className="flex h-[100dvh] min-w-0 flex-col overflow-hidden bg-white">
-      <header className="flex h-[90px] shrink-0 items-center justify-between gap-6 border-b border-[#e8e8e8] bg-white px-7">
-        <div className="flex min-w-0 items-center gap-5">
+      <header className="flex min-h-[90px] shrink-0 flex-col items-stretch justify-center gap-3 border-b border-[#e8e8e8] bg-white px-4 py-3 sm:px-5 md:h-[90px] md:flex-row md:items-center md:justify-between md:gap-6 md:px-7 md:py-0">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3 md:gap-5">
           <Link
             href={`/dashboard/${section}`}
             className="flex size-8 shrink-0 items-center justify-center text-[#8a8a8a] hover:text-[#222]"
@@ -14698,7 +14856,7 @@ function CollectionDetailView({
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-8 text-sm">
+        <div className="flex w-full flex-wrap items-center gap-2 text-sm md:w-auto md:shrink-0 md:flex-nowrap md:gap-5 lg:gap-8">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -14766,7 +14924,7 @@ function CollectionDetailView({
             </DropdownMenuContent>
           </DropdownMenu>
           <button
-            className="font-medium text-[#222]"
+            className="inline-flex min-h-10 items-center px-1 font-medium text-[#222]"
             onClick={() =>
               window.open(ownerPreviewLink, "_blank", "noopener,noreferrer")
             }
@@ -14775,7 +14933,7 @@ function CollectionDetailView({
             Preview
           </button>
           <Button
-            className="h-10 px-5"
+            className="h-10 px-3 sm:px-5"
             disabled={updateCollection.isPending || !hasUnsavedChanges}
             onClick={saveCollection}
             type="button"
@@ -14798,8 +14956,8 @@ function CollectionDetailView({
                 className="inline-flex h-10 items-center bg-[#6337d8] font-bold text-white hover:bg-[#542bc2]"
                 type="button"
               >
-                <span className="px-7">Share</span>
-                <span className="flex h-6 items-center border-l border-white/30 px-4">
+                <span className="px-4 sm:px-5 md:px-7">Share</span>
+                <span className="flex h-6 items-center border-l border-white/30 px-3 sm:px-4">
                   <ChevronDown className="size-4" />
                 </span>
               </button>
@@ -15455,15 +15613,15 @@ function CollectionDetailView({
 
       <div
         className={cn(
-          "grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-300 ease-out",
+          "grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden transition-[grid-template-columns] duration-300 ease-out md:grid-rows-1",
           detailCollapsed
             ? "md:grid-cols-[88px_minmax(0,1fr)]"
             : "md:grid-cols-[320px_minmax(0,1fr)]",
         )}
       >
-        <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-[#fafafa] transition-colors duration-300">
+        <aside className="flex max-h-[300px] min-h-0 flex-col overflow-hidden border-b bg-[#fafafa] transition-colors duration-300 md:max-h-none md:border-b-0 md:border-r">
           {!detailCollapsed && (
-            <div className="h-[208px] shrink-0 bg-[#e8e8e8]">
+            <div className="hidden h-[208px] shrink-0 bg-[#e8e8e8] md:block">
               {form.coverImage ||
               images.find((image) => image.mediaType !== "video")?.url ? (
                 <img
@@ -15783,7 +15941,7 @@ function CollectionDetailView({
             </div>
           )}
           <button
-            className="mt-auto flex h-12 shrink-0 items-center justify-center border-t text-[#333]"
+            className="mt-auto hidden h-12 shrink-0 items-center justify-center border-t text-[#333] md:flex"
             onClick={() => setDetailCollapsed((value) => !value)}
             aria-label="Toggle gallery sidebar"
           >
@@ -15793,13 +15951,13 @@ function CollectionDetailView({
           </button>
         </aside>
 
-        <div className="min-w-0 overflow-y-auto bg-white px-8 py-7">
+        <div className="min-w-0 overflow-y-auto bg-white px-4 py-5 sm:px-6 md:px-8 md:py-7">
           {activeTab === "photos" && (
-            <div className="mb-7 flex flex-wrap items-center justify-between gap-5">
+            <div className="mb-6 flex flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-5 md:mb-7">
               <h2 className="text-[22px] font-medium text-[#111]">
                 {activeSet?.name ?? "Photos"}
               </h2>
-              <div className="flex items-center gap-5 text-[#777]">
+              <div className="flex flex-wrap items-center gap-2 text-[#777] sm:gap-4 md:gap-5">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
@@ -15819,10 +15977,10 @@ function CollectionDetailView({
                     </p>
                     {(
                       [
-                        ["uploaded-new-old", "Uploaded: New ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Old"],
-                        ["uploaded-old-new", "Uploaded: Old ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ New"],
-                        ["taken-new-old", "Date Taken: New ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Old"],
-                        ["taken-old-new", "Date Taken: Old ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ New"],
+                        ["uploaded-new-old", "Uploaded: New \u2192 Old"],
+                        ["uploaded-old-new", "Uploaded: Old \u2192 New"],
+                        ["taken-new-old", "Date Taken: New \u2192 Old"],
+                        ["taken-old-new", "Date Taken: Old \u2192 New"],
                         ["name-az", "Name: A-Z"],
                         ["name-za", "Name: Z-A"],
                         ["random", "Random"],
@@ -15975,11 +16133,11 @@ function CollectionDetailView({
                     Drop media to upload
                   </div>
                 )}
-                <div className="mb-4 flex items-center justify-between gap-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#777]">
+                <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <p className="break-words text-xs font-bold uppercase tracking-wide text-[#777]">
                     {collection.name} / {activeSet?.name ?? "Set"} / Images
                   </p>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                     {selectedImageIds.length > 0 && (
                       <>
                         <span className="text-xs font-bold text-[#777]">
@@ -16018,7 +16176,7 @@ function CollectionDetailView({
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-[#999]">
-                  ÃƒÂ¢Ã…â€™Ã‹Å“/Ctrl + A selects all Ãƒâ€šÃ‚Â· Delete removes selected Ãƒâ€šÃ‚Â· Esc
+                  Cmd/Ctrl + A selects all - Delete removes selected - Esc
                   clears
                 </p>
                 {deletingImages && (
@@ -16058,7 +16216,7 @@ function CollectionDetailView({
                   chosenClass="sortable-image-chosen"
                   dragClass="sortable-image-drag"
                   className={cn(
-                    "grid gap-x-8 gap-y-8",
+                    "grid gap-3 sm:gap-5 lg:gap-8",
                     collectionGridSize === "small"
                       ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-8"
                       : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4",
@@ -16465,20 +16623,19 @@ function CollectionDetailView({
                   imagesHasMore={imagesHasMore}
                   imagesLoadingMore={imagesLoadingMore}
                   onLoadMoreImages={() => void loadMoreCollectionImages()}
-                  onCoverUpload={async (file) => {
+                  onCoverUpload={async (files) => {
                     const response = await uploadImages.mutateAsync({
-                      files: [file],
+                      files,
                       setId: activeSetId,
                     });
-                    const image = response.data?.[0];
-                    if (image) {
-                      setLoadedImages((current) =>
-                        current.some((item) => item._id === image._id)
-                          ? current
-                          : [...current, image],
-                      );
+                    const uploaded = Array.isArray(response.data) ? response.data : [];
+                    if (uploaded.length) {
+                      setLoadedImages((current) => {
+                        const seen = new Set(current.map((item) => item._id));
+                        return [...current, ...uploaded.filter((item) => !seen.has(item._id))];
+                      });
                     }
-                    return image;
+                    return uploaded;
                   }}
                   onCoverImageChange={(image) =>
                     setForm((current) => ({
@@ -17707,7 +17864,7 @@ function CollectionActivityPanel({
                             (isAllowed ? "allowed" : "pending")}
                         </TableCell>
                         <TableCell className="max-w-80 whitespace-normal text-[#666]">
-                          {request?.reason || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                          {request?.reason || "-"}
                         </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
@@ -18350,6 +18507,10 @@ const collectionDefaultDesign: PresetDesignSettings = {
   coverAnimationPreset: "none",
   coverAnimationSpeed: 1,
   coverAnimations: {},
+  coverParallaxEnabled: false,
+  coverParallaxStrength: 36,
+  galleryParallaxEnabled: false,
+  galleryParallaxStrength: 36,
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",

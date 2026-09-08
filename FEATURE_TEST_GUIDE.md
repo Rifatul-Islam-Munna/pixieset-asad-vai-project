@@ -126,13 +126,33 @@ Also test: Skip intro → gallery opens immediately. Only once per session → r
 
 **Test:** Try None, Fade in, Slow cinematic zoom, Rise in → Save each → reload public gallery → selected motion must appear.
 
-## 16. Homepage trusted-by animation
+## 16. Cover image parallax
+
+**Go:** Gallery -> Design -> Cover -> Animated Cover Studio -> Cover image parallax
+
+**Use:** Enable it, then set **Parallax strength**. Start around 40-60px for a clearly visible result. This control moves only the **cover image**; cover text and the gallery grid stay independent.
+
+**Test:** Use an image cover -> enable Cover image parallax -> scroll the right-side live preview -> the cover photo should drift at a slower rate than the page. Save -> open the published gallery -> scroll down from the cover -> the same depth effect must appear.
+
+**Also test:** Disable it -> cover is still. Use a video cover -> no cover parallax is applied. Enable reduced-motion in the OS/browser -> cover stays still.
+
+## 17. Gallery image parallax
+
+**Go:** Gallery -> Design -> Cover -> Animated Cover Studio -> Gallery image parallax
+
+**Use:** Enable it, then set **Parallax strength**. This affects the **gallery photos below the cover**, not the cover image. It can be enabled at the same time as Cover image parallax.
+
+**Test:** Enable -> scroll the right-side live preview through the photo grid -> images should move with visible depth inside their tiles. Save -> open the published gallery -> scroll the gallery -> the same effect must appear.
+
+**Also test:** Disable it -> gallery photos are still. Reduced-motion -> photos stay still.
+
+## 18. Homepage trusted-by animation
 
 **Go:** Public main homepage `/` → Trusted by professionals
 
 **Test:** Scroll to logos → animation must be smooth, no jump/flicker. Reduced-motion mode → content stays visible without unnecessary motion.
 
-## 17. Album Designer
+## 19. Album Designer
 
 **Go:** Client Gallery → Album Designer
 
@@ -140,7 +160,7 @@ Also test: Skip intro → gallery opens immediately. Only once per session → r
 
 **Does:** Photographer designs album from client gallery photos. Client cannot design/approve it. No email, order, or payment connection.
 
-## 18. Client Blog
+## 20. Client Blog
 
 **Go:** Client Gallery → Blog
 
@@ -150,19 +170,19 @@ Also test: Skip intro → gallery opens immediately. Only once per session → r
 
 Test search, category, language, Featured post, cover, and article page.
 
-## 19. Admin Blog
+## 21. Admin Blog
 
 **Go:** `/admin/blogs`
 
 **Test:** Create/edit/publish post → open `/blog` → post must appear → open `/blog/<slug>` → detail page must work.
 
-## 20. Favorite ZIP download
+## 22. Favorite ZIP download
 
 **Go:** Public gallery → My Favorites
 
 **Test:** Favorite 3 photos → select only 1 → Download selected → ZIP must contain exactly 1. Select 2 → ZIP must contain exactly 2.
 
-## 21. Bookings, Events, and Co-workers
+## 23. Bookings, Events, and Co-workers
 
 **Go:** Client Gallery → Bookings  
 **URL:** `/dashboard/client-gallery/bookings`
@@ -197,7 +217,7 @@ Calendar → Add event → add title/start/end/location/notes → assign co-work
 
 **Not included:** Event delete button, co-worker login/invite, co-worker notification email, Google Calendar sync, online booking payment.
 
-## 22. Quick email troubleshooting
+## 24. Quick email troubleshooting
 
 No email? Check:
 
@@ -209,6 +229,6 @@ No email? Check:
 - Gallery Published has Client Emails
 - New Subscriber client opted in
 
-## 23. Final quick check
+## 25. Final quick check
 
 Gallery create/edit/upload → public PIN/email access → downloads → favorites → homepage/search → templates after login again → mobile layout. Everything must still work.

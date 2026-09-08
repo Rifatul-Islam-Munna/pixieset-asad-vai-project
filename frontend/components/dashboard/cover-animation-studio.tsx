@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import { ImageIcon, Play, RotateCcw, Sparkles, Type } from "lucide-react";
@@ -175,6 +175,54 @@ export function CoverAnimationStudio({
           suffix="x"
           onChange={(coverAnimationSpeed) => onChange({ coverAnimationSpeed, coverAnimationReplayKey: Date.now() })}
         />
+      </div>
+
+      <div className="grid gap-4 rounded-xl border border-[#e7e0f7] bg-[#faf8ff] p-4 sm:grid-cols-[1fr_240px] sm:p-5">
+        <div>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={Boolean(design.coverParallaxEnabled)}
+              onCheckedChange={(coverParallaxEnabled) => onChange({ coverParallaxEnabled })}
+            />
+            <p className="text-sm font-bold">Cover image parallax</p>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-[#777]">Moves the cover photo at a slower scroll rate for a layered depth effect in the live preview and published collection. Image covers only; video covers stay unchanged. Reduced-motion visitors get a still cover.</p>
+        </div>
+        <div className={cn(!design.coverParallaxEnabled && "pointer-events-none opacity-45")}>
+          <RangeControl
+            label="Parallax strength"
+            value={design.coverParallaxStrength ?? 36}
+            min={12}
+            max={80}
+            step={1}
+            suffix="px"
+            onChange={(coverParallaxStrength) => onChange({ coverParallaxStrength })}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 rounded-xl border border-[#e7e0f7] bg-[#faf8ff] p-4 sm:grid-cols-[1fr_240px] sm:p-5">
+        <div>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={Boolean(design.galleryParallaxEnabled)}
+              onCheckedChange={(galleryParallaxEnabled) => onChange({ galleryParallaxEnabled })}
+            />
+            <p className="text-sm font-bold">Gallery image parallax</p>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-[#777]">Adds visible scroll depth to gallery photos in both the live preview and the published public collection. Reduced-motion visitors automatically get a still image.</p>
+        </div>
+        <div className={cn(!design.galleryParallaxEnabled && "pointer-events-none opacity-45")}>
+          <RangeControl
+            label="Parallax strength"
+            value={design.galleryParallaxStrength ?? 36}
+            min={12}
+            max={80}
+            step={1}
+            suffix="px"
+            onChange={(galleryParallaxStrength) => onChange({ galleryParallaxStrength })}
+          />
+        </div>
       </div>
 
       {activePreset !== "none" && (

@@ -50,6 +50,8 @@ export type PresetDesignSettings = CoverAnimationDesign & {
   logoRevealDurationMs?: number;
   logoRevealOncePerSession?: boolean;
   coverMotion?: "none" | "fade" | "slow-zoom" | "rise";
+  galleryParallaxEnabled?: boolean;
+  galleryParallaxStrength?: number;
   color: string;
   gridStyle: "Vertical" | "Horizontal" | "Art" | "Custom";
   thumbnailSize: "Regular" | "Large" | "Extra Large";
@@ -332,6 +334,10 @@ const emptyPresetDesign: PresetDesignSettings = {
   coverAnimationPreset: "none",
   coverAnimationSpeed: 1,
   coverAnimations: {},
+  coverParallaxEnabled: false,
+  coverParallaxStrength: 36,
+  galleryParallaxEnabled: false,
+  galleryParallaxStrength: 36,
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",

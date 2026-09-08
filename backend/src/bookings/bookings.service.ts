@@ -1,4 +1,4 @@
-﻿import { BadRequestException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { randomBytes } from 'crypto';
@@ -59,7 +59,7 @@ export class BookingsService {
     if (body.slotIntervalMinutes !== undefined) patch.slotIntervalMinutes = this.clampNumber(body.slotIntervalMinutes, 5, 240, current.slotIntervalMinutes);
     if (body.confirmationMessage !== undefined) patch.confirmationMessage = this.text(body.confirmationMessage, 600) || 'Thanks! Your booking request has been received.';
     if (Array.isArray(body.businessHours)) patch.businessHours = this.businessHours(body.businessHours);
-    return this.settingModel.findOneAndUpdate({ userId }, { $set: patch }, { new: true, upsert: true }).lean();
+    return this.settingModel.findOneAndUpdate({ userId }, { $set: patch }, { returnDocument: 'after', upsert: true }).lean();
   }
 
   async createShareLink(userId: string, body: Record<string, unknown>) {
@@ -137,7 +137,7 @@ export class BookingsService {
   async updateService(userId: string, id: string, body: Record<string, unknown>) {
     this.objectId(id, 'Booking type');
     const data = this.servicePayload(body, true);
-    const item = await this.serviceModel.findOneAndUpdate({ _id: id, userId }, { $set: data }, { new: true }).lean();
+    const item = await this.serviceModel.findOneAndUpdate({ _id: id, userId }, { $set: data }, { returnDocument: 'after' }).lean();
     if (!item) throw new NotFoundException('Booking type not found');
     return item;
   }
@@ -158,7 +158,7 @@ export class BookingsService {
   async updateCoworker(userId: string, id: string, body: Record<string, unknown>) {
     this.objectId(id, 'Co-worker');
     const data = this.coworkerPayload(body, true);
-    const item = await this.coworkerModel.findOneAndUpdate({ _id: id, userId }, { $set: data }, { new: true }).lean();
+    const item = await this.coworkerModel.findOneAndUpdate({ _id: id, userId }, { $set: data }, { returnDocument: 'after' }).lean();
     if (!item) throw new NotFoundException('Co-worker not found');
     return item;
   }
@@ -189,7 +189,7 @@ export class BookingsService {
     const startAt = (data.startAt as Date | undefined) ?? existing.startAt;
     const endAt = (data.endAt as Date | undefined) ?? existing.endAt;
     if (endAt <= startAt) throw new BadRequestException('Event end time must be after the start time');
-    return this.eventModel.findOneAndUpdate({ _id: id, userId }, { $set: data }, { new: true }).lean();
+    return this.eventModel.findOneAndUpdate({ _id: id, userId }, { $set: data }, { returnDocument: 'after' }).lean();
   }
 
   async deleteEvent(userId: string, id: string) {
@@ -286,7 +286,7 @@ export class BookingsService {
       const claimed = await this.shareLinkModel.findOneAndUpdate(
         { _id: invite._id, userId, usedAt: { $exists: false }, expiresAt: { $gt: new Date() } },
         { $set: { usedAt: new Date() } },
-        { new: true },
+        { returnDocument: 'after' },
       ).lean();
       if (!claimed) throw new GoneException('This private booking link has expired or was already used');
       claimedInviteId = String(claimed._id);

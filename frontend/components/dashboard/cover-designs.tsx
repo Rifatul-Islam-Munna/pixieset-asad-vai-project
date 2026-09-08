@@ -1,4 +1,6 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useEffect, useRef, type CSSProperties } from "react";
 import { AnimatedCoverBox, AnimatedCoverMedia, AnimatedCoverText } from "@/components/dashboard/cover-animation-elements";
 import type { CoverAnimationDesign, CoverAnimationTarget } from "@/lib/cover-animation";
 import { cn } from "@/lib/utils";
@@ -84,17 +86,92 @@ function CoverMedia({
   disabled?: boolean;
 }) {
   const video = mediaType === "video" || /\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(src);
+  const parallaxEnabled = Boolean(design.coverParallaxEnabled && !disabled && !video);
+  const frameRef = useRef<HTMLSpanElement | null>(null);
+  const moverRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    const mover = moverRef.current;
+    if (!frame || !mover) return;
+    if (!parallaxEnabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      mover.style.transform = "";
+      mover.style.willChange = "";
+      return;
+    }
+
+    let raf = 0;
+    const strength = Math.min(80, Math.max(12, Number(design.coverParallaxStrength) || 36));
+    const scrollParent = (() => {
+      let node = frame.parentElement;
+      while (node && node !== document.body) {
+        const overflowY = window.getComputedStyle(node).overflowY;
+        if (/(auto|scroll|overlay)/.test(overflowY) && node.scrollHeight > node.clientHeight) return node;
+        node = node.parentElement;
+      }
+      return null;
+    })();
+
+    const update = () => {
+      raf = 0;
+      const rect = frame.getBoundingClientRect();
+      const rootRect = scrollParent?.getBoundingClientRect();
+      const top = rootRect?.top ?? 0;
+      const viewportHeight = Math.max(1, rootRect?.height ?? window.innerHeight);
+      const center = top + viewportHeight / 2;
+      const progress = Math.min(1, Math.max(-1, (rect.top + rect.height / 2 - center) / (viewportHeight * 0.58)));
+      const travel = Math.min(strength, Math.max(8, rect.height * 0.09));
+      const scale = 1 + Math.min(0.22, (travel * 2 + 16) / Math.max(1, rect.height));
+      const y = -progress * travel;
+      mover.style.transform = `translate3d(0, ${y.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
+    };
+    const requestUpdate = () => {
+      if (!raf) raf = window.requestAnimationFrame(update);
+    };
+    mover.style.willChange = "transform";
+    mover.style.transformOrigin = "center center";
+    update();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    scrollParent?.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", requestUpdate);
+      scrollParent?.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+      mover.style.transform = "";
+      mover.style.willChange = "";
+    };
+  }, [design.coverParallaxStrength, parallaxEnabled, src]);
+
+  if (!parallaxEnabled) {
+    return (
+      <AnimatedCoverMedia
+        src={src}
+        video={video}
+        className={cn("cover-preview-media", className)}
+        style={style}
+        design={design}
+        disabled={disabled}
+      />
+    );
+  }
   return (
-    <AnimatedCoverMedia
-      src={src}
-      video={video}
-      className={cn("cover-preview-media", className)}
-      style={style}
-      design={design}
-      disabled={disabled}
-    />
+    <span ref={frameRef} className={cn("cover-preview-media relative block overflow-hidden", className)}>
+      <span ref={moverRef} className="block h-full w-full">
+        <AnimatedCoverMedia
+          src={src}
+          video={false}
+          className="h-full w-full object-cover"
+          style={style}
+          design={design}
+          disabled={disabled}
+        />
+      </span>
+    </span>
   );
 }
+
 export function CoverPreview({
   design,
   image,

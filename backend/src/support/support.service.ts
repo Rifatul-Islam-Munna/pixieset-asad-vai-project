@@ -41,7 +41,7 @@ export class SupportService {
   }
 
   async setBlocked(userId: string, blocked: boolean) {
-    const user = await this.userModel.findByIdAndUpdate(userId, { $set: { supportBlocked: blocked } }, { new: true })
+    const user = await this.userModel.findByIdAndUpdate(userId, { $set: { supportBlocked: blocked } }, { returnDocument: 'after' })
       .select('name email supportBlocked')
       .lean();
     if (!user) throw new NotFoundException('User not found');

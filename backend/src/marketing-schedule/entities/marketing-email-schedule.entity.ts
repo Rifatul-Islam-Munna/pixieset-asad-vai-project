@@ -29,7 +29,7 @@ export class MarketingEmailSchedule {
   @Prop({ trim: true, index: true }) automationId?: string;
   @Prop({ trim: true }) automationContactId?: string;
   @Prop({ trim: true, lowercase: true }) automationRecipientEmail?: string;
-  @Prop({ trim: true, index: true }) automationEventKey?: string;
+  @Prop({ trim: true }) automationEventKey?: string;
   @Prop({ default: true }) subscriptionRequired: boolean;
   @Prop({ required: true }) scheduledAt: Date;
   @Prop({ required: true, trim: true }) scheduledLocal: string;

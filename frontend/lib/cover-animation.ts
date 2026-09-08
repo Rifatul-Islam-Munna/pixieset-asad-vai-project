@@ -53,6 +53,8 @@ export type CoverAnimationDesign = {
   coverAnimationSpeed?: number;
   coverAnimationReplayKey?: number;
   coverAnimations?: CoverAnimationOverrides;
+  coverParallaxEnabled?: boolean;
+  coverParallaxStrength?: number;
 };
 
 export const DEFAULT_COVER_ANIMATION_SPEC: CoverAnimationSpec = {

@@ -158,6 +158,10 @@ const defaultDesign: PresetDesignSettings = {
   coverAnimationPreset: "none",
   coverAnimationSpeed: 1,
   coverAnimations: {},
+  coverParallaxEnabled: false,
+  coverParallaxStrength: 36,
+  galleryParallaxEnabled: false,
+  galleryParallaxStrength: 36,
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -288,6 +292,11 @@ export function PublicGallery({
   const marketingOptIn = marketing.optIn ?? {};
   const marketingPopup = marketing.popup ?? {};
   const marketingEmailRegistrationEnabled = marketingOptIn.emailRegistration !== false;
+  const showEmailRegistrationMarketingOptIn = Boolean(
+    emailRegistrationEnabled &&
+      marketingSubscriptionEnabled &&
+      marketingEmailRegistrationEnabled,
+  );
   const marketingPopupEnabled = marketingPopup.enabled !== false;
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
   const images: PublicImage[] = collection
@@ -328,7 +337,7 @@ export function PublicGallery({
   const [downloadCount, setDownloadCount] = useState(0);
   const [visitorEmail, setVisitorEmail] = useState("");
   const [visitorEmailSaved, setVisitorEmailSaved] = useState(false);
-  const [visitorMarketingOptIn, setVisitorMarketingOptIn] = useState(true);
+  const [visitorMarketingOptIn, setVisitorMarketingOptIn] = useState(false);
   const [downloadMarketingOptIn, setDownloadMarketingOptIn] = useState(true);
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupEmail, setPopupEmail] = useState("");
@@ -803,11 +812,7 @@ export function PublicGallery({
       }
       await recordEmailRegistration(
         email,
-        Boolean(
-          marketingSubscriptionEnabled &&
-            marketingEmailRegistrationEnabled &&
-            visitorMarketingOptIn,
-        ),
+        Boolean(showEmailRegistrationMarketingOptIn && visitorMarketingOptIn),
         "email-registration",
       );
       setCollection(payload.data);
@@ -1175,7 +1180,7 @@ export function PublicGallery({
             className="mt-6 h-11 rounded-none"
             autoFocus
           />
-          {marketingSubscriptionEnabled && marketingEmailRegistrationEnabled && (
+          {showEmailRegistrationMarketingOptIn && (
             <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#666]">
               <input
                 type="checkbox"
@@ -1183,7 +1188,7 @@ export function PublicGallery({
                 onChange={(event) => setVisitorMarketingOptIn(event.target.checked)}
                 className="mt-1"
               />
-              <span>Subscribe to updates and special offers.</span>
+              <span>Subscribe to updates and special offers</span>
             </label>
           )}
           <Button
@@ -1340,10 +1345,10 @@ export function PublicGallery({
               placeholder="Email for gallery access"
               className="h-10 min-w-0 flex-1 border bg-white px-3 text-sm text-black outline-none"
             />
-            {marketingOptIn.emailRegistration && (
+            {showEmailRegistrationMarketingOptIn && (
               <label className="flex min-w-full items-center gap-2 text-xs text-[#666]">
                 <input type="checkbox" checked={visitorMarketingOptIn} onChange={(event) => setVisitorMarketingOptIn(event.target.checked)} />
-                <span>Send me updates and special offers.</span>
+                <span>Subscribe to updates and special offers</span>
               </label>
             )}
             <button
@@ -1424,6 +1429,8 @@ export function PublicGallery({
                   privateBusy={privateImageBusy === photo._id}
                   showFilename={showFilenames}
                   priority={index < 4}
+                  parallax={Boolean(design.galleryParallaxEnabled)}
+                  parallaxStrength={design.galleryParallaxStrength ?? 36}
                   onPrivate={togglePrivatePhoto}
                   onDownload={downloadPhoto}
                   onFavorite={toggleImageFavorite}
@@ -1844,6 +1851,8 @@ function GalleryTile({
   privateBusy,
   showFilename,
   priority,
+  parallax,
+  parallaxStrength,
   onPrivate,
   onDownload,
   onFavorite,
@@ -1863,6 +1872,8 @@ function GalleryTile({
   privateBusy: boolean;
   showFilename: boolean;
   priority: boolean;
+  parallax: boolean;
+  parallaxStrength: number;
   onPrivate: (photo: PublicImage) => void;
   onDownload: (photo: PublicImage) => void;
   onFavorite: (photo: PublicImage) => void;
@@ -1898,6 +1909,8 @@ function GalleryTile({
             className={crop ? "block h-full w-full object-cover" : "block h-auto w-full"}
             style={sharpenStyle(sharpeningLevel)}
             priority={priority}
+            parallax={parallax}
+            parallaxStrength={parallaxStrength}
           />
         )}
       </button>
@@ -1950,6 +1963,8 @@ function GalleryImage({
   style,
   onShape,
   priority = false,
+  parallax = false,
+  parallaxStrength = 36,
 }: {
   src: string;
   fallbackSrc?: string;
@@ -1958,14 +1973,69 @@ function GalleryImage({
   style?: CSSProperties;
   onShape?: (shape: "portrait" | "landscape" | "square") => void;
   priority?: boolean;
+  parallax?: boolean;
+  parallaxStrength?: number;
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const frameRef = useRef<HTMLSpanElement | null>(null);
   useEffect(() => {
     setCurrentSrc(src);
   }, [src]);
+  useEffect(() => {
+    const image = imageRef.current;
+    const frame = frameRef.current;
+    if (!image || !frame) return;
+    if (!parallax || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      image.style.transform = "";
+      image.style.willChange = "";
+      return;
+    }
+
+    let raf = 0;
+    const strength = Math.min(80, Math.max(12, Number(parallaxStrength) || 36));
+    const scrollParent = (() => {
+      let node = frame.parentElement;
+      while (node && node !== document.body) {
+        const overflowY = window.getComputedStyle(node).overflowY;
+        if (/(auto|scroll|overlay)/.test(overflowY) && node.scrollHeight > node.clientHeight) return node;
+        node = node.parentElement;
+      }
+      return null;
+    })();
+    const update = () => {
+      raf = 0;
+      const rect = frame.getBoundingClientRect();
+      const rootRect = scrollParent?.getBoundingClientRect();
+      const top = rootRect?.top ?? 0;
+      const height = Math.max(1, rootRect?.height ?? window.innerHeight);
+      const center = top + height / 2;
+      const progress = Math.min(1, Math.max(-1, (rect.top + rect.height / 2 - center) / (height * 0.55)));
+      const y = -progress * strength;
+      image.style.transform = `translate3d(0, ${y.toFixed(2)}px, 0) scale(1.12)`;
+    };
+    const requestUpdate = () => {
+      if (!raf) raf = window.requestAnimationFrame(update);
+    };
+    image.style.willChange = "transform";
+    image.style.transformOrigin = "center center";
+    update();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    scrollParent?.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", requestUpdate);
+      scrollParent?.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+      image.style.transform = "";
+      image.style.willChange = "";
+    };
+  }, [parallax, parallaxStrength]);
   return (
-    <span className={cn("relative block w-full bg-transparent", className?.includes("h-full") && "h-full overflow-hidden")}>
+    <span ref={frameRef} className={cn("relative block w-full bg-transparent", (parallax || className?.includes("h-full")) && "overflow-hidden", className?.includes("h-full") && "h-full")}>
       <img
+        ref={imageRef}
         src={currentSrc}
         alt={alt}
         loading={priority ? "eager" : "lazy"}

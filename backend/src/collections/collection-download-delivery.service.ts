@@ -127,7 +127,7 @@ export class CollectionDownloadDeliveryService {
       const job = await this.deliveryModel.findOneAndUpdate(
         { status: 'queued' },
         { $set: { status: 'processing', lastError: '' } },
-        { new: true, sort: { createdAt: 1 } },
+        { returnDocument: 'after', sort: { createdAt: 1 } },
       );
       if (job) await this.prepare(job);
     } finally {

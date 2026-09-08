@@ -362,7 +362,7 @@ export class MobileGalleryService {
           website: String(body.website ?? '').trim(),
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     ).lean();
   }
 

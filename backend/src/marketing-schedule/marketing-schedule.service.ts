@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Interval } from '@nestjs/schedule';
 import { Model, Types } from 'mongoose';
@@ -203,7 +203,7 @@ export class MarketingScheduleService implements OnModuleInit {
     const doc = await this.scheduleModel.findOneAndUpdate(
       { _id: id, userId, status: { $in: ['scheduled', 'failed'] } },
       { $set: { status: 'cancelled', lastError: '' } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
     if (!doc) throw new NotFoundException('Scheduled campaign not found or cannot be cancelled');
     return doc;
@@ -220,7 +220,7 @@ export class MarketingScheduleService implements OnModuleInit {
         const claimed = await this.scheduleModel.findOneAndUpdate(
           { _id: item._id, status: 'scheduled' },
           { $set: { status: 'sending', lastError: '' } },
-          { new: true },
+          { returnDocument: 'after' },
         );
         if (!claimed) continue;
         await this.deliver(claimed).catch((error) => this.markFailed(claimed._id.toString(), error));
