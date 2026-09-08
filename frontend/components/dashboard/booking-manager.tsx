@@ -187,7 +187,6 @@ export function BookingManager() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b6b6b]">Take client bookings, keep your calendar organized, and assign work to your team from one place.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setTab("links")} className="rounded-lg border-[#cfc4ed] text-[#6337d8] hover:bg-[#f8f5ff]"><Link2 className="size-4" /> Share booking link</Button>
           <Button onClick={() => openNewEvent()} className="rounded-lg bg-[#6337d8] text-white hover:bg-[#5527c9]"><Plus className="size-4" /> Add event</Button>
         </div>
       </div>
