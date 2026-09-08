@@ -447,7 +447,6 @@ function ActivityIcon({ type }: { type: string }) {
 }
 function QuickActions() {
   const items = [
-    { label: "Upload Photos", href: "/dashboard/client-gallery", icon: Upload },
     {
       label: "Create Gallery",
       href: "/dashboard/client-gallery/collection-new",
