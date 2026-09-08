@@ -203,8 +203,8 @@ export class BookingsService {
     const owner = await this.resolveOwner(identifier);
     const userId = owner._id.toString();
     const settings = await this.ensureSettings(userId);
-    if (!settings.enabled) throw new NotFoundException('Online booking is not available');
     const invite = inviteToken ? await this.resolveShareLink(userId, inviteToken) : null;
+    if (!settings.enabled && !invite) throw new NotFoundException('Online booking is not available');
     const serviceQuery: Record<string, unknown> = { userId, active: true };
     if (invite?.serviceId) serviceQuery._id = invite.serviceId;
     const services = await this.serviceModel
@@ -239,8 +239,8 @@ export class BookingsService {
     const owner = await this.resolveOwner(identifier);
     const userId = owner._id.toString();
     const settings = await this.ensureSettings(userId);
-    if (!settings.enabled) throw new NotFoundException('Online booking is not available');
     const invite = inviteToken ? await this.resolveShareLink(userId, inviteToken) : null;
+    if (!settings.enabled && !invite) throw new NotFoundException('Online booking is not available');
     if (!serviceId || !Types.ObjectId.isValid(serviceId)) throw new BadRequestException('Booking type is required');
     if (invite?.serviceId && invite.serviceId !== serviceId)
       throw new BadRequestException('This private link is for a different booking type');
@@ -259,9 +259,9 @@ export class BookingsService {
     const owner = await this.resolveOwner(identifier);
     const userId = owner._id.toString();
     const settings = await this.ensureSettings(userId);
-    if (!settings.enabled) throw new NotFoundException('Online booking is not available');
     const inviteToken = this.text(body.inviteToken, 100);
     const invite = inviteToken ? await this.resolveShareLink(userId, inviteToken) : null;
+    if (!settings.enabled && !invite) throw new NotFoundException('Online booking is not available');
     const serviceId = this.text(body.serviceId, 80);
     if (!Types.ObjectId.isValid(serviceId)) throw new BadRequestException('Booking type is required');
     if (invite?.serviceId && invite.serviceId !== serviceId)
