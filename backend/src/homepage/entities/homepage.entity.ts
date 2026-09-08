@@ -81,6 +81,12 @@ export class Homepage {
   @Prop({ enum: ['newest', 'oldest', 'name'], default: 'newest' })
   sortOrder: 'newest' | 'oldest' | 'name';
 
+  @Prop({ default: true })
+  showCategories: boolean;
+
+  @Prop({ type: [String], default: [] })
+  featuredCollectionIds: string[];
+
   createdAt?: Date;
   updatedAt?: Date;
 }

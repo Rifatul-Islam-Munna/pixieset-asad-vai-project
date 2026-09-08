@@ -11,6 +11,7 @@ import {
   ImageIcon,
   Loader2,
   Mail,
+  Printer,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,7 +31,7 @@ type FavoritePageCollection = {
   coverImage?: string;
   eventDate?: string;
   images?: FavoritePageImage[];
-  settings?: { general?: { language?: string } };
+  settings?: { general?: { language?: string }; favorite?: { autoShareToPrintShop?: boolean } };
 };
 
 type StoredFavorites = {
@@ -56,6 +57,8 @@ export function PublicGalleryFavoritesPage({
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [zipBusy, setZipBusy] = useState(false);
+  const [printShopBusy, setPrintShopBusy] = useState(false);
+  const [submittedSignature, setSubmittedSignature] = useState("");
   const [notice, setNotice] = useState("");
   const language = galleryLanguageCode(collection.settings?.general?.language);
 
@@ -63,21 +66,31 @@ export function PublicGalleryFavoritesPage({
     () => images.filter((image) => favoriteIds.has(image._id)),
     [favoriteIds, images],
   );
+  const printShopHandoffEnabled = Boolean(collection.settings?.favorite?.autoShareToPrintShop);
+  const favoriteSignature = useMemo(
+    () => Array.from(favoriteIds).sort().join("|"),
+    [favoriteIds],
+  );
+  const submissionStorageKey = `pixieset-print-shop-submission:${collection._id || collection.slug || galary}`;
 
   useEffect(() => {
-    setEmail(window.localStorage.getItem("pixieset-favorite-email") || "");
-    try {
-      const stored = JSON.parse(window.localStorage.getItem(storageKey) || "null") as StoredFavorites | null;
-      const ids = new Set(Array.isArray(stored?.imageIds) ? stored.imageIds : []);
-      setCollectionFavorited(Boolean(stored?.collectionFavorited));
-      setFavoriteIds(ids);
-      setSelectedIds(new Set(ids));
-    } catch {
-      window.localStorage.removeItem(storageKey);
-    } finally {
-      setLoaded(true);
-    }
-  }, [storageKey]);
+    const timer = window.setTimeout(() => {
+      setEmail(window.localStorage.getItem("pixieset-favorite-email") || "");
+      setSubmittedSignature(window.localStorage.getItem(submissionStorageKey) || "");
+      try {
+        const stored = JSON.parse(window.localStorage.getItem(storageKey) || "null") as StoredFavorites | null;
+        const ids = new Set(Array.isArray(stored?.imageIds) ? stored.imageIds : []);
+        setCollectionFavorited(Boolean(stored?.collectionFavorited));
+        setFavoriteIds(ids);
+        setSelectedIds(new Set());
+      } catch {
+        window.localStorage.removeItem(storageKey);
+      } finally {
+        setLoaded(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [storageKey, submissionStorageKey]);
 
   useEffect(() => {
     if (!notice) return;
@@ -121,67 +134,104 @@ export function PublicGalleryFavoritesPage({
   const selectAll = () => setSelectedIds(new Set(favoriteImages.map((image) => image._id)));
   const clearSelection = () => setSelectedIds(new Set());
 
-  const recordDownload = async (downloadImages: FavoritePageImage[], type: "single" | "all") => {
-    if (!email || !email.includes("@")) return;
-    const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-    await fetch(`${apiBase}/public/collections/${encodeURIComponent(collection.slug || galary)}/download-activity?siteSlug=${encodeURIComponent(name)}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        email,
-        downloadType: type,
-        items: downloadImages.map((image) => ({
-          imageId: image._id,
-          imageName: image.originalName || "favorite-photo",
-          imageUrl: imageSrc(image.url),
-        })),
-      }),
-    }).catch(() => null);
+  const ensureDownloadEmail = () => {
+    let clientEmail = (window.localStorage.getItem("pixieset-download-email") || email || "").trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(clientEmail)) {
+      clientEmail = window.prompt("Where should we email your secure download link?", clientEmail)?.trim().toLowerCase() || "";
+    }
+    if (!/^\S+@\S+\.\S+$/.test(clientEmail)) {
+      setNotice("A valid email is required for downloads");
+      return "";
+    }
+    setEmail(clientEmail);
+    window.localStorage.setItem("pixieset-download-email", clientEmail);
+    window.localStorage.setItem("pixieset-favorite-email", clientEmail);
+    return clientEmail;
   };
 
-  const downloadOne = async (image: FavoritePageImage, index: number) => {
-    void recordDownload([image], "single");
-    const link = document.createElement("a");
-    link.href = `/api/public-download?url=${encodeURIComponent(imageSrc(image.url))}&name=${encodeURIComponent(image.originalName || `favorite-${index + 1}`)}`;
-    link.download = "";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setNotice("Download started");
+  const requestDownload = async (scope: "single" | "favorites", imageIds: string[]) => {
+    const clientEmail = ensureDownloadEmail();
+    if (!clientEmail) return null;
+    const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+    const pin = window.sessionStorage.getItem(`collection-access-pin:${galary}`) || "";
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(collection.slug || galary)}/download-request?siteSlug=${encodeURIComponent(name)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: clientEmail, scope, imageIds, pin: pin || undefined }),
+      cache: "no-store",
+    }).catch(() => null);
+    const payload = response ? await response.json().catch(() => null) : null;
+    if (!response?.ok) throw new Error(payload?.message || "Download request failed");
+    return payload?.data;
+  };
+
+  const downloadOne = async (image: FavoritePageImage, _index: number) => {
+    void _index;
+    if (zipBusy) return;
+    setZipBusy(true);
+    try {
+      await requestDownload("single", [image._id]);
+      setNotice("We’ll email the secure download link when this photo is ready. It expires after 30 hours.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Download request failed");
+    } finally {
+      setZipBusy(false);
+    }
   };
 
   const downloadSelected = async () => {
-    const selected = favoriteImages.filter((image) => selectedIds.has(image._id));
+    const selectedIdSnapshot = new Set(selectedIds);
+    const selected = images.filter((image) => favoriteIds.has(image._id) && selectedIdSnapshot.has(image._id));
     if (!selected.length || zipBusy) return;
     setZipBusy(true);
-    void recordDownload(selected, "all");
     try {
-      const response = await fetch("/api/public-download", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: `${collection.name}-favorites`,
-          images: selected.map((image, index) => ({
-            url: imageSrc(image.url),
-            name: image.originalName || `favorite-${index + 1}`,
-          })),
-        }),
-      });
-      if (!response.ok) throw new Error("Could not create favorites ZIP");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${safeName(collection.name)}-favorites.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setNotice("Favorites ZIP download started");
+      const data = await requestDownload("favorites", selected.map((image) => image._id));
+      setNotice(`Request received for ${Number(data?.fileCount ?? selected.length)} favorite photo${Number(data?.fileCount ?? selected.length) === 1 ? "" : "s"}. We’ll email the secure 30-hour link when ready.`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Download failed");
+      setNotice(error instanceof Error ? error.message : "Download request failed");
     } finally {
       setZipBusy(false);
+    }
+  };
+
+
+  const finishAndSendToPrintShop = async () => {
+    if (!printShopHandoffEnabled || printShopBusy || !favoriteIds.size) return;
+    let clientEmail = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(clientEmail)) {
+      clientEmail = window.prompt("Enter the email used for your favorites", clientEmail)?.trim().toLowerCase() || "";
+    }
+    if (!/^\S+@\S+\.\S+$/.test(clientEmail)) {
+      setNotice("A valid email is required to finish the selection");
+      return;
+    }
+    if (clientEmail !== email) {
+      setEmail(clientEmail);
+      window.localStorage.setItem("pixieset-favorite-email", clientEmail);
+    }
+    setPrintShopBusy(true);
+    try {
+      const response = await fetch(
+        `/api/public/collections/${encodeURIComponent(collection.slug || galary)}/favorite-submission?siteSlug=${encodeURIComponent(name)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: clientEmail, imageIds: Array.from(favoriteIds) }),
+          cache: "no-store",
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || "Could not send the favorite selection");
+      if (!payload?.data?.sent) {
+        throw new Error(payload?.data?.reason === "SMTP_NOT_CONFIGURED" ? "Print shop email delivery is not configured yet" : "Print shop email could not be sent");
+      }
+      window.localStorage.setItem(submissionStorageKey, favoriteSignature);
+      setSubmittedSignature(favoriteSignature);
+      setNotice(`Sent ${payload.data.requestedCount ?? favoriteIds.size} favorite photo${(payload.data.requestedCount ?? favoriteIds.size) === 1 ? "" : "s"} to the print shop`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not send the favorite selection");
+    } finally {
+      setPrintShopBusy(false);
     }
   };
 
@@ -213,8 +263,21 @@ export function PublicGalleryFavoritesPage({
           <div className="flex flex-wrap gap-3">
             <Link href={galleryPath} className="inline-flex h-11 items-center gap-2 border bg-white px-5 text-sm font-bold"><ExternalLink className="size-4" />Go to collection</Link>
             <button onClick={downloadSelected} disabled={!selectedIds.size || zipBusy} className="inline-flex h-11 items-center gap-2 bg-[#202326] px-5 text-sm font-bold text-white disabled:opacity-40">{zipBusy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}Download selected ({selectedIds.size})</button>
+            {printShopHandoffEnabled && (
+              <button onClick={() => void finishAndSendToPrintShop()} disabled={!favoriteIds.size || printShopBusy || (Boolean(favoriteSignature) && submittedSignature === favoriteSignature)} className="inline-flex h-11 items-center gap-2 bg-[#6337d8] px-5 text-sm font-bold text-white disabled:opacity-45">
+                {printShopBusy ? <Loader2 className="size-4 animate-spin" /> : <Printer className="size-4" />}
+                {favoriteSignature && submittedSignature === favoriteSignature ? "Sent to print shop" : `Finish & send (${favoriteIds.size})`}
+              </button>
+            )}
           </div>
         </div>
+
+        {printShopHandoffEnabled && (
+          <div className="mt-6 flex items-start gap-3 border border-[#6337d8]/20 bg-[#f6f2ff] p-4 text-sm leading-6 text-[#4f3b84]">
+            <Printer className="mt-0.5 size-5 shrink-0" />
+            <span>When your favorites are final, use <strong>Finish & send</strong>. The print shop receives your requested photo numbers plus the available files automatically.</span>
+          </div>
+        )}
 
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           <Stat label="Favorite photos" value={String(favoriteImages.length)} />
@@ -288,6 +351,3 @@ function imageSrc(url?: string) {
   return url;
 }
 
-function safeName(value: string) {
-  return value.trim().replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "favorites";
-}

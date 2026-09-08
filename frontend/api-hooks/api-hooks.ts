@@ -18,19 +18,18 @@ export const getToken = async ()=>{
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000"
 
 function parseAxiosError(error: AxiosError): { message: string, statusCode: number } {
-  const res = error?.response?.data as any ;
-  const statusCode = error?.response?.data?.statusCode ?? 500;
+  const res = error?.response?.data as { statusCode?: number; message?: unknown } | undefined;
+  const statusCode = res?.statusCode ?? error?.response?.status ?? 500;
 
   let message = 'Something went wrong';
 
-  if (res?.message) {
-    if (Array.isArray(res.message?.message)) {
-      message = res.message.message[0];
-    } else if (typeof res.message === 'string') {
-      message = res.message;
-    } else if (typeof res.message?.message === 'string') {
-      message = res.message.message;
-    }
+  const responseMessage = res?.message;
+  if (typeof responseMessage === 'string') {
+    message = responseMessage;
+  } else if (responseMessage && typeof responseMessage === 'object' && 'message' in responseMessage) {
+    const nested = (responseMessage as { message?: unknown }).message;
+    if (Array.isArray(nested) && typeof nested[0] === 'string') message = nested[0];
+    else if (typeof nested === 'string') message = nested;
   }
 
   return { message, statusCode };
@@ -66,10 +65,10 @@ export const PostRequestAxios = async <T>(url: string, payload: any) : Promise<[
         return [null, null];
     }
 }
-export const PatchRequestAxios = async <T>(url: string, payload: T) : Promise<[T | null, { message: string; statusCode: number } | null]> => {
+export const PatchRequestAxios = async <TResponse, TPayload = unknown>(url: string, payload: TPayload) : Promise<[TResponse | null, { message: string; statusCode: number } | null]> => {
     const {access_token} = await getToken()
     try{
-        const {data} = await axios.patch(`${baseUrl}${url}`, payload,{
+        const {data} = await axios.patch<TResponse>(`${baseUrl}${url}`, payload,{
             headers:{
                 access_token:access_token,
             

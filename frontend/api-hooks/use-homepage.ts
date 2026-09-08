@@ -36,6 +36,8 @@ export type HomepageRecord = {
   socialLinks: HomepageSocialLinks;
   show: HomepageVisibility;
   sortOrder: "newest" | "oldest" | "name";
+  showCategories: boolean;
+  featuredCollectionIds: string[];
 };
 
 export type HomepageUpdatePayload = Partial<Omit<HomepageRecord, "_id" | "userId" | "slug" | "publicPath" | "hasPassword">> & {

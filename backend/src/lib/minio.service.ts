@@ -213,6 +213,19 @@ export class MinioService implements OnModuleInit {
     return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase());
   }
 
+  async openReadStream(fileReference: string) {
+    const fileName = this.objectKey(fileReference);
+    if (!fileName) throw new HttpException('Invalid file name', HttpStatus.BAD_REQUEST);
+    if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
+    const response = await this.s3.send(new GetObjectCommand({ Bucket: this.bucketName, Key: fileName }));
+    if (!response.Body) throw new HttpException('File is unavailable', HttpStatus.NOT_FOUND);
+    return {
+      body: response.Body as Readable,
+      contentLength: Math.max(0, Number(response.ContentLength ?? 0)),
+      contentType: String(response.ContentType || 'application/octet-stream'),
+    };
+  }
+
   async deleteService(fileReference: string) {
     const fileName = this.objectKey(fileReference);
     if (!fileName) throw new HttpException('Invalid file name', HttpStatus.BAD_REQUEST);

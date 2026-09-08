@@ -2,12 +2,16 @@
 
 import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
+import type { ClientBlogPost } from "@/lib/client-blog";
+import { publicHomepageBlogPath } from "@/lib/public-site-url";
 import {
   Globe2,
+  CalendarDays,
   Loader2,
   LockKeyhole,
   Mail,
   MapPin,
+  Newspaper,
   Search,
   Phone,
 } from "lucide-react";
@@ -19,6 +23,8 @@ export type PublicHomepageCollection = {
   eventDate?: string;
   coverImage?: string;
   imageCount?: number;
+  tags?: string[];
+  featured?: boolean;
   url: string;
 };
 
@@ -32,6 +38,7 @@ export type PublicHomepageData = {
   phone?: string;
   address?: string;
   socialLinks?: Record<string, string>;
+  booking?: { enabled?: boolean; url?: string };
   integrations?: {
     googleAnalytics?: {
       enabled?: boolean;
@@ -39,8 +46,10 @@ export type PublicHomepageData = {
     };
   };
   hasPassword?: boolean;
+  showCategories?: boolean;
   locked: boolean;
   collections: PublicHomepageCollection[];
+  blogPosts?: ClientBlogPost[];
 };
 
 export function PublicHomepage({ initialData }: { initialData: PublicHomepageData }) {
@@ -49,12 +58,23 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
   const [unlocking, setUnlocking] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("All");
 
+  const categories = useMemo(
+    () => [...new Set(data.collections.flatMap((collection) => collection.tags ?? []).map((tag) => tag.trim()).filter(Boolean))].sort(),
+    [data.collections],
+  );
   const collections = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return data.collections;
-    return data.collections.filter((collection) => collection.name.toLowerCase().includes(query));
-  }, [data.collections, search]);
+    return data.collections.filter((collection) => {
+      const tags = collection.tags ?? [];
+      const matchesCategory = activeCategory === "All" || tags.includes(activeCategory);
+      const haystack = [collection.name, ...tags].join(" ").toLowerCase();
+      return matchesCategory && (!query || haystack.includes(query));
+    });
+  }, [activeCategory, data.collections, search]);
+  const featuredCollections = collections.filter((collection) => collection.featured);
+  const regularCollections = featuredCollections.length ? collections.filter((collection) => !collection.featured) : collections;
 
   const unlock = async (event: FormEvent) => {
     event.preventDefault();
@@ -145,34 +165,90 @@ export function PublicHomepage({ initialData }: { initialData: PublicHomepageDat
               );
             })}
           </div>
+          {(data.booking?.enabled && data.booking.url || (data.blogPosts?.length ?? 0) > 0) && (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              {data.booking?.enabled && data.booking.url && (
+                <Link href={data.booking.url} className="inline-flex h-11 items-center gap-2 rounded-full bg-[#111] px-6 text-sm font-bold text-white transition hover:bg-[#6337d8]">
+                  <CalendarDays className="size-4" /> Book a Session
+                </Link>
+              )}
+              {(data.blogPosts?.length ?? 0) > 0 && (
+                <Link href={publicHomepageBlogPath(data.slug)} className="inline-flex h-11 items-center gap-2 rounded-full border border-[#cfcac4] bg-white px-6 text-sm font-bold transition hover:border-[#111]">
+                  <Newspaper className="size-4" /> Journal
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
       <section className="mx-auto max-w-[1380px] px-5 pb-20 sm:px-10">
-        {collections.length ? (
-          <div className="grid gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
-            {collections.map((collection) => (
-              <Link key={collection._id} href={collection.url} className="group block text-center">
-                <div className="overflow-hidden bg-[#F3F0EA] shadow-[0_18px_48px_rgba(21,21,21,0.06)]">
-                  {collection.coverImage ? (
-                    <img src={imageSrc(collection.coverImage)} alt={collection.name} className="aspect-[1.5] w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
-                  ) : (
-                    <div className="flex aspect-[1.5] items-center justify-center text-sm text-[#999]">No cover image</div>
-                  )}
-                </div>
-                <h2 className="mx-auto mt-5 max-w-[92%] text-[16px] font-semibold uppercase leading-6 tracking-[0.08em]">{collection.name}</h2>
-                {collection.eventDate && <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-[#777]">{formatDate(collection.eventDate)}</p>}
-              </Link>
+        {data.showCategories !== false && categories.length > 0 && (
+          <div className="mb-12 flex flex-wrap items-center justify-center gap-2 border-y border-[#e8e5e1] py-5">
+            {["All", ...categories].map((category) => (
+              <button key={category} type="button" onClick={() => setActiveCategory(category)} className={`rounded-full border px-5 py-2 text-xs font-bold uppercase tracking-[.12em] transition ${activeCategory === category ? "border-[#111] bg-[#111] text-white" : "border-[#ddd] bg-white text-[#555] hover:border-[#999]"}`}>{category}</button>
             ))}
           </div>
-        ) : (
-          <div className="flex min-h-[360px] flex-col items-center justify-center border-t text-center">
-            <p className="text-lg font-semibold">No published collections yet</p>
-            <p className="mt-3 text-sm text-[#777]">Published collections will appear here automatically.</p>
+        )}
+
+        {featuredCollections.length > 0 && (
+          <div className="mb-16">
+            <div className="mb-7 text-center"><p className="text-[10px] font-bold uppercase tracking-[.28em] text-[#8a8178]">Selected work</p><h2 className="mt-2 text-2xl font-semibold">Featured Galleries</h2></div>
+            <div className="grid gap-x-8 gap-y-12 md:grid-cols-2">
+              {featuredCollections.map((collection) => <GalleryCard key={collection._id} collection={collection} featured />)}
+            </div>
           </div>
         )}
+
+        {regularCollections.length ? (
+          <div>
+            {featuredCollections.length > 0 && <h2 className="mb-7 border-b pb-4 text-lg font-semibold">All Galleries</h2>}
+            <div className="grid gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
+              {regularCollections.map((collection) => <GalleryCard key={collection._id} collection={collection} />)}
+            </div>
+          </div>
+        ) : !featuredCollections.length ? (
+          <div className="flex min-h-[360px] flex-col items-center justify-center border-t text-center">
+            <p className="text-lg font-semibold">No galleries found</p>
+            <p className="mt-3 text-sm text-[#777]">Try another search or category.</p>
+          </div>
+        ) : null}
       </section>
+
+      {(data.blogPosts?.length ?? 0) > 0 && (
+        <section className="border-t border-[#e8e5e1] bg-[#f8f7f4] px-5 py-16 sm:px-10 sm:py-20">
+          <div className="mx-auto max-w-[1180px]">
+            <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.28em] text-[#8a8178]">Journal</p><h2 className="mt-2 text-3xl font-semibold">Latest Stories</h2></div><Link href={publicHomepageBlogPath(data.slug)} className="text-sm font-bold underline underline-offset-4">View all stories</Link></div>
+            <div className="mt-8 grid gap-7 md:grid-cols-3">
+              {data.blogPosts!.slice(0, 3).map((post) => (
+                <Link key={post.id} href={publicHomepageBlogPath(data.slug, post.slug)} className="group block bg-white">
+                  <div className="aspect-[16/10] overflow-hidden bg-[#e8e5e1]">{post.coverImage ? <img src={imageSrc(post.coverImage)} alt={post.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" /> : null}</div>
+                  <div className="p-5"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#8a8178]">{post.category} · {post.language}</p><h3 className="mt-3 text-xl font-semibold leading-tight">{post.title}</h3><p className="mt-3 line-clamp-2 text-sm leading-6 text-[#666]">{post.excerpt}</p></div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
     </main>
+  );
+}
+
+function GalleryCard({ collection, featured = false }: { collection: PublicHomepageCollection; featured?: boolean }) {
+  return (
+    <Link href={collection.url} className="group block text-center">
+      <div className="relative overflow-hidden bg-[#F3F0EA] shadow-[0_18px_48px_rgba(21,21,21,0.06)]">
+        {collection.coverImage ? (
+          <img src={imageSrc(collection.coverImage)} alt={collection.name} className={`${featured ? "aspect-[1.7]" : "aspect-[1.5]"} w-full object-cover transition duration-500 group-hover:scale-[1.03]`} />
+        ) : (
+          <div className={`${featured ? "aspect-[1.7]" : "aspect-[1.5]"} flex items-center justify-center text-sm text-[#999]`}>No cover image</div>
+        )}
+        {featured && <span className="absolute left-4 top-4 bg-white/95 px-3 py-2 text-[9px] font-bold uppercase tracking-[.2em]">Featured</span>}
+      </div>
+      <h2 className={`mx-auto mt-5 max-w-[92%] font-semibold uppercase leading-6 tracking-[0.08em] ${featured ? "text-[18px]" : "text-[16px]"}`}>{collection.name}</h2>
+      {collection.tags?.length ? <p className="mt-2 text-[10px] font-semibold uppercase tracking-[.18em] text-[#998f84]">{collection.tags.slice(0, 3).join(" · ")}</p> : null}
+      {collection.eventDate && <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-[#777]">{formatDate(collection.eventDate)}</p>}
+    </Link>
   );
 }
 

@@ -17,6 +17,8 @@ import { validatePrintLabSettings } from "@/lib/print-lab-settings";
 const defaults: StoreSettingsForm = {
   enabled: false,
   printRequestsEnabled: false,
+  freePrintSizes: ["4 x 6", "5 x 7", "8 x 10", "8 x 12"],
+  freePrintPapers: ["Glossy", "Matte"],
   printLabEmail: "",
   notifyPrintLabForFreeRequests: false,
   notifyPrintLabForPaidOrders: false,
@@ -44,12 +46,15 @@ export function useCollectionStoreAdmin(collectionId: string) {
   });
 
   useEffect(() => {
-    if (!collection || loaded) return;
-    const store = collection.settings?.store ?? {};
+    if (!collection || loaded || catalogQuery.isLoading) return;
+    const store = (collection.settings?.store ?? {}) as Record<string, any>;
+    const catalog = catalogQuery.data?.data;
     setForm({
       ...defaults,
       enabled: Boolean(store.enabled || store.storeStatus),
       printRequestsEnabled: Boolean(store.printRequestsEnabled),
+      freePrintSizes: optionList(store.freePrintSizes, catalog?.freePrintSizes, defaults.freePrintSizes),
+      freePrintPapers: optionList(store.freePrintPapers, catalog?.freePrintPapers, defaults.freePrintPapers),
       printLabEmail: String(store.printLabEmail ?? ""),
       notifyPrintLabForFreeRequests: Boolean(store.notifyPrintLabForFreeRequests),
       notifyPrintLabForPaidOrders: Boolean(store.notifyPrintLabForPaidOrders),
@@ -62,7 +67,7 @@ export function useCollectionStoreAdmin(collectionId: string) {
       requireProfessionalInfo: Boolean(store.requireProfessionalInfo),
     });
     setLoaded(true);
-  }, [collection, loaded]);
+  }, [collection, loaded, catalogQuery.isLoading, catalogQuery.data]);
 
   const refresh = () => client.invalidateQueries({
     queryKey: ["collection-store-catalog", collectionId],
@@ -83,6 +88,8 @@ export function useCollectionStoreAdmin(collectionId: string) {
   const saveSettings = async (patch: Partial<StoreSettingsForm> = {}) => {
     if (!collection) return;
     const nextForm = { ...form, ...patch };
+    nextForm.freePrintSizes = cleanOptions(nextForm.freePrintSizes);
+    nextForm.freePrintPapers = cleanOptions(nextForm.freePrintPapers);
     const validationError = validatePrintLabSettings(nextForm);
     if (validationError) {
       toast.error(validationError);
@@ -105,6 +112,8 @@ export function useCollectionStoreAdmin(collectionId: string) {
             enabled: nextForm.enabled,
             storeStatus: nextForm.enabled,
             printRequestsEnabled: nextForm.printRequestsEnabled,
+            freePrintSizes: nextForm.freePrintSizes,
+            freePrintPapers: nextForm.freePrintPapers,
             printLabEmail: nextForm.printLabEmail.trim(),
             notifyPrintLabForFreeRequests: nextForm.notifyPrintLabForFreeRequests,
             notifyPrintLabForPaidOrders: nextForm.notifyPrintLabForPaidOrders,
@@ -167,4 +176,15 @@ export function useCollectionStoreAdmin(collectionId: string) {
       "Product hidden",
     ),
   };
+}
+
+function cleanOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.map((item) => String(item ?? "").trim().slice(0, 80)).filter((item) => { const key = item.toLowerCase(); if (!item || seen.has(key)) return false; seen.add(key); return true; }).slice(0, 50);
+}
+
+function optionList(...sources: unknown[]): string[] {
+  for (const source of sources) { const options = cleanOptions(source); if (options.length) return options; }
+  return [];
 }

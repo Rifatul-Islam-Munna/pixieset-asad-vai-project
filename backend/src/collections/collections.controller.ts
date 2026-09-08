@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -18,7 +19,9 @@ import { existsSync, mkdirSync } from 'fs';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { cwd } from 'process';
+import type { Response } from 'express';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
+import { CollectionDownloadDeliveryService } from './collection-download-delivery.service';
 import { CollectionsService } from './collections.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
@@ -41,7 +44,24 @@ const uploadOptions = {
 
 @Controller('public/collections')
 export class PublicCollectionsController {
-  constructor(private readonly collectionsService: CollectionsService) {}
+  constructor(
+    private readonly collectionsService: CollectionsService,
+    private readonly downloadDeliveryService: CollectionDownloadDeliveryService,
+  ) {}
+
+  @Get('download-deliveries/:token')
+  async openDownloadDelivery(
+    @Param('token') token: string,
+    @Res() response: Response,
+  ) {
+    const file = await this.downloadDeliveryService.open(token);
+    response.setHeader('Content-Type', file.contentType || 'application/zip');
+    if (file.contentLength > 0) response.setHeader('Content-Length', String(file.contentLength));
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`);
+    file.body.on('error', () => response.destroy());
+    file.body.pipe(response);
+  }
 
   @Get(':identifier')
   async findPublic(
@@ -146,6 +166,23 @@ export class PublicCollectionsController {
     };
   }
 
+  @Post(':identifier/download-request')
+  async requestDownloadDelivery(
+    @Param('identifier') identifier: string,
+    @Body()
+    body: {
+      email?: string;
+      scope?: 'single' | 'set' | 'favorites' | 'all';
+      setId?: string;
+      imageIds?: string[];
+      pin?: string;
+    },
+    @Query('siteSlug') siteSlug?: string,
+  ) {
+    const data = await this.downloadDeliveryService.request(identifier, body, siteSlug);
+    return { message: data.message, data };
+  }
+
   @Post(':identifier/download-activity')
   async recordDownloadActivity(
     @Param('identifier') identifier: string,
@@ -186,6 +223,16 @@ export class PublicCollectionsController {
       message: data.favorited ? 'Photo favorited' : 'Photo unfavorited',
       data,
     };
+  }
+
+  @Post(':identifier/favorite-submission')
+  async submitFavoriteSelection(
+    @Param('identifier') identifier: string,
+    @Body() body: { email?: string; imageIds?: string[] },
+    @Query('siteSlug') siteSlug?: string,
+  ) {
+    const data = await this.collectionsService.submitPublicFavoriteSelection(identifier, body, siteSlug);
+    return { message: data.sent ? 'Favorite selection sent to print shop' : 'Favorite selection could not be emailed', data };
   }
 }
 
@@ -238,6 +285,12 @@ export class CollectionsController {
     const data = await this.collectionsService.listMarketingContacts(
       req.user.id,
     );
+    return { data };
+  }
+
+  @Get('client-contacts')
+  async clientContacts(@Req() req: ExpressRequest) {
+    const data = await this.collectionsService.listClientContacts(req.user.id);
     return { data };
   }
 

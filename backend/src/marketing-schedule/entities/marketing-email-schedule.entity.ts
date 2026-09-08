@@ -26,6 +26,11 @@ export class MarketingEmailSchedule {
   @Prop({ default: true }) showImage: boolean;
   @Prop({ trim: true }) collectionId?: string;
   @Prop({ trim: true }) collectionName?: string;
+  @Prop({ trim: true, index: true }) automationId?: string;
+  @Prop({ trim: true }) automationContactId?: string;
+  @Prop({ trim: true, lowercase: true }) automationRecipientEmail?: string;
+  @Prop({ trim: true, index: true }) automationEventKey?: string;
+  @Prop({ default: true }) subscriptionRequired: boolean;
   @Prop({ required: true }) scheduledAt: Date;
   @Prop({ required: true, trim: true }) scheduledLocal: string;
   @Prop({ required: true, trim: true, maxlength: 120 }) timeZone: string;
@@ -39,3 +44,11 @@ export class MarketingEmailSchedule {
 export const MarketingEmailScheduleSchema = SchemaFactory.createForClass(MarketingEmailSchedule);
 MarketingEmailScheduleSchema.index({ userId: 1, createdAt: -1 });
 MarketingEmailScheduleSchema.index({ status: 1, scheduledAt: 1 });
+MarketingEmailScheduleSchema.index(
+  { automationId: 1, automationRecipientEmail: 1 },
+  { unique: true, sparse: true },
+);
+MarketingEmailScheduleSchema.index(
+  { automationEventKey: 1 },
+  { unique: true, sparse: true },
+);

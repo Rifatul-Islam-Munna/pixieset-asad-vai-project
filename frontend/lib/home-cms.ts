@@ -1,4 +1,18 @@
+import { GALLERY_LANGUAGES, type GalleryLanguage } from "@/lib/gallery-language";
+import { CLIENT_GALLERY_CATEGORIES } from "@/lib/gallery-categories";
+
 export type HomeLanguage = "en" | "gr";
+
+export const EMAIL_TEMPLATE_LANGUAGES = GALLERY_LANGUAGES;
+export const EMAIL_TEMPLATE_CATEGORIES = [
+  "Gallery Delivery",
+  "Reminder",
+  "Thank You",
+  "Album & Print",
+  "Booking",
+  "Marketing",
+] as const;
+export type EmailTemplateCategory = (typeof EMAIL_TEMPLATE_CATEGORIES)[number];
 
 export type HomeCmsData = {
   seo: SiteSeo;
@@ -66,16 +80,145 @@ export type EmailTemplateItem = {
   image: string;
   eyebrowText?: string;
   showImage?: boolean;
+  category?: EmailTemplateCategory | string;
+  galleryCategory?: string;
+  customGalleryCategoryLabel?: string;
+  language?: GalleryLanguage | string;
   updatedAt: string;
   source?: "admin" | "user";
   sourceTemplateId?: string;
 };
 
+type CoreEmailTemplateCategory = EmailTemplateCategory;
+type LocalizedEmailCopy = { subject: string; previewText: string; title: string; message: string; buttonText: string; footerText: string };
+
+const localizedEmailCopy: Record<GalleryLanguage, Record<CoreEmailTemplateCategory, LocalizedEmailCopy>> = {
+  English: {
+    "Gallery Delivery": { subject: "Your photos are ready", previewText: "Your gallery is ready to view.", title: "Your photos are ready", message: "Your gallery is ready. We hope you love reliving these moments. Use the button below to view, favorite, and download your photos.", buttonText: "View Gallery", footerText: "Thank you for trusting us with your memories." },
+    Reminder: { subject: "A quick reminder about your gallery", previewText: "Your gallery is still waiting for you.", title: "Your gallery is waiting", message: "Just a friendly reminder that your photo gallery is ready. Open it anytime to view your images, choose favorites, and download the moments you love.", buttonText: "Open Gallery", footerText: "Questions? Reply to this email and we'll be happy to help." },
+    "Thank You": { subject: "Thank you — your gallery is here", previewText: "A small thank-you and your finished gallery.", title: "Thank you", message: "Thank you for choosing us to photograph your story. Your finished gallery is now available and ready to share with the people you love.", buttonText: "See Your Photos", footerText: "With gratitude, your photography team." },
+    "Album & Print": { subject: "Turn your favorite photos into something lasting", previewText: "Albums and prints are ready when you are.", title: "Your story deserves to be held", message: "Your favorite photographs can become a beautiful album or finished prints made for your home. Open your gallery to choose the moments you want to keep in print.", buttonText: "Choose Favorites", footerText: "Need help choosing an album or print size? Reply and we'll guide you." },
+    Booking: { subject: "Ready to plan your next session?", previewText: "Choose a date for your next photo session.", title: "Let's create something new", message: "If you've been thinking about another session, now is a great time to reserve a date. Use the button below to view availability and start planning.", buttonText: "Book a Session", footerText: "We'd love to photograph your next chapter." },
+    Marketing: { subject: "A little something from the studio", previewText: "News, inspiration, and an update from us.", title: "From the studio", message: "We wanted to share a little inspiration and the latest from the studio. Take a look and discover what's new for your next photography experience.", buttonText: "Explore More", footerText: "Thanks for being part of our photography community." },
+  },
+  Spanish: {
+    "Gallery Delivery": { subject: "Tus fotos están listas", previewText: "Tu galería ya está lista para ver.", title: "Tus fotos están listas", message: "Tu galería está lista. Esperamos que disfrutes reviviendo estos momentos. Usa el botón para ver, marcar favoritas y descargar tus fotos.", buttonText: "Ver galería", footerText: "Gracias por confiar en nosotros para guardar tus recuerdos." },
+    Reminder: { subject: "Un recordatorio sobre tu galería", previewText: "Tu galería sigue esperándote.", title: "Tu galería te espera", message: "Solo un recordatorio amistoso: tu galería de fotos está lista. Puedes abrirla cuando quieras para ver tus imágenes, elegir favoritas y descargarlas.", buttonText: "Abrir galería", footerText: "¿Tienes preguntas? Responde a este correo y estaremos encantados de ayudarte." },
+    "Thank You": { subject: "Gracias — tu galería ya está aquí", previewText: "Un pequeño agradecimiento y tu galería terminada.", title: "Gracias", message: "Gracias por elegirnos para fotografiar tu historia. Tu galería final ya está disponible y lista para compartir con las personas que quieres.", buttonText: "Ver tus fotos", footerText: "Con gratitud, tu equipo de fotografía." },
+    "Album & Print": { subject: "Convierte tus fotos favoritas en algo para siempre", previewText: "Álbumes e impresiones listos cuando tú quieras.", title: "Tu historia merece estar en tus manos", message: "Tus fotografías favoritas pueden convertirse en un álbum precioso o en impresiones terminadas para tu hogar. Abre la galería y elige los momentos que quieres conservar en papel.", buttonText: "Elegir favoritas", footerText: "¿Necesitas ayuda con el álbum o el tamaño de impresión? Responde a este correo y te orientamos." },
+    Booking: { subject: "¿Listos para planear la próxima sesión?", previewText: "Elige una fecha para tu próxima sesión de fotos.", title: "Creemos algo nuevo", message: "Si estás pensando en otra sesión, este es un buen momento para reservar una fecha. Usa el botón para ver la disponibilidad y empezar a planear.", buttonText: "Reservar sesión", footerText: "Nos encantará fotografiar el siguiente capítulo de tu historia." },
+    Marketing: { subject: "Algo especial desde el estudio", previewText: "Novedades, inspiración y una actualización del estudio.", title: "Desde el estudio", message: "Queríamos compartir un poco de inspiración y las últimas novedades del estudio. Descubre qué hay de nuevo para tu próxima experiencia fotográfica.", buttonText: "Descubrir más", footerText: "Gracias por formar parte de nuestra comunidad fotográfica." },
+  },
+  French: {
+    "Gallery Delivery": { subject: "Vos photos sont prêtes", previewText: "Votre galerie est prête à être découverte.", title: "Vos photos sont prêtes", message: "Votre galerie est prête. Nous espérons que vous aimerez revivre ces moments. Utilisez le bouton pour voir, ajouter vos favoris et télécharger vos photos.", buttonText: "Voir la galerie", footerText: "Merci de nous avoir confié vos souvenirs." },
+    Reminder: { subject: "Petit rappel concernant votre galerie", previewText: "Votre galerie vous attend toujours.", title: "Votre galerie vous attend", message: "Petit rappel amical : votre galerie photo est prête. Ouvrez-la quand vous le souhaitez pour voir vos images, choisir vos favoris et les télécharger.", buttonText: "Ouvrir la galerie", footerText: "Une question ? Répondez à cet e-mail, nous serons ravis de vous aider." },
+    "Thank You": { subject: "Merci — votre galerie est prête", previewText: "Un petit merci accompagné de votre galerie finale.", title: "Merci", message: "Merci de nous avoir choisis pour photographier votre histoire. Votre galerie finale est maintenant disponible et prête à être partagée avec vos proches.", buttonText: "Voir vos photos", footerText: "Avec toute notre gratitude, votre équipe photo." },
+    "Album & Print": { subject: "Donnez une vie durable à vos photos préférées", previewText: "Albums et tirages sont prêts quand vous l'êtes.", title: "Votre histoire mérite d'être imprimée", message: "Vos photographies préférées peuvent devenir un bel album ou des tirages finis pour votre intérieur. Ouvrez votre galerie et choisissez les moments que vous souhaitez conserver sur papier.", buttonText: "Choisir mes favoris", footerText: "Besoin d'aide pour choisir un album ou un format ? Répondez à cet e-mail et nous vous guiderons." },
+    Booking: { subject: "Prêts à organiser votre prochaine séance ?", previewText: "Choisissez une date pour votre prochaine séance photo.", title: "Créons quelque chose de nouveau", message: "Si vous pensez à une nouvelle séance, c'est le bon moment pour réserver une date. Utilisez le bouton pour consulter les disponibilités et commencer à préparer votre séance.", buttonText: "Réserver une séance", footerText: "Nous serions ravis de photographier votre prochain chapitre." },
+    Marketing: { subject: "Quelques nouvelles du studio", previewText: "Actualités, inspiration et nouveautés du studio.", title: "Depuis le studio", message: "Nous souhaitions partager un peu d'inspiration et les dernières nouvelles du studio. Découvrez ce qui est nouveau pour votre prochaine expérience photo.", buttonText: "Découvrir", footerText: "Merci de faire partie de notre communauté photo." },
+  },
+  German: {
+    "Gallery Delivery": { subject: "Deine Fotos sind fertig", previewText: "Deine Galerie ist jetzt bereit.", title: "Deine Fotos sind fertig", message: "Deine Galerie ist fertig. Wir wünschen dir viel Freude beim Wiedererleben dieser Momente. Über den Button kannst du deine Fotos ansehen, favorisieren und herunterladen.", buttonText: "Galerie ansehen", footerText: "Danke, dass du uns deine Erinnerungen anvertraut hast." },
+    Reminder: { subject: "Eine kurze Erinnerung an deine Galerie", previewText: "Deine Galerie wartet noch auf dich.", title: "Deine Galerie wartet", message: "Eine freundliche Erinnerung: Deine Fotogalerie ist bereit. Öffne sie jederzeit, um deine Bilder anzusehen, Favoriten auszuwählen und sie herunterzuladen.", buttonText: "Galerie öffnen", footerText: "Fragen? Antworte einfach auf diese E-Mail – wir helfen gerne." },
+    "Thank You": { subject: "Danke — deine Galerie ist da", previewText: "Ein kleines Dankeschön und deine fertige Galerie.", title: "Danke", message: "Danke, dass du uns gewählt hast, um deine Geschichte festzuhalten. Deine fertige Galerie ist jetzt verfügbar und kann mit deinen Lieblingsmenschen geteilt werden.", buttonText: "Fotos ansehen", footerText: "Mit herzlichem Dank, dein Fotografie-Team." },
+    "Album & Print": { subject: "Mach aus deinen Lieblingsfotos etwas Bleibendes", previewText: "Alben und Prints warten auf deine Auswahl.", title: "Deine Geschichte gehört in deine Hände", message: "Deine Lieblingsfotos können zu einem hochwertigen Album oder zu fertigen Prints für dein Zuhause werden. Öffne deine Galerie und wähle die Momente aus, die du gedruckt bewahren möchtest.", buttonText: "Favoriten auswählen", footerText: "Du brauchst Hilfe bei Album oder Printformat? Antworte einfach auf diese E-Mail." },
+    Booking: { subject: "Bereit für deine nächste Fotosession?", previewText: "Wähle einen Termin für deine nächste Fotosession.", title: "Lass uns etwas Neues schaffen", message: "Wenn du über eine weitere Session nachdenkst, ist jetzt ein guter Zeitpunkt, einen Termin zu reservieren. Über den Button kannst du freie Termine sehen und mit der Planung beginnen.", buttonText: "Session buchen", footerText: "Wir freuen uns darauf, dein nächstes Kapitel zu fotografieren." },
+    Marketing: { subject: "Neuigkeiten aus dem Studio", previewText: "Inspiration, Neuigkeiten und ein Update von uns.", title: "Aus dem Studio", message: "Wir möchten ein wenig Inspiration und die neuesten Neuigkeiten aus dem Studio mit dir teilen. Entdecke, was es für dein nächstes Fotoerlebnis Neues gibt.", buttonText: "Mehr entdecken", footerText: "Danke, dass du Teil unserer Fotografie-Community bist." },
+  },
+  Greek: {
+    "Gallery Delivery": { subject: "Οι φωτογραφίες σας είναι έτοιμες", previewText: "Η γκαλερί σας είναι έτοιμη για προβολή.", title: "Οι φωτογραφίες σας είναι έτοιμες", message: "Η γκαλερί σας είναι έτοιμη. Ελπίζουμε να απολαύσετε ξανά αυτές τις στιγμές. Χρησιμοποιήστε το κουμπί για να δείτε, να επιλέξετε αγαπημένες και να κατεβάσετε τις φωτογραφίες σας.", buttonText: "Προβολή γκαλερί", footerText: "Σας ευχαριστούμε που μας εμπιστευτήκατε τις αναμνήσεις σας." },
+    Reminder: { subject: "Μια μικρή υπενθύμιση για τη γκαλερί σας", previewText: "Η γκαλερί σας εξακολουθεί να σας περιμένει.", title: "Η γκαλερί σας περιμένει", message: "Μια φιλική υπενθύμιση ότι η γκαλερί φωτογραφιών σας είναι έτοιμη. Ανοίξτε την όποτε θέλετε για να δείτε τις εικόνες, να επιλέξετε αγαπημένες και να τις κατεβάσετε.", buttonText: "Άνοιγμα γκαλερί", footerText: "Έχετε ερωτήσεις; Απαντήστε σε αυτό το email και θα χαρούμε να βοηθήσουμε." },
+    "Thank You": { subject: "Ευχαριστούμε — η γκαλερί σας είναι εδώ", previewText: "Ένα μικρό ευχαριστώ μαζί με την ολοκληρωμένη γκαλερί σας.", title: "Ευχαριστούμε", message: "Σας ευχαριστούμε που μας επιλέξατε για να φωτογραφίσουμε την ιστορία σας. Η ολοκληρωμένη γκαλερί είναι τώρα διαθέσιμη και έτοιμη να τη μοιραστείτε με τους αγαπημένους σας.", buttonText: "Δείτε τις φωτογραφίες", footerText: "Με ευγνωμοσύνη, η φωτογραφική σας ομάδα." },
+    "Album & Print": { subject: "Κάντε τις αγαπημένες σας φωτογραφίες κάτι διαχρονικό", previewText: "Άλμπουμ και εκτυπώσεις είναι έτοιμα όταν είστε κι εσείς.", title: "Η ιστορία σας αξίζει να μείνει στα χέρια σας", message: "Οι αγαπημένες σας φωτογραφίες μπορούν να γίνουν ένα όμορφο άλμπουμ ή ποιοτικές εκτυπώσεις για το σπίτι. Ανοίξτε τη γκαλερί και επιλέξτε τις στιγμές που θέλετε να κρατήσετε τυπωμένες.", buttonText: "Επιλέξτε αγαπημένες", footerText: "Χρειάζεστε βοήθεια με άλμπουμ ή μέγεθος εκτύπωσης; Απαντήστε σε αυτό το email." },
+    Booking: { subject: "Έτοιμοι να σχεδιάσουμε την επόμενη φωτογράφιση;", previewText: "Επιλέξτε ημερομηνία για την επόμενη φωτογράφισή σας.", title: "Ας δημιουργήσουμε κάτι νέο", message: "Αν σκέφτεστε μια νέα φωτογράφιση, τώρα είναι μια καλή στιγμή να κρατήσετε ημερομηνία. Χρησιμοποιήστε το κουμπί για να δείτε τη διαθεσιμότητα και να ξεκινήσετε τον σχεδιασμό.", buttonText: "Κράτηση φωτογράφισης", footerText: "Θα χαρούμε να φωτογραφίσουμε το επόμενο κεφάλαιο της ιστορίας σας." },
+    Marketing: { subject: "Νέα από το στούντιο", previewText: "Έμπνευση, νέα και μια ενημέρωση από εμάς.", title: "Από το στούντιο", message: "Θέλαμε να μοιραστούμε λίγη έμπνευση και τα τελευταία νέα του στούντιο. Ανακαλύψτε τι νέο υπάρχει για την επόμενη φωτογραφική σας εμπειρία.", buttonText: "Ανακαλύψτε περισσότερα", footerText: "Ευχαριστούμε που είστε μέρος της φωτογραφικής μας κοινότητας." },
+  },
+  Arabic: {
+    "Gallery Delivery": { subject: "صوركم أصبحت جاهزة", previewText: "معرض الصور جاهز الآن للمشاهدة.", title: "صوركم أصبحت جاهزة", message: "معرض الصور الخاص بكم جاهز. نتمنى أن تستمتعوا باستعادة هذه اللحظات. استخدموا الزر لمشاهدة الصور واختيار المفضلة وتنزيلها.", buttonText: "عرض المعرض", footerText: "شكرًا لثقتكم بنا لحفظ ذكرياتكم." },
+    Reminder: { subject: "تذكير بسيط بمعرض الصور", previewText: "معرض الصور ما زال بانتظاركم.", title: "معرض الصور بانتظاركم", message: "مجرد تذكير ودي بأن معرض الصور جاهز. يمكنكم فتحه في أي وقت لمشاهدة الصور واختيار المفضلة وتنزيل اللحظات التي تحبونها.", buttonText: "فتح المعرض", footerText: "هل لديكم أي سؤال؟ ردوا على هذا البريد وسنسعد بمساعدتكم." },
+    "Thank You": { subject: "شكرًا لكم — معرض الصور جاهز", previewText: "رسالة شكر صغيرة مع معرضكم النهائي.", title: "شكرًا لكم", message: "شكرًا لاختياركم لنا لتوثيق قصتكم. أصبح معرض الصور النهائي متاحًا الآن وجاهزًا للمشاركة مع من تحبون.", buttonText: "مشاهدة الصور", footerText: "مع خالص الامتنان، فريق التصوير." },
+    "Album & Print": { subject: "حوّلوا صوركم المفضلة إلى ذكرى تدوم", previewText: "الألبومات والمطبوعات جاهزة عندما تكونون جاهزين.", title: "قصتكم تستحق أن تبقى بين أيديكم", message: "يمكن أن تتحول صوركم المفضلة إلى ألبوم جميل أو مطبوعات أنيقة لمنزلكم. افتحوا المعرض واختاروا اللحظات التي تريدون الاحتفاظ بها مطبوعة.", buttonText: "اختيار المفضلة", footerText: "هل تحتاجون مساعدة في اختيار الألبوم أو مقاس الطباعة؟ ردوا على هذا البريد وسنساعدكم." },
+    Booking: { subject: "هل أنتم مستعدون للتخطيط للجلسة القادمة؟", previewText: "اختاروا موعدًا لجلسة التصوير القادمة.", title: "لنصنع شيئًا جديدًا", message: "إذا كنتم تفكرون في جلسة تصوير جديدة، فهذا وقت مناسب لحجز موعد. استخدموا الزر لمشاهدة المواعيد المتاحة والبدء في التخطيط.", buttonText: "حجز جلسة", footerText: "يسعدنا أن نوثق الفصل القادم من قصتكم." },
+    Marketing: { subject: "جديد من الاستوديو", previewText: "أخبار وإلهام وتحديث جديد منا.", title: "من الاستوديو", message: "أردنا أن نشارككم بعض الإلهام وآخر أخبار الاستوديو. اكتشفوا ما هو جديد لتجربة التصوير القادمة.", buttonText: "اكتشفوا المزيد", footerText: "شكرًا لكونكم جزءًا من مجتمعنا الفوتوغرافي." },
+  },
+};
+
+const coreTemplateColors: Record<CoreEmailTemplateCategory, string> = {
+  "Gallery Delivery": "#1C1C1C",
+  Reminder: "#6F57D9",
+  "Thank You": "#B48A58",
+  "Album & Print": "#86684A",
+  Booking: "#2E6E68",
+  Marketing: "#6337D8",
+};
+
+const purposeEmailTemplates: EmailTemplateItem[] = EMAIL_TEMPLATE_LANGUAGES.flatMap((language) =>
+  EMAIL_TEMPLATE_CATEGORIES.map((category) => {
+    const copy = localizedEmailCopy[language][category];
+    const slug = `${language}-${category}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return {
+      id: `admin-${slug}`,
+      name: `${category} · ${language}`,
+      category,
+      language,
+      ...copy,
+      buttonLink: "Collection URL",
+      buttonColor: coreTemplateColors[category],
+      image: "",
+      eyebrowText: "Client Gallery",
+      showImage: true,
+      updatedAt: "Pre-built",
+      source: "admin" as const,
+    };
+  }),
+);
+
+const galleryCategoryEmailTemplates: EmailTemplateItem[] = EMAIL_TEMPLATE_LANGUAGES.flatMap((language) =>
+  CLIENT_GALLERY_CATEGORIES.map((galleryCategory) => {
+    const copy = localizedEmailCopy[language]["Gallery Delivery"];
+    const slug = `${language}-${galleryCategory}-gallery`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return {
+      id: `admin-category-${slug}`,
+      name: `${galleryCategory} · ${language}`,
+      category: "Gallery Delivery",
+      galleryCategory,
+      language,
+      ...copy,
+      buttonLink: "Collection URL",
+      buttonColor: coreTemplateColors["Gallery Delivery"],
+      image: "",
+      eyebrowText: galleryCategory === "Custom label" ? "Client Gallery" : galleryCategory,
+      showImage: true,
+      updatedAt: "Pre-built",
+      source: "admin" as const,
+    };
+  }),
+);
+
 export const defaultEmailTemplates: EmailTemplateItem[] = [
-  { id: "admin-gallery-ready", name: "Gallery Ready", subject: "Your photos are ready", previewText: "Your gallery is ready to view.", title: "Your photos are ready", message: "Your gallery is ready. We hope you love reliving these moments. Use the button below to view and download your photos.", buttonText: "View Gallery", buttonLink: "Collection URL", buttonColor: "#1C1C1C", footerText: "Thank you for trusting us with your memories.", image: "", updatedAt: "Pre-built", source: "admin" },
-  { id: "admin-friendly-reminder", name: "Friendly Reminder", subject: "A quick reminder about your gallery", previewText: "Your gallery is still waiting for you.", title: "Your gallery is waiting", message: "Just a friendly reminder that your photo gallery is ready. Open it anytime to view your images, choose favorites, and download the moments you love.", buttonText: "Open Gallery", buttonLink: "Collection URL", buttonColor: "#6F57D9", footerText: "Questions? Reply to this email and we'll be happy to help.", image: "", updatedAt: "Pre-built", source: "admin" },
-  { id: "admin-thank-you", name: "Thank You", subject: "Thank you — your gallery is here", previewText: "A small thank-you and your finished gallery.", title: "Thank you", message: "Thank you for choosing us to photograph your story. Your finished gallery is now available and ready to share with the people you love.", buttonText: "See Your Photos", buttonLink: "Collection URL", buttonColor: "#B48A58", footerText: "With gratitude, your photography team.", image: "", updatedAt: "Pre-built", source: "admin" },
+  ...purposeEmailTemplates,
+  ...galleryCategoryEmailTemplates,
 ];
+
+const legacyEmailCategory: Record<string, CoreEmailTemplateCategory> = {
+  "admin-gallery-ready": "Gallery Delivery",
+  "admin-friendly-reminder": "Reminder",
+  "admin-thank-you": "Thank You",
+};
+
+function mergeCmsEmailTemplates(value: EmailTemplateItem[] | undefined) {
+  const saved = (Array.isArray(value) ? value : []).map((template) => ({
+    ...template,
+    category: template.category || legacyEmailCategory[template.id] || "Gallery Delivery",
+    language: template.language || "English",
+    source: "admin" as const,
+  }));
+  const templateKey = (template: EmailTemplateItem) =>
+    `${template.language || "English"}::${template.category || "Gallery Delivery"}::${template.galleryCategory || ""}`;
+  const covered = new Set(saved.map(templateKey));
+  const missingDefaults = defaultEmailTemplates.filter((template) => !covered.has(templateKey(template)));
+  return [...saved, ...missingDefaults];
+}
 
 export type SiteSeo = {
   siteTitle: string;
@@ -931,10 +1074,7 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
     coverTemplates: Array.isArray(data?.coverTemplates)
       ? data.coverTemplates
       : [],
-    emailTemplates:
-      Array.isArray(data?.emailTemplates) && data.emailTemplates.length
-        ? data.emailTemplates.map((template) => ({ ...template, source: "admin" as const }))
-        : defaultEmailTemplates,
+    emailTemplates: mergeCmsEmailTemplates(data?.emailTemplates),
     media,
     content,
   };

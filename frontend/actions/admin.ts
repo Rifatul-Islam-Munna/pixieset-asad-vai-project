@@ -403,6 +403,9 @@ export type AdminBlog = {
   content?: string;
   thumbnailUrl?: string;
   author?: string;
+  category?: string;
+  language?: string;
+  featured?: boolean;
   keywords?: string[];
   published: boolean;
   publishedAt?: string;

@@ -14,6 +14,13 @@ export type GlobalMailPayload = {
   bcc?: string | string[];
   replyTo?: string;
   from?: string;
+  attachments?: GlobalMailAttachment[];
+};
+
+export type GlobalMailAttachment = {
+  filename: string;
+  content: Buffer | Uint8Array;
+  contentType?: string;
 };
 
 export type GlobalMailResult = {
@@ -91,6 +98,7 @@ export class MailService implements OnModuleInit {
       subject: payload.subject,
       text: payload.text,
       html: payload.html,
+      attachments: payload.attachments,
       messageId,
     });
 
@@ -357,9 +365,12 @@ function buildMimeMessage(input: {
   subject: string;
   text?: string;
   html?: string;
+  attachments?: GlobalMailAttachment[];
   messageId: string;
 }) {
-  const boundary = `mobile-gallery-${randomUUID()}`;
+  const alternativeBoundary = `mail-alt-${randomUUID()}`;
+  const mixedBoundary = `mail-mixed-${randomUUID()}`;
+  const attachments = input.attachments ?? [];
   const headers = [
     `From: ${input.from}`,
     `To: ${input.to.join(', ')}`,
@@ -371,17 +382,46 @@ function buildMimeMessage(input: {
     'MIME-Version: 1.0',
   ];
 
-  if (input.text && input.html) {
-    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
-    return `${headers.join('\r\n')}\r\n\r\n--${boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(input.text)}\r\n--${boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(input.html)}\r\n--${boundary}--\r\n`;
+  const bodyPart = input.text && input.html
+    ? `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n--${alternativeBoundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(input.text)}\r\n--${alternativeBoundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(input.html)}\r\n--${alternativeBoundary}--\r\n`
+    : `Content-Type: ${input.html ? 'text/html' : 'text/plain'}; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(input.html || input.text || '')}\r\n`;
+
+  if (!attachments.length) {
+    if (input.text && input.html) {
+      headers.push(`Content-Type: multipart/alternative; boundary="${alternativeBoundary}"`);
+      return `${headers.join('\r\n')}\r\n\r\n--${alternativeBoundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(input.text)}\r\n--${alternativeBoundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(input.html)}\r\n--${alternativeBoundary}--\r\n`;
+    }
+    headers.push(`Content-Type: ${input.html ? 'text/html' : 'text/plain'}; charset=UTF-8`);
+    headers.push('Content-Transfer-Encoding: base64');
+    return `${headers.join('\r\n')}\r\n\r\n${base64Lines(input.html || input.text || '')}\r\n`;
   }
 
-  const isHtml = Boolean(input.html);
-  headers.push(`Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset=UTF-8`);
-  headers.push('Content-Transfer-Encoding: base64');
-  return `${headers.join('\r\n')}\r\n\r\n${base64Lines(input.html || input.text || '')}\r\n`;
+  headers.push(`Content-Type: multipart/mixed; boundary="${mixedBoundary}"`);
+  let body = `--${mixedBoundary}\r\n${bodyPart}`;
+
+  for (const attachment of attachments) {
+    const filename = safeAttachmentFilename(attachment.filename);
+    const contentType = safeAttachmentContentType(attachment.contentType);
+    body += `--${mixedBoundary}\r\nContent-Type: ${contentType}; name="${filename}"\r\nContent-Disposition: attachment; filename="${filename}"\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64BufferLines(attachment.content)}\r\n`;
+  }
+  body += `--${mixedBoundary}--\r\n`;
+  return `${headers.join('\r\n')}\r\n\r\n${body}`;
 }
 
 function base64Lines(value: string) {
   return Buffer.from(value, 'utf8').toString('base64').match(/.{1,76}/g)?.join('\r\n') || '';
+}
+
+function base64BufferLines(value: Buffer | Uint8Array) {
+  return Buffer.from(value).toString('base64').match(/.{1,76}/g)?.join('\r\n') || '';
+}
+
+function safeAttachmentFilename(value: string) {
+  const clean = String(value || 'attachment').replace(/[\r\n"\\/]+/g, '-').replace(/[^a-z0-9._ -]+/gi, '-').trim();
+  return clean.slice(0, 140) || 'attachment';
+}
+
+function safeAttachmentContentType(value?: string) {
+  const clean = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(clean) ? clean : 'application/octet-stream';
 }

@@ -14,6 +14,8 @@ import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
 import { setTimeout as delay } from 'timers/promises';
 import { MinioService } from 'src/lib/minio.service';
+import { MailService, type GlobalMailAttachment } from 'src/mail/mail.service';
+import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
 import { FaceSearchService } from 'src/face-search/face-search.service';
 import {
   MobileGalleryImage,
@@ -119,6 +121,8 @@ export class CollectionsService {
     private readonly homepageModel: Model<HomepageDocument>,
     private readonly minioService: MinioService,
     private readonly faceSearchService: FaceSearchService,
+    private readonly mailService: MailService,
+    private readonly marketingScheduleService: MarketingScheduleService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -132,19 +136,37 @@ export class CollectionsService {
       }
     }
     const safeDto = await this.sanitizeCollectionCapabilities(userId, dto);
+    const publishRecipients = this.cleanEmailList(safeDto.clientEmails);
+    const incomingSettings = ((safeDto.settings ?? {}) as Record<string, any>);
+    const incomingAccess = ((incomingSettings.access ?? {}) as Record<string, any>);
     const collection = await this.collectionModel.create({
       userId,
       name: safeDto.name,
       slug: await this.uniqueSlug(userId, safeDto.name),
       eventDate: safeDto.eventDate ? new Date(safeDto.eventDate) : undefined,
       presetId: safeDto.presetId,
+      tags: [...new Set((safeDto.tags ?? []).map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 20),
+      clientEmails: publishRecipients,
       status: safeDto.status ?? 'draft',
       design: safeDto.design ?? {},
-      settings: safeDto.settings ?? {},
+      settings: {
+        ...incomingSettings,
+        access: {
+          ...incomingAccess,
+          allowedEmails: this.cleanEmailList([
+            ...(Array.isArray(incomingAccess.allowedEmails) ? incomingAccess.allowedEmails : []),
+            ...publishRecipients,
+          ]),
+          publishRecipientEmails: publishRecipients,
+        },
+      },
       sets: [{ id: 'highlights', name: 'Featured', createdAt: new Date() }],
       imageCount: 0,
     });
 
+    if (collection.status === 'published') {
+      await this.queuePublishedCollection(collection).catch(() => undefined);
+    }
     return collection.toObject();
   }
 
@@ -385,11 +407,19 @@ export class CollectionsService {
           .lean()
       : null;
     const presetData = preset?.data as any;
+    const collectionAccess = ((collection.settings as any)?.access ?? {}) as Record<string, any>;
     const accessSourceSettings = {
       ...((collection.settings as any) ?? {}),
       general: {
         ...(presetData?.general ?? presetData?.presetGeneral ?? {}),
         ...((collection.settings as any)?.general ?? {}),
+      },
+      access: {
+        ...collectionAccess,
+        allowedEmails: this.cleanEmailList([
+          ...(Array.isArray(collectionAccess.allowedEmails) ? collectionAccess.allowedEmails : []),
+          ...(Array.isArray(collection.clientEmails) ? collection.clientEmails : []),
+        ]),
       },
     };
     const accessRaw = (accessSourceSettings as any)?.access ?? {};
@@ -461,6 +491,15 @@ export class CollectionsService {
       .lean();
     const ownerFeatures = owner?.planFeatures ?? {};
 
+    const mergedFavoriteSettings = {
+      ...(presetData?.favorite ?? presetData?.presetFavorite ?? {}),
+      ...((collection.settings as any)?.favorite ?? {}),
+    } as Record<string, any>;
+    const { printShopEmail: _hiddenPrintShopEmail, ...publicFavoriteSettings } = mergedFavoriteSettings;
+    publicFavoriteSettings.autoShareToPrintShop =
+      this.boolSetting(mergedFavoriteSettings.autoShareToPrintShop) &&
+      Boolean(this.cleanEmail(mergedFavoriteSettings.printShopEmail));
+
     const mergedSettings = {
       general: {
         ...(presetData?.general ?? presetData?.presetGeneral ?? {}),
@@ -470,10 +509,7 @@ export class CollectionsService {
         ...(presetData?.download ?? presetData?.presetDownload ?? {}),
         ...((collection.settings as any)?.download ?? {}),
       },
-      favorite: {
-        ...(presetData?.favorite ?? presetData?.presetFavorite ?? {}),
-        ...((collection.settings as any)?.favorite ?? {}),
-      },
+      favorite: publicFavoriteSettings,
       store: {
         ...(presetData?.store ?? presetData?.presetStore ?? {}),
         ...((collection.settings as any)?.store ?? {}),
@@ -510,8 +546,9 @@ export class CollectionsService {
       };
     }
 
+    const { clientEmails: _hiddenClientEmails, ...publicCollection } = collection as any;
     return {
-      ...collection,
+      ...publicCollection,
       planCapabilities: {
         aiFaceSearch: Boolean(ownerFeatures.aiFaceSearch),
         advancedFaceSearch: Boolean(ownerFeatures.advancedFaceSearch),
@@ -651,11 +688,19 @@ export class CollectionsService {
           .lean()
       : null;
     const presetData = preset?.data as any;
+    const collectionAccess = ((collection.settings as any)?.access ?? {}) as Record<string, any>;
     const accessSourceSettings = {
       ...((collection.settings as any) ?? {}),
       general: {
         ...(presetData?.general ?? presetData?.presetGeneral ?? {}),
         ...((collection.settings as any)?.general ?? {}),
+      },
+      access: {
+        ...collectionAccess,
+        allowedEmails: this.cleanEmailList([
+          ...(Array.isArray(collectionAccess.allowedEmails) ? collectionAccess.allowedEmails : []),
+          ...(Array.isArray(collection.clientEmails) ? collection.clientEmails : []),
+        ]),
       },
     };
     const accessRaw = (accessSourceSettings as any)?.access ?? {};
@@ -863,6 +908,53 @@ export class CollectionsService {
     }));
   }
 
+  async listClientContacts(userId: string) {
+    const [registrations, collections] = await Promise.all([
+      this.emailRegistrationModel
+        .find({ ownerId: userId })
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .lean(),
+      this.collectionModel
+        .find({ userId, clientEmails: { $exists: true, $ne: [] } })
+        .select('name clientEmails')
+        .lean(),
+    ]);
+    type ClientContactRow = {
+      email: string;
+      collectionName?: string;
+      source?: string;
+      marketingOptIn?: boolean;
+      categories: string[];
+    };
+    const rows = new Map<string, ClientContactRow>();
+    const mergeContact = (email: string, category?: string, source?: string, marketingOptIn = false) => {
+      const existing = rows.get(email);
+      const cleanCategory = String(category ?? '').trim();
+      const categories = [...new Set([
+        ...(existing?.categories ?? []),
+        ...(cleanCategory ? [cleanCategory] : []),
+      ])];
+      const preferIncoming = String(source ?? '').startsWith('manual-');
+      rows.set(email, {
+        email,
+        collectionName: preferIncoming ? cleanCategory : existing?.collectionName || cleanCategory,
+        source: preferIncoming ? source : existing?.source || source,
+        marketingOptIn: Boolean(existing?.marketingOptIn || marketingOptIn),
+        categories,
+      });
+    };
+    for (const contact of registrations) {
+      const email = this.cleanEmail(contact.email);
+      if (!email) continue;
+      mergeContact(email, contact.collectionName, contact.lastSource, Boolean(contact.marketingOptIn));
+    }
+    for (const collection of collections) {
+      for (const email of this.cleanEmailList(collection.clientEmails))
+        mergeContact(email, collection.name, 'publish-recipient');
+    }
+    return [...rows.values()].sort((left, right) => left.email.localeCompare(right.email));
+  }
+
   async addMarketingContacts(
     userId: string,
     body: {
@@ -895,6 +987,10 @@ export class CollectionsService {
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '') || 'contacts'
       }`;
+      const existing = await this.emailRegistrationModel
+        .findOne({ collectionId: source, email: item.email })
+        .select('marketingOptIn marketingOptedInAt')
+        .lean();
       await this.emailRegistrationModel.updateOne(
         { collectionId: source, email: item.email },
         {
@@ -904,6 +1000,7 @@ export class CollectionsService {
             email: item.email,
             lastSource: source,
             marketingOptIn: true,
+            ...(!existing?.marketingOptIn ? { marketingOptedInAt: new Date() } : {}),
           },
           $setOnInsert: { collectionId: source },
           $addToSet: { sources: source },
@@ -1103,7 +1200,180 @@ export class CollectionsService {
       { $setOnInsert: { userId: email, imageId, collectionId } },
       { upsert: true },
     );
+    await this.queueCollectionLifecycle(collection, 'client-favorite', [email], siteSlug).catch(() => undefined);
     return { favorited: true, imageId, collectionId };
+  }
+
+  async submitPublicFavoriteSelection(
+    identifier: string,
+    body: { email?: string; imageIds?: string[] },
+    siteSlug?: string,
+  ) {
+    const email = this.cleanEmail(body?.email);
+    if (!email) throw new BadRequestException('Email is required');
+    const collection = await this.findCollectionByIdentifier(identifier, siteSlug);
+    if (!this.isPublicCollectionVisible(collection))
+      throw new NotFoundException('Collection not found');
+
+    const favoriteSettings = await this.mergedFavoriteSettings(collection);
+    if (!this.boolSetting(favoriteSettings.autoShareToPrintShop)) {
+      throw new BadRequestException('Print shop handoff is not enabled for this gallery');
+    }
+    const recipient = this.cleanEmail(favoriteSettings.printShopEmail);
+    if (!recipient) throw new BadRequestException('Print shop email is not configured');
+
+    const collectionId = collection._id.toString();
+    const favorites = await this.imageFavoriteModel
+      .find({ collectionId, userId: email })
+      .select('imageId')
+      .lean();
+    const favoriteIds = new Set(favorites.map((item) => String(item.imageId)));
+    const requestedIds = [...new Set((Array.isArray(body?.imageIds) ? body.imageIds : [])
+      .map((value) => String(value))
+      .filter((value) => Types.ObjectId.isValid(value)))];
+    if (!requestedIds.length)
+      throw new BadRequestException('No favorite photos are selected');
+    if (requestedIds.some((imageId) => !favoriteIds.has(imageId))) {
+      throw new BadRequestException('Favorite selection is still syncing. Please try again.');
+    }
+    const finalIds = requestedIds;
+
+    const images = await this.imageModel
+      .find({ collectionId, _id: { $in: finalIds } })
+      .select('_id url originalName filename mimetype mediaType sizeBytes order')
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
+    if (!images.length) throw new BadRequestException('Favorite files were not found');
+
+    const attachmentBudget = Math.max(
+      0,
+      Number(this.configService.get<string>('PRINT_SHOP_EMAIL_ATTACHMENT_MAX_BYTES') || 12 * 1024 * 1024),
+    );
+    let remainingBytes = attachmentBudget;
+    const attachments: GlobalMailAttachment[] = [];
+    for (const image of images) {
+      if (image.mediaType === 'video' || remainingBytes <= 0) continue;
+      const declaredSize = Math.max(0, Number(image.sizeBytes ?? 0));
+      if (declaredSize && declaredSize > remainingBytes) continue;
+      const attachment = await this.loadPrintShopAttachment(image).catch(() => null);
+      if (!attachment || attachment.content.byteLength > remainingBytes) continue;
+      attachments.push(attachment);
+      remainingBytes -= attachment.content.byteLength;
+    }
+
+    const rows = images.map((image, index) => {
+      const fileName = image.originalName || image.filename || `photo-${index + 1}`;
+      return {
+        number: index + 1,
+        fileName,
+        url: this.publicPrintShopFileUrl(String(image.url || '')),
+      };
+    });
+    const text = [
+      `New completed favorite selection`,
+      `Collection: ${collection.name}`,
+      `Client: ${email}`,
+      `Requested photos: ${rows.length}`,
+      `Files attached to this email: ${attachments.length}`,
+      '',
+      'Requested photo numbers / filenames:',
+      ...rows.map((row) => `${row.number}. ${row.fileName}`),
+      '',
+      'Download links:',
+      ...rows.map((row) => `${row.number}. ${row.fileName} - ${row.url}`),
+      '',
+      attachments.length < rows.length
+        ? 'Some files were not attached because of email attachment size limits. Use the download links above for every requested file.'
+        : 'All requested photo files are attached.',
+    ].join('\n');
+    const htmlRows = rows
+      .map((row) => `<li><strong>${escapeEmailHtml(row.fileName)}</strong> - <a href="${escapeEmailHtml(row.url)}">download file</a></li>`)
+      .join('');
+    const html = [
+      '<h1>Completed favorite selection</h1>',
+      `<p><strong>Collection:</strong> ${escapeEmailHtml(collection.name)}</p>`,
+      `<p><strong>Client:</strong> ${escapeEmailHtml(email)}</p>`,
+      `<p><strong>Requested photos:</strong> ${rows.length}<br/><strong>Attached files:</strong> ${attachments.length}</p>`,
+      '<h2>Requested photo numbers / files</h2>',
+      `<ol>${htmlRows}</ol>`,
+      attachments.length < rows.length
+        ? '<p>Some files were not attached because of email attachment size limits. Every requested file is available from the links above.</p>'
+        : '<p>All requested photo files are attached to this email.</p>',
+    ].join('');
+
+    const result = await this.mailService.send({
+      to: recipient,
+      replyTo: email,
+      subject: `Print request - ${collection.name} - ${email}`,
+      text,
+      html,
+      attachments,
+    });
+    return {
+      ...result,
+      requestedCount: rows.length,
+      attachedCount: attachments.length,
+      linkedCount: rows.length,
+    };
+  }
+
+  private async mergedFavoriteSettings(collection: any) {
+    const preset = collection.presetId
+      ? await this.settingModel.findOne({
+          userId: collection.userId,
+          type: DashboardSettingType.PRESET,
+          localId: collection.presetId,
+        }).lean()
+      : null;
+    const presetData = preset?.data as any;
+    return {
+      ...(presetData?.favorite ?? presetData?.presetFavorite ?? {}),
+      ...((collection.settings as any)?.favorite ?? {}),
+    } as Record<string, any>;
+  }
+
+  private async loadPrintShopAttachment(image: any): Promise<GlobalMailAttachment | null> {
+    const rawUrl = String(image?.url ?? '').trim();
+    if (!rawUrl) return null;
+    const filename = String(image?.originalName || image?.filename || `photo-${image?._id || 'file'}`);
+    const contentType = String(image?.mimetype || '').trim() || undefined;
+    if (rawUrl.startsWith('/uploads/')) {
+      const relative = rawUrl.split(/[?#]/)[0].replace(/^\/+/, '');
+      const content = await readFile(join(cwd(), relative));
+      return { filename, content, contentType };
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return null;
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    const response = await fetch(parsed, {
+      signal: AbortSignal.timeout(15000),
+      cache: 'no-store',
+    }).catch(() => null);
+    if (!response?.ok) return null;
+    const content = new Uint8Array(await response.arrayBuffer());
+    return {
+      filename,
+      content,
+      contentType: contentType || response.headers.get('content-type') || undefined,
+    };
+  }
+
+  private publicPrintShopFileUrl(rawUrl: string) {
+    if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
+    const base =
+      this.configService.get<string>('PUBLIC_BASE_URL') ||
+      this.configService.get<string>('BASE_URL') ||
+      this.configService.get<string>('NEXT_PUBLIC_BASE_URL') ||
+      `http://localhost:${this.configService.get<string>('PORT') || '4000'}`;
+    try {
+      return new URL(rawUrl, base).toString();
+    } catch {
+      return rawUrl;
+    }
   }
 
   async getCollectionActivity(userId: string, collectionId: string) {
@@ -1576,7 +1846,39 @@ export class CollectionsService {
   async update(userId: string, id: string, dto: UpdateCollectionDto) {
     const collection = await this.collectionModel.findOne({ _id: id, userId });
     if (!collection) throw new NotFoundException('Collection not found');
+    const wasPublished = collection.status === 'published';
     dto = await this.sanitizeCollectionCapabilities(userId, dto, id);
+    const currentSettings = ((collection.settings ?? {}) as Record<string, any>);
+    const currentAccess = ((currentSettings.access ?? {}) as Record<string, any>);
+    const previousPublishRecipients = this.cleanEmailList(
+      Array.isArray(currentAccess.publishRecipientEmails)
+        ? currentAccess.publishRecipientEmails
+        : collection.clientEmails,
+    );
+    const nextPublishRecipients = dto.clientEmails !== undefined
+      ? this.cleanEmailList(dto.clientEmails)
+      : this.cleanEmailList(collection.clientEmails);
+    const requestedSettings = dto.settings !== undefined
+      ? ((dto.settings ?? {}) as Record<string, any>)
+      : currentSettings;
+    const requestedAccess = ((requestedSettings.access ?? currentAccess) as Record<string, any>);
+    const requestedAllowedEmails = this.cleanEmailList(
+      Array.isArray(requestedAccess.allowedEmails) ? requestedAccess.allowedEmails : [],
+    );
+    const manualAllowedEmails = requestedAllowedEmails.filter(
+      (email) => !previousPublishRecipients.includes(email),
+    );
+    const syncedSettings = {
+      ...requestedSettings,
+      access: {
+        ...requestedAccess,
+        allowedEmails: this.cleanEmailList([
+          ...manualAllowedEmails,
+          ...nextPublishRecipients,
+        ]),
+        publishRecipientEmails: nextPublishRecipients,
+      },
+    };
 
     if (dto.name !== undefined) {
       collection.name = dto.name;
@@ -1608,16 +1910,21 @@ export class CollectionsService {
         ? nextSets
         : [{ id: 'highlights', name: 'Featured', createdAt: new Date() }];
     }
-    if (dto.tags !== undefined) collection.tags = dto.tags;
+    if (dto.tags !== undefined) collection.tags = [...new Set(dto.tags.map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 20);
+    if (dto.clientEmails !== undefined) collection.clientEmails = nextPublishRecipients;
     if (dto.watermarkId !== undefined)
       collection.watermarkId = dto.watermarkId || undefined;
     if (dto.expiresAt !== undefined)
       collection.expiresAt = this.expiryDate(dto.expiresAt);
     if (dto.status !== undefined) collection.status = dto.status;
     if (dto.design !== undefined) collection.design = dto.design;
-    if (dto.settings !== undefined) collection.settings = dto.settings;
+    if (dto.settings !== undefined || dto.clientEmails !== undefined)
+      collection.settings = syncedSettings;
 
     await collection.save();
+    if (!wasPublished && collection.status === 'published') {
+      await this.queuePublishedCollection(collection).catch(() => undefined);
+    }
     return collection.toObject();
   }
 
@@ -1643,6 +1950,7 @@ export class CollectionsService {
         { id: 'highlights', name: 'Featured', createdAt: new Date() },
       ],
       tags: source.tags ?? [],
+      clientEmails: source.clientEmails ?? [],
       watermarkId: source.watermarkId,
       expiresAt: source.expiresAt,
       design: source.design ?? {},
@@ -2934,6 +3242,60 @@ export class CollectionsService {
     return /^\S+@\S+\.\S+$/.test(email) ? email : '';
   }
 
+  private cleanEmailList(values?: unknown[]) {
+    return [...new Set((Array.isArray(values) ? values : [])
+      .map((value) => this.cleanEmail(String(value ?? '')))
+      .filter(Boolean))];
+  }
+
+  private async collectionPublicLink(collection: any, siteSlug?: string) {
+    const homepage = siteSlug
+      ? null
+      : await this.homepageModel.findOne({ userId: String(collection.userId) }).select('slug').lean();
+    const resolvedSiteSlug = String(siteSlug || homepage?.slug || '').trim();
+    if (!resolvedSiteSlug) return '';
+    const collectionSlug = String(collection.slug || collection._id || '').trim();
+    if (!collectionSlug) return '';
+    const configuredRoot = String(
+      this.configService.get<string>('ROOT_DOMAIN') ||
+      this.configService.get<string>('NEXT_PUBLIC_ROOT_DOMAIN') ||
+      '',
+    ).trim();
+    const frontendOrigin = String(
+      this.configService.get<string>('FRONTEND_URL') ||
+      this.configService.get<string>('PUBLIC_APP_URL') ||
+      'http://localhost:3000',
+    ).replace(/\/$/, '');
+    const root = configuredRoot.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+    if (root && !/^localhost(?::\d+)?$/i.test(root)) {
+      const protocol = configuredRoot.startsWith('http://') ? 'http' : 'https';
+      return `${protocol}://${resolvedSiteSlug}.${root}/${encodeURIComponent(collectionSlug)}`;
+    }
+    return `${frontendOrigin}/collection/${encodeURIComponent(resolvedSiteSlug)}/${encodeURIComponent(collectionSlug)}`;
+  }
+
+  private async queueCollectionLifecycle(collection: any, trigger: 'gallery-published' | 'client-download' | 'client-favorite', emails: string[], siteSlug?: string) {
+    const recipientEmails = this.cleanEmailList(emails);
+    if (!recipientEmails.length) return;
+    const buttonLink = await this.collectionPublicLink(collection, siteSlug);
+    await this.marketingScheduleService.queueLifecycleEvent({
+      userId: String(collection.userId),
+      trigger,
+      recipientEmails,
+      collectionId: String(collection._id),
+      collectionName: String(collection.name || 'Gallery'),
+      buttonLink,
+    }).catch(() => undefined);
+  }
+
+  private async queuePublishedCollection(collection: any) {
+    await this.queueCollectionLifecycle(
+      collection,
+      'gallery-published',
+      Array.isArray(collection.clientEmails) ? collection.clientEmails : [],
+    );
+  }
+
   private registrationSource(value?: string) {
     const source = String(value ?? 'email-registration')
       .trim()
@@ -2958,8 +3320,10 @@ export class CollectionsService {
     const collectionId = collection._id.toString();
     const existing = await this.emailRegistrationModel
       .findOne({ collectionId, email })
-      .select('marketingOptIn')
+      .select('marketingOptIn marketingOptedInAt')
       .lean();
+    const nextMarketingOptIn = Boolean(existing?.marketingOptIn || marketingOptIn);
+    const firstOptIn = nextMarketingOptIn && !existing?.marketingOptIn;
     await this.emailRegistrationModel.updateOne(
       { collectionId, email },
       {
@@ -2968,7 +3332,8 @@ export class CollectionsService {
           collectionName: collection.name,
           email,
           lastSource: source,
-          marketingOptIn: Boolean(existing?.marketingOptIn || marketingOptIn),
+          marketingOptIn: nextMarketingOptIn,
+          ...(firstOptIn ? { marketingOptedInAt: new Date() } : {}),
         },
         $setOnInsert: { collectionId },
         $addToSet: { sources: source },
@@ -3087,4 +3452,8 @@ function maxDate(values: Date[]) {
   return new Date(
     Math.max(...values.map((value) => new Date(value).getTime())),
   );
+}
+
+function escapeEmailHtml(value: unknown) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] || char));
 }

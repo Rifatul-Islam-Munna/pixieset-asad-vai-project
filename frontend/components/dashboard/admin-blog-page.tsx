@@ -8,9 +8,11 @@ import { createAdminBlog, deleteAdminBlog, type AdminBlog, updateAdminBlog, uplo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { GALLERY_LANGUAGES } from "@/lib/gallery-language";
 import { AdminResourceShell } from "./admin-resource-shell";
 
-const blank = { title: "", slug: "", excerpt: "", content: "", thumbnailUrl: "", author: "", keywords: "", published: true };
+const BLOG_CATEGORIES = ["Guides", "Business", "Client Experience", "Marketing", "Inspiration", "Product Updates"] as const;
+const blank = { title: "", slug: "", excerpt: "", content: "", thumbnailUrl: "", author: "", category: "Guides", language: "English", featured: false, keywords: "", published: true };
 type Draft = typeof blank & { _id?: string };
 
 export function AdminBlogPage({ initialBlogs }: { initialBlogs: AdminBlog[] }) {
@@ -23,6 +25,7 @@ export function AdminBlogPage({ initialBlogs }: { initialBlogs: AdminBlog[] }) {
   const openEdit = (post: AdminBlog) => setDraft({
     _id: post._id, title: post.title, slug: post.slug, excerpt: post.excerpt ?? "",
     content: post.content ?? "", thumbnailUrl: post.thumbnailUrl ?? "", author: post.author ?? "",
+    category: post.category || "Guides", language: post.language || "English", featured: Boolean(post.featured),
     keywords: (post.keywords ?? []).join(", "), published: post.published,
   });
 
@@ -73,7 +76,7 @@ export function AdminBlogPage({ initialBlogs }: { initialBlogs: AdminBlog[] }) {
         {blogs.map((post) => (
           <article key={post._id} className="overflow-hidden rounded-xl border border-[#e6ddff] bg-white shadow-[0_12px_34px_rgba(99,55,216,.07)]">
             <div className="aspect-[16/9] bg-[#eee]">{post.thumbnailUrl ? <img src={post.thumbnailUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[#aaa]"><ImagePlus /></div>}</div>
-            <div className="p-5"><div className="flex items-center justify-between gap-3"><span className="rounded-full bg-[#f0ebff] px-2.5 py-1 text-xs font-bold text-[#6337d8]">{post.published ? "Published" : "Draft"}</span><span className="text-xs text-[#777]">{post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : ""}</span></div>
+            <div className="p-5"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap gap-1.5"><span className="rounded-full bg-[#f0ebff] px-2.5 py-1 text-xs font-bold text-[#6337d8]">{post.published ? "Published" : "Draft"}</span><span className="rounded-full bg-[#f5f5f5] px-2.5 py-1 text-xs font-bold text-[#666]">{post.category || "Guides"}</span>{post.featured && <span className="rounded-full bg-[#fff3cd] px-2.5 py-1 text-xs font-bold text-[#7a5b00]">Featured</span>}</div><span className="text-xs text-[#777]">{post.language || "English"}</span></div>
               <h2 className="mt-4 text-xl font-bold">{post.title}</h2><p className="mt-2 line-clamp-2 text-sm leading-6 text-[#666]">{post.excerpt}</p>
               <div className="mt-5 flex gap-2"><Button variant="outline" size="sm" onClick={() => openEdit(post)}><Pencil className="mr-1 size-4" />Edit</Button><Button variant="outline" size="sm" asChild><Link href={`/blog/${post.slug}`} target="_blank"><ExternalLink className="mr-1 size-4" />View</Link></Button><Button variant="outline" size="sm" onClick={() => remove(post)} className="text-red-600"><Trash2 className="size-4" /></Button></div>
             </div>
@@ -109,7 +112,10 @@ export function AdminBlogPage({ initialBlogs }: { initialBlogs: AdminBlog[] }) {
                 </label>
                 {draft.thumbnailUrl && <img src={draft.thumbnailUrl} alt="" className="aspect-[16/9] w-full rounded-lg object-cover" />}
                 <label className="grid gap-2 text-sm font-bold">Author<Input value={draft.author} onChange={(e) => setDraft({ ...draft, author: e.target.value })} /></label>
+                <label className="grid gap-2 text-sm font-bold">Category<select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} className="h-10 rounded-md border bg-white px-3 font-normal">{BLOG_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label>
+                <label className="grid gap-2 text-sm font-bold">Language<select value={draft.language} onChange={(e) => setDraft({ ...draft, language: e.target.value })} className="h-10 rounded-md border bg-white px-3 font-normal">{GALLERY_LANGUAGES.map((language) => <option key={language}>{language}</option>)}</select></label>
                 <label className="grid gap-2 text-sm font-bold">SEO keywords<Input value={draft.keywords} onChange={(e) => setDraft({ ...draft, keywords: e.target.value })} placeholder="photography, galleries, clients" /></label>
+                <label className="flex items-center justify-between rounded-lg border bg-white p-3 text-sm font-bold">Featured on Blog<input type="checkbox" checked={draft.featured} onChange={(e) => setDraft({ ...draft, featured: e.target.checked })} /></label>
                 <label className="flex items-center justify-between rounded-lg border bg-white p-3 text-sm font-bold">Published<input type="checkbox" checked={draft.published} onChange={(e) => setDraft({ ...draft, published: e.target.checked })} /></label>
               </aside>
             </div>

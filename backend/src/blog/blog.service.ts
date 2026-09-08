@@ -13,7 +13,7 @@ export class BlogService {
   }
 
   async publicList() {
-    return this.model.find({ published: true }).sort({ publishedAt: -1, createdAt: -1 }).lean();
+    return this.model.find({ published: true }).sort({ featured: -1, publishedAt: -1, createdAt: -1 }).lean();
   }
 
   async publicOne(slug: string) {

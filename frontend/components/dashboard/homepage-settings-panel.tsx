@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PlanFeatureLock } from "@/components/dashboard/plan-feature-lock";
+import { useCollections } from "@/api-hooks/use-collections";
 import {
   type HomepageRecord,
   type HomepageVisibility,
@@ -44,11 +45,18 @@ const emptyForm: Omit<HomepageRecord, "_id" | "userId" | "slug" | "publicPath" |
   socialLinks: {},
   show: defaultVisibility,
   sortOrder: "newest",
+  showCategories: true,
+  featuredCollectionIds: [],
 };
 
 export function HomepageSettingsPanel() {
   const { query, update } = useHomepageSettings();
+  const { collectionsQuery } = useCollections();
   const record = query.data?.data;
+  const publishedCollections = useMemo(
+    () => (collectionsQuery.data?.data ?? []).filter((collection) => collection.status === "published"),
+    [collectionsQuery.data],
+  );
   const [form, setForm] = useState(emptyForm);
   const [password, setPassword] = useState("");
   const [passwordDirty, setPasswordDirty] = useState(false);
@@ -71,6 +79,8 @@ export function HomepageSettingsPanel() {
       socialLinks: record.socialLinks || {},
       show: { ...defaultVisibility, ...(record.show || {}) },
       sortOrder: record.sortOrder || "newest",
+      showCategories: record.showCategories !== false,
+      featuredCollectionIds: Array.isArray(record.featuredCollectionIds) ? record.featuredCollectionIds : [],
     });
   }, [record]);
 
@@ -142,6 +152,22 @@ export function HomepageSettingsPanel() {
       ...current,
       show: { ...current.show, [key]: !current.show[key] },
     }));
+  };
+
+  const toggleFeaturedCollection = (collectionId: string) => {
+    setForm((current) => {
+      const selected = current.featuredCollectionIds.includes(collectionId);
+      if (!selected && current.featuredCollectionIds.length >= 12) {
+        toast.error("You can feature up to 12 galleries");
+        return current;
+      }
+      return {
+        ...current,
+        featuredCollectionIds: selected
+          ? current.featuredCollectionIds.filter((id) => id !== collectionId)
+          : [...current.featuredCollectionIds, collectionId],
+      };
+    });
   };
 
   if (query.isLoading) {
@@ -284,6 +310,29 @@ export function HomepageSettingsPanel() {
               ))}
             </div>
             <HelpText>Blank information is automatically hidden even when selected.</HelpText>
+          </Section>
+
+          <Section title="Featured Galleries & Categories">
+            <label className="flex cursor-pointer items-center justify-between gap-4 border bg-white p-4">
+              <span><span className="block text-sm font-bold">Show gallery categories</span><span className="mt-1 block text-xs leading-5 text-[#777]">Uses Category Tags from each gallery as filter tabs on your public homepage.</span></span>
+              <input type="checkbox" checked={form.showCategories} onChange={(event) => setForm((current) => ({ ...current, showCategories: event.target.checked }))} className="size-4 accent-[#6F57D9]" />
+            </label>
+            <div>
+              <div className="mb-3 flex items-center justify-between gap-3"><p className="text-sm font-bold">Feature galleries first</p><span className="text-xs font-semibold text-[#777]">{form.featuredCollectionIds.length}/12 selected</span></div>
+              <div className="max-h-[330px] overflow-y-auto border bg-white">
+                {publishedCollections.map((collection) => {
+                  const checked = form.featuredCollectionIds.includes(collection._id);
+                  return (
+                    <label key={collection._id} className="flex cursor-pointer items-center gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-[#fafafa]">
+                      <input type="checkbox" checked={checked} onChange={() => toggleFeaturedCollection(collection._id)} className="size-4 accent-[#6F57D9]" />
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{collection.name}</span><span className="block truncate text-xs text-[#888]">{collection.tags?.length ? collection.tags.join(" · ") : "No category tags yet"}</span></span>
+                    </label>
+                  );
+                })}
+                {!publishedCollections.length && <p className="p-5 text-sm text-[#777]">Publish a gallery first, then it can be featured here.</p>}
+              </div>
+            </div>
+            <HelpText>Featured galleries appear before the rest of your work. Category filters are built from the tags you already add inside each gallery.</HelpText>
           </Section>
 
           <Section title="Collection Sort Order">

@@ -1,12 +1,15 @@
 "use client";
 
-import { Loader2, Printer, Save } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Plus, Printer, Save, X } from "lucide-react";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 
 export type StoreSettingsForm = {
   enabled: boolean;
   printRequestsEnabled: boolean;
+  freePrintSizes: string[];
+  freePrintPapers: string[];
   printLabEmail: string;
   notifyPrintLabForFreeRequests: boolean;
   notifyPrintLabForPaidOrders: boolean;
@@ -81,11 +84,21 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
             Adds a Print Request button to each photo. Visitors choose print size, paper, quantity, and send a free request with notes. Store products and prices stay unchanged.
           </span>
         </label>
+        {form.printRequestsEnabled && (
+          <div className="grid gap-5 border border-[#d9eee9] bg-[#f4fbf9] p-5">
+            <div>
+              <p className="font-bold">Print request options</p>
+              <p className="mt-2 text-sm leading-6 text-[#56635f]">Add the exact print sizes and paper types this gallery can request.</p>
+            </div>
+            <PrintOptionEditor label="Print sizes" helper="Examples: 10 x 15 cm, 13 x 18 cm, A4, 8 x 10" values={form.freePrintSizes} placeholder="Add a size" onChange={(freePrintSizes) => onChange({ freePrintSizes })} />
+            <PrintOptionEditor label="Paper types" helper="Examples: Glossy, Matte, Silk, Fine Art" values={form.freePrintPapers} placeholder="Add a paper type" onChange={(freePrintPapers) => onChange({ freePrintPapers })} />
+          </div>
+        )}
         <div className="grid gap-4 border border-[#d9eee9] bg-[#f4fbf9] p-5">
           <div>
-            <p className="font-bold">Print-company notifications</p>
+            <p className="font-bold">Print fulfillment company</p>
             <p className="mt-2 text-sm leading-6 text-[#56635f]">
-              Send print requests and paid order notifications to your print company.
+              Send the print company a secure fulfillment link with the selected photos, filenames, print size, paper type, quantity, and customer notes.
             </p>
           </div>
           <label className="block text-sm font-medium">
@@ -166,5 +179,26 @@ export function CollectionStoreSettingsPanel({ form, busy, priceSheets, onChange
         {busy ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save settings
       </button>
     </section>
+  );
+}
+
+function PrintOptionEditor({ label, helper, values, placeholder, onChange }: { label: string; helper: string; values: string[]; placeholder: string; onChange: (values: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const incoming = draft.split(/[,;\n]+/).map((value) => value.trim()).filter(Boolean);
+    if (!incoming.length) return;
+    const next = [...values];
+    for (const option of incoming) {
+      if (!next.some((value) => value.toLowerCase() === option.toLowerCase())) next.push(option.slice(0, 80));
+    }
+    onChange(next.slice(0, 50));
+    setDraft("");
+  };
+  return (
+    <div>
+      <div className="flex items-end justify-between gap-3"><div><p className="text-sm font-bold">{label}</p><p className="mt-1 text-xs leading-5 text-[#6b7773]">{helper}</p></div><span className="text-xs text-[#7b8582]">{values.length} added</span></div>
+      <div className="mt-3 flex flex-wrap gap-2">{values.map((value) => <span key={value} className="inline-flex items-center gap-2 border border-[#cde7e1] bg-white px-3 py-2 text-sm"><span>{value}</span><button type="button" aria-label={`Remove ${value}`} className="text-[#6b7773] hover:text-red-600" onClick={() => onChange(values.filter((item) => item !== value))}><X className="size-3.5" /></button></span>)}</div>
+      <div className="mt-3 flex gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(); } }} className="h-11 min-w-0 flex-1 border bg-white px-3 text-sm outline-none focus:border-[#159d8b]" placeholder={placeholder} /><button type="button" onClick={add} className="inline-flex h-11 items-center gap-2 bg-[#202326] px-4 text-sm font-semibold text-white"><Plus className="size-4" />Add</button></div>
+    </div>
   );
 }

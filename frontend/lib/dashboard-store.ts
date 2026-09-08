@@ -44,6 +44,11 @@ export type PresetDesignSettings = {
   coverFocalX?: number;
   coverFocalY?: number;
   coverMediaType?: "image" | "video";
+  logoRevealEnabled?: boolean;
+  logoRevealStyle?: "fade" | "scale" | "slide" | "blur" | "shutter";
+  logoRevealDurationMs?: number;
+  logoRevealOncePerSession?: boolean;
+  coverMotion?: "none" | "fade" | "slow-zoom" | "rise";
   color: string;
   gridStyle: "Vertical" | "Horizontal" | "Art";
   thumbnailSize: "Regular" | "Large";
@@ -95,6 +100,8 @@ export type PresetFavoriteSettings = {
   favoriteNotes: boolean;
   maxFavorites: string;
   description: string;
+  autoShareToPrintShop: boolean;
+  printShopEmail: string;
 };
 
 export type PresetStoreSettings = {
@@ -131,7 +138,7 @@ export type WatermarkItem = {
 
 export type DashboardSettingRecord<T = unknown> = {
   _id: string;
-  type: "watermark" | "preset" | "email-template" | "branding" | "preference" | "integration" | "marketing";
+  type: "watermark" | "preset" | "email-template" | "branding" | "preference" | "integration" | "marketing" | "album-design" | "blog-post";
   localId: string;
   name: string;
   data: T;
@@ -311,6 +318,11 @@ const emptyPresetDesign: PresetDesignSettings = {
   textColor: "#ffffff",
   coverFocalX: 50,
   coverFocalY: 50,
+  logoRevealEnabled: false,
+  logoRevealStyle: "scale",
+  logoRevealDurationMs: 1800,
+  logoRevealOncePerSession: true,
+  coverMotion: "slow-zoom",
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -341,6 +353,8 @@ const emptyPresetFavorite: PresetFavoriteSettings = {
   favoriteNotes: true,
   maxFavorites: "",
   description: "",
+  autoShareToPrintShop: false,
+  printShopEmail: "",
 };
 
 const emptyPresetStore: PresetStoreSettings = {
@@ -808,6 +822,10 @@ export const useDashboardStore = create<DashboardState>((set) => {
         image: "",
         eyebrowText: "Client Gallery",
         showImage: true,
+        category: "Gallery Delivery",
+        galleryCategory: "Wedding",
+        customGalleryCategoryLabel: "",
+        language: "English",
         updatedAt: "Draft",
         source: "user",
       };

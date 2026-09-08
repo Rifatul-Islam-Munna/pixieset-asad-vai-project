@@ -1,4 +1,4 @@
-﻿import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+﻿import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { MarketingScheduleService } from './marketing-schedule.service';
 
@@ -15,6 +15,26 @@ export class MarketingScheduleController {
   @Post()
   async create(@Req() req: ExpressRequest, @Body() body: Record<string, unknown>) {
     return { data: await this.schedules.create(req.user.id, body), message: 'Campaign scheduled' };
+  }
+
+  @Get('automations')
+  async listAutomations(@Req() req: ExpressRequest) {
+    return { data: await this.schedules.listAutomations(req.user.id) };
+  }
+
+  @Post('automations')
+  async createAutomation(@Req() req: ExpressRequest, @Body() body: Record<string, unknown>) {
+    return { data: await this.schedules.createAutomation(req.user.id, body), message: 'Marketing automation created' };
+  }
+
+  @Patch('automations/:id')
+  async updateAutomation(@Req() req: ExpressRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return { data: await this.schedules.updateAutomation(req.user.id, id, body), message: 'Marketing automation updated' };
+  }
+
+  @Delete('automations/:id')
+  async removeAutomation(@Req() req: ExpressRequest, @Param('id') id: string) {
+    return { data: await this.schedules.removeAutomation(req.user.id, id), message: 'Marketing automation deleted' };
   }
 
   @Patch(':id/cancel')

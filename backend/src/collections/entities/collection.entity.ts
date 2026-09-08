@@ -29,6 +29,9 @@ export class Collection {
   @Prop({ type: [String], default: [] })
   tags: string[];
 
+  @Prop({ type: [String], default: [] })
+  clientEmails: string[];
+
   @Prop()
   watermarkId?: string;
 

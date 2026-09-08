@@ -26,6 +26,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  BookOpen,
   Calendar as CalendarIcon,
   CalendarDays,
   Bold,
@@ -59,6 +60,7 @@ import {
   MoreHorizontal,
   Monitor,
   Menu,
+  Newspaper,
   Package,
   Palette,
   PanelTop,
@@ -79,6 +81,7 @@ import {
   Star,
   Store,
   Smartphone,
+  Sparkles,
   Trash2,
   Underline,
   Unlink,
@@ -237,13 +240,17 @@ import {
   type PresetStoreSettings,
   type WatermarkItem,
 } from "@/lib/dashboard-store";
-import type {
-  BrandSettings,
-  CustomCoverTemplate,
-  HomeCmsData,
+import {
+  EMAIL_TEMPLATE_CATEGORIES,
+  EMAIL_TEMPLATE_LANGUAGES,
+  type BrandSettings,
+  type CustomCoverTemplate,
+  type HomeCmsData,
 } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 import { GALLERY_LANGUAGES, normalizeGalleryLanguage, type GalleryLanguage } from "@/lib/gallery-language";
+import { CLIENT_GALLERY_CATEGORIES } from "@/lib/gallery-categories";
+import { GALLERY_FONT_CATEGORIES, GALLERY_FONT_OPTIONS, galleryFontSample, resolveGalleryFontFamily, type GalleryFontCategory } from "@/lib/gallery-fonts";
 import { ClientGalleryOverview } from "@/components/dashboard/client-gallery-overview";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 import {
@@ -251,9 +258,14 @@ import {
   PlanFeatureNotice,
 } from "@/components/dashboard/plan-feature-lock";
 import { HomepageSettingsPanel } from "@/components/dashboard/homepage-settings-panel";
+import { AlbumDesigner } from "@/components/dashboard/album-designer";
+import { ClientBlogManager } from "@/components/dashboard/client-blog-manager";
 import { SupportChat } from "@/components/dashboard/support-chat";
+import { BookingManager } from "@/components/dashboard/booking-manager";
 import { CollectionStoreSettingsPanel } from "@/components/dashboard/collection-store-settings-panel";
 import { CollectionRegistrationActivity } from "@/components/dashboard/collection-registration-activity";
+import { PublishRecipientsField } from "@/components/dashboard/publish-recipients-field";
+import { MarketingAutomationPanel } from "@/components/dashboard/marketing-automation-panel";
 import { MarketingContactsGrid } from "@/components/dashboard/marketing-contacts-grid";
 import { MarketingScheduleDialog } from "@/components/dashboard/marketing-schedule-dialog";
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
@@ -274,6 +286,9 @@ export type DashboardPage =
   | "library"
   | "starred"
   | "homepage"
+  | "album-design"
+  | "blog"
+  | "bookings"
   | "settings"
   | "marketing"
   | "pricing"
@@ -288,7 +303,7 @@ export type DashboardPage =
   | "storage"
   | "support"
   | "account";
-export type MarketingPage = "email-campaigns" | "contacts" | "settings";
+export type MarketingPage = "email-campaigns" | "automations" | "contacts" | "settings";
 export type SettingsPage =
   | "branding"
   | "watermark"
@@ -335,6 +350,9 @@ const sidebarItems = {
     { label: "Library", icon: LayoutGrid, page: "library" },
     { label: "Starred", icon: Star, page: "starred" },
     { label: "Homepage", icon: PanelTop, page: "homepage" },
+    { label: "Album Designer", icon: BookOpen, page: "album-design" },
+    { label: "Blog", icon: Newspaper, page: "blog" },
+    { label: "Bookings", icon: CalendarDays, page: "bookings" },
     { label: "Settings", icon: Settings, page: "settings" },
   ],
   "store-gallery": [
@@ -355,6 +373,7 @@ const sidebarItems = {
 
 const marketingSidebarItems = [
   { label: "Email", slug: "email-campaigns", icon: Mail },
+  { label: "Automations", slug: "automations", icon: Sparkles },
   { label: "Contacts", slug: "contacts", icon: Users },
   { label: "Settings", slug: "settings", icon: MailCheck },
 ] satisfies { label: string; slug: MarketingPage; icon: typeof Mail }[];
@@ -1116,6 +1135,10 @@ export function ClientDashboard({
                           `/dashboard/${section}/marketing/email-campaigns`,
                         ],
                         [
+                          "Automations",
+                          `/dashboard/${section}/marketing/automations`,
+                        ],
+                        [
                           "Contacts",
                           `/dashboard/${section}/marketing/contacts`,
                         ],
@@ -1206,6 +1229,12 @@ export function ClientDashboard({
               />
             ) : page === "homepage" ? (
               <HomepageSettings />
+            ) : page === "album-design" ? (
+              <AlbumDesigner />
+            ) : page === "blog" ? (
+              <ClientBlogManager />
+            ) : page === "bookings" ? (
+              <BookingManager />
             ) : page === "storage" ? (
               <StoragePlanPanel />
             ) : page === "support" ? (
@@ -1563,7 +1592,7 @@ function AccountPanel() {
                     : "text-red-600",
               )}
             >
-              {usernameState === "checking" ? "Checking…" : usernameMessage}
+              {usernameState === "checking" ? "CheckingÃ¢â‚¬Â¦" : usernameMessage}
             </p>
           )}
           <FieldInput
@@ -1597,11 +1626,11 @@ function AccountPanel() {
                   <div>
                     <b>{purchase.planName}</b>
                     <p className="mt-1 text-xs capitalize text-[#888]">
-                      {purchase.source} · {purchase.status}
+                      {purchase.source} Ã‚Â· {purchase.status}
                     </p>
                   </div>
                   <div className="text-right">
-                    <b>€{Number(purchase.amount).toFixed(2)}</b>
+                    <b>Ã¢â€šÂ¬{Number(purchase.amount).toFixed(2)}</b>
                     <p className="mt-1 text-xs text-[#888]">
                       {new Date(purchase.createdAt).toLocaleDateString()}
                     </p>
@@ -2020,7 +2049,7 @@ function StoragePlanPanel() {
                 <div className="flex justify-between">
                   <span>Price</span>
                   <b>
-                    €{monthlyEquivalent.toFixed(2)}{" "}
+                    Ã¢â€šÂ¬{monthlyEquivalent.toFixed(2)}{" "}
                     {billingInterval === "year" ? "/yearly" : "/month"}
                   </b>
                 </div>
@@ -2029,7 +2058,7 @@ function StoragePlanPanel() {
                     <span>Billed</span>
                     <b>
                       {yearlyAvailable
-                        ? `€${Number(plan.priceYearly).toFixed(2)} yearly`
+                        ? `Ã¢â€šÂ¬${Number(plan.priceYearly).toFixed(2)} yearly`
                         : "Unavailable"}
                     </b>
                   </div>
@@ -2504,6 +2533,10 @@ function MarketingPanel({ marketingPage }: { marketingPage: MarketingPage }) {
     }
   }, [emailTemplateSettings.data, hydrateDashboardSettings]);
 
+  if (marketingPage === "automations") {
+    return <MarketingAutomationPanel />;
+  }
+
   if (marketingPage === "contacts") {
     return (
       <div className="mx-auto w-full max-w-[1240px]">
@@ -2679,8 +2712,8 @@ function MarketingSettingsPanel({
                       Email registration subscription
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[#5d6b68]">
-                      Show an optional “Subscribe to updates and special
-                      offers” checkbox inside the collection email-registration
+                      Show an optional Ã¢â‚¬Å“Subscribe to updates and special
+                      offersÃ¢â‚¬Â checkbox inside the collection email-registration
                       modal.
                     </p>
                   </div>
@@ -2697,7 +2730,7 @@ function MarketingSettingsPanel({
               This appears only when both <strong>Email Registration</strong>{" "}
               and
               <strong> Marketing Subscription</strong> are enabled in that
-              collection’s Privacy settings.
+              collectionÃ¢â‚¬â„¢s Privacy settings.
             </div>
           </section>
 
@@ -3028,7 +3061,7 @@ function CampaignTable({
         <div key={campaign._id} className="grid gap-3 border-b py-5 text-left text-sm md:grid-cols-[2fr_130px_1.7fr_1fr_1.5fr_60px] md:items-center md:gap-0">
           <span className="min-w-0">
             <span className="block truncate font-bold">{campaign.name}</span>
-            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.kind === "schedule" && campaign.recipientCategory ? ` · ${campaign.recipientCategory}` : ""}</span>
+            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.kind === "schedule" && campaign.recipientCategory ? ` Ã‚Â· ${campaign.recipientCategory}` : ""}</span>
             {campaign.kind === "schedule" && campaign.lastError && <span className="mt-1 block line-clamp-1 text-xs font-semibold text-red-600" title={campaign.lastError}>{campaign.lastError}</span>}
           </span>
           <span><span className={cn("rounded-full px-4 py-2 text-[10px] font-bold uppercase", campaign.status === "sent" ? "bg-emerald-50 text-emerald-700" : campaign.status === "failed" ? "bg-red-50 text-red-700" : campaign.status === "cancelled" ? "bg-[#f1f1f1] text-[#777]" : campaign.status === "sending" ? "bg-amber-50 text-amber-700" : campaign.status === "draft" ? "bg-[#f4f4f4] text-[#555]" : "bg-[#f1ecff] text-[#6337d8]")}>{campaign.status}</span></span>
@@ -3051,7 +3084,7 @@ function CampaignTable({
 function formatScheduleLocal(value: string, timeZone: string) {
   if (!value) return "-";
   const [date, time] = value.split("T");
-  return `${date} ${time || ""} · ${timeZone}`;
+  return `${date} ${time || ""} Ã‚Â· ${timeZone}`;
 }
 
 function TemplateGrid({
@@ -5006,6 +5039,9 @@ function EmailTemplatesPanel({
   const router = useRouter();
   const [editorOpen, setEditorOpen] = useState(Boolean(editorId));
   const [templateSearch, setTemplateSearch] = useState("");
+  const [templateCategory, setTemplateCategory] = useState("All");
+  const [templateGalleryCategory, setTemplateGalleryCategory] = useState("All");
+  const [templateLanguage, setTemplateLanguage] = useState("All");
   const createdEditorRouteRef = useRef("");
   const {
     addEmailTemplateDraft,
@@ -5022,12 +5058,19 @@ function EmailTemplatesPanel({
   const activeTemplate =
     emailTemplates.find((template) => template.id === activeEmailTemplateId) ??
     emailTemplates[0];
-  const visibleTemplates = emailTemplates.filter((template) =>
-    [template.name, template.subject, template.previewText]
+  const visibleTemplates = emailTemplates.filter((template) => {
+    const galleryCategory = template.galleryCategory === "Custom label"
+      ? template.customGalleryCategoryLabel || "Custom label"
+      : template.galleryCategory || "General";
+    const matchesSearch = [template.name, template.subject, template.previewText, template.category, galleryCategory, template.language]
       .join(" ")
       .toLowerCase()
-      .includes(templateSearch.toLowerCase()),
-  );
+      .includes(templateSearch.toLowerCase());
+    const matchesCategory = templateCategory === "All" || (template.category || "Gallery Delivery") === templateCategory;
+    const matchesGalleryCategory = templateGalleryCategory === "All" || (template.galleryCategory || "General") === templateGalleryCategory;
+    const matchesLanguage = templateLanguage === "All" || (template.language || "English") === templateLanguage;
+    return matchesSearch && matchesCategory && matchesGalleryCategory && matchesLanguage;
+  });
   useEffect(() => {
     if (!editorId) {
       createdEditorRouteRef.current = "";
@@ -5115,6 +5158,21 @@ function EmailTemplatesPanel({
           </Button>
         </div>
 
+        <div className="mt-5 flex flex-wrap gap-2">
+          <select value={templateCategory} onChange={(event) => setTemplateCategory(event.target.value)} className="h-10 border bg-white px-3 text-sm font-semibold">
+            <option value="All">All email purposes</option>
+            {EMAIL_TEMPLATE_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select>
+          <select value={templateGalleryCategory} onChange={(event) => setTemplateGalleryCategory(event.target.value)} className="h-10 border bg-white px-3 text-sm font-semibold">
+            <option value="All">All gallery categories</option><option value="General">General</option>
+            {CLIENT_GALLERY_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select>
+          <select value={templateLanguage} onChange={(event) => setTemplateLanguage(event.target.value)} className="h-10 border bg-white px-3 text-sm font-semibold">
+            <option value="All">All languages</option>
+            {EMAIL_TEMPLATE_LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
+          </select>
+        </div>
+
         {!emailTemplates.length ? (
           <div className="mt-12 flex min-h-[520px] flex-col items-center justify-center text-center">
             <div className="relative">
@@ -5152,8 +5210,9 @@ function EmailTemplatesPanel({
                   className="grid w-full grid-cols-[2fr_2fr_1.2fr_1.2fr_40px] items-center border-b py-5 text-left text-sm hover:bg-[#fafafa]"
                   onClick={() => editTemplate(template.id)}
                 >
-                  <span className="font-bold">
-                    {template.name || "Untitled Template"}
+                  <span className="min-w-0">
+                    <span className="block truncate font-bold">{template.name || "Untitled Template"}</span>
+                    <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-wider text-[#9a8f82]">{template.category || "Gallery Delivery"} · {template.galleryCategory === "Custom label" ? template.customGalleryCategoryLabel || "Custom label" : template.galleryCategory || "General"} · {template.language || "English"}</span>
                   </span>
                   <span className="truncate pr-8 text-[#555]">
                     {template.subject || "-"}
@@ -5250,6 +5309,32 @@ function EmailTemplatesPanel({
             </p>
           </div>
           <FieldGroup className="gap-6">
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field>
+                <FieldLabel className="font-bold uppercase text-[#777]">Email purpose</FieldLabel>
+                <select value={activeTemplate.category || "Gallery Delivery"} onChange={(event) => updateEmailTemplate({ category: event.target.value })} className="h-12 w-full border border-[#ddd] bg-[#fbfbfa] px-3 text-sm">
+                  {EMAIL_TEMPLATE_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+                </select>
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold uppercase text-[#777]">Gallery category</FieldLabel>
+                <select value={activeTemplate.galleryCategory || ""} onChange={(event) => updateEmailTemplate({ galleryCategory: event.target.value || undefined, customGalleryCategoryLabel: event.target.value === "Custom label" ? activeTemplate.customGalleryCategoryLabel : "" })} className="h-12 w-full border border-[#ddd] bg-[#fbfbfa] px-3 text-sm">
+                  <option value="">General / all gallery types</option>{CLIENT_GALLERY_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+                </select>
+              </Field>
+              <Field>
+                <FieldLabel className="font-bold uppercase text-[#777]">Language</FieldLabel>
+                <select value={activeTemplate.language || "English"} onChange={(event) => updateEmailTemplate({ language: event.target.value })} className="h-12 w-full border border-[#ddd] bg-[#fbfbfa] px-3 text-sm">
+                  {EMAIL_TEMPLATE_LANGUAGES.map((language) => <option key={language}>{language}</option>)}
+                </select>
+              </Field>
+            </div>
+            {activeTemplate.galleryCategory === "Custom label" && (
+              <Field>
+                <FieldLabel className="font-bold uppercase text-[#777]">Custom gallery label</FieldLabel>
+                <Input className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]" value={activeTemplate.customGalleryCategoryLabel || ""} onChange={(event) => updateEmailTemplate({ customGalleryCategoryLabel: event.target.value })} placeholder="e.g. Newborn, Corporate Gala" />
+              </Field>
+            )}
             <Field>
               <FieldLabel className="font-bold uppercase text-[#777]">
                 Subject
@@ -5951,6 +6036,8 @@ function PresetFavoritePanel({
     favoriteNotes: boolean;
     maxFavorites: string;
     description: string;
+    autoShareToPrintShop: boolean;
+    printShopEmail: string;
   };
   hidePager?: boolean;
   onBack: () => void;
@@ -6008,6 +6095,17 @@ function PresetFavoritePanel({
             placeholder="Tell clients how to use this favorite list."
             className="min-h-28 rounded-none bg-white"
           />
+        </Field>
+        <Field className="border-t pt-8">
+          <FieldLabel className="font-bold">Print Shop Handoff</FieldLabel>
+          <div className="flex items-center gap-3">
+            <Switch checked={favorite.autoShareToPrintShop} onCheckedChange={(value) => onChange({ autoShareToPrintShop: value })} />
+            <span>{favorite.autoShareToPrintShop ? "On" : "Off"}</span>
+          </div>
+          <p className="text-sm leading-6 text-[#666]">When the client finishes their favorites, send the requested photo numbers and available files to the print shop automatically.</p>
+          {favorite.autoShareToPrintShop && (
+            <Input type="email" value={favorite.printShopEmail} onChange={(event) => onChange({ printShopEmail: event.target.value })} placeholder="printshop@example.com" className="h-12 rounded-none bg-white" />
+          )}
         </Field>
       </FieldGroup>
       {!hidePager && <PresetPager onBack={onBack} onNext={onNext} />}
@@ -6214,6 +6312,11 @@ function PresetDesignPanel({
     coverFocalX?: number;
     coverFocalY?: number;
     coverMediaType?: "image" | "video";
+    logoRevealEnabled?: boolean;
+    logoRevealStyle?: "fade" | "scale" | "slide" | "blur" | "shutter";
+    logoRevealDurationMs?: number;
+    logoRevealOncePerSession?: boolean;
+    coverMotion?: "none" | "fade" | "slow-zoom" | "rise";
     color: string;
     gridStyle: "Vertical" | "Horizontal" | "Art";
     thumbnailSize: "Regular" | "Large";
@@ -6231,7 +6334,9 @@ function PresetDesignPanel({
   onCoverUpload?: (file: File) => Promise<CollectionImageRecord | undefined>;
   onLoadMoreImages?: () => void;
 }) {
-  type UploadedFont = { name: string; url: string; fileName: string };
+  type UploadedFont = { name: string; url: string; fileName: string; category?: GalleryFontCategory };
+  const [fontCategory, setFontCategory] = useState<"All" | GalleryFontCategory | "My Fonts">("All");
+  const [fontUploadCategory, setFontUploadCategory] = useState<GalleryFontCategory>("English");
   const [adminCoverTemplates, setAdminCoverTemplates] = useState<
     CustomCoverTemplate[]
   >([]);
@@ -6263,7 +6368,7 @@ function PresetDesignPanel({
         await fontLibrary.saveSetting.mutateAsync({
           localId: `font:${crypto.randomUUID()}`,
           name,
-          data: { name, url, fileName: file.name },
+          data: { name, url, fileName: file.name, category: fontUploadCategory },
         });
       }
       toast.success(
@@ -6418,6 +6523,38 @@ function PresetDesignPanel({
               </DialogContent>
             </Dialog>
           </OptionSection>}
+          <OptionSection title="Motion & Logo Reveal">
+            <div className="grid gap-5">
+              <label className="flex items-center justify-between gap-4 border bg-[#fafafa] p-4 text-sm font-bold">
+                <span><span className="block">Animated logo reveal</span><span className="mt-1 block text-xs font-normal leading-5 text-[#777]">Show your branding before the gallery appears, with reduced-motion support.</span></span>
+                <Switch checked={Boolean(design.logoRevealEnabled)} onCheckedChange={(value) => onChange({ logoRevealEnabled: value })} />
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel className="font-bold">Reveal style</FieldLabel>
+                  <select value={design.logoRevealStyle || "scale"} onChange={(event) => onChange({ logoRevealStyle: event.target.value as NonNullable<typeof design.logoRevealStyle> })} className="mt-2 h-11 w-full border bg-white px-3 text-sm">
+                    <option value="fade">Soft fade</option><option value="scale">Cinematic scale</option><option value="slide">Editorial slide</option><option value="blur">Focus reveal</option><option value="shutter">Shutter reveal</option>
+                  </select>
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold">Reveal duration</FieldLabel>
+                  <select value={design.logoRevealDurationMs || 1800} onChange={(event) => onChange({ logoRevealDurationMs: Number(event.target.value) })} className="mt-2 h-11 w-full border bg-white px-3 text-sm">
+                    <option value={1000}>1.0 sec</option><option value={1500}>1.5 sec</option><option value={1800}>1.8 sec</option><option value={2500}>2.5 sec</option><option value={3200}>3.2 sec</option>
+                  </select>
+                </Field>
+              </div>
+              <label className="flex items-center justify-between gap-4 border p-4 text-sm font-bold">
+                <span><span className="block">Only once per browser session</span><span className="mt-1 block text-xs font-normal text-[#777]">Avoid replaying the intro every time a client opens another photo.</span></span>
+                <Switch checked={design.logoRevealOncePerSession !== false} onCheckedChange={(value) => onChange({ logoRevealOncePerSession: value })} />
+              </label>
+              <Field>
+                <FieldLabel className="font-bold">Cover entrance motion</FieldLabel>
+                <select value={design.coverMotion || "slow-zoom"} onChange={(event) => onChange({ coverMotion: event.target.value as NonNullable<typeof design.coverMotion> })} className="mt-2 h-11 w-full border bg-white px-3 text-sm">
+                  <option value="none">None</option><option value="fade">Fade in</option><option value="slow-zoom">Slow cinematic zoom</option><option value="rise">Rise in</option>
+                </select>
+              </Field>
+            </div>
+          </OptionSection>
           <OptionSection title="Cover Text">
             <FieldGroup className="gap-5">
               {(
@@ -6587,8 +6724,16 @@ function PresetDesignPanel({
       {activePanel === "typography" && (
         <PlanFeatureLock feature="advancedDesign" label="Advanced design">
           <h2 className="text-2xl font-medium">Typography</h2>
-          <div className="mt-8 grid grid-cols-2 gap-3">
-            {uploadedFonts.map((font) => (
+          <p className="mt-3 text-sm leading-6 text-[#666]">Choose fonts by writing system. Greek, Cyrillic, German/Deutsch, English, and Arabic are grouped so the right glyph coverage is easy to find.</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {(["All", ...GALLERY_FONT_CATEGORIES, "My Fonts"] as const).map((category) => (
+              <button key={category} type="button" onClick={() => setFontCategory(category)} className={cn("h-9 border px-3 text-xs font-bold transition", fontCategory === category ? "border-[#6337d8] bg-[#f1ecff] text-[#6337d8]" : "bg-white text-[#555] hover:border-[#aaa]")}>{category}</button>
+            ))}
+          </div>
+          <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {uploadedFonts
+              .filter((font) => fontCategory === "All" || fontCategory === "My Fonts" || (font.data.category ?? "English") === fontCategory)
+              .map((font) => (
               <button
                 key={font.localId}
                 className="text-center"
@@ -6618,7 +6763,7 @@ function PresetDesignPanel({
                     Aa {font.data.name}
                   </span>
                   <span className="mt-3 block text-xs text-[#555]">
-                    Saved font
+                    Saved font · {font.data.category ?? "English"}
                   </span>
                 </span>
                 <span className="mt-3 block truncate text-sm">
@@ -6626,7 +6771,20 @@ function PresetDesignPanel({
                 </span>
               </button>
             ))}
-            {typographyOptions.map(([name, sample, desc]) => (
+            {fontCategory !== "My Fonts" && GALLERY_FONT_OPTIONS
+              .filter((font) => fontCategory === "All" || font.categories.includes(fontCategory as GalleryFontCategory))
+              .map((font) => (
+                <button key={`builtin-${font.name}`} className="text-center" type="button" onClick={() => onChange({ typography: "Custom", customFontName: font.name, customFontDataUrl: "" } as Partial<typeof design>)}>
+                  <span className={cn("block border p-8 text-left", design.customFontName === font.name && !design.customFontDataUrl && "border-[#6337d8] ring-1 ring-[#6337d8]")}>
+                    <span className="block text-xl" dir={font.categories.includes("Arabic") && (fontCategory === "Arabic" || font.categories.length === 1) ? "rtl" : "ltr"} style={{ fontFamily: resolveGalleryFontFamily(font.name, "sans-serif") }}>
+                      {galleryFontSample(fontCategory === "All" ? font.categories[0] : fontCategory as GalleryFontCategory)}
+                    </span>
+                    <span className="mt-3 block text-xs text-[#555]">{font.categories.join(" · ")}</span>
+                  </span>
+                  <span className="mt-3 block text-sm">{font.name}</span>
+                </button>
+              ))}
+            {fontCategory === "All" && typographyOptions.map(([name, sample, desc]) => (
               <button
                 key={name}
                 className="text-center"
@@ -6658,8 +6816,14 @@ function PresetDesignPanel({
           <div className="mt-8 border bg-[#fafafa] p-5">
             <p className="font-bold">Your Font Library</p>
             <p className="mt-2 text-sm text-[#666]">
-              Upload many once. Choose any saved font later.
+              Upload many once. Choose any saved font later and keep it grouped by writing system.
             </p>
+            <label className="mt-4 block max-w-[260px] text-xs font-bold uppercase tracking-[0.12em] text-[#777]">
+              Font category
+              <select value={fontUploadCategory} onChange={(event) => setFontUploadCategory(event.target.value as GalleryFontCategory)} className="mt-2 h-10 w-full border bg-white px-3 text-sm font-normal normal-case tracking-normal text-[#222]">
+                {GALLERY_FONT_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+              </select>
+            </label>
             <label className="mt-4 inline-flex h-10 cursor-pointer items-center gap-2 bg-[#111] px-4 text-sm font-bold text-white">
               {fontUploading ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -6679,7 +6843,7 @@ function PresetDesignPanel({
                 }}
               />
             </label>
-            {design.customFontDataUrl && (
+            {design.customFontName && (
               <button
                 className="ml-3 h-10 border bg-white px-4 text-sm font-bold"
                 onClick={() =>
@@ -6893,9 +7057,7 @@ function CollectionDesignLivePreview({
       design.typography as keyof typeof collectionPreviewTypeMap
     ] ?? collectionPreviewTypeMap.Classic;
   const customFontName = design.customFontName?.trim();
-  const fontFamily = customFontName
-    ? `"${customFontName.replace(/"/g, "")}", ${fallbackFontFamily}`
-    : fallbackFontFamily;
+  const fontFamily = resolveGalleryFontFamily(customFontName, fallbackFontFamily);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">(
     "desktop",
   );
@@ -8144,7 +8306,7 @@ function StoreDashboardPanel() {
                     <td className="px-5 py-4 text-[#77727f]">
                       {order.createdAt
                         ? new Date(order.createdAt).toLocaleDateString()
-                        : "—"}
+                        : "Ã¢â‚¬â€"}
                     </td>
                   </tr>
                 ))}
@@ -9986,7 +10148,7 @@ function money(value: number, currency = "EUR") {
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   } catch {
-    return `€${Number(value || 0).toFixed(2)}`;
+    return `Ã¢â€šÂ¬${Number(value || 0).toFixed(2)}`;
   }
 }
 
@@ -11275,7 +11437,7 @@ function ProductTile({
           </p>
           <p className="mt-1 text-xs text-[#999]">
             {productTypeLabels[product.type]}
-            {product.active === false ? " · Hidden" : ""}
+            {product.active === false ? " Ã‚Â· Hidden" : ""}
           </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#6337d8]" />
@@ -12626,7 +12788,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             />
           </label>
           <p className="hidden">
-            Manage your collections — create, view, and organize your
+            Manage your collections Ã¢â‚¬â€ create, view, and organize your
             photos.
           </p>
         </div>
@@ -13065,6 +13227,9 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
     name: "",
     eventDate: "",
     presetId: "",
+    galleryCategory: "Wedding",
+    customCategoryLabel: "",
+    clientEmails: "",
     status: "draft" as "draft" | "published",
   });
 
@@ -13080,6 +13245,14 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
     const eventLabel = form.eventDate
       ? format(parseISO(form.eventDate), "PPP")
       : "";
+    const galleryCategory = form.galleryCategory === "Custom label"
+      ? form.customCategoryLabel.trim()
+      : form.galleryCategory;
+    if (!galleryCategory) return toast.error("Enter a custom gallery category label");
+    const clientEmails = [...new Set(form.clientEmails
+      .split(/[\s,;]+/)
+      .map((item) => item.trim().toLowerCase())
+      .filter((item) => item.includes("@")))];
     const design = {
       ...(preset?.design ?? collectionDefaultDesign),
       coverSmallTitle: coverTextOrDefault(
@@ -13104,6 +13277,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
       language: normalizeGalleryLanguage(
         preset?.general.language ?? savedPreferences.defaultLanguage,
       ),
+      collectionTags: galleryCategory,
     };
 
     createCollection.mutate(
@@ -13111,6 +13285,8 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
         name,
         eventDate: form.eventDate || undefined,
         presetId: form.presetId || undefined,
+        tags: [galleryCategory],
+        clientEmails,
         status: form.status,
         design,
         settings: {
@@ -13159,6 +13335,20 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
               placeholder="e.g. Jessie & Ryan"
               className="mt-2 h-12 rounded-none bg-white px-5"
             />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="new-gallery-category" className="font-bold">Gallery Category</FieldLabel>
+            <select id="new-gallery-category" value={form.galleryCategory} onChange={(event) => setForm((value) => ({ ...value, galleryCategory: event.target.value }))} className="mt-2 h-12 w-full border bg-white px-4 text-sm outline-none">
+              {CLIENT_GALLERY_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+            </select>
+            {form.galleryCategory === "Custom label" && (
+              <Input value={form.customCategoryLabel} onChange={(event) => setForm((value) => ({ ...value, customCategoryLabel: event.target.value }))} placeholder="e.g. Newborn, Corporate Gala" className="mt-3 h-12 rounded-none bg-white px-5" />
+            )}
+            <p className="mt-2 text-xs leading-5 text-[#777]">This category is used on your public homepage filters and for category-specific email templates.</p>
+          </Field>
+          <Field>
+            <FieldLabel className="font-bold">Publish Recipients & Email Access</FieldLabel>
+            <PublishRecipientsField value={form.clientEmails} onChange={(clientEmails) => setForm((value) => ({ ...value, clientEmails }))} />
           </Field>
           <Field>
             <FieldLabel htmlFor="new-event-date" className="font-bold">
@@ -13804,6 +13994,10 @@ function CollectionDetailView({
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean),
+      clientEmails: [...new Set(form.clientEmails
+        .split(/[\s,;]+/)
+        .map((email) => email.trim().toLowerCase())
+        .filter((email) => email.includes("@")))],
       watermarkId:
         form.general.defaultWatermark === "No watermark"
           ? undefined
@@ -14390,6 +14584,13 @@ function CollectionDetailView({
               >
                 <Link2 className="size-4" />
                 Get direct link
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="h-11 rounded-none"
+                onSelect={() => router.push(`/dashboard/client-gallery/album-design?collectionId=${encodeURIComponent(collection._id)}`)}
+              >
+                <BookOpen className="size-4" />
+                Design album from gallery
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="h-11 rounded-none"
@@ -15482,10 +15683,10 @@ function CollectionDetailView({
                     </p>
                     {(
                       [
-                        ["uploaded-new-old", "Uploaded: New → Old"],
-                        ["uploaded-old-new", "Uploaded: Old → New"],
-                        ["taken-new-old", "Date Taken: New → Old"],
-                        ["taken-old-new", "Date Taken: Old → New"],
+                        ["uploaded-new-old", "Uploaded: New Ã¢â€ â€™ Old"],
+                        ["uploaded-old-new", "Uploaded: Old Ã¢â€ â€™ New"],
+                        ["taken-new-old", "Date Taken: New Ã¢â€ â€™ Old"],
+                        ["taken-old-new", "Date Taken: Old Ã¢â€ â€™ New"],
                         ["name-az", "Name: A-Z"],
                         ["name-za", "Name: Z-A"],
                         ["random", "Random"],
@@ -15681,7 +15882,7 @@ function CollectionDetailView({
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-[#999]">
-                  ⌘/Ctrl + A selects all · Delete removes selected · Esc
+                  Ã¢Å’Ëœ/Ctrl + A selects all Ã‚Â· Delete removes selected Ã‚Â· Esc
                   clears
                 </p>
                 {deletingImages && (
@@ -16226,23 +16427,27 @@ function CollectionDetailView({
                       </p>
                     </Field>
                     <Field>
-                      <FieldLabel className="font-bold">
-                        Category Tags
-                      </FieldLabel>
-                      <Input
-                        value={form.general.collectionTags}
-                        onChange={(event) =>
-                          setForm((value) => ({
-                            ...value,
-                            general: {
-                              ...value.general,
-                              collectionTags: event.target.value,
-                            },
-                          }))
-                        }
-                        placeholder="Select or enter tags"
-                        className="h-12 rounded-none bg-white"
-                      />
+                      <FieldLabel className="font-bold">Gallery Category</FieldLabel>
+                      <select
+                        value={(CLIENT_GALLERY_CATEGORIES as readonly string[]).includes(form.general.collectionTags) ? form.general.collectionTags : "Custom label"}
+                        onChange={(event) => setForm((value) => ({ ...value, general: { ...value.general, collectionTags: event.target.value === "Custom label" ? "" : event.target.value } }))}
+                        className="h-12 w-full rounded-none border bg-white px-5 text-sm"
+                      >
+                        {CLIENT_GALLERY_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+                      </select>
+                      {!(CLIENT_GALLERY_CATEGORIES as readonly string[]).includes(form.general.collectionTags) && (
+                        <Input
+                          value={form.general.collectionTags}
+                          onChange={(event) => setForm((value) => ({ ...value, general: { ...value.general, collectionTags: event.target.value } }))}
+                          placeholder="Enter your custom category label"
+                          className="mt-3 h-12 rounded-none bg-white"
+                        />
+                      )}
+                      <p className="text-sm leading-6 text-[#666]">Used for homepage category filters and matching email templates.</p>
+                    </Field>
+                    <Field>
+                      <FieldLabel className="font-bold">Publish Recipients & Email Access</FieldLabel>
+                      <PublishRecipientsField compact value={form.clientEmails} onChange={(clientEmails) => setForm((value) => ({ ...value, clientEmails }))} />
                     </Field>
                     <Field>
                       <FieldLabel className="font-bold">
@@ -16675,6 +16880,7 @@ function CollectionDetailView({
                   : []
               }
               orders={collectionOrders}
+              collectionId={collection._id}
               collectionName={collection.name}
               collectionImages={images}
               publicLink={publicLink}
@@ -16807,6 +17013,7 @@ function CollectionActivityPanel({
   emailRegistrations = [],
   privatePhotos = [],
   orders = [],
+  collectionId,
   collectionName,
   collectionImages = [],
   publicLink,
@@ -16831,6 +17038,7 @@ function CollectionActivityPanel({
   emailRegistrations: CollectionEmailRegistrationRecord[];
   privatePhotos: CollectionPrivatePhotoActivityRecord[];
   orders: StoreOrderRecord[];
+  collectionId: string;
   collectionName: string;
   collectionImages: CollectionImageRecord[];
   publicLink: string;
@@ -16955,23 +17163,57 @@ function CollectionActivityPanel({
       }
     }, 180);
   };
-  const openDownloadPage = () => {
-    const images = collectionImages
-      .filter((image) => image.url)
-      .map((image, index) => ({
-        url: image.url,
-        name: image.originalName || `photo-${index + 1}`,
-      }));
+  const openDownloadPage = (list?: CollectionFavoriteActivityRecord) => {
+    const imageById = new Map(
+      collectionImages.map((image) => [image._id, image] as const),
+    );
+    const imageByName = new Map(
+      collectionImages
+        .filter((image) => image.originalName)
+        .map((image) => [image.originalName!.toLowerCase(), image] as const),
+    );
+    const favoriteEntries = list
+      ? list.images?.length
+        ? list.images
+        : list.filenames.map((name) => ({ imageId: "", name, url: "" }))
+      : [];
+    const images = list
+      ? favoriteEntries
+          .map((favorite, index) => {
+            const galleryImage =
+              (favorite.imageId ? imageById.get(favorite.imageId) : undefined) ??
+              imageByName.get(favorite.name.toLowerCase());
+            const url = favorite.url || galleryImage?.url || "";
+            if (!url) return null;
+            return {
+              url,
+              name:
+                favorite.name ||
+                galleryImage?.originalName ||
+                `favorite-${index + 1}`,
+            };
+          })
+          .filter(
+            (image): image is { url: string; name: string } => Boolean(image),
+          )
+      : collectionImages
+          .filter((image) => image.url)
+          .map((image, index) => ({
+            url: image.url,
+            name: image.originalName || `photo-${index + 1}`,
+          }));
     if (!images.length) {
-      toast.error("No gallery images to download");
+      toast.error(
+        list ? "No favorite images to download" : "No gallery images to download",
+      );
       return;
     }
     window.sessionStorage.setItem(
       "gallerista-favorite-download",
       JSON.stringify({
         collectionName,
-        listName: "All photos",
-        email: "",
+        listName: list?.name || "All photos",
+        email: list?.email || "",
         images,
       }),
     );
@@ -17329,7 +17571,7 @@ function CollectionActivityPanel({
                             (isAllowed ? "allowed" : "pending")}
                         </TableCell>
                         <TableCell className="max-w-80 whitespace-normal text-[#666]">
-                          {request?.reason || "—"}
+                          {request?.reason || "Ã¢â‚¬â€"}
                         </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
@@ -17589,12 +17831,17 @@ function CollectionActivityPanel({
                           >
                             Edit List
                           </Button>
+                          <Button asChild variant="outline" className="h-8 rounded-none px-2 text-xs text-[#6337d8]">
+                            <Link href={`/dashboard/client-gallery/album-design?collectionId=${encodeURIComponent(collectionId)}&favoriteUserId=${encodeURIComponent(item.id)}`}>
+                              <BookOpen className="size-3.5" /> Design album
+                            </Link>
+                          </Button>
                           <Button
                             variant="outline"
                             className="h-8 rounded-none px-2 text-xs"
-                            onClick={() => openDownloadPage()}
+                            onClick={() => openDownloadPage(item)}
                           >
-                            Download all
+                            Download favorites
                           </Button>
                           <Button
                             variant="outline"
@@ -17653,9 +17900,9 @@ function CollectionActivityPanel({
                                   <Eye className="size-4" /> View in Gallery
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => openDownloadPage()}
+                                  onClick={() => openDownloadPage(item)}
                                 >
-                                  <Download className="size-4" /> Download all
+                                  <Download className="size-4" /> Download favorites
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => exportFavoriteList(item)}
@@ -17959,6 +18206,11 @@ const collectionDefaultDesign: PresetDesignSettings = {
   textColor: "#ffffff",
   coverFocalX: 50,
   coverFocalY: 50,
+  logoRevealEnabled: false,
+  logoRevealStyle: "scale",
+  logoRevealDurationMs: 1800,
+  logoRevealOncePerSession: true,
+  coverMotion: "slow-zoom",
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -18013,6 +18265,8 @@ const collectionDefaultFavorite: PresetFavoriteSettings = {
   favoriteNotes: true,
   maxFavorites: "",
   description: "",
+  autoShareToPrintShop: false,
+  printShopEmail: "",
 };
 
 const collectionDefaultStore: PresetStoreSettings = {
@@ -18043,6 +18297,7 @@ type CollectionFormState = {
   presetId: string;
   coverImage: string;
   expiresAt: string;
+  clientEmails: string;
   sets: NonNullable<CollectionRecord["sets"]>;
   design: PresetDesignSettings;
   general: PresetGeneralSettings;
@@ -18097,6 +18352,7 @@ function collectionForm(
     presetId: collection?.presetId ?? "",
     coverImage: collection?.coverImage ?? "",
     expiresAt: collection?.expiresAt ? collection.expiresAt.slice(0, 10) : "",
+    clientEmails: (collection?.clientEmails ?? []).join(", "),
     sets: collection?.sets?.length
       ? collection.sets
       : [{ id: "highlights", name: "Featured" }],

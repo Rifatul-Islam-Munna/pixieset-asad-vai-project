@@ -20,6 +20,9 @@ export class CollectionEmailRegistration {
   @Prop({ default: false, index: true })
   marketingOptIn: boolean;
 
+  @Prop({ index: true })
+  marketingOptedInAt?: Date;
+
   @Prop({ type: [String], default: [] })
   sources: string[];
 

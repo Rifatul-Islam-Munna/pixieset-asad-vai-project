@@ -18,6 +18,7 @@ export type CollectionRecord = {
   imageCount?: number;
   sets?: CollectionSetRecord[];
   tags?: string[];
+  clientEmails?: string[];
   watermarkId?: string;
   expiresAt?: string;
   design?: Record<string, any>;
@@ -115,6 +116,8 @@ export function useCollections() {
       name: string;
       eventDate?: string;
       presetId?: string;
+      tags?: string[];
+      clientEmails?: string[];
       status?: "draft" | "published";
       design?: Record<string, any>;
       settings?: Record<string, any>;

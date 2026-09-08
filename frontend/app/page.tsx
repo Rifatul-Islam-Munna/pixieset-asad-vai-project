@@ -13,6 +13,7 @@ import {
 import { HomeHero } from "@/components/home/home-hero";
 import { HomeMarquee } from "@/components/home/home-marquee";
 import { HomeMotion } from "@/components/home/home-motion";
+import { HomeTrustLogos } from "@/components/home/home-trust-logos";
 import { ClientGalleryShowcase } from "@/components/home/client-gallery-showcase";
 import { PhotographerTypesShowcase } from "@/components/home/photographer-types-showcase";
 import { getUser } from "@/actions/auth";
@@ -244,29 +245,7 @@ export default async function Home({
         </div>
       </section>
 
-      <section className="bg-white px-4 py-9 text-center sm:px-5 sm:py-10 md:px-8">
-        <p className="text-[9px] font-bold uppercase tracking-[.18em] text-[#666]">
-          {t.trustHeading}
-        </p>
-        <div className="mx-auto mt-7 grid max-w-[1050px] grid-cols-2 items-center justify-items-center gap-7 sm:flex sm:flex-wrap sm:justify-center sm:gap-x-12 sm:gap-y-6">
-          {t.brandLogos.map((logo, i) =>
-            logo.image ? (
-              <img
-                key={i}
-                src={logo.image}
-                alt={logo.name}
-                data-home-reveal
-                className="home-logo-reveal max-h-8 max-w-28 object-contain grayscale hover:grayscale-0"
-                style={{ transitionDelay: `${i * 90}ms` }}
-              />
-            ) : (
-              <span key={i} data-home-reveal className="home-logo-reveal text-xl font-bold text-[#888]" style={{ transitionDelay: `${i * 90}ms` }}>
-                {logo.name}
-              </span>
-            ),
-          )}
-        </div>
-      </section>
+      <HomeTrustLogos heading={t.trustHeading} logos={t.brandLogos} />
 
       <footer
         id="resources"

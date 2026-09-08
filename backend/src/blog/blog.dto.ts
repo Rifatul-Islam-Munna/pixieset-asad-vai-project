@@ -7,6 +7,9 @@ export class CreateBlogDto {
   @IsOptional() @IsString() content?: string;
   @IsOptional() @IsString() thumbnailUrl?: string;
   @IsOptional() @IsString() @MaxLength(100) author?: string;
+  @IsOptional() @IsString() @MaxLength(80) category?: string;
+  @IsOptional() @IsString() @MaxLength(40) language?: string;
+  @IsOptional() @IsBoolean() featured?: boolean;
   @IsOptional() @IsArray() @IsString({ each: true }) keywords?: string[];
   @IsOptional() @IsBoolean() published?: boolean;
   @IsOptional() @IsDateString() publishedAt?: string;

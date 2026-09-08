@@ -11,6 +11,8 @@ export enum DashboardSettingType {
   PREFERENCE = 'preference',
   INTEGRATION = 'integration',
   MARKETING = 'marketing',
+  ALBUM_DESIGN = 'album-design',
+  BLOG_POST = 'blog-post',
 }
 
 @Schema({ timestamps: true, autoIndex: true })

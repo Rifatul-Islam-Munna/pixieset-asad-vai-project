@@ -6,6 +6,7 @@ import { Collection, CollectionDocument } from 'src/collections/entities/collect
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
+import { BookingSetting, BookingSettingDocument } from 'src/bookings/entities/booking-setting.entity';
 import { UpdateHomepageDto } from './dto/update-homepage.dto';
 import { Homepage, HomepageDocument } from './entities/homepage.entity';
 
@@ -22,6 +23,8 @@ export class HomepageService {
     private readonly imageModel: Model<CollectionImageDocument>,
     @InjectModel(DashboardSetting.name)
     private readonly settingModel: Model<DashboardSettingDocument>,
+    @InjectModel(BookingSetting.name)
+    private readonly bookingSettingModel: Model<BookingSettingDocument>,
   ) {}
 
   async getMine(userId: string) {
@@ -53,6 +56,7 @@ export class HomepageService {
       'phone',
       'address',
       'sortOrder',
+      'showCategories',
     ];
 
     for (const key of simpleFields) {
@@ -77,6 +81,12 @@ export class HomepageService {
       homepage.markModified('show');
     }
 
+    if (dto.featuredCollectionIds !== undefined) {
+      homepage.featuredCollectionIds = [...new Set(
+        dto.featuredCollectionIds.map((value) => String(value ?? '').trim()).filter(Boolean),
+      )].slice(0, 12);
+    }
+
     if (dto.password !== undefined) {
       const owner = await this.userModel.findById(userId).select('planFeatures').lean();
       if (dto.password && !owner?.planFeatures?.passwordProtection) {
@@ -98,21 +108,35 @@ export class HomepageService {
     const isLocked = Boolean(homepage.passwordHash);
     const passwordValid = !isLocked || this.hashPassword(homepage.userId, password ?? '') === homepage.passwordHash;
     const base = this.publicBase(homepage);
-    const integrations = await this.settingModel
-      .findOne({
-        userId: homepage.userId,
-        type: DashboardSettingType.INTEGRATION,
-        localId: 'google-analytics',
-      })
-      .lean();
+    const [integrations, bookingSettings, owner] = await Promise.all([
+      this.settingModel
+        .findOne({
+          userId: homepage.userId,
+          type: DashboardSettingType.INTEGRATION,
+          localId: 'google-analytics',
+        })
+        .lean(),
+      this.bookingSettingModel
+        .findOne({ userId: homepage.userId })
+        .select('enabled')
+        .lean(),
+      this.userModel.findById(homepage.userId).select('_id username').lean(),
+    ]);
     const publicIntegrations = {
       googleAnalytics: (integrations?.data as any) ?? {},
+    };
+    const publicBooking = {
+      enabled: Boolean(bookingSettings?.enabled),
+      url: bookingSettings?.enabled && owner
+        ? `/book/${encodeURIComponent(owner.username || owner._id.toString())}`
+        : '',
     };
 
     if (!passwordValid) {
       return {
         ...base,
         integrations: publicIntegrations,
+        booking: { enabled: false, url: '' },
         locked: true,
         collections: [],
       };
@@ -126,7 +150,27 @@ export class HomepageService {
     if (homepage.sortOrder === 'oldest') query.sort('createdAt');
     else if (homepage.sortOrder === 'name') query.sort('name');
     else query.sort('-createdAt');
-    const collections = await query.lean();
+    const [collections, blogSettings] = await Promise.all([
+      query.lean(),
+      this.settingModel
+        .find({ userId: homepage.userId, type: DashboardSettingType.BLOG_POST })
+        .sort({ updatedAt: -1 })
+        .lean(),
+    ]);
+    const blogPosts = blogSettings
+      .map((setting) => {
+        const data = (setting.data ?? {}) as Record<string, unknown>;
+        return { ...data, id: String(data.id ?? setting.localId) };
+      })
+      .filter((post) => post["published"] === true)
+      .sort((a, b) => {
+        const aFeatured = Boolean(a["featured"]);
+        const bFeatured = Boolean(b["featured"]);
+        if (aFeatured !== bFeatured) return aFeatured ? -1 : 1;
+        const bDate = new Date(String(b["publishedAt"] || b["updatedAt"] || 0)).getTime();
+        const aDate = new Date(String(a["publishedAt"] || a["updatedAt"] || 0)).getTime();
+        return bDate - aDate;
+      });
 
     const collectionIds = collections.map((collection) => collection._id.toString());
     const images = collectionIds.length
@@ -145,7 +189,9 @@ export class HomepageService {
     return {
       ...base,
       integrations: publicIntegrations,
+      booking: publicBooking,
       locked: false,
+      blogPosts,
       collections: collections.map((collection) => {
         const id = collection._id.toString();
         const fallback = firstImage.get(id);
@@ -156,6 +202,8 @@ export class HomepageService {
           eventDate: collection.eventDate,
           coverImage: collection.coverImage || fallback?.thumbnailUrl || fallback?.url || '',
           imageCount: collection.imageCount ?? 0,
+          tags: Array.isArray(collection.tags) ? collection.tags : [],
+          featured: (homepage.featuredCollectionIds ?? []).includes(id),
           url: `/${encodeURIComponent(collection.slug ?? id)}`,
         };
       }),
@@ -198,6 +246,8 @@ export class HomepageService {
         address: true,
       },
       sortOrder: 'newest',
+      showCategories: true,
+      featuredCollectionIds: [],
     });
     return homepage;
   }
@@ -258,6 +308,7 @@ export class HomepageService {
       address: show.address ? homepage.address || '' : '',
       socialLinks: show.social ? homepage.socialLinks ?? {} : {},
       sortOrder: homepage.sortOrder ?? 'newest',
+      showCategories: homepage.showCategories !== false,
       hasPassword: Boolean(homepage.passwordHash),
     };
   }

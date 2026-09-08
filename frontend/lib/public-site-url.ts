@@ -2,7 +2,7 @@ export function publicSiteOrigin(siteSlug: string, fallbackOrigin = "") {
   const configuredRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim();
   const rootDomain = configuredRoot?.replace(/^https?:\/\//, "").replace(/\/$/, "");
   if (!rootDomain) return fallbackOrigin;
-  const protocol = configuredRoot.startsWith("http://") || fallbackOrigin.startsWith("http://") ? "http" : "https";
+  const protocol = configuredRoot?.startsWith("http://") || fallbackOrigin.startsWith("http://") ? "http" : "https";
   return `${protocol}://${siteSlug}.${rootDomain}`;
 }
 
@@ -12,4 +12,19 @@ export function publicCollectionUrl(siteSlug: string, collectionSlug: string, fa
   const rootDomain = configuredRoot.replace(/^https?:\/\//, "").replace(/\/$/, "");
   if (/^localhost(:\d+)?$/.test(rootDomain)) return `${fallbackOrigin}/collection/${encodeURIComponent(siteSlug)}/${encodeURIComponent(collectionSlug)}`;
   return `${publicSiteOrigin(siteSlug, fallbackOrigin)}/${encodeURIComponent(collectionSlug)}`;
+}
+
+export function publicHomepagePath(siteSlug: string) {
+  const configuredRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim();
+  const rootDomain = configuredRoot?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (rootDomain && !/^localhost(:\d+)?$/.test(rootDomain)) return "/";
+  return `/home/${encodeURIComponent(siteSlug)}`;
+}
+
+export function publicHomepageBlogPath(siteSlug: string, postSlug?: string) {
+  const configuredRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim();
+  const rootDomain = configuredRoot?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const suffix = postSlug ? `/${encodeURIComponent(postSlug)}` : "";
+  if (rootDomain && !/^localhost(:\d+)?$/.test(rootDomain)) return `/blog${suffix}`;
+  return `/home/${encodeURIComponent(siteSlug)}/blog${suffix}`;
 }

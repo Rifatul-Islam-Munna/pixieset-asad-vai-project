@@ -9,6 +9,8 @@ import type { PublicStoreProduct } from "@/lib/public-store";
 export type CollectionStoreCatalog = {
   _id: string;
   name: string;
+  freePrintSizes?: string[];
+  freePrintPapers?: string[];
   products?: PublicStoreProduct[];
 };
 

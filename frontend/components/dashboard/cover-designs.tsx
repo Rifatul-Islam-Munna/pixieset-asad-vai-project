@@ -82,7 +82,7 @@ function CoverMedia({
   return video ? (
     <video
       src={src}
-      className={className}
+      className={cn("cover-preview-media", className)}
       style={style}
       autoPlay
       muted
@@ -92,7 +92,7 @@ function CoverMedia({
       aria-label="Animated gallery cover"
     />
   ) : (
-    <img src={src} alt="" className={className} style={style} />
+    <img src={src} alt="" className={cn("cover-preview-media", className)} style={style} />
   );
 }
 

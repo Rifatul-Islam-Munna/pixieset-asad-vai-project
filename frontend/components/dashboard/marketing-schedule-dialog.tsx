@@ -149,7 +149,7 @@ export function MarketingScheduleDialog({ open, onOpenChange }: { open: boolean;
           </section>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Email template</span><select value={selectedTemplateId} onChange={(event) => setTemplateId(event.target.value)} className="h-11 border bg-white px-3 text-sm">{emailTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+            <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Email template</span><select value={selectedTemplateId} onChange={(event) => setTemplateId(event.target.value)} className="h-11 border bg-white px-3 text-sm">{emailTemplates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.galleryCategory === "Custom label" ? template.customGalleryCategoryLabel || "Custom label" : template.galleryCategory || "General"} · {template.language || "English"} · {template.category || "Gallery Delivery"}</option>)}</select></label>
             <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Button opens collection</span><select value={selectedCollectionId} onChange={(event) => setCollectionId(event.target.value)} className="h-11 border bg-white px-3 text-sm">{collections.map((collection) => <option key={collection._id} value={collection._id}>{collection.name}</option>)}</select></label>
           </div>
 

@@ -9,7 +9,8 @@ import { AdminResourceShell } from "@/components/dashboard/admin-resource-shell"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { EmailTemplateItem, HomeCmsData } from "@/lib/home-cms";
+import { EMAIL_TEMPLATE_CATEGORIES, EMAIL_TEMPLATE_LANGUAGES, type EmailTemplateItem, type HomeCmsData } from "@/lib/home-cms";
+import { CLIENT_GALLERY_CATEGORIES } from "@/lib/gallery-categories";
 
 const blankTemplate = (): EmailTemplateItem => ({
   id: `admin-email-${Date.now()}`,
@@ -23,6 +24,10 @@ const blankTemplate = (): EmailTemplateItem => ({
   buttonColor: "#111111",
   footerText: "",
   image: "",
+  category: "Gallery Delivery",
+  galleryCategory: "Wedding",
+  customGalleryCategoryLabel: "",
+  language: "English",
   updatedAt: "Draft",
   source: "admin",
 });
@@ -31,8 +36,15 @@ export function AdminEmailTemplatesPage({ initialCms }: { initialCms: HomeCmsDat
   const [cms, setCms] = useState(initialCms);
   const [activeId, setActiveId] = useState(initialCms.emailTemplates[0]?.id ?? "");
   const [draft, setDraft] = useState<EmailTemplateItem | null>(initialCms.emailTemplates[0] ?? null);
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [galleryCategoryFilter, setGalleryCategoryFilter] = useState("All");
+  const [languageFilter, setLanguageFilter] = useState("All");
   const [pending, startTransition] = useTransition();
   const templates = useMemo(() => cms.emailTemplates ?? [], [cms.emailTemplates]);
+  const visibleTemplates = useMemo(() => templates.filter((template) =>
+    (categoryFilter === "All" || (template.category || "Gallery Delivery") === categoryFilter) &&
+    (galleryCategoryFilter === "All" || (template.galleryCategory || "General") === galleryCategoryFilter) &&
+    (languageFilter === "All" || (template.language || "English") === languageFilter)), [categoryFilter, galleryCategoryFilter, languageFilter, templates]);
 
   const select = (template: EmailTemplateItem) => {
     setActiveId(template.id);
@@ -89,14 +101,20 @@ export function AdminEmailTemplatesPage({ initialCms }: { initialCms: HomeCmsDat
       <div className="grid gap-6 xl:grid-cols-[300px_minmax(420px,0.85fr)_minmax(420px,1fr)]">
         <aside className="border bg-white p-3">
           <p className="px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[#777]">Templates</p>
+          <div className="grid gap-2 px-3 pb-3">
+            <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="h-9 border bg-white px-2 text-xs"><option>All</option>{EMAIL_TEMPLATE_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select>
+            <select value={galleryCategoryFilter} onChange={(event) => setGalleryCategoryFilter(event.target.value)} className="h-9 border bg-white px-2 text-xs"><option>All</option><option>General</option>{CLIENT_GALLERY_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select>
+            <select value={languageFilter} onChange={(event) => setLanguageFilter(event.target.value)} className="h-9 border bg-white px-2 text-xs"><option>All</option>{EMAIL_TEMPLATE_LANGUAGES.map((language) => <option key={language}>{language}</option>)}</select>
+          </div>
           <div className="mt-2 grid gap-2">
-            {templates.map((template) => (
+            {visibleTemplates.map((template) => (
               <button key={template.id} onClick={() => select(template)} className={`border p-4 text-left ${activeId === template.id ? "border-[#111] bg-[#f5f5f2]" : "hover:bg-[#fafafa]"}`}>
                 <p className="font-bold">{template.name}</p>
                 <p className="mt-1 truncate text-xs text-[#777]">{template.subject || "No subject"}</p>
+                <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-[#9a8f82]">{template.category || "Gallery Delivery"} · {template.galleryCategory || "General"} · {template.language || "English"}</p>
               </button>
             ))}
-            {!templates.length && <p className="p-5 text-sm text-[#777]">No pre-built templates.</p>}
+            {!visibleTemplates.length && <p className="p-5 text-sm text-[#777]">No templates match these filters.</p>}
           </div>
         </aside>
 
@@ -111,6 +129,12 @@ export function AdminEmailTemplatesPage({ initialCms }: { initialCms: HomeCmsDat
               </div>
             </div>
             <Field label="Template name"><Input value={draft.name} onChange={(event) => update({ name: event.target.value })} /></Field>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Email purpose"><select value={draft.category || "Gallery Delivery"} onChange={(event) => update({ category: event.target.value })} className="h-10 border bg-white px-3 text-sm font-normal normal-case tracking-normal">{EMAIL_TEMPLATE_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field>
+              <Field label="Gallery category"><select value={draft.galleryCategory || ""} onChange={(event) => update({ galleryCategory: event.target.value || undefined, customGalleryCategoryLabel: event.target.value === "Custom label" ? draft.customGalleryCategoryLabel : "" })} className="h-10 border bg-white px-3 text-sm font-normal normal-case tracking-normal"><option value="">General / all gallery types</option>{CLIENT_GALLERY_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field>
+              <Field label="Language"><select value={draft.language || "English"} onChange={(event) => update({ language: event.target.value })} className="h-10 border bg-white px-3 text-sm font-normal normal-case tracking-normal">{EMAIL_TEMPLATE_LANGUAGES.map((language) => <option key={language}>{language}</option>)}</select></Field>
+            </div>
+            {draft.galleryCategory === "Custom label" && <Field label="Custom gallery label"><Input value={draft.customGalleryCategoryLabel || ""} onChange={(event) => update({ customGalleryCategoryLabel: event.target.value })} placeholder="e.g. Newborn, Corporate Gala" /></Field>}
             <Field label="Subject"><Input value={draft.subject} onChange={(event) => update({ subject: event.target.value })} /></Field>
             <Field label="Preview text"><Input value={draft.previewText} onChange={(event) => update({ previewText: event.target.value })} /></Field>
             <Field label="Email title"><Input value={draft.title} onChange={(event) => update({ title: event.target.value })} /></Field>

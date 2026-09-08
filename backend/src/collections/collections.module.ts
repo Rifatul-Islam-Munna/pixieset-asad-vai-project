@@ -10,7 +10,9 @@ import {
   PublicCollectionsController,
 } from './collections.controller';
 import { CollectionsService } from './collections.service';
+import { CollectionDownloadDeliveryService } from './collection-download-delivery.service';
 import { Collection, CollectionSchema } from './entities/collection.entity';
+import { CollectionDownloadDelivery, CollectionDownloadDeliverySchema } from './entities/collection-download-delivery.entity';
 import {
   CollectionImage,
   CollectionImageSchema,
@@ -45,6 +47,7 @@ import {
 } from 'src/store/entities/store-order.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
+import { MarketingScheduleModule } from 'src/marketing-schedule/marketing-schedule.module';
 import {
   MobileGalleryImage,
   MobileGalleryImageSchema,
@@ -58,6 +61,7 @@ import {
   imports: [
     MongooseModule.forFeature([
       { name: Collection.name, schema: CollectionSchema },
+      { name: CollectionDownloadDelivery.name, schema: CollectionDownloadDeliverySchema },
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: CollectionFavorite.name, schema: CollectionFavoriteSchema },
       {
@@ -84,8 +88,9 @@ import {
       { name: Homepage.name, schema: HomepageSchema },
     ]),
     FaceSearchModule,
+    MarketingScheduleModule,
   ],
   controllers: [CollectionsController, PublicCollectionsController],
-  providers: [CollectionsService, MinioService],
+  providers: [CollectionsService, CollectionDownloadDeliveryService, MinioService],
 })
 export class CollectionsModule {}

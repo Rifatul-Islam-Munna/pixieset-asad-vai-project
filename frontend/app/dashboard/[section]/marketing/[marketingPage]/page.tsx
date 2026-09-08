@@ -7,7 +7,7 @@ import {
 } from "@/components/dashboard/client-dashboard";
 
 const sections = ["client-gallery", "store-gallery"] as const;
-const marketingPages = ["email-campaigns", "contacts", "settings"] as const;
+const marketingPages = ["email-campaigns", "automations", "contacts", "settings"] as const;
 
 export default async function DashboardMarketingPage({
   params,

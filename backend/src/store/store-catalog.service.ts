@@ -251,8 +251,8 @@ export class StoreCatalogService {
       minimumOrderAmount: Number(raw.minimumOrderAmount ?? 0),
       currency: 'EUR',
       requireProfessionalInfo: Boolean(raw.requireProfessionalInfo),
-      freePrintSizes: Array.isArray(sheet?.freePrintSizes) && sheet.freePrintSizes.length ? sheet.freePrintSizes : ['4 x 6', '5 x 7', '8 x 10', '8 x 12'],
-      freePrintPapers: Array.isArray(sheet?.freePrintPapers) && sheet.freePrintPapers.length ? sheet.freePrintPapers : ['Glossy', 'Matte'],
+      freePrintSizes: optionList(raw.freePrintSizes, sheet?.freePrintSizes, ['4 x 6', '5 x 7', '8 x 10', '8 x 12']),
+      freePrintPapers: optionList(raw.freePrintPapers, sheet?.freePrintPapers, ['Glossy', 'Matte']),
     };
     if (requireEnabled && !config.enabled) throw new NotFoundException('Store is not enabled for this collection');
     return { collection, userId, settings, config, sheet };
@@ -358,4 +358,14 @@ export class StoreCatalogService {
     }
     return missing.length;
   }
+}
+
+function optionList(...sources: unknown[]): string[] {
+  for (const source of sources) {
+    if (!Array.isArray(source)) continue;
+    const seen = new Set<string>();
+    const options = source.map((value) => String(value ?? '').trim().slice(0, 80)).filter((value) => { const key = value.toLowerCase(); if (!value || seen.has(key)) return false; seen.add(key); return true; }).slice(0, 50);
+    if (options.length) return options;
+  }
+  return [];
 }

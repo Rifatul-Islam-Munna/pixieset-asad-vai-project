@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -19,6 +19,7 @@ import { HomepageModule } from './homepage/homepage.module';
 import { BlogModule } from './blog/blog.module';
 import { SupportModule } from './support/support.module';
 import { MarketingScheduleModule } from './marketing-schedule/marketing-schedule.module';
+import { BookingsModule } from './bookings/bookings.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { MarketingScheduleModule } from './marketing-schedule/marketing-schedule
     BlogModule,
     SupportModule,
     MarketingScheduleModule,
+    BookingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsObject,
@@ -63,4 +64,13 @@ export class UpdateHomepageDto {
   @IsOptional()
   @IsIn(['newest', 'oldest', 'name'])
   sortOrder?: 'newest' | 'oldest' | 'name';
+
+  @IsOptional()
+  @IsBoolean()
+  showCategories?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  featuredCollectionIds?: string[];
 }

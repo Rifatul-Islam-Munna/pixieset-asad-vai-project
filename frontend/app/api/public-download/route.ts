@@ -4,6 +4,7 @@ import JSZip from "jszip";
 const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
 
 type ZipImage = {
+  id?: string;
   url?: string;
   name?: string;
 };
@@ -48,11 +49,30 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const payload = await request.json().catch(() => null);
-  const images = Array.isArray(payload?.images) ? payload.images.slice(0, 250) as ZipImage[] : [];
+  const rawImages = Array.isArray(payload?.images) ? payload.images as ZipImage[] : [];
+  const strictFavoriteSelection = payload?.scope === "favorites";
+  const selectedImageIds = new Set(
+    Array.isArray(payload?.selectedImageIds)
+      ? payload.selectedImageIds.map((value: unknown) => String(value)).filter(Boolean)
+      : [],
+  );
+  const seenFavoriteIds = new Set<string>();
+  const images = (strictFavoriteSelection
+    ? rawImages.filter((image) => {
+        const id = String(image.id ?? "");
+        if (!id || !selectedImageIds.has(id) || seenFavoriteIds.has(id)) return false;
+        seenFavoriteIds.add(id);
+        return true;
+      })
+    : rawImages
+  ).slice(0, 250);
   const zipName = safeFilename(String(payload?.name ?? "collection"), ".zip");
 
+  if (strictFavoriteSelection && !selectedImageIds.size) {
+    return NextResponse.json({ message: "No favorite photos selected" }, { status: 400 });
+  }
   if (!images.length) {
-    return NextResponse.json({ message: "No images to download" }, { status: 400 });
+    return NextResponse.json({ message: strictFavoriteSelection ? "Selected favorites were not found" : "No images to download" }, { status: 400 });
   }
 
   const usedNames = new Set<string>();

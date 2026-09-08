@@ -1,0 +1,16 @@
+﻿import { NextResponse } from "next/server";
+
+const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+
+export async function POST(request: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  const { identifier } = await params;
+  const body = await request.json().catch(() => ({}));
+  const response = await fetch(`${baseUrl}/public/bookings/${encodeURIComponent(identifier)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => null);
+  return NextResponse.json(payload ?? { message: "Booking request failed" }, { status: response.status });
+}

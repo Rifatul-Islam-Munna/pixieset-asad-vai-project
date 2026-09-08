@@ -97,6 +97,18 @@ export function proxy(request: NextRequest) {
     return NextResponse.rewrite(destination);
   }
 
+  if (path === "/blog" || /^\/blog\/[^/]+$/.test(path)) {
+    const blogSegments = path.split("/").filter(Boolean);
+    destination.pathname = `/home/${encodeURIComponent(slug)}/blog`;
+    if (blogSegments[1]) destination.pathname += `/${encodeURIComponent(blogSegments[1])}`;
+    return NextResponse.rewrite(destination);
+  }
+
+  // Fallback direct app routes used in localhost development already carry the homepage slug.
+  if (path.startsWith("/home/")) {
+    return withGeoLanguage(request, NextResponse.next());
+  }
+
   const segments = path.split("/").filter(Boolean);
   const collectionSlug = segments[0];
   const remainder = segments.slice(1);

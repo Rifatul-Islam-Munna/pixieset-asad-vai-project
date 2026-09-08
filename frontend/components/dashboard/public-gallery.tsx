@@ -12,6 +12,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { Textarea } from "@/components/ui/textarea";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import { galleryLanguageCode } from "@/lib/gallery-language";
+import { resolveGalleryFontFamily } from "@/lib/gallery-fonts";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 import { usePublicGalleryFavorites } from "./public-gallery-favorites";
@@ -63,7 +64,7 @@ type PublicCollection = {
       language?: string;
     };
     download?: Partial<PresetDownloadSettings>;
-    favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string };
+    favorite?: { favoritePhotos?: boolean; favoriteNotes?: boolean; maxFavorites?: string; description?: string; autoShareToPrintShop?: boolean };
     store?: { storeStatus?: boolean; enabled?: boolean; printRequestsEnabled?: boolean; showPrintStoreNav?: boolean; showBuyPhotoButton?: boolean };
     access?: { emailRequired?: boolean; emailAuthorized?: boolean; emailStatus?: string; email?: string; pinRequired?: boolean; pinAuthorized?: boolean };
   };
@@ -149,6 +150,11 @@ const defaultDesign: PresetDesignSettings = {
   coverButtonColor: "#ffffff",
   galleryTitleColor: "#202326",
   galleryNavigationColor: "#6b7280",
+  logoRevealEnabled: false,
+  logoRevealStyle: "scale",
+  logoRevealDurationMs: 1800,
+  logoRevealOncePerSession: true,
+  coverMotion: "slow-zoom",
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
@@ -206,13 +212,35 @@ export function PublicGallery({
   const fallbackPresetDownload = useDashboardStore((state) => state.presetDownload);
   const fallbackPresetStore = useDashboardStore((state) => state.presetStore);
   const fallbackPresetGeneral = useDashboardStore((state) => state.presetGeneral);
+  const ownerPreview = collection?.ownerPreview === true;
   const design = {
     ...defaultDesign,
     ...(collection?.design ?? fallbackPresetDesign),
   };
+  const [logoRevealVisible, setLogoRevealVisible] = useState(false);
+  const [logoRevealLeaving, setLogoRevealLeaving] = useState(false);
+  useEffect(() => {
+    if (!design.logoRevealEnabled || ownerPreview) return;
+    const storageKey = `gallery-logo-reveal:${collection?._id || galary}`;
+    const oncePerSession = design.logoRevealOncePerSession !== false;
+    if (oncePerSession && window.sessionStorage.getItem(storageKey) === "1") return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const duration = reducedMotion ? 450 : Math.min(6000, Math.max(900, Number(design.logoRevealDurationMs) || 1800));
+    const showFrame = window.requestAnimationFrame(() => {
+      setLogoRevealLeaving(false);
+      setLogoRevealVisible(true);
+      if (oncePerSession) window.sessionStorage.setItem(storageKey, "1");
+    });
+    const leaveTimer = window.setTimeout(() => setLogoRevealLeaving(true), Math.max(150, duration - (reducedMotion ? 150 : 420)));
+    const hideTimer = window.setTimeout(() => setLogoRevealVisible(false), duration);
+    return () => {
+      window.cancelAnimationFrame(showFrame);
+      window.clearTimeout(leaveTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [collection?._id, design.logoRevealDurationMs, design.logoRevealEnabled, design.logoRevealOncePerSession, galary, ownerPreview]);
   const navigationWithText = design.navigationStyle === "Icon & Text";
   const studioName = decodeRouteText(name);
-  const ownerPreview = collection?.ownerPreview === true;
   const aiFaceSearchEnabled = collection?.planCapabilities?.aiFaceSearch !== false;
   const advancedFaceSearchEnabled = collection?.planCapabilities?.advancedFaceSearch === true;
   const title = collection?.name ?? decodeRouteText(galary);
@@ -345,9 +373,7 @@ export function PublicGallery({
   const fallbackFontFamily =
     typeMap[design.typography as keyof typeof typeMap] ?? typeMap.Classic;
   const customFontName = design.customFontName?.trim();
-  const fontFamily = customFontName
-    ? `"${customFontName.replace(/"/g, "")}", ${fallbackFontFamily}`
-    : fallbackFontFamily;
+  const fontFamily = resolveGalleryFontFamily(customFontName, fallbackFontFamily);
   const masonryGapPx = design.gridSpacing === "Large" ? 20 : 4;
   const masonryColumns = design.thumbnailSize === "Large"
     ? "columns-1 sm:columns-2"
@@ -367,7 +393,6 @@ export function PublicGallery({
   const videoDownloadsEnabled = boolSetting(download.videoDownload);
   const galleryDownloadEnabled = download.galleryDownload !== false;
   const singlePhotoDownloadEnabled = download.singlePhotoDownload !== false;
-  const singlePhotoDownloadEmailTracking = !ownerPreview && download.singlePhotoDownloadEmailTracking !== false;
   const restrictedSinglePhotoDownloadSize = Boolean(download.restrictedSinglePhotoDownloadSize);
   const preferences = collection?.preferences ?? {};
   const showFilenames =
@@ -390,6 +415,7 @@ export function PublicGallery({
     favoriteImageIds,
     favoriteImageBusy,
     toggleImageFavorite,
+    openFavorites,
   } = favoriteTools;
   const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
   const favoriteGalleryImages = useMemo(
@@ -496,59 +522,83 @@ export function PublicGallery({
     }
     return persistDownloadEmail(existing);
   };
-  const recordDownloadActivity = async (
+  const requestDownloadDelivery = async (
     email: string,
-    items: Array<{ imageId?: string; imageName?: string; imageUrl?: string }>,
-    downloadType: "single" | "all",
+    scope: "single" | "set" | "favorites" | "all",
+    imageIds?: string[],
   ) => {
     const identifier = collection?.slug ?? galary;
-    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(identifier)}/download-activity?siteSlug=${encodeURIComponent(name)}`, {
+    const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(identifier)}/download-request?siteSlug=${encodeURIComponent(name)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, items, downloadType }),
+      body: JSON.stringify({
+        email,
+        scope,
+        setId: scope === "set" ? activeSetId : undefined,
+        imageIds,
+        pin: accessPin || undefined,
+      }),
     }).catch(() => null);
-    if (!response?.ok) {
-      const payload = response ? await response.json().catch(() => null) : null;
-      throw new Error(payload?.message ?? "Download activity failed");
-    }
+    const payload = response ? await response.json().catch(() => null) : null;
+    if (!response?.ok) throw new Error(payload?.message ?? "Download request failed");
+    return payload?.data;
   };
   const downloadPhoto = async (photo: PublicImage, index = 0, emailOverride = "") => {
     if (!canDownloadMedia(photo)) return;
-    let email = "";
-    if (singlePhotoDownloadEmailTracking) {
-      email = ensureDownloadEmail({ type: "single", photo, index }, emailOverride);
-      if (!email) return;
-      try {
-        await recordDownloadActivity(
-          email,
-          [{
-            imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
-            imageName: photo.originalName || `photo-${index + 1}`,
-            imageUrl: imageSrc(photo.url),
-          }],
-          "single",
-        );
-      } catch (error) {
-        setShareNotice(error instanceof Error ? error.message : "Download activity failed");
-        return;
-      }
+    if (ownerPreview) {
+      const downloadSource = restrictedSinglePhotoDownloadSize
+        ? imageSrc(photo.thumbnailUrl || photo.url)
+        : imageSrc(photo.url);
+      const url = `/api/public-download?url=${encodeURIComponent(downloadSource)}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      onDownload();
+      return;
     }
-    const downloadSource = restrictedSinglePhotoDownloadSize
-      ? imageSrc(photo.thumbnailUrl || photo.url)
-      : imageSrc(photo.url);
-    const url = `/api/public-download?url=${encodeURIComponent(downloadSource)}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    onDownload();
+    const email = ensureDownloadEmail({ type: "single", photo, index }, emailOverride);
+    if (!email) return;
+    if (!isPersistedImageId(photo._id)) {
+      setShareNotice("This photo is not ready for download yet");
+      return;
+    }
+    try {
+      await requestDownloadDelivery(email, "single", [photo._id]);
+      setShareNotice("Request received. We’ll email a secure download link when the file is ready. The link stays valid for 30 hours.");
+      onDownload();
+    } catch (error) {
+      setShareNotice(error instanceof Error ? error.message : "Download request failed");
+    }
   };
   const downloadAllImages = async (emailOverride = "", scope: "all" | "set" | "favorites" = "all") => {
     if (!canDownloadAll || zipDownloading) return;
     const email = ownerPreview ? "" : ensureDownloadEmail({ type: "all", scope }, emailOverride);
     if (!ownerPreview && !email) return;
+    if (!ownerPreview) {
+      const favoriteIds = scope === "favorites"
+        ? Array.from(favoriteImageIds).filter(isPersistedImageId)
+        : undefined;
+      if (scope === "favorites" && !favoriteIds?.length) {
+        setShareNotice("Favorite some photos before requesting a favorites download");
+        return;
+      }
+      setZipDownloading(true);
+      setZipStage("Queuing your secure download");
+      try {
+        const result = await requestDownloadDelivery(email, scope, favoriteIds);
+        setDownloadCount((count) => count + Number(result?.fileCount ?? 0));
+        setShareNotice(`Request received for ${Number(result?.fileCount ?? 0)} file${Number(result?.fileCount ?? 0) === 1 ? "" : "s"}. We’ll email the secure download link when it is ready; it expires 30 hours after preparation.`);
+      } catch (error) {
+        setShareNotice(error instanceof Error ? error.message : "Download request failed");
+      } finally {
+        setZipDownloading(false);
+        setZipStage("Preparing your photos");
+      }
+      return;
+    }
     let allImages = galleryImages.filter((photo) => !isVideo(photo));
     if (collection && imagesHasMore) {
       setZipStage("Loading remaining gallery photos");
@@ -592,35 +642,23 @@ export function PublicGallery({
     const downloadable = allImages.slice(0, remaining || allImages.length);
     if (!downloadable.length) return;
     setZipDownloading(true);
-    setZipStage("Collecting gallery photos");
-    try {
-      if (!ownerPreview) {
-        await recordDownloadActivity(
-          email,
-          downloadable.map((photo, index) => ({
-            imageId: isPersistedImageId(photo._id) ? photo._id : undefined,
-            imageName: photo.originalName || `photo-${index + 1}`,
-            imageUrl: imageSrc(photo.url),
-          })),
-          "all",
-        );
-      }
-    } catch (error) {
-      setZipDownloading(false);
-      setShareNotice(error instanceof Error ? error.message : "Download activity failed");
-      return;
-    }
     setZipStage("Creating ZIP archive");
     const response = await fetch("/api/public-download", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         name: title,
+        scope,
+        selectedImageIds: scope === "favorites"
+          ? downloadable.map((photo) => photo._id)
+          : undefined,
         images: downloadable.map((photo, index) => ({
+          id: photo._id,
           url: imageSrc(photo.url),
           name: photo.originalName || `photo-${index + 1}`,
         })),
       }),
+      cache: "no-store",
     }).catch(() => null);
 
     if (!response?.ok) {
@@ -1043,6 +1081,19 @@ export function PublicGallery({
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
       <ScreenCaptureGuard watermark={`${studioName} · ${title} · Visitor ${visitorCode}`} />
+      {logoRevealVisible && (
+        <div className={cn("gallery-logo-reveal fixed inset-0 z-[120] grid place-items-center bg-[#101010] text-white", `gallery-logo-reveal--${design.logoRevealStyle || "scale"}`, logoRevealLeaving && "is-leaving")}>
+          <button type="button" onClick={() => setLogoRevealVisible(false)} className="absolute right-5 top-5 rounded-full border border-white/25 px-4 py-2 text-[10px] font-bold uppercase tracking-[.18em] text-white/70 transition hover:border-white/60 hover:text-white">Skip intro</button>
+          <div className="gallery-logo-reveal__mark flex max-w-[80vw] flex-col items-center gap-5 text-center">
+            {collection?.branding?.logoUrl || collection?.branding?.brandImageUrl ? (
+              <img src={imageSrc(collection.branding.logoUrl || collection.branding.brandImageUrl || "")} alt={collection.branding.brandText || studioName} className="max-h-28 max-w-[min(72vw,420px)] object-contain" />
+            ) : (
+              <div className="text-2xl font-semibold uppercase tracking-[.22em] sm:text-4xl">{collection?.branding?.brandText || studioName}</div>
+            )}
+            <span className="gallery-logo-reveal__line h-px w-16 bg-white/55" />
+          </div>
+        </div>
+      )}
       {popupOpen && marketingSubscriptionEnabled && marketingPopupEnabled && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
           <div className="relative w-full max-w-[450px] bg-white p-8 text-[#111] shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-10">
@@ -1125,7 +1176,7 @@ export function PublicGallery({
       ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="public-gallery-page min-h-screen overflow-x-hidden scroll-smooth" lang={galleryLanguageCode(generalSettings.language)} dir={galleryLanguageCode(generalSettings.language) === "ar" ? "rtl" : "ltr"}>
       <section className="w-full p-0">
-        <div className="cover-preview-container aspect-video w-full overflow-hidden">
+        <div className={cn("cover-preview-container aspect-video w-full overflow-hidden", `gallery-cover-motion--${design.coverMotion || "slow-zoom"}`)}>
           <CoverPreview
             design={{
               ...design,
@@ -1249,6 +1300,11 @@ export function PublicGallery({
               <div className="flex min-h-36 items-center justify-center border border-dashed border-black/15 bg-white text-sm text-black/50">
                 Favorite photos from this collection will show here.
               </div>
+            )}
+            {favoriteSettings?.autoShareToPrintShop && favoriteImageIds.size > 0 && (
+              <button type="button" onClick={openFavorites} className="mt-5 inline-flex h-11 items-center gap-2 bg-[#6337d8] px-5 text-sm font-bold text-white">
+                <Printer className="size-4" /> Review & finish selection
+              </button>
             )}
           </section>
         )}
