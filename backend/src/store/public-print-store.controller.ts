@@ -1,5 +1,5 @@
-﻿import { Body, Controller, Get, NotFoundException, Param, Post, Query, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { PublicStoreService } from './public-store.service';
 import { PrintLabNotificationService } from './print-lab-notification.service';
 
@@ -12,6 +12,30 @@ export class PublicPrintStoreController {
     return { data: await this.store.getCheckoutResult(sessionId) };
   }
 
+  @Post('store/paypal-order/:orderId/capture')
+  async capturePayPal(@Param('orderId') orderId: string) {
+    return { data: await this.store.capturePayPalCheckout(orderId) };
+  }
+
+  @Post('store/paypal/webhook')
+  async paypalWebhook(
+    @Headers('paypal-auth-algo') authAlgo: string | undefined,
+    @Headers('paypal-cert-url') certUrl: string | undefined,
+    @Headers('paypal-transmission-id') transmissionId: string | undefined,
+    @Headers('paypal-transmission-sig') transmissionSig: string | undefined,
+    @Headers('paypal-transmission-time') transmissionTime: string | undefined,
+    @Req() req: Request,
+  ) {
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body ?? {}));
+    let event: Record<string, unknown>;
+    try { event = JSON.parse(rawBody.toString('utf8')); }
+    catch { throw new BadRequestException('Invalid PayPal webhook body'); }
+    return this.store.handlePayPalWebhook(
+      { authAlgo, certUrl, transmissionId, transmissionSig, transmissionTime },
+      event,
+      rawBody,
+    );
+  }
   @Get(':identifier/store')
   async storefront(@Param('identifier') identifier: string, @Query('siteSlug') siteSlug?: string) {
     return { data: await this.store.getStore(identifier, siteSlug) };

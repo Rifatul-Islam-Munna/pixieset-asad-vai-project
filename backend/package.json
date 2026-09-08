@@ -37,6 +37,7 @@
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^11.1.26",
+    "@paypal/paypal-server-sdk": "^2.5.0",
     "@qdrant/js-client-rest": "^1.18.0",
     "archiver": "^8.0.0",
     "axios": "^1.17.0",

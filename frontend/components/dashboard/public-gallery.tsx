@@ -155,10 +155,16 @@ const defaultDesign: PresetDesignSettings = {
   logoRevealDurationMs: 1800,
   logoRevealOncePerSession: true,
   coverMotion: "slow-zoom",
+  coverAnimationPreset: "none",
+  coverAnimationSpeed: 1,
+  coverAnimations: {},
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
   gridSpacing: "Regular",
+  gridColumns: 4,
+  gridSpacingPx: 4,
+  customAspectRatio: "natural",
   navigationStyle: "Icon Only",
 };
 
@@ -217,6 +223,7 @@ export function PublicGallery({
     ...defaultDesign,
     ...(collection?.design ?? fallbackPresetDesign),
   };
+  const advancedCoverAnimationActive = Boolean(design.coverAnimationPreset && design.coverAnimationPreset !== "none");
   const [logoRevealVisible, setLogoRevealVisible] = useState(false);
   const [logoRevealLeaving, setLogoRevealLeaving] = useState(false);
   useEffect(() => {
@@ -283,7 +290,7 @@ export function PublicGallery({
   const marketingEmailRegistrationEnabled = marketingOptIn.emailRegistration !== false;
   const marketingPopupEnabled = marketingPopup.enabled !== false;
   const maxDownloads = boolSetting(download.limitDownloads) ? Number(download.limitPinUsage) || 0 : 0;
-  const images = collection
+  const images: PublicImage[] = collection
     ? loadedImages
     : fallbackPhotos.map((url, index) => ({ _id: `sample-${index}`, url }));
   const collectionCoverImage = collection?.coverImage;
@@ -374,16 +381,32 @@ export function PublicGallery({
     typeMap[design.typography as keyof typeof typeMap] ?? typeMap.Classic;
   const customFontName = design.customFontName?.trim();
   const fontFamily = resolveGalleryFontFamily(customFontName, fallbackFontFamily);
-  const masonryGapPx = design.gridSpacing === "Large" ? 20 : 4;
-  const masonryColumns = design.thumbnailSize === "Large"
-    ? "columns-1 sm:columns-2"
-    : "columns-1 sm:columns-2 lg:columns-3 xl:columns-4";
+  const masonryGapPx = design.gridStyle === "Custom"
+    ? Math.min(40, Math.max(0, Number(design.gridSpacingPx ?? 4)))
+    : design.gridSpacing === "Large" ? 20 : 4;
+  const masonryColumns = design.thumbnailSize === "Extra Large"
+    ? "columns-1"
+    : design.thumbnailSize === "Large"
+      ? "columns-1 sm:columns-2"
+      : "columns-1 sm:columns-2 lg:columns-3 xl:columns-4";
+  const customGridColumns = design.gridColumns === 2
+    ? "grid grid-cols-1 sm:grid-cols-2"
+    : design.gridColumns === 3
+      ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+      : design.gridColumns === 5
+        ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+        : design.gridColumns === 6
+          ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+          : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+  const customAspectClass = design.customAspectRatio === "portrait" ? "aspect-[4/5]"
+    : design.customAspectRatio === "landscape" ? "aspect-[3/2]"
+      : design.customAspectRatio === "square" ? "aspect-square" : "";
   const galleryLayout =
     design.gridStyle === "Art"
       ? "art"
       : design.gridStyle === "Horizontal"
         ? "classic"
-        : "masonry";
+        : design.gridStyle === "Custom" ? "custom" : "masonry";
   const photoDownloadsEnabled =
     quickShareDownload === "1"
       ? true
@@ -603,7 +626,7 @@ export function PublicGallery({
     if (collection && imagesHasMore) {
       setZipStage("Loading remaining gallery photos");
       let offset = loadedImages.length;
-      let hasMore = imagesHasMore;
+      let hasMore: boolean = imagesHasMore;
       const loaded: PublicImage[] = [];
       while (hasMore) {
         const params = new URLSearchParams({ limit: "120", offset: String(offset), siteSlug: name });
@@ -1080,7 +1103,7 @@ export function PublicGallery({
       {customFontName && design.customFontDataUrl && (
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
-      <ScreenCaptureGuard watermark={`${studioName} · ${title} · Visitor ${visitorCode}`} />
+      <ScreenCaptureGuard />
       {logoRevealVisible && (
         <div className={cn("gallery-logo-reveal fixed inset-0 z-[120] grid place-items-center bg-[#101010] text-white", `gallery-logo-reveal--${design.logoRevealStyle || "scale"}`, logoRevealLeaving && "is-leaving")}>
           <button type="button" onClick={() => setLogoRevealVisible(false)} className="absolute right-5 top-5 rounded-full border border-white/25 px-4 py-2 text-[10px] font-bold uppercase tracking-[.18em] text-white/70 transition hover:border-white/60 hover:text-white">Skip intro</button>
@@ -1176,7 +1199,7 @@ export function PublicGallery({
       ) : (
     <main style={{ backgroundColor: bg, color: fg, fontFamily }} className="public-gallery-page min-h-screen overflow-x-hidden scroll-smooth" lang={galleryLanguageCode(generalSettings.language)} dir={galleryLanguageCode(generalSettings.language) === "ar" ? "rtl" : "ltr"}>
       <section className="w-full p-0">
-        <div className={cn("cover-preview-container aspect-video w-full overflow-hidden", `gallery-cover-motion--${design.coverMotion || "slow-zoom"}`)}>
+        <div className={cn("cover-preview-container aspect-video w-full overflow-hidden", `gallery-cover-motion--${advancedCoverAnimationActive ? "none" : design.coverMotion || "slow-zoom"}`)}>
           <CoverPreview
             design={{
               ...design,
@@ -1371,8 +1394,9 @@ export function PublicGallery({
             className={cn(
               galleryLayout === "masonry" && masonryColumns,
               galleryLayout === "classic" && "grid grid-cols-1 sm:grid-cols-2",
-              galleryLayout === "classic" && design.thumbnailSize !== "Large" && "lg:grid-cols-3 xl:grid-cols-4",
+              galleryLayout === "classic" && design.thumbnailSize === "Regular" && "lg:grid-cols-3 xl:grid-cols-4",
               galleryLayout === "art" && "grid auto-rows-[minmax(180px,46vw)] grid-cols-2 sm:auto-rows-[260px] lg:grid-cols-4 lg:auto-rows-[300px]",
+              galleryLayout === "custom" && customGridColumns,
             )}
             style={{ gap: galleryLayout === "masonry" ? undefined : `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
           >
@@ -1383,12 +1407,13 @@ export function PublicGallery({
                   "min-w-0 break-inside-avoid",
                   galleryLayout === "classic" && "aspect-square",
                   galleryLayout === "art" && index % 7 === 0 && "col-span-2 row-span-2",
+                  galleryLayout === "custom" && customAspectClass,
                 )}
               >
                 <GalleryTile
                   photo={photo}
                   spacing={galleryLayout === "masonry" ? masonryGapPx : 0}
-                  crop={galleryLayout !== "masonry"}
+                  crop={galleryLayout !== "masonry" && !(galleryLayout === "custom" && !customAspectClass)}
                   canFavorite={favoritesEnabled}
                   canDownload={canDownloadMedia(photo)}
                   canShare={socialSharingEnabled}

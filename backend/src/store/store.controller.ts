@@ -13,24 +13,27 @@ import { PrintLabNotificationService } from './print-lab-notification.service';
 
 @Controller('public/store')
 export class PublicStoreController {
-  constructor(private readonly storeService: StoreService) {}
+  constructor(private readonly publicStoreService: PublicStoreService) {}
 
   @Get('checkout-session/:sessionId')
   async publicCheckoutSession(@Param('sessionId') sessionId: string) {
-    const data = await this.storeService.publicCheckoutSession(sessionId);
-    return { data };
+    return { data: await this.publicStoreService.getCheckoutResult(sessionId) };
+  }
+
+  @Post('paypal-order/:orderId/capture')
+  async capturePayPal(@Param('orderId') orderId: string) {
+    return { data: await this.publicStoreService.capturePayPalCheckout(orderId) };
   }
 
   @Post(':identifier/checkout')
   async publicCheckout(@Param('identifier') identifier: string, @Body() dto: any) {
-    const data = await this.storeService.publicCheckout(identifier, dto);
+    const data = await this.publicStoreService.createCheckout(identifier, dto);
     return { message: 'Checkout created', data };
   }
 
   @Get(':identifier')
   async publicStore(@Param('identifier') identifier: string) {
-    const data = await this.storeService.publicStore(identifier);
-    return { data };
+    return { data: await this.publicStoreService.getStore(identifier) };
   }
 }
 
@@ -62,6 +65,11 @@ export class StoreController {
   async updateSettings(@Body() dto: any, @Req() req: ExpressRequest) {
     const data = await this.storeService.updateSettings(req.user.id, dto);
     return { message: 'Store settings saved', data };
+  }
+
+  @Post('settings/paypal/test')
+  async testPayPal(@Req() req: ExpressRequest) {
+    return { data: await this.storeService.testPayPalConnection(req.user.id) };
   }
 
 

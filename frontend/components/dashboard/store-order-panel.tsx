@@ -27,6 +27,11 @@ export function StoreOrderPanel({
   onClear: () => void;
 }) {
   const currency = data?.store?.currency ?? "EUR";
+  const stripeEnabled = Boolean(data?.store?.paymentMethods?.stripe?.enabled);
+  const paypalEnabled = Boolean(data?.store?.paymentMethods?.paypal?.enabled);
+  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "paypal">(
+    paypalEnabled && !stripeEnabled ? "paypal" : "stripe",
+  );
   const [customer, setCustomer] = useState({
     name: "", email: "", phone: "", country: "", line1: "", line2: "",
     city: "", state: "", postalCode: "",
@@ -65,6 +70,7 @@ export function StoreOrderPanel({
   const requestBody = () => ({
     checkoutSource: printRequestMode ? "print-request" : "public-store",
     printRequest: printRequestMode,
+    paymentProvider: printRequestMode ? undefined : paymentProvider,
     customer: {
       name: customer.name,
       email: customer.email,
@@ -135,15 +141,18 @@ export function StoreOrderPanel({
     const galleryUrl = currentUrl.endsWith("/checkout")
       ? currentUrl.replace(/\/checkout$/, "")
       : currentUrl;
-    const successUrl = galleryUrl.endsWith("/store")
-      ? `${galleryUrl}/success?session_id={CHECKOUT_SESSION_ID}`
-      : `${galleryUrl}/store/success?session_id={CHECKOUT_SESSION_ID}`;
+    const successBase = galleryUrl.endsWith("/store")
+      ? `${galleryUrl}/success`
+      : `${galleryUrl}/store/success`;
+    const successUrl = `${successBase}?session_id={CHECKOUT_SESSION_ID}`;
+    const paypalSuccessUrl = `${successBase}?provider=paypal`;
     const response = await fetch(`/api/public-print-store/${encodeURIComponent(identifier)}/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...requestBody(),
         successUrl,
+        paypalSuccessUrl,
         cancelUrl: currentUrl,
       }),
     }).catch(() => null);
@@ -248,6 +257,24 @@ export function StoreOrderPanel({
           </div>
         </Section>
       )}
+      {!printRequestMode && data?.store?.canCheckout && (
+        <Section title="Payment method">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {stripeEnabled && (
+              <button type="button" onClick={() => setPaymentProvider("stripe")} className={`border px-4 py-4 text-left ${paymentProvider === "stripe" ? "border-[#635bff] bg-[#f7f6ff] ring-1 ring-[#635bff]" : "border-[#ddd]"}`}>
+                <span className="block text-sm font-semibold">Stripe</span>
+                <span className="mt-1 block text-xs text-[#777]">Pay securely by card</span>
+              </button>
+            )}
+            {paypalEnabled && (
+              <button type="button" onClick={() => setPaymentProvider("paypal")} className={`border px-4 py-4 text-left ${paymentProvider === "paypal" ? "border-[#0070ba] bg-[#f3f9ff] ring-1 ring-[#0070ba]" : "border-[#ddd]"}`}>
+                <span className="block text-sm font-semibold text-[#003087]">PayPal</span>
+                <span className="mt-1 block text-xs text-[#777]">Continue to PayPal to approve payment</span>
+              </button>
+            )}
+          </div>
+        </Section>
+      )}
       {!printRequestMode && (
         <Section title="Coupon">
           <div className="flex gap-2">
@@ -269,12 +296,12 @@ export function StoreOrderPanel({
         {pricingPending && <p className="mt-3 flex items-center gap-2 text-xs text-[#777]"><Loader2 className="size-3 animate-spin" /> Recalculating totals</p>}
       </Section>
       {message && <p className="mt-5 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{message}</p>}
-      {!printRequestMode && !data?.store?.canCheckout && <p className="mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{data?.store?.checkoutMessage || "The collection owner has not finished Stripe setup."}</p>}
+      {!printRequestMode && !data?.store?.canCheckout && <p className="mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{data?.store?.checkoutMessage || "The collection owner has not finished payment setup."}</p>}
       <button className="mt-6 flex h-12 w-full items-center justify-center gap-2 bg-[#303030] text-sm font-semibold text-white disabled:opacity-45" disabled={(printRequestMode ? !data?.store?.printRequestsEnabled : !data?.store?.canCheckout) || placingOrder || pricingPending} onClick={() => void submit()}>
         {placingOrder && <Loader2 className="size-4 animate-spin" />}
-        {placingOrder ? (printRequestMode ? "Submitting print request..." : "Opening secure checkout...") : (printRequestMode ? "Submit print request" : "Pay with Stripe")}
+        {placingOrder ? (printRequestMode ? "Submitting print request..." : "Opening secure checkout...") : (printRequestMode ? "Submit print request" : `Pay with ${paymentProvider === "paypal" ? "PayPal" : "Stripe"}`)}
       </button>
-      <p className="mt-3 text-center text-[11px] text-[#888]">{printRequestMode ? "No card or payment details are required." : "Payment uses the collection owner's Stripe account."}</p>
+      <p className="mt-3 text-center text-[11px] text-[#888]">{printRequestMode ? "No card or payment details are required." : `Payment goes directly through the collection owner's ${paymentProvider === "paypal" ? "PayPal" : "Stripe"} account.`}</p>
     </div>
   );
 }

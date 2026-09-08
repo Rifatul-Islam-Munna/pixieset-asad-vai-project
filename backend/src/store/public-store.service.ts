@@ -52,6 +52,13 @@ export class PublicStoreService {
     return this.payments.checkoutSession(sessionId);
   }
 
+  capturePayPalCheckout(orderId: string) {
+    return this.payments.capturePayPalCheckout(orderId);
+  }
+
+  handlePayPalWebhook(headers: any, event: any, rawBody?: Buffer) {
+    return this.payments.handlePayPalWebhook(headers, event, rawBody);
+  }
   makePublicIntent(identifier: string, body: any, siteSlug?: string) {
     return this.payments.createPublicIntent(identifier, body, siteSlug);
   }

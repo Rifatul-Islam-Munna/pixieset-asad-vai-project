@@ -12,9 +12,11 @@ import { CollectionImage, CollectionImageDocument } from 'src/collections/entiti
 import { User, UserDocument, UserType } from 'src/user/entities/user.entity';
 import { AdminCreatePlanDto, AdminUpdatePlanDto } from './dto/admin-plan.dto';
 import { AdminStripeSettingDto } from './dto/admin-stripe-setting.dto';
+import { AdminPayPalSettingDto } from './dto/admin-paypal-setting.dto';
 import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
 import { AdminSendLoginAccessDto } from './dto/admin-login-access.dto';
 import { AdminStripeSetting, AdminStripeSettingDocument } from './entities/admin-stripe-setting.entity';
+import { AdminPayPalSetting, AdminPayPalSettingDocument } from './entities/admin-paypal-setting.entity';
 import { Plan, PlanDocument } from './entities/plan.entity';
 import { StoreOrder, StoreOrderDocument } from 'src/store/entities/store-order.entity';
 import { FaceSearchService } from 'src/face-search/face-search.service';
@@ -22,6 +24,7 @@ import { StoreDefaultProductService } from 'src/store/store-default-product.serv
 import { FreePlanSettingDto } from './dto/free-plan-setting.dto';
 import { FreePlanSettingService } from './free-plan-setting.service';
 import { PlanPurchase, PlanPurchaseDocument } from './entities/plan-purchase.entity';
+import { capturePayPalOrder, createPayPalOrder, getPayPalOrder, paypalAccessToken, paypalCaptureCompleted, verifyPayPalWebhookSignature, type PayPalConfig, type PayPalWebhookHeaders } from '../lib/paypal';
 
 @Injectable()
 export class AdminService implements OnModuleInit {
@@ -32,6 +35,8 @@ export class AdminService implements OnModuleInit {
     @InjectModel(Plan.name) private readonly planModel: Model<PlanDocument>,
     @InjectModel(AdminStripeSetting.name)
     private readonly stripeSettingModel: Model<AdminStripeSettingDocument>,
+    @InjectModel(AdminPayPalSetting.name)
+    private readonly paypalSettingModel: Model<AdminPayPalSettingDocument>,
     @InjectModel(StoreOrder.name) private readonly orderModel: Model<StoreOrderDocument>,
     @InjectModel(PlanPurchase.name) private readonly planPurchaseModel: Model<PlanPurchaseDocument>,
     private readonly faceSearchService: FaceSearchService,
@@ -378,6 +383,19 @@ export class AdminService implements OnModuleInit {
     return this.hideStripeSecrets(settings);
   }
 
+  async getPayPalSettings() {
+    const settings = await this.getRawPayPalSettings();
+    return this.hidePayPalSecrets(settings);
+  }
+
+  async getBillingPaymentMethods() {
+    const [stripe, paypal] = await Promise.all([this.getRawStripeSettings(), this.getRawPayPalSettings()]);
+    return {
+      stripe: Boolean(stripe.enabled && stripe.secretKey && stripe.publishableKey),
+      paypal: Boolean(paypal.enabled && paypal.clientId && paypal.clientSecret),
+    };
+  }
+
   async getFreePlanSettings() {
     return this.freePlanSettings.get();
   }
@@ -420,10 +438,36 @@ export class AdminService implements OnModuleInit {
     return this.hideStripeSecrets(settings.toObject());
   }
 
-  async createPlanCheckout(userId: string, planId: string, requestedInterval?: string, successUrl?: string, cancelUrl?: string) {
-    const [plan, settings, user] = await Promise.all([
+  async updatePayPalSettings(dto: AdminPayPalSettingDto) {
+    const existing = await this.getRawPayPalSettings();
+    const settings = await this.paypalSettingModel.findOneAndUpdate(
+      { key: 'global' },
+      { $set: {
+        enabled: Boolean(dto.enabled),
+        environment: dto.environment === 'live' ? 'live' : 'sandbox',
+        clientId: dto.clientId ?? existing.clientId ?? '',
+        clientSecret: dto.clientSecret && dto.clientSecret !== '********' ? dto.clientSecret : existing.clientSecret ?? '',
+        webhookId: dto.webhookId ?? existing.webhookId ?? '',
+      } },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+    );
+    return this.hidePayPalSecrets(settings.toObject());
+  }
+
+  async testPayPalSettings() {
+    const config = this.paypalConfig(await this.getRawPayPalSettings());
+    if (!config.clientId || !config.clientSecret) {
+      throw new BadRequestException('Save a PayPal Client ID and Client Secret first');
+    }
+    await paypalAccessToken(config);
+    return { success: true, environment: config.environment, message: `PayPal ${config.environment} credentials are valid` };
+  }
+
+  async createPlanCheckout(userId: string, planId: string, requestedInterval?: string, successUrl?: string, cancelUrl?: string, paymentProvider?: string) {
+    const [plan, stripeSettings, paypalSettings, user] = await Promise.all([
       this.planModel.findOne({ _id: planId, active: true }).lean(),
       this.getRawStripeSettings(),
+      this.getRawPayPalSettings(),
       this.userModel.findById(userId).lean(),
     ]);
     if (!plan) throw new NotFoundException('Plan not found');
@@ -436,9 +480,34 @@ export class AdminService implements OnModuleInit {
       const activatedPlan = await this.assignPlanToUser(userId, plan._id.toString(), 'free', undefined, billingInterval);
       return { activated: true, checkoutUrl: null, sessionId: null, plan: activatedPlan };
     }
-    if (!settings.enabled || !settings.secretKey) throw new BadRequestException('Stripe is not configured');
+    const stripeReady = Boolean(stripeSettings.enabled && stripeSettings.secretKey && stripeSettings.publishableKey);
+    const paypalConfig = this.paypalConfig(paypalSettings);
+    const paypalReady = Boolean(paypalConfig.enabled && paypalConfig.clientId && paypalConfig.clientSecret);
+    let provider = paymentProvider === 'paypal' ? 'paypal' : paymentProvider === 'stripe' ? 'stripe' : '';
+    if (!provider) {
+      if (stripeReady && !paypalReady) provider = 'stripe';
+      else if (paypalReady && !stripeReady) provider = 'paypal';
+      else if (stripeReady && paypalReady) throw new BadRequestException('Choose Stripe or PayPal');
+      else throw new BadRequestException('No payment method is configured');
+    }
 
-    const stripe = new Stripe(settings.secretKey);
+    if (provider === 'paypal') {
+      if (!paypalReady) throw new BadRequestException('PayPal is not configured');
+      const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+      const result = await createPayPalOrder(paypalConfig, {
+        amount,
+        currency: 'EUR',
+        description: `${plan.name} - ${billingInterval === 'year' ? '1 year' : '1 month'} access`,
+        customId: `plan:${userId}:${plan._id.toString()}:${billingInterval}`,
+        invoiceId: `PLAN-${userId}-${plan._id.toString()}-${Date.now()}`,
+        returnUrl: successUrl || `${frontendUrl}/dashboard/client-gallery/storage?plan=success&provider=paypal`,
+        cancelUrl: cancelUrl || `${frontendUrl}/dashboard/client-gallery/storage?plan=cancel`,
+      });
+      return { checkoutUrl: result.approveUrl, paypalOrderId: result.order.id, paymentProvider: 'paypal' };
+    }
+
+    if (!stripeReady) throw new BadRequestException('Stripe is not configured');
+    const stripe = new Stripe(stripeSettings.secretKey);
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -464,7 +533,7 @@ export class AdminService implements OnModuleInit {
       },
     });
 
-    return { checkoutUrl: session.url, sessionId: session.id };
+    return { checkoutUrl: session.url, sessionId: session.id, paymentProvider: 'stripe' };
   }
 
   async confirmPlanCheckout(sessionId: string, userId: string) {
@@ -481,6 +550,34 @@ export class AdminService implements OnModuleInit {
     const billingInterval = session.metadata.billingInterval === 'year' ? 'year' : 'month';
     const plan = await this.assignPlanToUser(userId, session.metadata.planId, 'checkout', session.id, billingInterval);
     return plan;
+  }
+
+  async confirmPayPalPlanCheckout(orderId: string, userId: string) {
+    const paypalSettings = await this.getRawPayPalSettings();
+    const config = this.paypalConfig(paypalSettings);
+    if (!config.enabled || !config.clientId || !config.clientSecret) throw new BadRequestException('PayPal is not configured');
+    let order = await getPayPalOrder(config, orderId);
+    const customId = String(order?.purchase_units?.[0]?.custom_id ?? '');
+    const [kind, customUserId, planId, interval] = customId.split(':');
+    if (kind !== 'plan' || customUserId !== userId || !planId) throw new BadRequestException('Invalid PayPal checkout');
+    const plan = await this.planModel.findById(planId).lean();
+    if (!plan) throw new NotFoundException('Plan not found');
+    const billingInterval: 'month' | 'year' = interval === 'year' ? 'year' : 'month';
+    const expectedAmount = Number((billingInterval === 'year' ? plan.priceYearly : plan.priceMonthly) ?? 0).toFixed(2);
+    const unitAmount = order?.purchase_units?.[0]?.amount;
+    if (String(unitAmount?.currency_code ?? '').toUpperCase() !== 'EUR' || Number(unitAmount?.value) !== Number(expectedAmount)) {
+      throw new BadRequestException('PayPal payment amount does not match the selected plan');
+    }
+    if (!paypalCaptureCompleted(order)) {
+      if (order?.status !== 'APPROVED') throw new BadRequestException('PayPal checkout has not been approved');
+      order = await capturePayPalOrder(config, orderId);
+    }
+    if (!paypalCaptureCompleted(order)) throw new BadRequestException('PayPal payment was not completed');
+    const capture = order?.purchase_units?.[0]?.payments?.captures?.find((item: any) => item?.status === 'COMPLETED');
+    if (String(capture?.amount?.currency_code ?? '').toUpperCase() !== 'EUR' || Number(capture?.amount?.value) !== Number(expectedAmount)) {
+      throw new BadRequestException('Captured PayPal amount does not match the selected plan');
+    }
+    return this.assignPlanToUser(userId, planId, 'checkout', undefined, billingInterval, orderId);
   }
 
   async handleStripeWebhook(signature: string | undefined, rawBody: Buffer) {
@@ -510,10 +607,38 @@ export class AdminService implements OnModuleInit {
     return { received: true };
   }
 
-  async assignPlanToUser(userId: string, planId: string, source: 'admin' | 'checkout' | 'free' = 'admin', stripeSessionId?: string, billingInterval: 'month' | 'year' = 'month') {
+  async handlePayPalWebhook(headers: PayPalWebhookHeaders, event: any, rawBody?: Buffer) {
+    const settings = await this.getRawPayPalSettings();
+    const config = this.paypalConfig(settings);
+    if (!config.webhookId) {
+      return { received: true, verified: false, processed: false, reason: 'webhook-id-not-configured' };
+    }
+    await verifyPayPalWebhookSignature(config, headers, event ?? {}, rawBody);
+    const eventType = String(event?.event_type ?? event?.eventType ?? '');
+    if (!['PAYMENT.CAPTURE.COMPLETED', 'CHECKOUT.ORDER.COMPLETED'].includes(eventType)) {
+      return { received: true, verified: true, processed: false, reason: 'event-not-used' };
+    }
+    const resource = event?.resource ?? {};
+    const orderId = String(
+      resource?.supplementary_data?.related_ids?.order_id ??
+      (eventType.startsWith('CHECKOUT.ORDER.') ? resource?.id : '') ??
+      '',
+    );
+    if (!orderId) return { received: true, verified: true, processed: false, reason: 'paypal-order-id-missing' };
+    const order = await getPayPalOrder(config, orderId);
+    const customId = String(order?.purchase_units?.[0]?.custom_id ?? '');
+    const [kind, userId] = customId.split(':');
+    if (kind !== 'plan' || !userId) {
+      return { received: true, verified: true, processed: false, reason: 'not-a-plan-payment' };
+    }
+    await this.confirmPayPalPlanCheckout(orderId, userId);
+    return { received: true, verified: true, processed: true, orderId, userId };
+  }
+  async assignPlanToUser(userId: string, planId: string, source: 'admin' | 'checkout' | 'free' = 'admin', stripeSessionId?: string, billingInterval: 'month' | 'year' = 'month', paypalOrderId?: string) {
     const plan = await this.planModel.findById(planId).lean();
     if (!plan) throw new NotFoundException('Plan not found');
     if (stripeSessionId && await this.planPurchaseModel.exists({ stripeSessionId })) return plan;
+    if (paypalOrderId && await this.planPurchaseModel.exists({ paypalOrderId })) return plan;
     const expiresAt = new Date();
     expiresAt.setUTCDate(expiresAt.getUTCDate() + (billingInterval === 'year' ? 365 : 30));
     await this.userModel.updateOne(
@@ -538,8 +663,10 @@ export class AdminService implements OnModuleInit {
       },
     );
     const amount = billingInterval === 'year' ? Number(plan.priceYearly ?? 0) : Number(plan.priceMonthly ?? 0);
-    const purchase = { userId, planId: plan._id.toString(), planName: plan.name, amount, billingInterval, source, stripeSessionId, status: source === 'checkout' ? 'paid' : 'active' } as const;
+    const paymentProvider = paypalOrderId ? 'paypal' : stripeSessionId ? 'stripe' : source === 'free' ? 'free' : 'admin';
+    const purchase = { userId, planId: plan._id.toString(), planName: plan.name, amount, billingInterval, source, stripeSessionId, paypalOrderId, paymentProvider, status: source === 'checkout' ? 'paid' : 'active' } as const;
     if (stripeSessionId) await this.planPurchaseModel.updateOne({ stripeSessionId }, { $setOnInsert: purchase }, { upsert: true });
+    else if (paypalOrderId) await this.planPurchaseModel.updateOne({ paypalOrderId }, { $setOnInsert: purchase }, { upsert: true });
     else await this.planPurchaseModel.create(purchase);
     return plan;
   }
@@ -696,6 +823,29 @@ export class AdminService implements OnModuleInit {
       webhookSecret: settings.webhookSecret ? '********' : '',
       hasSecretKey: Boolean(settings.secretKey),
       hasWebhookSecret: Boolean(settings.webhookSecret),
+    };
+  }
+
+  private async getRawPayPalSettings() {
+    const settings = await this.paypalSettingModel.findOneAndUpdate(
+      { key: 'global' },
+      { $setOnInsert: { key: 'global', enabled: false, environment: 'sandbox', clientId: '', clientSecret: '', webhookId: '' } },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+    );
+    return settings.toObject();
+  }
+
+  private hidePayPalSecrets(settings: any) {
+    return { ...settings, clientSecret: settings.clientSecret ? '********' : '', hasClientSecret: Boolean(settings.clientSecret) };
+  }
+
+  private paypalConfig(settings: any): PayPalConfig {
+    return {
+      enabled: Boolean(settings?.enabled),
+      environment: settings?.environment === 'live' ? 'live' : 'sandbox',
+      clientId: String(settings?.clientId ?? '').trim(),
+      clientSecret: String(settings?.clientSecret ?? '').trim(),
+      webhookId: String(settings?.webhookId ?? '').trim(),
     };
   }
 

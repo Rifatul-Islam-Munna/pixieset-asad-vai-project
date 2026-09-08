@@ -83,6 +83,7 @@ export type PublicStoreData = {
     checkoutMessage?: string;
     paymentMethods?: {
       stripe?: { enabled?: boolean; publishableKey?: string };
+      paypal?: { enabled?: boolean; environment?: "sandbox" | "live" };
     };
   };
   priceSheet?: { _id?: string; name?: string; minimumOrderAmount?: number };

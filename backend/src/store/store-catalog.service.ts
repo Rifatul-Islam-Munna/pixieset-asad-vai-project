@@ -97,6 +97,7 @@ export class StoreCatalogService {
       }).lean(),
     ]);
     const stripe = this.ownerStripe(resolved.settings);
+    const paypal = this.ownerPayPal(resolved.settings);
     if (logView && resolved.config.enabled) {
       void this.log(resolved, 'store_view', { source: 'public-store' });
     }
@@ -114,10 +115,11 @@ export class StoreCatalogService {
         enabled: resolved.config.paidStoreEnabled,
         priceSheetId: resolved.sheet?._id?.toString(),
         globalStatus: resolved.settings?.globalStatus ?? false,
-        canCheckout: Boolean(stripe.enabled && stripe.publishableKey && stripe.secretKey),
-        checkoutMessage: this.stripeMessage(stripe),
+        canCheckout: Boolean(this.stripeReady(stripe) || this.paypalReady(paypal)),
+        checkoutMessage: this.paymentMessage(stripe, paypal),
         paymentMethods: {
-          stripe: { enabled: stripe.enabled, publishableKey: stripe.publishableKey },
+          stripe: { enabled: this.stripeReady(stripe), publishableKey: stripe.publishableKey },
+          paypal: { enabled: this.paypalReady(paypal), environment: paypal.environment },
         },
       },
       priceSheet: resolved.sheet,
@@ -326,11 +328,38 @@ export class StoreCatalogService {
     };
   }
 
+  ownerPayPal(settings: any) {
+    const paypal = settings?.paymentMethods?.paypal ?? {};
+    return {
+      enabled: Boolean(paypal.enabled),
+      environment: paypal.environment === 'live' ? 'live' as const : 'sandbox' as const,
+      clientId: String(paypal.clientId ?? '').trim(),
+      clientSecret: String(paypal.clientSecret ?? '').trim(),
+      webhookId: String(paypal.webhookId ?? '').trim(),
+    };
+  }
+
+  stripeReady(stripe: { enabled: boolean; publishableKey?: string; secretKey?: string }) {
+    return Boolean(stripe.enabled && stripe.publishableKey && stripe.secretKey);
+  }
+
+  paypalReady(paypal: { enabled: boolean; clientId?: string; clientSecret?: string }) {
+    return Boolean(paypal.enabled && paypal.clientId && paypal.clientSecret);
+  }
+
   stripeMessage(stripe: { enabled: boolean; publishableKey?: string; secretKey?: string }) {
     if (!stripe.enabled) return 'The collection owner has not enabled Stripe.';
     if (!stripe.publishableKey) return 'The collection owner Stripe publishable key is missing.';
     if (!stripe.secretKey) return 'The collection owner Stripe secret key is missing.';
-    return 'No payment method is active at this moment.';
+    return 'Stripe is ready.';
+  }
+
+  paymentMessage(stripe: any, paypal: any) {
+    if (this.stripeReady(stripe) || this.paypalReady(paypal)) return '';
+    if (stripe.enabled) return this.stripeMessage(stripe);
+    if (paypal.enabled && !paypal.clientId) return 'The collection owner PayPal client ID is missing.';
+    if (paypal.enabled && !paypal.clientSecret) return 'The collection owner PayPal client secret is missing.';
+    return 'The collection owner has not enabled Stripe or PayPal.';
   }
 
   publicProduct(product: any) {

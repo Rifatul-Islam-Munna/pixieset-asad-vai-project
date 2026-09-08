@@ -192,10 +192,12 @@ import { logOutUser } from "@/actions/auth";
 import {
   checkoutPlan,
   confirmPlanCheckout,
+  confirmPayPalPlanCheckout,
   getBillingOverview,
   getPurchaseHistory,
   recordEmailUsage,
   type BillingUser,
+  type BillingPaymentMethods,
   type PlanPurchase,
 } from "@/actions/billing";
 import { restoreAdminSession, type AdminPlan } from "@/actions/admin";
@@ -203,6 +205,7 @@ import {
   CoverPreview,
   coverOptions,
 } from "@/components/dashboard/cover-designs";
+import { CoverAnimationStudio } from "@/components/dashboard/cover-animation-studio";
 import {
   useStorePriceSheet,
   useStorePriceSheetDetails,
@@ -225,6 +228,7 @@ import {
   type StoreProductRecord,
   type StoreProductType,
   type StoreProductVariant,
+  type StorePriceSheetRecord,
   type StoreShippingRecord,
   type StoreSettingsRecord,
   type StoreTaxRecord,
@@ -1407,14 +1411,14 @@ function AccountPanel() {
       { avatar: "" },
       {
         onSuccess: () => toast.success("Profile image removed"),
-        onError: (error) => toast.error(error.message),
+        onError: (error: Error) => toast.error(error.message),
       },
     );
   };
   const save = () =>
     update.mutate(form, {
       onSuccess: () => toast.success("Account saved"),
-      onError: (error) => toast.error(error.message),
+      onError: (error: Error) => toast.error(error.message),
     });
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "gallerista.app";
 
@@ -1592,7 +1596,7 @@ function AccountPanel() {
                     : "text-red-600",
               )}
             >
-              {usernameState === "checking" ? "CheckingÃ¢â‚¬Â¦" : usernameMessage}
+              {usernameState === "checking" ? "CheckingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" : usernameMessage}
             </p>
           )}
           <FieldInput
@@ -1626,11 +1630,11 @@ function AccountPanel() {
                   <div>
                     <b>{purchase.planName}</b>
                     <p className="mt-1 text-xs capitalize text-[#888]">
-                      {purchase.source} Ã‚Â· {purchase.status}
+                      {purchase.source} Ãƒâ€šÃ‚Â· {purchase.status}
                     </p>
                   </div>
                   <div className="text-right">
-                    <b>Ã¢â€šÂ¬{Number(purchase.amount).toFixed(2)}</b>
+                    <b>ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬{Number(purchase.amount).toFixed(2)}</b>
                     <p className="mt-1 text-xs text-[#888]">
                       {new Date(purchase.createdAt).toLocaleDateString()}
                     </p>
@@ -1860,24 +1864,32 @@ function StoragePlanPanel() {
   const [billingInterval, setBillingInterval] = useState<"month" | "year">(
     "month",
   );
+  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "paypal">("stripe");
   const [data, setData] = useState<{
     plans: AdminPlan[];
     user: BillingUser;
+    paymentMethods: BillingPaymentMethods;
   } | null>(null);
 
   useEffect(() => {
     let active = true;
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
+    const paypalOrderId = params.get("provider") === "paypal" ? params.get("token") : null;
     const load = async (confirmCheckout = false) => {
-      if (confirmCheckout && sessionId)
+      if (confirmCheckout && paypalOrderId)
+        await confirmPayPalPlanCheckout(paypalOrderId).catch(() => null);
+      else if (confirmCheckout && sessionId)
         await confirmPlanCheckout(sessionId).catch(() => null);
       return getBillingOverview();
     };
     const applyBilling = (
       value: Awaited<ReturnType<typeof getBillingOverview>>,
     ) => {
-      if (active) setData(value);
+      if (!active) return;
+      setData(value);
+      if (value.paymentMethods.paypal && !value.paymentMethods.stripe) setPaymentProvider("paypal");
+      else if (value.paymentMethods.stripe) setPaymentProvider("stripe");
     };
     const onStorageChanged = () => {
       void load()
@@ -1913,7 +1925,7 @@ function StoragePlanPanel() {
     startTransition(async () => {
       setError("");
       try {
-        const result = await checkoutPlan(planId, billingInterval);
+        const result = await checkoutPlan(planId, billingInterval, paymentProvider);
         if (result.checkoutUrl) window.location.href = result.checkoutUrl;
         else if (result.activated) {
           setData(await getBillingOverview());
@@ -1973,6 +1985,23 @@ function StoragePlanPanel() {
           Yearly
         </button>
       </div>
+      {data && (data.paymentMethods.stripe || data.paymentMethods.paypal) && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Payment method</p>
+          <div className="inline-flex border bg-white p-1">
+            {data.paymentMethods.stripe && (
+              <button type="button" onClick={() => setPaymentProvider("stripe")} className={cn("h-10 px-5 text-sm font-bold", paymentProvider === "stripe" ? "bg-[#635bff] text-white" : "text-[#555]")}>Stripe</button>
+            )}
+            {data.paymentMethods.paypal && (
+              <button type="button" onClick={() => setPaymentProvider("paypal")} className={cn("h-10 px-5 text-sm font-bold", paymentProvider === "paypal" ? "bg-[#003087] text-white" : "text-[#555]")}>PayPal</button>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-[#777]">{data.paymentMethods.stripe && data.paymentMethods.paypal ? "Both are available. Choose how you want to pay." : `Checkout will use ${data.paymentMethods.paypal ? "PayPal" : "Stripe"}.`}</p>
+        </div>
+      )}
+      {data && !data.paymentMethods.stripe && !data.paymentMethods.paypal && (
+        <p className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">No paid checkout provider is enabled right now.</p>
+      )}
       <div className="mt-5 border-l-4 border-[#6337d8] bg-[#f5f1ff] px-5 py-4">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5a2fc5]">
           Current plan
@@ -2049,7 +2078,7 @@ function StoragePlanPanel() {
                 <div className="flex justify-between">
                   <span>Price</span>
                   <b>
-                    Ã¢â€šÂ¬{monthlyEquivalent.toFixed(2)}{" "}
+                    ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬{monthlyEquivalent.toFixed(2)}{" "}
                     {billingInterval === "year" ? "/yearly" : "/month"}
                   </b>
                 </div>
@@ -2058,7 +2087,7 @@ function StoragePlanPanel() {
                     <span>Billed</span>
                     <b>
                       {yearlyAvailable
-                        ? `Ã¢â€šÂ¬${Number(plan.priceYearly).toFixed(2)} yearly`
+                        ? `ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬${Number(plan.priceYearly).toFixed(2)} yearly`
                         : "Unavailable"}
                     </b>
                   </div>
@@ -2670,7 +2699,7 @@ function MarketingSettingsPanel({
       { localId: "gallery-marketing", name: "Gallery Marketing", data: form },
       {
         onSuccess: () => toast.success("Marketing settings saved"),
-        onError: (error) => toast.error(error.message),
+        onError: (error: Error) => toast.error(error.message),
       },
     );
   };
@@ -2712,8 +2741,8 @@ function MarketingSettingsPanel({
                       Email registration subscription
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[#5d6b68]">
-                      Show an optional Ã¢â‚¬Å“Subscribe to updates and special
-                      offersÃ¢â‚¬Â checkbox inside the collection email-registration
+                      Show an optional ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œSubscribe to updates and special
+                      offersÃƒÂ¢Ã¢â€šÂ¬Ã‚Â checkbox inside the collection email-registration
                       modal.
                     </p>
                   </div>
@@ -2730,7 +2759,7 @@ function MarketingSettingsPanel({
               This appears only when both <strong>Email Registration</strong>{" "}
               and
               <strong> Marketing Subscription</strong> are enabled in that
-              collectionÃ¢â‚¬â„¢s Privacy settings.
+              collectionÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢s Privacy settings.
             </div>
           </section>
 
@@ -3061,7 +3090,7 @@ function CampaignTable({
         <div key={campaign._id} className="grid gap-3 border-b py-5 text-left text-sm md:grid-cols-[2fr_130px_1.7fr_1fr_1.5fr_60px] md:items-center md:gap-0">
           <span className="min-w-0">
             <span className="block truncate font-bold">{campaign.name}</span>
-            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.kind === "schedule" && campaign.recipientCategory ? ` Ã‚Â· ${campaign.recipientCategory}` : ""}</span>
+            <span className="mt-1 block truncate text-xs text-[#888]">{campaign.templateName}{campaign.kind === "schedule" && campaign.recipientCategory ? ` Ãƒâ€šÃ‚Â· ${campaign.recipientCategory}` : ""}</span>
             {campaign.kind === "schedule" && campaign.lastError && <span className="mt-1 block line-clamp-1 text-xs font-semibold text-red-600" title={campaign.lastError}>{campaign.lastError}</span>}
           </span>
           <span><span className={cn("rounded-full px-4 py-2 text-[10px] font-bold uppercase", campaign.status === "sent" ? "bg-emerald-50 text-emerald-700" : campaign.status === "failed" ? "bg-red-50 text-red-700" : campaign.status === "cancelled" ? "bg-[#f1f1f1] text-[#777]" : campaign.status === "sending" ? "bg-amber-50 text-amber-700" : campaign.status === "draft" ? "bg-[#f4f4f4] text-[#555]" : "bg-[#f1ecff] text-[#6337d8]")}>{campaign.status}</span></span>
@@ -3084,7 +3113,7 @@ function CampaignTable({
 function formatScheduleLocal(value: string, timeZone: string) {
   if (!value) return "-";
   const [date, time] = value.split("T");
-  return `${date} ${time || ""} Ã‚Â· ${timeZone}`;
+  return `${date} ${time || ""} Ãƒâ€šÃ‚Â· ${timeZone}`;
 }
 
 function TemplateGrid({
@@ -5212,7 +5241,7 @@ function EmailTemplatesPanel({
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-bold">{template.name || "Untitled Template"}</span>
-                    <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-wider text-[#9a8f82]">{template.category || "Gallery Delivery"} · {template.galleryCategory === "Custom label" ? template.customGalleryCategoryLabel || "Custom label" : template.galleryCategory || "General"} · {template.language || "English"}</span>
+                    <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-wider text-[#9a8f82]">{template.category || "Gallery Delivery"} Â· {template.galleryCategory === "Custom label" ? template.customGalleryCategoryLabel || "Custom label" : template.galleryCategory || "General"} Â· {template.language || "English"}</span>
                   </span>
                   <span className="truncate pr-8 text-[#555]">
                     {template.subject || "-"}
@@ -6283,46 +6312,7 @@ function PresetDesignPanel({
   onCoverUpload,
   onLoadMoreImages,
 }: {
-  design: {
-    cover: string;
-    coverSmallTitle: string;
-    coverTitle: string;
-    coverDate: string;
-    coverButtonText: string;
-    showCoverSmallTitle: boolean;
-    showCoverTitle: boolean;
-    showCoverDate: boolean;
-    showCoverButton: boolean;
-    typography: string;
-    customFontName?: string;
-    customFontDataUrl?: string;
-    coverSmallTitleFontSizePx?: number;
-    coverTitleFontSizePx?: number;
-    coverDateFontSizePx?: number;
-    coverButtonFontSizePx?: number;
-    galleryTitleFontSizePx?: number;
-    galleryNavigationFontSizePx?: number;
-    coverSmallTitleColor?: string;
-    coverTitleColor?: string;
-    coverDateColor?: string;
-    coverButtonColor?: string;
-    galleryTitleColor?: string;
-    galleryNavigationColor?: string;
-    textColor?: string;
-    coverFocalX?: number;
-    coverFocalY?: number;
-    coverMediaType?: "image" | "video";
-    logoRevealEnabled?: boolean;
-    logoRevealStyle?: "fade" | "scale" | "slide" | "blur" | "shutter";
-    logoRevealDurationMs?: number;
-    logoRevealOncePerSession?: boolean;
-    coverMotion?: "none" | "fade" | "slow-zoom" | "rise";
-    color: string;
-    gridStyle: "Vertical" | "Horizontal" | "Art";
-    thumbnailSize: "Regular" | "Large";
-    gridSpacing: "Regular" | "Large";
-    navigationStyle: "Icon Only" | "Icon & Text";
-  };
+  design: PresetDesignSettings;
   activePanel: "cover" | "typography" | "color" | "grid";
   onChange: (value: Partial<typeof design>) => void;
   coverImage?: string;
@@ -6523,6 +6513,9 @@ function PresetDesignPanel({
               </DialogContent>
             </Dialog>
           </OptionSection>}
+          <OptionSection title="Animated Cover Studio">
+            <CoverAnimationStudio design={design} onChange={onChange} />
+          </OptionSection>
           <OptionSection title="Motion & Logo Reveal">
             <div className="grid gap-5">
               <label className="flex items-center justify-between gap-4 border bg-[#fafafa] p-4 text-sm font-bold">
@@ -6763,7 +6756,7 @@ function PresetDesignPanel({
                     Aa {font.data.name}
                   </span>
                   <span className="mt-3 block text-xs text-[#555]">
-                    Saved font · {font.data.category ?? "English"}
+                    Saved font Â· {font.data.category ?? "English"}
                   </span>
                 </span>
                 <span className="mt-3 block truncate text-sm">
@@ -6779,7 +6772,7 @@ function PresetDesignPanel({
                     <span className="block text-xl" dir={font.categories.includes("Arabic") && (fontCategory === "Arabic" || font.categories.length === 1) ? "rtl" : "ltr"} style={{ fontFamily: resolveGalleryFontFamily(font.name, "sans-serif") }}>
                       {galleryFontSample(fontCategory === "All" ? font.categories[0] : fontCategory as GalleryFontCategory)}
                     </span>
-                    <span className="mt-3 block text-xs text-[#555]">{font.categories.join(" · ")}</span>
+                    <span className="mt-3 block text-xs text-[#555]">{font.categories.join(" Â· ")}</span>
                   </span>
                   <span className="mt-3 block text-sm">{font.name}</span>
                 </button>
@@ -6953,11 +6946,12 @@ function PresetDesignPanel({
         <PlanFeatureLock feature="layouts" label="Layouts">
           <h2 className="text-2xl font-medium">Gallery Layout</h2>
           <OptionSection title="Layout Style">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {([
                 ["Vertical", "Masonry"],
                 ["Horizontal", "Classic"],
                 ["Art", "Fine Art"],
+                ["Custom", "Custom"],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -6975,16 +6969,38 @@ function PresetDesignPanel({
               ))}
             </div>
           </OptionSection>
-          <OptionSection title="Thumbnail Size">
-            <TwoOption
-              value={design.thumbnailSize}
-              a="Regular"
-              b="Large"
-              onPick={(value) =>
-                onChange({ thumbnailSize: value as "Regular" | "Large" })
-              }
-            />
+          <OptionSection title="Photo Size">
+            <div className="grid grid-cols-3 gap-2">
+              {(["Regular", "Large", "Extra Large"] as const).map((value) => (
+                <button key={value} type="button" onClick={() => onChange({ thumbnailSize: value })} className={cn("border px-2 py-3 text-xs font-bold transition", design.thumbnailSize === value ? "border-[#6337d8] bg-[#f5f1ff] text-[#6337d8]" : "bg-white hover:border-[#999]")}>
+                  {value}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs leading-5 text-[#777]">Extra Large gives clients a much bigger-photo gallery. Custom layout below lets you choose the exact desktop column count.</p>
           </OptionSection>
+          {design.gridStyle === "Custom" && (
+            <OptionSection title="Custom Layout Controls">
+              <div className="grid gap-4">
+                <Field>
+                  <FieldLabel className="font-bold">Desktop columns</FieldLabel>
+                  <select value={design.gridColumns ?? 4} onChange={(event) => onChange({ gridColumns: Number(event.target.value) as 2 | 3 | 4 | 5 | 6 })} className="mt-2 h-11 w-full border bg-white px-3 text-sm">
+                    {[2, 3, 4, 5, 6].map((columns) => <option key={columns} value={columns}>{columns} columns</option>)}
+                  </select>
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold">Photo shape</FieldLabel>
+                  <select value={design.customAspectRatio ?? "natural"} onChange={(event) => onChange({ customAspectRatio: event.target.value as "natural" | "square" | "portrait" | "landscape" })} className="mt-2 h-11 w-full border bg-white px-3 text-sm">
+                    <option value="natural">Natural proportions</option><option value="square">Square</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option>
+                  </select>
+                </Field>
+                <Field>
+                  <div className="flex items-center justify-between"><FieldLabel className="font-bold">Exact spacing</FieldLabel><span className="text-xs text-[#777]">{design.gridSpacingPx ?? 4}px</span></div>
+                  <input type="range" min={0} max={40} step={1} value={design.gridSpacingPx ?? 4} onChange={(event) => onChange({ gridSpacingPx: Number(event.target.value) })} className="mt-3 w-full" />
+                </Field>
+              </div>
+            </OptionSection>
+          )}
           <OptionSection title="Grid Spacing">
             <TwoOption
               value={design.gridSpacing}
@@ -7036,15 +7052,25 @@ function CollectionDesignLivePreview({
 }) {
   const previewImages = images.length ? images.slice(0, 12) : [];
   const firstSets = sets.slice(0, 5);
-  const masonryGapPx = design.gridSpacing === "Large" ? 20 : 4;
-  const masonryColumns =
-    design.thumbnailSize === "Large" ? "columns-2" : "columns-4";
+  const masonryGapPx = design.gridStyle === "Custom"
+    ? Math.min(40, Math.max(0, Number(design.gridSpacingPx ?? 4)))
+    : design.gridSpacing === "Large" ? 20 : 4;
+  const masonryColumns = design.thumbnailSize === "Extra Large"
+    ? "columns-1"
+    : design.thumbnailSize === "Large" ? "columns-2" : "columns-4";
+  const customColumns = design.gridColumns === 2 ? "grid-cols-2"
+    : design.gridColumns === 3 ? "grid-cols-3"
+      : design.gridColumns === 5 ? "grid-cols-5"
+        : design.gridColumns === 6 ? "grid-cols-6" : "grid-cols-4";
+  const customAspect = design.customAspectRatio === "portrait" ? "aspect-[4/5]"
+    : design.customAspectRatio === "landscape" ? "aspect-[3/2]"
+      : design.customAspectRatio === "square" ? "aspect-square" : "";
   const layoutLabel =
     design.gridStyle === "Art"
       ? "Fine Art Gallery"
       : design.gridStyle === "Horizontal"
         ? "Classic Gallery"
-        : "Masonry Gallery";
+        : design.gridStyle === "Custom" ? "Custom Gallery" : "Masonry Gallery";
   const coverMediaType = images.find(
     (image) => imageSrc(image.url) === imageSrc(coverImage),
   )?.mediaType ?? design.coverMediaType;
@@ -7192,7 +7218,8 @@ function CollectionDesignLivePreview({
                   ? isMobilePreview ? "columns-2" : masonryColumns
                   : "grid grid-cols-2",
                 design.gridStyle === "Art" && !isMobilePreview && "grid-cols-4",
-                design.gridStyle === "Horizontal" && !isMobilePreview && (design.thumbnailSize === "Large" ? "grid-cols-2" : "grid-cols-3"),
+                design.gridStyle === "Horizontal" && !isMobilePreview && (design.thumbnailSize === "Extra Large" ? "grid-cols-1" : design.thumbnailSize === "Large" ? "grid-cols-2" : "grid-cols-3"),
+                design.gridStyle === "Custom" && !isMobilePreview && customColumns,
               )}
               style={{ gap: `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
             >
@@ -7203,6 +7230,7 @@ function CollectionDesignLivePreview({
                       className={cn(
                         "break-inside-avoid overflow-hidden bg-[#ececec]",
                         design.gridStyle === "Art" && !isMobilePreview && index % 7 === 0 && "col-span-2 row-span-2",
+                        design.gridStyle === "Custom" && customAspect,
                       )}
                       style={{ marginBottom: design.gridStyle === "Vertical" ? `${masonryGapPx}px` : undefined }}
                     >
@@ -7220,7 +7248,9 @@ function CollectionDesignLivePreview({
                                 : index % 3 === 1
                                   ? "aspect-[1.3]"
                                   : "aspect-square"
-                              : "aspect-square h-full",
+                              : design.gridStyle === "Custom" && !customAspect
+                                ? "h-auto"
+                                : "h-full",
                           )}
                         />
                       )}
@@ -8306,7 +8336,7 @@ function StoreDashboardPanel() {
                     <td className="px-5 py-4 text-[#77727f]">
                       {order.createdAt
                         ? new Date(order.createdAt).toLocaleDateString()
-                        : "Ã¢â‚¬â€"}
+                        : "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
                     </td>
                   </tr>
                 ))}
@@ -9642,6 +9672,13 @@ const defaultStoreSettings: StoreSettingsRecord = {
       publishableKey: "",
       secretKey: "",
     },
+    paypal: {
+      enabled: false,
+      environment: "sandbox",
+      clientId: "",
+      clientSecret: "",
+      webhookId: "",
+    },
   },
   links: [],
   giftCardSharingEmail: "",
@@ -9650,8 +9687,9 @@ const defaultStoreSettings: StoreSettingsRecord = {
 };
 
 function StoreSettingsPanel() {
-  const { settingsQuery, saveSettings } = useStoreSettings();
+  const { settingsQuery, saveSettings, testPayPal } = useStoreSettings();
   const [form, setForm] = useState<StoreSettingsRecord>(defaultStoreSettings);
+  const paypalWebhookUrl = `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000"}/public/collections/store/paypal/webhook`;
 
   useEffect(() => {
     if (settingsQuery.data?.data) {
@@ -9669,14 +9707,34 @@ function StoreSettingsPanel() {
     }
   }, [settingsQuery.data]);
 
-  const setStripe = (value: Record<string, unknown>) => {
+  const setStripe = (value: Partial<NonNullable<StoreSettingsRecord["paymentMethods"]["stripe"]>>) => {
     setForm((current) => ({
       ...current,
       paymentMethods: {
         ...current.paymentMethods,
-        stripe: { ...(current.paymentMethods.stripe ?? {}), ...value },
+        stripe: { ...(current.paymentMethods.stripe ?? { enabled: false }), ...value },
       },
     }));
+  };
+
+  const setPayPal = (value: Partial<NonNullable<StoreSettingsRecord["paymentMethods"]["paypal"]>>) => {
+    setForm((current) => ({
+      ...current,
+      paymentMethods: {
+        ...current.paymentMethods,
+        paypal: { ...(current.paymentMethods.paypal ?? { enabled: false }), ...value },
+      },
+    }));
+  };
+
+  const testPayPalConnection = async () => {
+    try {
+      await saveSettings.mutateAsync(form);
+      const result = await testPayPal.mutateAsync();
+      toast.success(result?.data?.message ?? "PayPal connection successful");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "PayPal connection failed");
+    }
   };
 
   const updateLink = (
@@ -9763,6 +9821,84 @@ function StoreSettingsPanel() {
               />
             </div>
           </div>
+
+          <div className="mt-4 bg-[#f6f6f6] p-5">
+            <div className="flex items-center justify-between gap-5">
+              <div>
+                <p className="text-lg font-bold text-[#003087]">PayPal</p>
+                <p className="mt-2 text-sm text-[#667085]">
+                  Accept PayPal using this store owner's own PayPal Business app credentials.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={Boolean(form.paymentMethods.paypal?.enabled)}
+                  onCheckedChange={(enabled) => setPayPal({ enabled })}
+                />
+                <span className="text-xs">{form.paymentMethods.paypal?.enabled ? "On" : "Off"}</span>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <Field>
+                <FieldLabel className="font-bold">Environment</FieldLabel>
+                <select
+                  value={form.paymentMethods.paypal?.environment ?? "sandbox"}
+                  onChange={(event) => setPayPal({ environment: event.target.value === "live" ? "live" : "sandbox" })}
+                  className="h-11 w-full rounded-none border bg-white px-3 text-sm outline-none"
+                >
+                  <option value="sandbox">Sandbox â€” test payments</option>
+                  <option value="live">Live â€” real payments</option>
+                </select>
+              </Field>
+              <StoreInput
+                label="PayPal Client ID"
+                value={form.paymentMethods.paypal?.clientId ?? ""}
+                onChange={(clientId) => setPayPal({ clientId })}
+              />
+              <Field>
+                <FieldLabel className="font-bold">PayPal Client Secret</FieldLabel>
+                <Input
+                  type="password"
+                  value={form.paymentMethods.paypal?.clientSecret ?? ""}
+                  onChange={(event) => setPayPal({ clientSecret: event.target.value })}
+                  placeholder="Write secret only when changing"
+                  className="h-11 rounded-none bg-white"
+                />
+                <p className="text-xs text-[#777]">
+                  {form.paymentMethods.paypal?.hasClientSecret ? "A client secret is saved. Enter a new one only to replace it." : "Write-only. Saved secret is never shown again."}
+                </p>
+              </Field>
+              <StoreInput
+                label="PayPal Webhook ID (optional)"
+                value={form.paymentMethods.paypal?.webhookId ?? ""}
+                onChange={(webhookId) => setPayPal({ webhookId })}
+              />
+            </div>
+            <div className="mt-4 border-t border-[#ddd] pt-4">
+              <div className="border border-[#d8e7f3] bg-[#f7fbff] p-4 text-xs leading-5 text-[#52606d]">
+                <p className="font-bold text-[#003087]">How to connect PayPal</p>
+                <ol className="mt-2 list-decimal space-y-1 pl-5">
+                  <li>Open PayPal Developer Dashboard, then Apps & Credentials and create a REST API app.</li>
+                  <li>Use Sandbox first. Copy the app Client ID and Secret here, save, then press Test PayPal connection.</li>
+                  <li>For real payments use the Live app credentials, switch Environment to Live, save and test again.</li>
+                  <li>Optional backup verification: add a webhook in the same PayPal app, use the URL below, then paste its Webhook ID here.</li>
+                </ol>
+                <div className="mt-3 break-all border bg-white p-3 font-mono text-[11px] text-[#334155]">{paypalWebhookUrl}</div>
+                <p className="mt-2">Recommended event: PAYMENT.CAPTURE.COMPLETED. Checkout still verifies and captures through PayPal when Webhook ID is empty.</p>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="max-w-[520px] text-xs leading-5 text-[#667085]">
+                  Stripe and PayPal are independent. Keep either one enabled, or keep both enabled and let the client choose at checkout.
+                </p>
+              <div className="flex flex-wrap gap-2">
+                <a href="https://developer.paypal.com/dashboard/" target="_blank" rel="noreferrer" className="inline-flex h-10 items-center border bg-white px-4 text-xs font-bold text-[#003087] hover:bg-[#f3f9ff]">Get PayPal credentials</a>
+                <Button type="button" variant="outline" onClick={() => void testPayPalConnection()} disabled={saveSettings.isPending || testPayPal.isPending} className="h-10 rounded-none border-[#0070ba] text-[#003087]">
+                  {(saveSettings.isPending || testPayPal.isPending) && <Loader2 className="size-4 animate-spin" />} Test PayPal connection
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
         </section>
 
         <section className="mt-8 grid gap-6">
@@ -10148,7 +10284,7 @@ function money(value: number, currency = "EUR") {
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   } catch {
-    return `Ã¢â€šÂ¬${Number(value || 0).toFixed(2)}`;
+    return `ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬${Number(value || 0).toFixed(2)}`;
   }
 }
 
@@ -11437,7 +11573,7 @@ function ProductTile({
           </p>
           <p className="mt-1 text-xs text-[#999]">
             {productTypeLabels[product.type]}
-            {product.active === false ? " Ã‚Â· Hidden" : ""}
+            {product.active === false ? " Ãƒâ€šÃ‚Â· Hidden" : ""}
           </p>
         </div>
         <MoreHorizontal className="size-5 shrink-0 text-[#6337d8]" />
@@ -12788,7 +12924,7 @@ function CollectionsPanel({ section }: { section: DashboardSection }) {
             />
           </label>
           <p className="hidden">
-            Manage your collections Ã¢â‚¬â€ create, view, and organize your
+            Manage your collections ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â create, view, and organize your
             photos.
           </p>
         </div>
@@ -15683,10 +15819,10 @@ function CollectionDetailView({
                     </p>
                     {(
                       [
-                        ["uploaded-new-old", "Uploaded: New Ã¢â€ â€™ Old"],
-                        ["uploaded-old-new", "Uploaded: Old Ã¢â€ â€™ New"],
-                        ["taken-new-old", "Date Taken: New Ã¢â€ â€™ Old"],
-                        ["taken-old-new", "Date Taken: Old Ã¢â€ â€™ New"],
+                        ["uploaded-new-old", "Uploaded: New ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Old"],
+                        ["uploaded-old-new", "Uploaded: Old ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ New"],
+                        ["taken-new-old", "Date Taken: New ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Old"],
+                        ["taken-old-new", "Date Taken: Old ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ New"],
                         ["name-az", "Name: A-Z"],
                         ["name-za", "Name: Z-A"],
                         ["random", "Random"],
@@ -15882,7 +16018,7 @@ function CollectionDetailView({
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-[#999]">
-                  Ã¢Å’Ëœ/Ctrl + A selects all Ã‚Â· Delete removes selected Ã‚Â· Esc
+                  ÃƒÂ¢Ã…â€™Ã‹Å“/Ctrl + A selects all Ãƒâ€šÃ‚Â· Delete removes selected Ãƒâ€šÃ‚Â· Esc
                   clears
                 </p>
                 {deletingImages && (
@@ -17571,7 +17707,7 @@ function CollectionActivityPanel({
                             (isAllowed ? "allowed" : "pending")}
                         </TableCell>
                         <TableCell className="max-w-80 whitespace-normal text-[#666]">
-                          {request?.reason || "Ã¢â‚¬â€"}
+                          {request?.reason || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
                         </TableCell>
                         <TableCell className="px-5">
                           <div className="flex justify-end gap-2">
@@ -18211,10 +18347,16 @@ const collectionDefaultDesign: PresetDesignSettings = {
   logoRevealDurationMs: 1800,
   logoRevealOncePerSession: true,
   coverMotion: "slow-zoom",
+  coverAnimationPreset: "none",
+  coverAnimationSpeed: 1,
+  coverAnimations: {},
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
   gridSpacing: "Regular",
+  gridColumns: 4,
+  gridSpacingPx: 4,
+  customAspectRatio: "natural",
   navigationStyle: "Icon Only",
 };
 

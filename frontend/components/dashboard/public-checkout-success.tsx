@@ -12,23 +12,27 @@ type VerifyState = {
 
 export function PublicCheckoutSuccess({
   sessionId,
+  paypalOrderId,
   backHref,
 }: {
   sessionId?: string;
+  paypalOrderId?: string;
   backHref: string;
 }) {
-  const [state, setState] = useState<VerifyState>({
-    loading: true,
-    message: "Verifying payment...",
-  });
+  const paymentId = paypalOrderId || sessionId;
+  const [state, setState] = useState<VerifyState>(() => ({
+    loading: Boolean(paymentId),
+    success: paymentId ? undefined : false,
+    message: paymentId ? "Verifying payment..." : "Missing payment reference.",
+  }));
 
   useEffect(() => {
-    if (!sessionId) {
-      setState({ loading: false, success: false, message: "Missing Stripe session." });
-      return;
-    }
-
-    fetch(`/api/public-print-store/checkout-session/${encodeURIComponent(sessionId)}`)
+    if (!paymentId) return;
+    const paypal = Boolean(paypalOrderId);
+    const url = paypal
+      ? `/api/public-print-store/paypal-order/${encodeURIComponent(paymentId)}`
+      : `/api/public-print-store/checkout-session/${encodeURIComponent(paymentId)}`;
+    fetch(url, paypal ? { method: "POST" } : undefined)
       .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
       .then(({ ok, payload }) => {
         if (!ok) {
@@ -42,7 +46,7 @@ export function PublicCheckoutSuccess({
         });
       })
       .catch(() => setState({ loading: false, success: false, message: "Payment verification failed." }));
-  }, [sessionId]);
+  }, [paypalOrderId, paymentId]);
 
   const Icon = state.success ? CheckCircle2 : XCircle;
   return (

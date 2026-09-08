@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     const filename = safeZipEntryName(String(image.name || `photo-${index + 1}`), extension, usedNames);
     usedNames.add(filename);
     return { name: filename, data: new Uint8Array(await response.arrayBuffer()) };
-  })).filter((file): file is { name: string; data: Uint8Array } => Boolean(file));
+  })).filter((file): file is { name: string; data: Uint8Array<ArrayBuffer> } => Boolean(file));
 
   if (!files.length) {
     return NextResponse.json({ message: "Image download failed" }, { status: 502 });
@@ -158,12 +158,12 @@ function extensionFromPath(pathname: string) {
   return match?.[0] ?? ".jpg";
 }
 
-async function createZip(files: { name: string; data: Uint8Array }[]) {
+async function createZip(files: { name: string; data: Uint8Array<ArrayBuffer> }[]) {
   const zip = new JSZip();
   for (const file of files) {
     zip.file(file.name, file.data);
   }
-  return zip.generateAsync({ type: "uint8array", compression: "STORE" });
+  return zip.generateAsync({ type: "arraybuffer", compression: "STORE" });
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T, index: number) => Promise<R>) {

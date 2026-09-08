@@ -7,6 +7,7 @@ import { UserType } from 'src/user/entities/user.entity';
 import { AdminService } from './admin.service';
 import { AdminCreatePlanDto, AdminUpdatePlanDto } from './dto/admin-plan.dto';
 import { AdminStripeSettingDto } from './dto/admin-stripe-setting.dto';
+import { AdminPayPalSettingDto } from './dto/admin-paypal-setting.dto';
 import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
 import { AdminCreateLoginAccessDto, AdminSendLoginAccessDto } from './dto/admin-login-access.dto';
 import { FreePlanSettingDto } from './dto/free-plan-setting.dto';
@@ -158,6 +159,11 @@ export class AdminController {
     return { data };
   }
 
+  @Get('paypal')
+  async paypalSettings() {
+    return { data: await this.adminService.getPayPalSettings() };
+  }
+
   @Get('free-plan')
   async freePlanSettings() {
     return { data: await this.adminService.getFreePlanSettings() };
@@ -173,5 +179,16 @@ export class AdminController {
   async updateStripeSettings(@Body() dto: AdminStripeSettingDto) {
     const data = await this.adminService.updateStripeSettings(dto);
     return { message: 'Stripe settings saved', data };
+  }
+
+  @Patch('paypal')
+  async updatePayPalSettings(@Body() dto: AdminPayPalSettingDto) {
+    const data = await this.adminService.updatePayPalSettings(dto);
+    return { message: 'PayPal settings saved', data };
+  }
+
+  @Post('paypal/test')
+  async testPayPalSettings() {
+    return { data: await this.adminService.testPayPalSettings() };
   }
 }

@@ -17,6 +17,7 @@ import { StoreTax, StoreTaxDocument } from './entities/store-tax.entity';
 import { Collection, CollectionDocument } from '../collections/entities/collection.entity';
 import { StoreDefaultProductService } from './store-default-product.service';
 import { User, UserDocument } from '../user/entities/user.entity';
+import { paypalAccessToken, type PayPalConfig } from '../lib/paypal';
 
 @Injectable()
 export class StoreService {
@@ -85,6 +86,7 @@ export class StoreService {
           roundPricesUpTo: '.00',
           paymentMethods: {
             stripe: { enabled: false, publishableKey: '', secretKey: '', accountLink: '' },
+            paypal: { enabled: false, environment: 'sandbox', clientId: '', clientSecret: '', webhookId: '' },
           },
           links: [],
           giftCardSharingEmail: '',
@@ -105,9 +107,19 @@ export class StoreService {
       enabled: Boolean(incomingStripe.enabled),
       publishableKey: incomingStripe.publishableKey ?? existing?.paymentMethods?.stripe?.publishableKey ?? '',
       accountLink: incomingStripe.accountLink ?? existing?.paymentMethods?.stripe?.accountLink ?? '',
-      secretKey: incomingStripe.secretKey
+      secretKey: incomingStripe.secretKey && incomingStripe.secretKey !== '********'
         ? incomingStripe.secretKey
         : existing?.paymentMethods?.stripe?.secretKey ?? '',
+    };
+    const incomingPayPal = dto.paymentMethods?.paypal ?? {};
+    const paypal = {
+      enabled: Boolean(incomingPayPal.enabled),
+      environment: incomingPayPal.environment === 'live' ? 'live' : 'sandbox',
+      clientId: incomingPayPal.clientId ?? existing?.paymentMethods?.paypal?.clientId ?? '',
+      clientSecret: incomingPayPal.clientSecret && incomingPayPal.clientSecret !== '********'
+        ? incomingPayPal.clientSecret
+        : existing?.paymentMethods?.paypal?.clientSecret ?? '',
+      webhookId: incomingPayPal.webhookId ?? existing?.paymentMethods?.paypal?.webhookId ?? '',
     };
     const settings = await this.settingModel.findOneAndUpdate(
       { userId },
@@ -118,7 +130,7 @@ export class StoreService {
           orderDelay: dto.orderDelay ?? '6 Hours',
           maintainMarkup: Boolean(dto.maintainMarkup),
           roundPricesUpTo: dto.roundPricesUpTo ?? '.00',
-          paymentMethods: { stripe },
+          paymentMethods: { stripe, paypal },
           links: dto.links ?? [],
           giftCardSharingEmail: dto.giftCardSharingEmail ?? '',
           termsOfSale: dto.termsOfSale ?? '',
@@ -128,6 +140,23 @@ export class StoreService {
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
     return this.hideStripeSecret(settings.toObject());
+  }
+
+  async testPayPalConnection(userId: string) {
+    const settings = await this.settingModel.findOne({ userId }).lean();
+    const paypal = settings?.paymentMethods?.paypal;
+    const config: PayPalConfig = {
+      enabled: Boolean(paypal?.enabled),
+      environment: paypal?.environment === 'live' ? 'live' : 'sandbox',
+      clientId: String(paypal?.clientId ?? '').trim(),
+      clientSecret: String(paypal?.clientSecret ?? '').trim(),
+      webhookId: String(paypal?.webhookId ?? '').trim(),
+    };
+    if (!config.clientId || !config.clientSecret) {
+      throw new BadRequestException('Save a PayPal Client ID and Client Secret first');
+    }
+    await paypalAccessToken(config);
+    return { success: true, environment: config.environment, message: `PayPal ${config.environment} credentials are valid` };
   }
 
   async createStripePaymentIntent(userId: string, dto: any) {
@@ -859,12 +888,20 @@ export class StoreService {
   }
 
   private hideStripeSecret(settings: any) {
+    const stripe = settings.paymentMethods?.stripe ?? {};
+    const paypal = settings.paymentMethods?.paypal ?? {};
     return {
       ...settings,
       paymentMethods: {
         stripe: {
-          ...(settings.paymentMethods?.stripe ?? {}),
+          ...stripe,
           secretKey: '',
+          hasSecretKey: Boolean(stripe.secretKey),
+        },
+        paypal: {
+          ...paypal,
+          clientSecret: '',
+          hasClientSecret: Boolean(paypal.clientSecret),
         },
       },
     };

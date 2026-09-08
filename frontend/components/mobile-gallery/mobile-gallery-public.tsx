@@ -217,7 +217,7 @@ export function MobileGalleryPublic({
       if (suffix === "all-photos" && imagesHasMore) {
         const loaded: MobileGalleryImage[] = [];
         let offset = images.length;
-        let hasMore = imagesHasMore;
+        let hasMore: boolean = imagesHasMore;
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
         while (hasMore) {
           const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(app.slug)}/images?limit=120&offset=${offset}`).catch(() => null);

@@ -35,6 +35,8 @@ async function bootstrap() {
   });
   app.use('/uploads', serveStatic(join(cwd(), 'uploads')));
   app.use('/billing/stripe/webhook', raw({ type: 'application/json' }));
+  app.use('/billing/paypal/webhook', raw({ type: 'application/json' }));
+  app.use('/public/collections/store/paypal/webhook', raw({ type: 'application/json' }));
   app.use(json({ limit: '20mb' }));
   app.use(urlencoded({ extended: true, limit: '20mb' }));
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));

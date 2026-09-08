@@ -20,6 +20,7 @@ import { StoreCollectionCatalogService } from './store-collection-catalog.servic
 import { StoreCollectionProductService } from './store-collection-product.service';
 import { StorePricingService } from './store-pricing.service';
 import { StoreStripeService } from './store-stripe.service';
+import { StorePayPalService } from './store-paypal.service';
 import { StoreOrderCreateService } from './store-order-create.service';
 import { StorePaymentVerifyService } from './store-payment-verify.service';
 import { StoreDefaultProductService } from './store-default-product.service';
@@ -65,6 +66,7 @@ import { DashboardSetting, DashboardSettingSchema } from 'src/settings/entities/
     StoreCollectionProductService,
     StorePricingService,
     StoreStripeService,
+    StorePayPalService,
     StoreOrderCreateService,
     StorePaymentVerifyService,
     StoreDefaultProductService,

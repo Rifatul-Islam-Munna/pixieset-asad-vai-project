@@ -1,9 +1,9 @@
 ﻿"use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, Loader2, Search } from "lucide-react";
-import { checkoutPlan } from "@/actions/billing";
+import { checkoutPlan, getPublicPaymentMethods, type BillingPaymentMethods } from "@/actions/billing";
 import type { AdminPlan } from "@/actions/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,16 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [billingInterval, setBillingInterval] = useState<"month" | "year">("month");
+  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "paypal">("stripe");
+  const [paymentMethods, setPaymentMethods] = useState<BillingPaymentMethods>({ stripe: false, paypal: false });
+
+  useEffect(() => {
+    void getPublicPaymentMethods().then((methods) => {
+      setPaymentMethods(methods);
+      if (methods.paypal && !methods.stripe) setPaymentProvider("paypal");
+      else if (methods.stripe) setPaymentProvider("stripe");
+    });
+  }, []);
 
   const safePlans = useMemo(() => {
     const normalized = Array.isArray(plans) ? plans.map((plan, index) => safePlan(plan, index)) : [];
@@ -67,9 +77,10 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
     setError("");
     startTransition(async () => {
       try {
-        const result = await checkoutPlan(planId, billingInterval);
+        const result = await checkoutPlan(planId, billingInterval, paymentProvider);
         if (result.checkoutUrl) window.location.href = result.checkoutUrl;
-        else setError("Stripe checkout URL missing");
+        else if (result.activated) window.location.href = "/dashboard/client-gallery/storage";
+        else setError("Checkout URL missing");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Checkout failed");
       }
@@ -101,6 +112,15 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
             <button type="button" onClick={() => setBillingInterval("year")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "year" ? "rounded-[6px] bg-[#6337d8] text-white" : "rounded-[6px] text-[#555] hover:bg-[#f5f1ff]")}>Yearly</button>
           </div>
         </div>
+        {(paymentMethods.stripe || paymentMethods.paypal) && (
+          <div className="mt-4 flex flex-col items-center">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Payment method</p>
+            <div className="inline-flex rounded-[8px] border border-[#ded9ea] bg-white p-1 shadow-sm">
+              {paymentMethods.stripe && <button type="button" onClick={() => setPaymentProvider("stripe")} className={cn("h-10 rounded-[6px] px-5 text-sm font-bold", paymentProvider === "stripe" ? "bg-[#635bff] text-white" : "text-[#555]")}>Stripe</button>}
+              {paymentMethods.paypal && <button type="button" onClick={() => setPaymentProvider("paypal")} className={cn("h-10 rounded-[6px] px-5 text-sm font-bold", paymentProvider === "paypal" ? "bg-[#003087] text-white" : "text-[#555]")}>PayPal</button>}
+            </div>
+          </div>
+        )}
 
         {(loadError || error) && (
           <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">

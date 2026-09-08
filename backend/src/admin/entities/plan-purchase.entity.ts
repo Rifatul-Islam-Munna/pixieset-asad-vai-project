@@ -12,6 +12,8 @@ export class PlanPurchase {
   @Prop({ required: true, enum: ['month', 'year'], default: 'month' }) billingInterval: 'month' | 'year';
   @Prop({ required: true, enum: ['admin', 'checkout', 'free'] }) source: 'admin' | 'checkout' | 'free';
   @Prop({ unique: true, sparse: true }) stripeSessionId?: string;
+  @Prop({ unique: true, sparse: true }) paypalOrderId?: string;
+  @Prop({ enum: ['stripe', 'paypal', 'admin', 'free'] }) paymentProvider?: 'stripe' | 'paypal' | 'admin' | 'free';
   @Prop({ required: true, enum: ['active', 'paid'] }) status: 'active' | 'paid';
 }
 

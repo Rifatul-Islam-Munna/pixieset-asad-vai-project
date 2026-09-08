@@ -31,6 +31,13 @@ export class StoreSetting {
       secretKey?: string;
       accountLink?: string;
     };
+    paypal?: {
+      enabled: boolean;
+      environment?: 'sandbox' | 'live';
+      clientId?: string;
+      clientSecret?: string;
+      webhookId?: string;
+    };
   };
 
   @Prop({ type: [{ label: String, url: String }], default: [] })

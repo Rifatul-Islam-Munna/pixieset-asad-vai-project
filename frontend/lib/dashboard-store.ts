@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { CoverAnimationDesign } from "@/lib/cover-animation";
 import {
   defaultEmailTemplates,
   type CustomCoverTemplate,
@@ -15,7 +16,7 @@ export type PresetEditorPanel =
   | "favorite"
   | "store";
 
-export type PresetDesignSettings = {
+export type PresetDesignSettings = CoverAnimationDesign & {
   cover: string;
   coverSmallTitle: string;
   coverTitle: string;
@@ -50,9 +51,12 @@ export type PresetDesignSettings = {
   logoRevealOncePerSession?: boolean;
   coverMotion?: "none" | "fade" | "slow-zoom" | "rise";
   color: string;
-  gridStyle: "Vertical" | "Horizontal" | "Art";
-  thumbnailSize: "Regular" | "Large";
+  gridStyle: "Vertical" | "Horizontal" | "Art" | "Custom";
+  thumbnailSize: "Regular" | "Large" | "Extra Large";
   gridSpacing: "Regular" | "Large";
+  gridColumns?: 2 | 3 | 4 | 5 | 6;
+  gridSpacingPx?: number;
+  customAspectRatio?: "natural" | "square" | "portrait" | "landscape";
   navigationStyle: "Icon Only" | "Icon & Text";
   customCoverTemplate?: CustomCoverTemplate;
 };
@@ -108,6 +112,8 @@ export type PresetStoreSettings = {
   storeStatus: boolean;
   priceSheet: string;
   productPreview: boolean;
+  showPrintStoreNav?: boolean;
+  showBuyPhotoButton?: boolean;
 };
 
 export type PresetItem = {
@@ -323,10 +329,16 @@ const emptyPresetDesign: PresetDesignSettings = {
   logoRevealDurationMs: 1800,
   logoRevealOncePerSession: true,
   coverMotion: "slow-zoom",
+  coverAnimationPreset: "none",
+  coverAnimationSpeed: 1,
+  coverAnimations: {},
   color: "White",
   gridStyle: "Vertical",
   thumbnailSize: "Regular",
   gridSpacing: "Regular",
+  gridColumns: 4,
+  gridSpacingPx: 4,
+  customAspectRatio: "natural",
   navigationStyle: "Icon Only",
 };
 
@@ -361,6 +373,8 @@ const emptyPresetStore: PresetStoreSettings = {
   storeStatus: true,
   priceSheet: "",
   productPreview: false,
+  showPrintStoreNav: true,
+  showBuyPhotoButton: true,
 };
 
 const defaultPresetItems: PresetItem[] = [

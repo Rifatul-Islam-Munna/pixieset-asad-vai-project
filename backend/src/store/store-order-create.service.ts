@@ -6,6 +6,7 @@ import { StoreOrder, StoreOrderDocument } from './entities/store-order.entity';
 import { StoreCatalogService } from './store-catalog.service';
 import { StorePricingService } from './store-pricing.service';
 import { StoreStripeService } from './store-stripe.service';
+import { StorePayPalService } from './store-paypal.service';
 import { PrintLabNotificationService } from './print-lab-notification.service';
 
 @Injectable()
@@ -19,6 +20,7 @@ export class StoreOrderCreateService {
     @InjectModel(StoreCustomer.name)
     private readonly customerModel: Model<StoreCustomerDocument>,
     private readonly printLabNotification: PrintLabNotificationService,
+    private readonly paypal: StorePayPalService,
   ) {}
 
   async checkout(identifier: string, body: any, siteSlug?: string) {
@@ -30,6 +32,20 @@ export class StoreOrderCreateService {
     }
     if (!printRequestMode && resolved.config.requireProfessionalInfo && !priced.professionalInfo?.company) {
       throw new BadRequestException('Professional information is required');
+    }
+    let paymentProvider: 'stripe' | 'paypal' | '' = '';
+    if (!printRequestMode) {
+      const stripeReady = this.catalog.stripeReady(this.catalog.ownerStripe(resolved.settings));
+      const paypalReady = this.catalog.paypalReady(this.catalog.ownerPayPal(resolved.settings));
+      paymentProvider = body.paymentProvider === 'paypal' ? 'paypal' : body.paymentProvider === 'stripe' ? 'stripe' : '';
+      if (!paymentProvider) {
+        if (stripeReady && !paypalReady) paymentProvider = 'stripe';
+        else if (paypalReady && !stripeReady) paymentProvider = 'paypal';
+        else if (stripeReady && paypalReady) throw new BadRequestException('Choose Stripe or PayPal');
+        else throw new BadRequestException(this.catalog.paymentMessage(this.catalog.ownerStripe(resolved.settings), this.catalog.ownerPayPal(resolved.settings)));
+      }
+      if (paymentProvider === 'stripe' && !stripeReady) throw new BadRequestException('Stripe is not configured for this store');
+      if (paymentProvider === 'paypal' && !paypalReady) throw new BadRequestException('PayPal is not configured for this store');
     }
     const savedCustomer = await this.customerModel.findOneAndUpdate(
       { userId: resolved.userId, email: customer.email },
@@ -64,9 +80,11 @@ export class StoreOrderCreateService {
       shippingMethodName: priced.shippingMethod?.name ?? '',
       shippingNote: priced.shippingMethod?.region ?? '',
       discount: priced.discount,
+      couponId: priced.coupon?._id?.toString(),
       total: priced.total,
       status: 'pending',
       paymentStatus: printRequestMode ? 'not-required' : 'unpaid',
+      paymentProvider: paymentProvider || undefined,
       stripeAccountMode: 'owner',
       checkoutSource: source,
       note: String(body.note ?? ''),
@@ -92,12 +110,28 @@ export class StoreOrderCreateService {
         completed: true,
       };
     }
+    if (paymentProvider === 'paypal') {
+      const paypalCheckout = await this.paypal.createCheckoutOrder(priced, order, body);
+      order.paypalOrderId = paypalCheckout.paypalOrderId;
+      await order.save();
+      return {
+        order: order.toObject(),
+        paymentUnavailable: false,
+        paymentProvider: 'paypal',
+        checkoutUrl: paypalCheckout.checkoutUrl,
+        paypalOrderId: paypalCheckout.paypalOrderId,
+        sessionId: null,
+        printRequest: false,
+        completed: false,
+      };
+    }
     const session = await this.stripe.createCheckoutSession(priced, order, body);
     order.stripeCheckoutSessionId = session.id;
     await order.save();
     return {
       order: order.toObject(),
       paymentUnavailable: false,
+      paymentProvider: 'stripe',
       checkoutUrl: session.url,
       sessionId: session.id,
       printRequest: false,

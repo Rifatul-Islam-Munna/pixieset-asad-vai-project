@@ -17,10 +17,12 @@ import {
   impersonateAdminUser,
   reorderAdminPlans,
   sendAdminLoginAccessEmail,
+  testAdminPayPalSettings,
   updateAdminCollection,
   updateAdminPlan,
   updateAdminFreePlanSettings,
   updateAdminStripeSettings,
+  updateAdminPayPalSettings,
   updateAdminUser,
   updateHomeCms,
   uploadHomeCmsFile,
@@ -30,6 +32,7 @@ import {
   type AdminLoginAccess,
   type AdminPlan,
   type AdminStripeSetting,
+  type AdminPayPalSetting,
   type AdminUser,
 } from "@/actions/admin";
 import { logOutUser } from "@/actions/auth";
@@ -139,6 +142,9 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
   const [stripeForm, setStripeForm] = useState<AdminStripeSetting>(
     initialData.stripe ?? { enabled: false, publishableKey: "" },
   );
+  const [paypalForm, setPayPalForm] = useState<AdminPayPalSetting>(
+    initialData.paypal ?? { enabled: false, environment: "sandbox", clientId: "" },
+  );
   const [freePlanForm, setFreePlanForm] = useState<AdminFreePlanSetting>(
     initialData.freePlan ?? { storageGb: 3, monthlyEmails: 1000 },
   );
@@ -167,7 +173,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
   const users = initialData.users;
   const collections = initialData.collections;
   const plans = initialData.plans ?? [];
-  const pageTitle = tab === "cms" ? "Homepage Editor" : tab === "terms" ? "Terms of Service" : tab === "privacy" ? "Privacy Policy" : tab === "overview" ? "Admin Dashboard" : tab.replace("-", " ").replace(/^./, (letter) => letter.toUpperCase());
+  const pageTitle = tab === "cms" ? "Homepage Editor" : tab === "terms" ? "Terms of Service" : tab === "privacy" ? "Privacy Policy" : tab === "overview" ? "Admin Dashboard" : tab === "stripe" ? "Payments" : tab.replace("-", " ").replace(/^./, (letter) => letter.toUpperCase());
 
   const filteredUsers = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -445,6 +451,33 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
     });
   };
 
+  const savePayPal = () => {
+    startTransition(async () => {
+      try {
+        const data = await updateAdminPayPalSettings(paypalForm);
+        setPayPalForm(data);
+        toast.success("PayPal settings saved");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "PayPal save failed");
+      }
+    });
+  };
+
+  const testPayPal = () => {
+    startTransition(async () => {
+      try {
+        const saved = await updateAdminPayPalSettings(paypalForm);
+        setPayPalForm(saved);
+        const result = await testAdminPayPalSettings();
+        toast.success(result.message || "PayPal connection successful");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "PayPal connection failed");
+      }
+    });
+  };
+
   const saveFreePlan = () => {
     startTransition(async () => {
       try {
@@ -630,7 +663,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={tab === "overview" ? "Dashboard overview" : tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "free-plan" ? "Free plan limits" : tab === "stripe" ? "Stripe settings" : tab === "cms" ? "Homepage editor" : tab === "terms" ? "Terms editor" : tab === "privacy" ? "Privacy editor" : "Search collections"}
+                placeholder={tab === "overview" ? "Dashboard overview" : tab === "users" ? "Search users" : tab === "plans" ? "Search plans" : tab === "free-plan" ? "Free plan limits" : tab === "stripe" ? "Payment settings" : tab === "cms" ? "Homepage editor" : tab === "terms" ? "Terms editor" : tab === "privacy" ? "Privacy editor" : "Search collections"}
                 className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
               />
             </div>
@@ -647,9 +680,14 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
               </select>
             )}
             {tab === "stripe" && (
-              <Button onClick={saveStripe} className="h-11 rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" disabled={pending}>
-                {pending ? <Loader2 className="size-4 animate-spin" /> : "Save Stripe"}
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={saveStripe} className="h-11 rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" disabled={pending}>
+                  {pending ? <Loader2 className="size-4 animate-spin" /> : "Save Stripe"}
+                </Button>
+                <Button onClick={savePayPal} className="h-11 rounded-none bg-[#003087] text-white hover:bg-[#00246b]" disabled={pending}>
+                  {pending ? <Loader2 className="size-4 animate-spin" /> : "Save PayPal"}
+                </Button>
+              </div>
             )}
             {tab === "users" && (
               <Button onClick={openAddModal} className="h-11 rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]">
@@ -678,7 +716,10 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
           ) : tab === "free-plan" ? (
             <FreePlanSettingsPanel form={freePlanForm} setForm={setFreePlanForm} onSave={saveFreePlan} busy={pending} />
           ) : tab === "stripe" ? (
-            <StripeSettingsPanel form={stripeForm} setForm={setStripeForm} />
+            <div className="space-y-6">
+              <StripeSettingsPanel form={stripeForm} setForm={setStripeForm} />
+              <PayPalSettingsPanel form={paypalForm} setForm={setPayPalForm} onSave={savePayPal} onTest={testPayPal} busy={pending} />
+            </div>
           ) : tab === "vip-support" ? (
             <SupportChat admin />
           ) : tab === "seo" ? (
@@ -972,7 +1013,7 @@ function AdminNav({ tab, setTab }: { tab: AdminTab; setTab: (tab: AdminTab) => v
     { id: "collections", label: "Collections", icon: Images },
     { id: "plans", label: "Plans", icon: Package },
     { id: "free-plan", label: "Free Plan", icon: HardDrive },
-    { id: "stripe", label: "Stripe", icon: ShieldCheck },
+    { id: "stripe", label: "Payments", icon: ShieldCheck },
     { id: "vip-support", label: "VIP Support", icon: MessageCircle },
     { id: "cms", label: "Homepage Editor", icon: FileImage },
     { id: "seo", label: "SEO", icon: Search },
@@ -1374,6 +1415,64 @@ function StripeSettingsPanel({ form, setForm }: {
           onChange={(webhookSecret) => setForm({ ...form, webhookSecret })}
           type="password"
         />
+      </div>
+    </div>
+  );
+}
+
+function PayPalSettingsPanel({ form, setForm, onSave, onTest, busy }: {
+  form: AdminPayPalSetting;
+  setForm: (value: AdminPayPalSetting) => void;
+  onSave: () => void;
+  onTest: () => void;
+  busy: boolean;
+}) {
+  const paypalWebhookUrl = `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000"}/billing/paypal/webhook`;
+  return (
+    <div className="max-w-[760px] bg-white p-5 sm:p-6">
+      <div className="border-b pb-5">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#003087]">PayPal</p>
+        <h2 className="mt-2 text-xl font-semibold">Plan checkout settings</h2>
+        <p className="mt-2 text-sm leading-6 text-[#666]">
+          Use Sandbox while testing. Switch to Live only with credentials from a live PayPal Business app. Stripe and PayPal may both be enabled; customers will choose during checkout.
+        </p>
+      </div>
+      <div className="mt-5 grid gap-4">
+        <label className="flex h-11 items-center justify-between border px-3 text-sm">
+          <span className="font-semibold">Enable PayPal</span>
+          <input type="checkbox" checked={Boolean(form.enabled)} onChange={(event) => setForm({ ...form, enabled: event.target.checked })} />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold">
+          Environment
+          <select value={form.environment ?? "sandbox"} onChange={(event) => setForm({ ...form, environment: event.target.value === "live" ? "live" : "sandbox" })} className="h-11 border bg-white px-3 font-normal outline-none">
+            <option value="sandbox">Sandbox — test payments</option>
+            <option value="live">Live — real payments</option>
+          </select>
+        </label>
+        <InputField label="Client ID" value={form.clientId ?? ""} onChange={(clientId) => setForm({ ...form, clientId })} />
+        <InputField label={form.hasClientSecret ? "Client secret saved - enter a new secret to replace" : "Client secret"} value={form.clientSecret && form.clientSecret !== "********" ? form.clientSecret : ""} onChange={(clientSecret) => setForm({ ...form, clientSecret })} type="password" />
+        <InputField label="Webhook ID (optional)" value={form.webhookId ?? ""} onChange={(webhookId) => setForm({ ...form, webhookId })} />
+        <div className="border border-[#d8e7f3] bg-[#f7fbff] p-4 text-xs leading-5 text-[#52606d]">
+          <p className="font-bold text-[#003087]">PayPal setup steps</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5">
+            <li>Open PayPal Developer Dashboard, then Apps & Credentials, and create a REST API app.</li>
+            <li>Use Sandbox Client ID and Secret first. Save here and press Test connection.</li>
+            <li>When ready for real plan payments, switch to the Live app credentials and set Environment to Live.</li>
+            <li>Optional: create a webhook in that PayPal app using the URL below and paste its Webhook ID above.</li>
+          </ol>
+          <div className="mt-3 break-all border bg-white p-3 font-mono text-[11px]">{paypalWebhookUrl}</div>
+          <p className="mt-2">Recommended event: PAYMENT.CAPTURE.COMPLETED. The normal return flow still verifies/captures server-side, so the webhook is an additional recovery path rather than a requirement.</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <div>
+            <p className="text-xs leading-5 text-[#777]">Client secrets are write-only and are never returned to the browser after saving.</p>
+            <a href="https://developer.paypal.com/dashboard/" target="_blank" rel="noreferrer" className="mt-1 inline-flex text-xs font-bold text-[#003087] hover:underline">Open PayPal Apps & Credentials</a>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onTest} disabled={busy} className="rounded-none border-[#0070ba] text-[#003087]">{busy && <Loader2 className="size-4 animate-spin" />} Test connection</Button>
+            <Button onClick={onSave} disabled={busy} className="rounded-none bg-[#003087] text-white hover:bg-[#00246b]">{busy && <Loader2 className="size-4 animate-spin" />} Save PayPal</Button>
+          </div>
+        </div>
       </div>
     </div>
   );

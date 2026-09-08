@@ -129,6 +129,9 @@ export class StoreOrder {
   @Prop({ default: 0 })
   discount: number;
 
+  @Prop({ index: true })
+  couponId?: string;
+
   @Prop({ default: 0 })
   total: number;
 
@@ -143,6 +146,15 @@ export class StoreOrder {
 
   @Prop({ index: true })
   stripeCheckoutSessionId?: string;
+
+  @Prop({ index: true })
+  paypalOrderId?: string;
+
+  @Prop({ index: true })
+  paypalCaptureId?: string;
+
+  @Prop({ enum: ['stripe', 'paypal'] })
+  paymentProvider?: 'stripe' | 'paypal';
 
   @Prop({ default: 'owner' })
   stripeAccountMode: 'owner';

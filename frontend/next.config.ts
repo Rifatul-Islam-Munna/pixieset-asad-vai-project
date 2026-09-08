@@ -4,7 +4,6 @@ import withPWAInit from "@ducanh2912/next-pwa";
 const withPWA = withPWAInit({
   dest: "public",
   register: true,
-  skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
   // CMS pages and metadata must always come from the server after an admin edit.
   cacheStartUrl: false,
@@ -12,18 +11,19 @@ const withPWA = withPWAInit({
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
   extendDefaultRuntimeCaching: true,
-  runtimeCaching: [
-    {
-      urlPattern: ({ request, sameOrigin }) =>
-        sameOrigin &&
-        (request.mode === "navigate" || request.headers.get("RSC") === "1"),
-      handler: "NetworkOnly",
-      options: { cacheName: "cms-live-pages" },
-    },
-  ],
   workboxOptions: {
+    skipWaiting: true,
     disableDevLogs: true,
     cleanupOutdatedCaches: true,
+    runtimeCaching: [
+      {
+        urlPattern: ({ request, sameOrigin }: { request: Request; sameOrigin: boolean }) =>
+          sameOrigin &&
+          (request.mode === "navigate" || request.headers.get("RSC") === "1"),
+        handler: "NetworkOnly",
+        options: { cacheName: "cms-live-pages" },
+      },
+    ],
   },
 });
 

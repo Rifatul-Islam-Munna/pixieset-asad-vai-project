@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import { AnimatedCoverBox, AnimatedCoverMedia, AnimatedCoverText } from "@/components/dashboard/cover-animation-elements";
+import type { CoverAnimationDesign, CoverAnimationTarget } from "@/lib/cover-animation";
 import { cn } from "@/lib/utils";
 import type { BrandSettings, CustomCoverTemplate } from "@/lib/home-cms";
 import { coverFocalStyle } from "@/lib/cover-focal";
@@ -36,7 +38,7 @@ export const coverOptions = [
   ["Quiet Luxury", "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80"],
 ] as const;
 
-export type CoverPreviewSettings = {
+export type CoverPreviewSettings = CoverAnimationDesign & {
   cover: string;
   coverSmallTitle?: string;
   coverTitle?: string;
@@ -71,31 +73,28 @@ function CoverMedia({
   mediaType,
   className,
   style,
+  design,
+  disabled,
 }: {
   src: string;
   mediaType?: "image" | "video";
   className?: string;
   style?: CSSProperties;
+  design: CoverAnimationDesign;
+  disabled?: boolean;
 }) {
-  const video =
-    mediaType === "video" || /\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(src);
-  return video ? (
-    <video
+  const video = mediaType === "video" || /\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(src);
+  return (
+    <AnimatedCoverMedia
       src={src}
+      video={video}
       className={cn("cover-preview-media", className)}
       style={style}
-      autoPlay
-      muted
-      loop
-      playsInline
-      preload="metadata"
-      aria-label="Animated gallery cover"
+      design={design}
+      disabled={disabled}
     />
-  ) : (
-    <img src={src} alt="" className={cn("cover-preview-media", className)} style={style} />
   );
 }
-
 export function CoverPreview({
   design,
   image,
@@ -122,6 +121,7 @@ export function CoverPreview({
       <CustomCoverPreview
         template={design.customCoverTemplate}
         branding={design.branding}
+        animationDesign={design}
         image={image}
         mediaType={resolvedMediaType}
         compact={compact}
@@ -170,31 +170,32 @@ export function CoverPreview({
   };
   const text = (
     <div className={cn("flex flex-col gap-2", compact && "gap-1")}>
-      {!compact && showSmall && <p className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }}>{smallTitle}</p>}
-      {showTitle && <h3 className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }}>{sampleTitle}</h3>}
-      {!compact && showDate && <p className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }}>{date}</p>}
+      {!compact && showSmall && (
+        <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }} />
+      )}
+      {showTitle && (
+        <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }} />
+      )}
+      {!compact && showDate && (
+        <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }} />
+      )}
       {!compact && showButton && (
-        <span className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }}>
-          {buttonText}
-        </span>
+        <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }} />
       )}
     </div>
   );
-
   if (design.cover === "Ceremony Wide") {
     return (
       <div className={cn("cover-preview-root relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-gradient-to-r from-black/38 via-black/10 to-black/20" />
         <div className={cn("absolute left-5 top-[58%] max-w-[82%] -translate-y-1/2 sm:left-8 sm:max-w-[72%]", compact && "left-3 max-w-[68%]")}>
-          {!compact && showSmall && <p className="mb-3 font-semibold uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }}>{smallTitle}</p>}
-          {showTitle && <h3 className="break-words font-medium uppercase leading-[0.96] tracking-[0.04em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }}>{sampleTitle}</h3>}
-          {!compact && showDate && <p className="mt-5 font-semibold uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }}>{date}</p>}
+          {!compact && showSmall && <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="mb-3 font-semibold uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }} />}
+          {showTitle && <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-medium uppercase leading-[0.96] tracking-[0.04em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }} />}
+          {!compact && showDate && <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="mt-5 font-semibold uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }} />}
         </div>
         {!compact && showButton && (
-          <span className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }}>
-            {buttonText}
-          </span>
+          <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }} />
         )}
       </div>
     );
@@ -203,7 +204,7 @@ export function CoverPreview({
   if (design.cover === "Cinematic") {
     return (
       <div className={cn("cover-preview-root relative h-full min-h-[62vh] overflow-hidden bg-black text-white", compact && "min-h-0", className)}>
-        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover opacity-80" style={imageStyle} />
+        <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover opacity-80" style={imageStyle} />
         <div className="absolute inset-x-0 top-0 h-[16%] bg-black/55" />
         <div className="absolute inset-x-0 bottom-0 h-[16%] bg-black/55" />
         <div className="absolute inset-x-[8%] top-[19%] border-t border-white/70" />
@@ -216,7 +217,7 @@ export function CoverPreview({
   if (design.cover === "Lower Left" || design.cover === "Lower Split") {
     return (
       <div className={cn("cover-preview-root relative h-full min-h-[62vh] overflow-hidden bg-[#1c1c1c] text-white", compact && "min-h-0", className)}>
-        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
         {design.cover === "Lower Split" && <div className="absolute bottom-0 left-0 right-0 h-[34%] bg-white/92" />}
         <div className={cn("absolute bottom-5 left-5 max-w-[82%] sm:bottom-8 sm:left-8 sm:max-w-[64%]", design.cover === "Lower Split" && "text-[#222] [text-shadow:none]", compact && "bottom-3 left-3 max-w-[75%]")}>{text}</div>
@@ -227,14 +228,12 @@ export function CoverPreview({
   if (design.cover === "Top Frame" || design.cover === "Side Button") {
     return (
       <div className={cn("cover-preview-root relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-black/24" />
         <div className={cn("absolute inset-6 border border-white/75", compact && "inset-2")} />
         <div className={cn("absolute left-5 top-5 max-w-[82%] sm:left-8 sm:top-8 sm:max-w-[70%]", compact && "left-3 top-3 max-w-[74%]")}>{text}</div>
         {design.cover === "Side Button" && !compact && showButton && (
-          <span className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }}>
-            {buttonText}
-          </span>
+          <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }} />
         )}
       </div>
     );
@@ -243,7 +242,7 @@ export function CoverPreview({
   if (["Soft Center", "Edge Title", "Fine Art", "Magazine", "Mono Frame", "Quiet Luxury"].includes(design.cover)) {
     return (
       <div className={cn("cover-preview-root relative h-full min-h-[62vh] overflow-hidden bg-[#f8f5f1] text-white", compact && "min-h-0", className)}>
-        <CoverMedia
+        <CoverMedia design={design} disabled={compact}
           src={src}
           mediaType={resolvedMediaType}
           style={imageStyle}
@@ -279,7 +278,7 @@ export function CoverPreview({
     return (
       <div className={cn("cover-preview-root relative grid h-full min-h-[62vh] grid-cols-1 bg-white text-[#222] sm:grid-cols-2", compact && "min-h-0", className)}>
         <div className={cn("flex items-center justify-center p-4 text-center", compact && "p-2")}>{text}</div>
-        <CoverMedia src={src} mediaType={resolvedMediaType} style={imageStyle} className={cn("h-full w-full object-cover p-3", compact && "p-2")} />
+        <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} style={imageStyle} className={cn("h-full w-full object-cover p-3", compact && "p-2")} />
       </div>
     );
   }
@@ -287,7 +286,7 @@ export function CoverPreview({
   if (design.cover === "Split" || design.cover === "Journal" || design.cover === "Editorial") {
     return (
       <div className={cn("cover-preview-root relative grid h-full min-h-[62vh] grid-cols-1 bg-white text-[#222] sm:grid-cols-2", compact && "min-h-0", className)}>
-        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className={cn("flex items-center p-6", design.cover === "Journal" ? "justify-start" : "justify-center text-center", compact && "p-2")}>{text}</div>
       </div>
     );
@@ -296,7 +295,7 @@ export function CoverPreview({
   if (design.cover === "Stamp" || design.cover === "Minimal") {
     return (
       <div className={cn("cover-preview-root relative flex h-full min-h-[62vh] flex-col items-center justify-center gap-5 bg-white text-center text-[#222]", compact && "min-h-0 gap-2", className)}>
-        <CoverMedia src={src} mediaType={resolvedMediaType} style={imageStyle} className={cn("aspect-square w-[34%] object-cover", compact && "w-[32%]")} />
+        <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} style={imageStyle} className={cn("aspect-square w-[34%] object-cover", compact && "w-[32%]")} />
         {text}
       </div>
     );
@@ -305,19 +304,17 @@ export function CoverPreview({
   if (design.cover === "Stripe") {
     return (
       <div className={cn("cover-preview-root relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-        <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
+        <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-black/28" />
         <div className="absolute left-[12%] right-[12%] top-[22%] border-t border-white" />
         <div className="absolute bottom-[22%] left-[12%] right-[12%] border-t border-white" />
         <div className={cn("absolute bottom-[22%] left-[12%] right-[12%] top-[22%] flex items-center justify-center p-6 text-center [text-shadow:0_2px_14px_rgba(0,0,0,0.55)]", compact && "p-3")}>
           <div className={cn("flex max-w-full flex-col items-center gap-3", compact && "gap-1")}>
-            {!compact && showSmall && <p className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }}>{smallTitle}</p>}
-            {showTitle && <h3 className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }}>{sampleTitle}</h3>}
-            {!compact && showDate && <p className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }}>{date}</p>}
+            {!compact && showSmall && <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }} />}
+            {showTitle && <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }} />}
+            {!compact && showDate && <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }} />}
             {!compact && showButton && (
-              <span className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }}>
-                {buttonText}
-              </span>
+              <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }} />
             )}
           </div>
         </div>
@@ -327,7 +324,7 @@ export function CoverPreview({
 
   return (
     <div className={cn("cover-preview-root relative h-full min-h-[62vh] overflow-hidden bg-[#222] text-white", compact && "min-h-0", className)}>
-      <CoverMedia src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
+      <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
       <div className={cn("absolute inset-0", design.cover === "Vintage" ? "bg-white/55" : "bg-black/28")} />
       {design.cover === "Frame" && <div className={cn("absolute inset-4 border border-white", compact && "inset-2")} />}
       {design.cover === "Divider" && <div className="absolute bottom-0 left-1/2 top-0 border-l border-white" />}
@@ -355,6 +352,7 @@ export function CoverPreview({
 
 function CustomCoverPreview({
   branding,
+  animationDesign,
   buttonText,
   className,
   compact,
@@ -371,6 +369,7 @@ function CustomCoverPreview({
   title,
 }: {
   branding?: Partial<BrandSettings>;
+  animationDesign: CoverAnimationDesign;
   buttonText?: string;
   className?: string;
   compact?: boolean;
@@ -399,7 +398,7 @@ function CustomCoverPreview({
 
   return (
     <div className={cn("cover-preview-root relative h-full min-h-[62vh] overflow-hidden bg-[#111] text-white", compact && "min-h-0", className)}>
-      <CoverMedia src={src} mediaType={mediaType} className="h-full w-full object-cover" style={{ objectPosition: `${Math.min(100, Math.max(0, Number(focalX ?? 50)))}% ${Math.min(100, Math.max(0, Number(focalY ?? 50)))}%` }} />
+      <CoverMedia design={animationDesign} disabled={compact} src={src} mediaType={mediaType} className="h-full w-full object-cover" style={{ objectPosition: `${Math.min(100, Math.max(0, Number(focalX ?? 50)))}% ${Math.min(100, Math.max(0, Number(focalY ?? 50)))}%` }} />
       <div className="absolute inset-0 bg-black" style={{ opacity: template.overlayOpacity / 100 }} />
       {template.gridOpacity > 0 && (
         <div
@@ -414,17 +413,14 @@ function CustomCoverPreview({
       )}
       {template.elements.map((element) => {
         const customFontSize =
-          element.type === "title" ||
-          element.type === "subtitle" ||
-          element.type === "date" ||
-          element.type === "button"
+          element.type === "title" || element.type === "subtitle" || element.type === "date" || element.type === "button"
             ? fontSizes?.[element.type]
             : undefined;
         const elementTextColor =
           element.type === "title" || element.type === "subtitle" || element.type === "date" || element.type === "button"
             ? textColors?.[element.type]
             : undefined;
-        const common = {
+        const common: CSSProperties = {
           left: `${element.x}%`,
           top: `${element.y}%`,
           width: `${element.width}%`,
@@ -433,44 +429,54 @@ function CustomCoverPreview({
           color: elementTextColor || textColor || element.color,
           transform: "translate(-50%, -50%)",
         };
+        const animationTarget: CoverAnimationTarget =
+          element.type === "subtitle" ? "smallTitle" :
+          element.type === "title" ? "title" :
+          element.type === "date" ? "date" :
+          element.type === "button" ? "button" :
+          element.type === "brandText" ? "brandText" :
+          element.type === "logo" ? "logo" : "line";
+
         if (element.type === "logo") {
           return branding?.logoUrl ? (
-            <img
-              key={element.id}
-              src={branding.logoUrl}
-              alt=""
-              className="absolute object-contain"
-              style={common}
-            />
+            <span key={element.id} className="absolute block" style={common}>
+              <AnimatedCoverBox target="logo" design={animationDesign} disabled={compact} className="h-full w-full">
+                <img src={branding.logoUrl} alt="" className="h-full w-full object-contain" />
+              </AnimatedCoverBox>
+            </span>
           ) : null;
         }
         if (element.type === "line") {
           return (
-            <span
-              key={element.id}
-              className="absolute block border-t"
-              style={{ ...common, borderColor: element.color, opacity: (element.opacity * template.lineOpacity) / 10000 }}
-            />
+            <span key={element.id} className="absolute block" style={{ ...common, opacity: (element.opacity * template.lineOpacity) / 10000 }}>
+              <AnimatedCoverBox target="line" design={animationDesign} disabled={compact} className="h-full w-full">
+                <span className="block h-full w-full border-t" style={{ borderColor: element.color }} />
+              </AnimatedCoverBox>
+            </span>
           );
         }
+        const requested = Math.max(1, customFontSize ?? element.fontSize);
+        const minimum = Math.min(requested, element.type === "title" ? 16 : 9);
+        const fluidTarget = Math.min(requested, element.type === "title" ? 88 : 28);
         return (
           <span
             key={element.id}
-            className={cn("absolute flex min-w-0 items-center overflow-hidden break-words leading-tight", element.type === "button" && "justify-center border px-2 font-semibold uppercase tracking-[0.12em]")}
-            style={{
-              ...common,
-              fontSize: (() => {
-                const requested = Math.max(1, customFontSize ?? element.fontSize);
-                const minimum = Math.min(requested, element.type === "title" ? 16 : 9);
-                const fluidTarget = Math.min(requested, element.type === "title" ? 88 : 28);
-                return `clamp(${minimum}px, ${(fluidTarget / 7.68).toFixed(3)}cqw, ${requested}px)`;
-              })(),
-              textAlign: element.align ?? "center",
-              justifyContent: element.align === "left" ? "flex-start" : element.align === "right" ? "flex-end" : "center",
-              borderColor: elementTextColor || textColor || element.color,
-            }}
+            className="absolute block min-w-0"
+            style={{ ...common, fontSize: `clamp(${minimum}px, ${(fluidTarget / 7.68).toFixed(3)}cqw, ${requested}px)` }}
           >
-            {textMap[element.type]}
+            <AnimatedCoverText
+              as="span"
+              target={animationTarget}
+              text={textMap[element.type]}
+              design={animationDesign}
+              disabled={compact}
+              className={cn("flex h-full w-full min-w-0 items-center overflow-hidden break-words leading-tight", element.type === "button" && "justify-center border px-2 font-semibold uppercase tracking-[0.12em]")}
+              style={{
+                textAlign: element.align ?? "center",
+                justifyContent: element.align === "left" ? "flex-start" : element.align === "right" ? "flex-end" : "center",
+                borderColor: elementTextColor || textColor || element.color,
+              }}
+            />
           </span>
         );
       })}

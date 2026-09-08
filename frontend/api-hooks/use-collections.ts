@@ -164,8 +164,8 @@ export function useCollections() {
     },
     onMutate: async (collectionId) => {
       await queryClient.cancelQueries({ queryKey: ["collections"] });
-      const previous = queryClient.getQueryData<ListResponse<CollectionRecord>>(["collections"]);
-      queryClient.setQueryData<ListResponse<CollectionRecord>>(["collections"], (current) => current ? { ...current, data: current.data.filter((item) => item._id !== collectionId) } : current);
+      const previous = queryClient.getQueryData<ListResponse<CollectionRecord[]>>(["collections"]);
+      queryClient.setQueryData<ListResponse<CollectionRecord[]>>(["collections"], (current) => current ? { ...current, data: current.data.filter((item) => item._id !== collectionId) } : current);
       return { previous };
     },
     onError: (_error, _collectionId, context) => {

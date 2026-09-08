@@ -123,6 +123,15 @@ export type AdminStripeSetting = {
   hasWebhookSecret?: boolean;
 };
 
+export type AdminPayPalSetting = {
+  enabled: boolean;
+  environment: "sandbox" | "live";
+  clientId: string;
+  clientSecret?: string;
+  webhookId?: string;
+  hasClientSecret?: boolean;
+};
+
 export type AdminFreePlanSetting = {
   storageGb: number;
   monthlyEmails: number;
@@ -144,6 +153,7 @@ export type AdminDashboardData = {
   collections: AdminCollection[];
   plans: AdminPlan[];
   stripe: AdminStripeSetting;
+  paypal: AdminPayPalSetting;
   freePlan: AdminFreePlanSetting;
   homeCms: HomeCmsData;
 };
@@ -174,7 +184,7 @@ async function adminOptionalRequest<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function getAdminDashboard(): Promise<AdminDashboardData> {
-  const [stats, users, collections, plans, stripe, freePlan, homeCms] = await Promise.all([
+  const [stats, users, collections, plans, stripe, paypal, freePlan, homeCms] = await Promise.all([
     adminRequest<AdminDashboardData["stats"]>("/admin/dashboard"),
     adminRequest<AdminUser[]>("/admin/users"),
     adminRequest<AdminCollection[]>("/admin/collections"),
@@ -185,13 +195,19 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       hasSecretKey: false,
       hasWebhookSecret: false,
     }),
+    adminOptionalRequest<AdminPayPalSetting>("/admin/paypal", {
+      enabled: false,
+      environment: "sandbox",
+      clientId: "",
+      hasClientSecret: false,
+    }),
     adminOptionalRequest<AdminFreePlanSetting>("/admin/free-plan", {
       storageGb: 3,
       monthlyEmails: 1000,
     }),
     adminOptionalRequest<HomeCmsData>("/home-cms", mergeHomeCms()),
   ]);
-  return { stats, users, collections, plans, stripe, freePlan, homeCms: mergeHomeCms(homeCms) };
+  return { stats, users, collections, plans, stripe, paypal, freePlan, homeCms: mergeHomeCms(homeCms) };
 }
 
 export async function createAdminUser(payload: {
@@ -324,6 +340,21 @@ export async function updateAdminStripeSettings(payload: AdminStripeSetting) {
   });
   revalidatePath("/admin");
   return data;
+}
+
+export async function updateAdminPayPalSettings(payload: AdminPayPalSetting) {
+  const data = await adminRequest<AdminPayPalSetting>("/admin/paypal", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/admin");
+  return data;
+}
+
+export async function testAdminPayPalSettings() {
+  return adminRequest<{ success: boolean; environment: "sandbox" | "live"; message: string }>("/admin/paypal/test", {
+    method: "POST",
+  });
 }
 
 export async function updateAdminFreePlanSettings(payload: AdminFreePlanSetting) {

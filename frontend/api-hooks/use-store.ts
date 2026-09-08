@@ -81,6 +81,7 @@ export type StoreOrderStatus =
 
 export type StoreOrderRecord = {
   _id: string;
+  collectionId?: string;
   orderNumber: string;
   customerId?: string;
   customer: { name: string; email: string; phone?: string; address?: Record<string, any> };
@@ -120,6 +121,11 @@ export type StoreOrderRecord = {
   total: number;
   status: StoreOrderStatus;
   paymentStatus: "unpaid" | "paid" | "refunded" | "not-required";
+  paymentProvider?: "stripe" | "paypal";
+  stripePaymentIntentId?: string;
+  stripeCheckoutSessionId?: string;
+  paypalOrderId?: string;
+  paypalCaptureId?: string;
   checkoutSource?: "public-gallery" | "public-store" | "buy-photo" | "print-request";
   trackingNumber?: string;
   trackingUrl?: string;
@@ -202,6 +208,15 @@ export type StoreSettingsRecord = {
       publishableKey?: string;
       secretKey?: string;
       accountLink?: string;
+      hasSecretKey?: boolean;
+    };
+    paypal?: {
+      enabled: boolean;
+      environment?: "sandbox" | "live";
+      clientId?: string;
+      clientSecret?: string;
+      webhookId?: string;
+      hasClientSecret?: boolean;
     };
   };
   links: { label: string; url: string }[];
@@ -454,7 +469,19 @@ export function useStoreSettings() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["store-settings"] }),
   });
 
-  return { settingsQuery, saveSettings };
+  const testPayPal = useMutation({
+    mutationFn: async () => {
+      const [data, error] = await PostRequestAxios<ListResponse<{
+        success: boolean;
+        environment: "sandbox" | "live";
+        message: string;
+      }>>("/store/settings/paypal/test", {});
+      if (error) throw new Error(error.message);
+      return data;
+    },
+  });
+
+  return { settingsQuery, saveSettings, testPayPal };
 }
 
 export function useStripePayments() {
