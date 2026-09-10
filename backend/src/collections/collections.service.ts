@@ -98,6 +98,11 @@ type ImageMetadataDefaults = {
   source?: string;
 };
 
+type FaceIndexQueueImage = Pick<
+  CollectionImage,
+  'userId' | 'collectionId' | 'url' | 'thumbnailUrl'
+> & { _id?: unknown };
+
 @Injectable()
 export class CollectionsService {
   constructor(
@@ -2168,9 +2173,18 @@ export class CollectionsService {
     await this.imageMetadataAiService.enqueueMany(uploaded).catch((error) => {
       console.warn('Could not queue AI image metadata:', error?.message ?? error);
     });
+    // Keep only the tiny fields face indexing needs so large upload batches are not
+    // retained in memory while waiting for the low-priority background lane.
+    const faceQueue: FaceIndexQueueImage[] = uploaded.map((image) => ({
+      _id: image._id,
+      userId: image.userId,
+      collectionId: image.collectionId,
+      url: image.url,
+      thumbnailUrl: image.thumbnailUrl,
+    }));
     setTimeout(() => {
-      void this.indexFacesInBackground(uploaded);
-    }, 1500);
+      void this.indexFacesInBackground(faceQueue);
+    }, this.backgroundFaceStartDelayMs());
 
     return uploaded;
   }
@@ -2305,15 +2319,24 @@ export class CollectionsService {
     }
   }
 
-  private async indexFacesInBackground(
-    images: Array<CollectionImage & { _id?: unknown }>,
-  ) {
+  private async indexFacesInBackground(images: FaceIndexQueueImage[]) {
     for (const image of images) {
       await this.faceSearchService.indexImage(image).catch((error) => {
         console.warn('Face indexing failed:', error?.message ?? error);
       });
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      // The face service owns the global cooldown, so overlapping upload batches
+      // cannot accidentally create a burst here.
     }
+  }
+
+  private backgroundFaceStartDelayMs() {
+    const configured = Number(
+      this.configService.get<string>('FACE_BACKGROUND_START_DELAY_MS') ?? 10000,
+    );
+    return Math.max(
+      0,
+      Math.min(60000, Number.isFinite(configured) ? Math.floor(configured) : 10000),
+    );
   }
 
   async removeImage(userId: string, collectionId: string, imageId: string) {

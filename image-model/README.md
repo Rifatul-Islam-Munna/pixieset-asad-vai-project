@@ -8,6 +8,7 @@ This container exposes one private HTTP endpoint that receives an image and retu
 - Auth header: `x-api-key: <API_KEY>`
 - Default model: `buffalo_s` (better suited to a 2-core VPS than `buffalo_l`)
 - Default detector: `960x960`, tiled group scan, mirror scan for side-face recovery
+- Low-pressure defaults: one inference worker, OS nice priority, short CPU yields between scans
 - Recommended collection: `album_faces_insightface`
 - Default upload cap: `80 MB` (`MAX_UPLOAD_MB`)
 

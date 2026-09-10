@@ -11,7 +11,9 @@ services:
       # Bigger detector + mirror/tile scans catch more small and side faces in group photos.
       DETECTION_SIZE: "960"
       DETECTION_THRESHOLD: "0.20"
-      WORKER_COUNT: "2"
+      WORKER_COUNT: "1"
+      PROCESS_NICE: "10"
+      SCAN_YIELD_MS: "15"
       GROUP_SCAN: "true"
       MIRROR_SCAN: "true"
       TILE_SIZE: "896"
@@ -44,7 +46,8 @@ services:
       retries: 3
       start_period: 90s
     mem_limit: 2g
-    cpus: 2.0
+    # Background face inference is intentionally capped below one full core.
+    cpus: 0.75
 
 volumes:
   insightface_models:

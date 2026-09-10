@@ -4,14 +4,16 @@ import { InjectModel } from '@nestjs/mongoose';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { createHash } from 'crypto';
 import { Model } from 'mongoose';
-import sharp from 'sharp';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { FaceIdentity, FaceIdentityDocument } from './entities/face-identity.entity';
 import { FacePerson, FacePersonDocument } from './entities/face-person.entity';
 
-type IndexedImage = CollectionImage & { _id?: unknown };
+type IndexedImage = Pick<
+  CollectionImage,
+  'userId' | 'collectionId' | 'url' | 'thumbnailUrl'
+> & { _id?: unknown };
 type FacePoint = {
   id: string | number;
   score?: number;
@@ -54,8 +56,10 @@ export class FaceSearchService implements OnModuleInit {
   private ready = false;
   private readonly reindexingCollections = new Set<string>();
   private readonly backfillingUsers = new Set<string>();
+  private readonly backfilledUsers = new Set<string>();
   private readonly identityCache = new Map<string, { expiresAt: number; items: any[] }>();
   private faceIndexTail: Promise<void> = Promise.resolve();
+  private nextFaceIndexAt = 0;
 
   constructor(
     private readonly configService: ConfigService,
@@ -76,11 +80,21 @@ export class FaceSearchService implements OnModuleInit {
 
   async indexImage(image: IndexedImage) {
     const run = this.faceIndexTail.then(
-      () => this.indexImageNow(image),
-      () => this.indexImageNow(image),
+      () => this.runQueuedFaceIndex(image),
+      () => this.runQueuedFaceIndex(image),
     );
     this.faceIndexTail = run.then(() => undefined, () => undefined);
     return run;
+  }
+
+  private async runQueuedFaceIndex(image: IndexedImage) {
+    const waitMs = Math.max(0, this.nextFaceIndexAt - Date.now());
+    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    try {
+      return await this.indexImageNow(image);
+    } finally {
+      this.nextFaceIndexAt = Date.now() + this.faceIndexGapMs();
+    }
   }
 
   private async indexImageNow(image: IndexedImage) {
@@ -89,7 +103,8 @@ export class FaceSearchService implements OnModuleInit {
     const imageId = image._id?.toString();
     if (!imageId || !image.url) return 0;
 
-    const buffer = await this.readImage(image.url).catch(() => null);
+    const sourceUrl = this.faceIndexImageUrl(image);
+    const buffer = await this.readImage(sourceUrl).catch(() => null);
     if (!buffer) {
       this.logger.warn(`Face indexing skipped for ${imageId}: image download failed`);
       return 0;
@@ -213,16 +228,18 @@ export class FaceSearchService implements OnModuleInit {
       throw new BadRequestException('Face search is not ready');
     }
 
-    const images = await this.imageModel.find({ collectionId }).lean();
     await this.deleteCollectionFaces(collectionId);
 
+    let imageCount = 0;
     let faces = 0;
-    for (const image of images) {
-      // Sequential indexing is intentional for a 2-core CPU.
+    const cursor = this.imageModel.find({ collectionId }).lean().cursor();
+    for await (const image of cursor) {
+      // Stream rows instead of holding a whole large collection in RAM.
       faces += await this.indexImage(image as IndexedImage);
+      imageCount += 1;
     }
 
-    return { collectionId, images: images.length, faces };
+    return { collectionId, images: imageCount, faces };
   }
 
   async searchCollection(collectionIdOrSlug: string, file?: Express.Multer.File) {
@@ -457,17 +474,23 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private async backfillLegacyFacePersons(userId: string) {
-    if (this.backfillingUsers.has(userId)) return;
+    if (this.backfilledUsers.has(userId) || this.backfillingUsers.has(userId)) return;
     this.backfillingUsers.add(userId);
     try {
       const collections = await this.collectionModel.find({ userId }).select('_id').lean();
       const collectionIds = collections.map((item) => item._id.toString());
-      if (!collectionIds.length) return;
+      if (!collectionIds.length) {
+        this.backfilledUsers.add(userId);
+        return;
+      }
       const legacy = await this.facePersonModel.find({
         collectionId: { $in: collectionIds },
         $or: [{ identityKey: { $exists: false } }, { identityKey: '' }],
       }).lean();
-      if (!legacy.length) return;
+      if (!legacy.length) {
+        this.backfilledUsers.add(userId);
+        return;
+      }
 
       const globals = (await this.loadUserIdentities(userId)).map((identity) => ({
         identityKey: String(identity.identityKey),
@@ -533,6 +556,7 @@ export class FaceSearchService implements OnModuleInit {
         }
       }
       this.identityCache.delete(userId);
+      this.backfilledUsers.add(userId);
     } finally {
       this.backfillingUsers.delete(userId);
     }
@@ -662,7 +686,7 @@ export class FaceSearchService implements OnModuleInit {
     setTimeout(() => {
       const work = fullReindex ? this.reindexCollectionFaces(collectionId) : this.indexMissingFaces(images);
       void work.finally(() => this.reindexingCollections.delete(collectionId));
-    }, 250);
+    }, this.configNumber('FACE_BACKGROUND_START_DELAY_MS', 10000, 0, 60000));
   }
 
   private async searchByVectors(collectionId: string, vectors: number[][]) {
@@ -916,6 +940,18 @@ export class FaceSearchService implements OnModuleInit {
     return this.configNumber('FACE_GLOBAL_PERSON_SIMILARITY', 0.24, 0.1, 0.99);
   }
 
+  private faceIndexGapMs() {
+    return this.configNumber('FACE_BACKGROUND_GAP_MS', 2000, 0, 30000);
+  }
+
+  private faceIndexImageUrl(image: IndexedImage) {
+    const raw = String(
+      this.configService.get<string>('FACE_INDEX_USE_THUMBNAIL') ?? 'true',
+    ).trim().toLowerCase();
+    const useThumbnail = !['0', 'false', 'no', 'off'].includes(raw);
+    return useThumbnail && image.thumbnailUrl ? image.thumbnailUrl : image.url;
+  }
+
   private newPersonKey(collectionId: string, imageId: string, faceIndex: number) {
     return `person_${createHash('sha1')
       .update(`${collectionId}:${imageId}:${faceIndex}:${Date.now()}:${Math.random()}`)
@@ -1018,15 +1054,9 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private async extractFaces(buffer: Buffer): Promise<DetectedFace[]> {
-    return this.extractFacesWithImageModel(await this.normalizeFaceImage(buffer));
-  }
-
-  private async normalizeFaceImage(buffer: Buffer) {
-    return sharp(buffer)
-      .rotate()
-      .flatten({ background: '#ffffff' })
-      .jpeg({ quality: 90, mozjpeg: true })
-      .toBuffer();
+    // The Python service already handles decode/orientation/downscaling. Avoid a
+    // second full-resolution Sharp decode in Nest, which was a major RAM/CPU spike.
+    return this.extractFacesWithImageModel(buffer);
   }
 
   private async extractFacesWithImageModel(buffer: Buffer): Promise<DetectedFace[]> {

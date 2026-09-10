@@ -5,6 +5,7 @@ import io
 import math
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,7 +29,9 @@ class Settings:
     model_root: str = os.getenv("MODEL_ROOT", "/models")
     detection_size: int = int(os.getenv("DETECTION_SIZE", "960"))
     detection_threshold: float = float(os.getenv("DETECTION_THRESHOLD", "0.20"))
-    worker_count: int = int(os.getenv("WORKER_COUNT", "2"))
+    worker_count: int = int(os.getenv("WORKER_COUNT", "1"))
+    process_nice: int = int(os.getenv("PROCESS_NICE", "10"))
+    scan_yield_ms: float = float(os.getenv("SCAN_YIELD_MS", "15"))
     group_scan: bool = os.getenv("GROUP_SCAN", "true").lower() in {"1", "true", "yes"}
     mirror_scan: bool = os.getenv("MIRROR_SCAN", "true").lower() in {"1", "true", "yes"}
     tile_size: int = int(os.getenv("TILE_SIZE", "896"))
@@ -209,11 +212,18 @@ def same_physical_face(left: Candidate, right: Candidate) -> bool:
     return distance <= face_size * 0.60
 
 
+def yield_cpu() -> None:
+    if SETTINGS.scan_yield_ms > 0:
+        time.sleep(SETTINGS.scan_yield_ms / 1000.0)
+
+
 def read_with_mirror(app: FaceAnalysis, image: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> list[Candidate]:
     candidates = read_faces(app, image, offset_x=offset_x, offset_y=offset_y)
+    yield_cpu()
     if SETTINGS.mirror_scan:
         mirrored = cv2.flip(image, 1)
         candidates.extend(read_faces(app, mirrored, offset_x=offset_x, offset_y=offset_y, mirrored=True))
+        yield_cpu()
     return candidates
 
 
@@ -280,6 +290,12 @@ async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
 async def lifespan(_: FastAPI):
     global face_apps, worker_queue
     Path(SETTINGS.model_root).mkdir(parents=True, exist_ok=True)
+    try:
+        if SETTINGS.process_nice > 0:
+            os.nice(SETTINGS.process_nice)
+    except (AttributeError, OSError):
+        # Nice is available in the Linux container; ignore unsupported hosts.
+        pass
     worker_total = max(1, min(4, SETTINGS.worker_count))
     face_apps = []
     worker_queue = asyncio.Queue(maxsize=worker_total)
@@ -316,6 +332,8 @@ def health() -> dict[str, Any]:
         "model": SETTINGS.model_name,
         "provider": "CPUExecutionProvider",
         "workers": len(face_apps),
+        "processNice": SETTINGS.process_nice,
+        "scanYieldMs": SETTINGS.scan_yield_ms,
         "groupScan": SETTINGS.group_scan,
         "mirrorScan": SETTINGS.mirror_scan,
         "detectionSize": SETTINGS.detection_size,
