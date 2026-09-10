@@ -178,6 +178,7 @@ import {
   useCollectionImages,
   useCollections,
   useImageActions,
+  useImageMetadata,
   fetchCollectionImagesPage,
   type CollectionDownloadActivityRecord,
   type CollectionEmailRegistrationRecord,
@@ -266,6 +267,7 @@ import { AlbumDesigner } from "@/components/dashboard/album-designer";
 import { ClientBlogManager } from "@/components/dashboard/client-blog-manager";
 import { SupportChat } from "@/components/dashboard/support-chat";
 import { BookingManager } from "@/components/dashboard/booking-manager";
+import { FaceIdentitySettings } from "@/components/dashboard/face-identity-settings";
 import { CollectionStoreSettingsPanel } from "@/components/dashboard/collection-store-settings-panel";
 import { CollectionRegistrationActivity } from "@/components/dashboard/collection-registration-activity";
 import { PublishRecipientsField } from "@/components/dashboard/publish-recipients-field";
@@ -315,6 +317,7 @@ export type SettingsPage =
   | "presets"
   | "preset-new"
   | "email-templates"
+  | "people"
   | "preferences"
   | "integrations";
 
@@ -4321,14 +4324,27 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
       image.collectionName,
       image.setName,
       image.metadata?.filename,
+      image.metadata?.fileTitle,
       image.metadata?.title,
+      image.metadata?.description,
       image.metadata?.caption,
+      image.metadata?.headline,
+      image.metadata?.objectName,
+      image.metadata?.genre,
       image.metadata?.keyword,
+      image.metadata?.keywords,
+      image.metadata?.photographer,
+      image.metadata?.credit,
+      image.metadata?.source,
+      image.metadata?.cityCountry,
+      image.metadata?.city,
+      image.metadata?.country,
+      image.metadata?.transmissionRef,
+      image.metadata?.itemNumber,
       image.metadata?.camera,
       image.metadata?.lens,
       image.metadata?.make,
       image.metadata?.model,
-      image.metadata?.headline,
       image.metadata?.artist,
       image.metadata?.copyright,
     ]
@@ -4558,6 +4574,7 @@ const settingsTabs = [
   { label: "Watermark", page: "watermark" },
   { label: "Presets", page: "presets" },
   { label: "Email Templates", page: "email-templates" },
+  { label: "People", page: "people" },
   { label: "Preferences", page: "preferences" },
   { label: "Integrations", page: "integrations" },
 ] as const;
@@ -4644,6 +4661,8 @@ function SettingsPanel({
           <PresetEditor section={section} />
         ) : settingsPage === "email-templates" ? (
           <EmailTemplatesPanel section={section} editorId={emailTemplateId} />
+        ) : settingsPage === "people" ? (
+          <FaceIdentitySettings />
         ) : settingsPage === "preferences" ? (
           <PreferencesPanel />
         ) : settingsPage === "integrations" ? (
@@ -16518,8 +16537,7 @@ function CollectionDetailView({
                     <DialogHeader>
                       <DialogTitle>Image Metadata</DialogTitle>
                       <DialogDescription>
-                        View stored camera and file metadata for the selected
-                        image.
+                        View reference, camera, location, and AI-enriched metadata for the selected image.
                       </DialogDescription>
                     </DialogHeader>
                     <MetadataPanel image={activeImage} />
@@ -18777,6 +18795,45 @@ function WatermarkOverlay({
 
 const metadataGroups = [
   {
+    title: "Reference",
+    items: [
+      ["itemNumber", "Item Number"],
+      ["date", "Uploaded Date"],
+      ["eventDate", "Event Date"],
+      ["genre", "Genre"],
+      ["credit", "Credit"],
+      ["photographer", "Photographer"],
+      ["source", "Source"],
+      ["copyright", "Copyright"],
+      ["cityCountry", "City, Country"],
+      ["size", "Size"],
+      ["transmissionRef", "Transmission Ref."],
+    ],
+  },
+  {
+    title: "Title & Description",
+    items: [
+      ["fileTitle", "File Title"],
+      ["title", "Title"],
+      ["description", "Short Description"],
+      ["objectName", "Object Name"],
+      ["headline", "Headline"],
+      ["caption", "Caption"],
+      ["keywords", "Keywords"],
+    ],
+  },
+  {
+    title: "Location",
+    items: [
+      ["city", "City"],
+      ["state", "State / Province"],
+      ["country", "Country"],
+      ["countryCode", "Country Code"],
+      ["location", "Location"],
+      ["gps", "GPS"],
+    ],
+  },
+  {
     title: "Camera Settings",
     items: [
       ["camera", "Camera"],
@@ -18791,66 +18848,113 @@ const metadataGroups = [
       ["flash", "Flash"],
       ["meteringMode", "Metering Mode"],
       ["exposureMode", "Exposure Mode"],
+      ["exposureProgram", "Exposure Program"],
       ["whiteBalance", "White Balance"],
     ],
   },
   {
-    title: "Metadata",
+    title: "File Metadata",
     items: [
       ["filename", "Filename"],
       ["dateTaken", "Date Taken"],
-      ["title", "Title"],
-      ["caption", "Caption"],
-      ["headline", "Headline"],
-      ["keyword", "Keyword"],
       ["artist", "Artist"],
-      ["copyright", "Copyright"],
       ["software", "Software"],
-      ["gps", "GPS"],
       ["orientation", "Orientation"],
+      ["width", "Width"],
+      ["height", "Height"],
+      ["format", "Format"],
+      ["colorSpace", "Color Space"],
       ["rating", "Rating"],
       ["colorLabel", "Color Label"],
-      ["colorSpace", "Color Space"],
     ],
   },
 ] as const;
 
 function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
-  const metadata = image?.metadata ?? {};
+  const metadataQuery = useImageMetadata(image?.collectionId, image?._id);
+  const currentImage = metadataQuery.data?.data ?? image;
+  const metadata = currentImage?.metadata ?? {};
+  const aiStatus = String(metadata.ai?.status ?? "");
+  const aiPending = aiStatus === "queued" || aiStatus === "processing";
+  const aiFailed = aiStatus === "failed";
 
   return (
-    <aside className="border bg-white p-5">
-      <p className="text-sm font-bold">Image Metadata</p>
-      {metadataGroups.map((group) => {
-        const relevantItems = group.items.filter(([key]) =>
-          Boolean(formatMetaValue(metadata[key])),
-        );
-        if (!relevantItems.length) return null;
-        return (
-        <div key={group.title} className="mt-7">
-          <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-[#777]">
-            {group.title}
+    <aside className="overflow-hidden border bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-[#fbfbfb] px-5 py-4">
+        <div>
+          <p className="text-sm font-bold">Image Metadata</p>
+          <p className="mt-1 text-xs text-[#777]">
+            EXIF, IPTC/XMP, account defaults, and AI-enriched fields.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {relevantItems.map(([key, label]) => {
-              const value = formatMetaValue(metadata[key]);
-              return (
-                <span
-                  key={key}
-                  className={cn(
-                    "rounded-full px-3 py-2 text-sm",
-                    "bg-[#f1f5f4] text-[#333]",
-                  )}
-                  title={value || label}
-                >
-                  {`${label}: ${value}`}
-                </span>
-              );
-            })}
-          </div>
         </div>
-        );
-      })}
+        {aiStatus && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold capitalize",
+              aiPending
+                ? "bg-[#f3efff] text-[#6337d8]"
+                : aiFailed
+                  ? "bg-red-50 text-red-700"
+                  : "bg-emerald-50 text-emerald-700",
+            )}
+          >
+            {aiPending && <Loader2 className="size-3.5 animate-spin" />}
+            AI {aiStatus}
+          </span>
+        )}
+      </div>
+
+      {aiPending && (
+        <div className="border-b border-[#e8e1fb] bg-[#f8f5ff] px-5 py-3 text-xs leading-5 text-[#5f45a6]">
+          Title and short description are being generated slowly in the background.
+          This modal refreshes only while it is open, so the rest of the dashboard stays quiet.
+        </div>
+      )}
+      {aiFailed && (
+        <div className="border-b border-red-100 bg-red-50 px-5 py-3 text-xs leading-5 text-red-700">
+          AI enrichment could not finish, but all embedded and account metadata below is still available.
+        </div>
+      )}
+
+      <div className="divide-y">
+        {metadataGroups.map((group) => {
+          const relevantItems = group.items.filter(([key]) =>
+            Boolean(formatMetadataValue(key, metadata[key])),
+          );
+          if (!relevantItems.length) return null;
+          return (
+            <section key={group.title} className="px-5 py-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#777]">
+                {group.title}
+              </p>
+              <div className="mt-3 divide-y border-y border-[#ececec]">
+                {relevantItems.map(([key, label]) => {
+                  const value = formatMetadataValue(key, metadata[key]);
+                  return (
+                    <div
+                      key={key}
+                      className="grid gap-1 py-3 text-sm sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-5"
+                    >
+                      <span className="font-semibold text-[#666]">{label}</span>
+                      <span className="break-words text-[#222]" title={value || label}>
+                        {value}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      {!metadataGroups.some((group) =>
+        group.items.some(([key]) => Boolean(formatMetadataValue(key, metadata[key]))),
+      ) && (
+        <p className="px-5 py-8 text-sm text-[#777]">
+          Metadata has not been populated for this image yet.
+        </p>
+      )}
     </aside>
   );
 }
@@ -18879,11 +18983,33 @@ function PhotoMenuItem({
   );
 }
 
+function formatMetadataValue(key: string, value: unknown) {
+  const raw = formatMetaValue(value);
+  if (!raw) return "";
+  if (["date", "eventDate", "dateTaken"].includes(key)) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: key === "date" ? "short" : undefined,
+      }).format(parsed);
+    }
+  }
+  return raw;
+}
+
 function formatMetaValue(value: unknown) {
   if (value === undefined || value === null || value === "") return "";
   if (Array.isArray(value)) return value.filter(Boolean).join(", ");
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    if (object.latitude !== undefined && object.longitude !== undefined) {
+      const altitude = object.altitude !== undefined ? `, ${object.altitude} m` : "";
+      return `${object.latitude}, ${object.longitude}${altitude}`;
+    }
+    return JSON.stringify(value);
+  }
   return String(value);
 }
 

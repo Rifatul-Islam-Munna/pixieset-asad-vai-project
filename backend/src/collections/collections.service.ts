@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { existsSync } from 'fs';
 import { readFile, unlink } from 'fs/promises';
 import { Model, Types } from 'mongoose';
-import { join } from 'path';
+import { extname, join } from 'path';
 import { cwd } from 'process';
 import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
@@ -17,6 +17,7 @@ import { MinioService } from 'src/lib/minio.service';
 import { MailService, type GlobalMailAttachment } from 'src/mail/mail.service';
 import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
 import { FaceSearchService } from 'src/face-search/face-search.service';
+import { ImageMetadataAiService } from 'src/image-metadata-ai/image-metadata-ai.service';
 import {
   MobileGalleryImage,
   MobileGalleryImageDocument,
@@ -91,6 +92,12 @@ type DirectUploadFile = {
   height?: number;
 };
 
+type ImageMetadataDefaults = {
+  photographer?: string;
+  credit?: string;
+  source?: string;
+};
+
 @Injectable()
 export class CollectionsService {
   constructor(
@@ -121,6 +128,7 @@ export class CollectionsService {
     private readonly homepageModel: Model<HomepageDocument>,
     private readonly minioService: MinioService,
     private readonly faceSearchService: FaceSearchService,
+    private readonly imageMetadataAiService: ImageMetadataAiService,
     private readonly mailService: MailService,
     private readonly marketingScheduleService: MarketingScheduleService,
     private readonly configService: ConfigService,
@@ -662,6 +670,19 @@ export class CollectionsService {
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
     return this.findImagesPage({ collectionId: id, userId }, limit, offset);
+  }
+
+  async findImageMetadata(userId: string, collectionId: string, imageId: string) {
+    if (!Types.ObjectId.isValid(imageId))
+      throw new BadRequestException('Image is required');
+    const image = await this.imageModel
+      .findOne({ _id: imageId, collectionId, userId })
+      .select(
+        '_id collectionId setId originalName filename mimetype mediaType sizeBytes width height metadata updatedAt',
+      )
+      .lean();
+    if (!image) throw new NotFoundException('Image not found');
+    return image;
   }
 
   async findPublicImages(
@@ -2083,10 +2104,21 @@ export class CollectionsService {
   ) {
     if (!files?.length) throw new BadRequestException('Files are required');
     this.assertImageFiles(files);
-    await this.ensureStorageAvailable(
+    const owner = await this.ensureStorageAvailable(
       userId,
       files.reduce((sum, file) => sum + (file.size ?? 0), 0),
     );
+    const photographer = String(
+      owner?.name || owner?.username || owner?.businessName || '',
+    ).trim();
+    const credit = String(
+      owner?.businessName || owner?.name || owner?.username || '',
+    ).trim();
+    const metadataDefaults: ImageMetadataDefaults = {
+      photographer,
+      credit,
+      source: credit,
+    };
 
     const collection = await this.collectionModel
       .findOne({ _id: collectionId, userId })
@@ -2122,6 +2154,7 @@ export class CollectionsService {
           watermark,
           resolvedSetId,
           nextOrder + index + 1,
+          metadataDefaults,
         ),
     );
 
@@ -2132,6 +2165,9 @@ export class CollectionsService {
         $set: { coverImage: collection.coverImage ?? uploaded[0]?.url },
       },
     );
+    await this.imageMetadataAiService.enqueueMany(uploaded).catch((error) => {
+      console.warn('Could not queue AI image metadata:', error?.message ?? error);
+    });
     setTimeout(() => {
       void this.indexFacesInBackground(uploaded);
     }, 1500);
@@ -2463,8 +2499,16 @@ export class CollectionsService {
     watermark: WatermarkData | null,
     setId?: string,
     order = 0,
+    metadataDefaults: ImageMetadataDefaults = {},
   ) {
-    const metadata = await this.extractMetadata(file);
+    const imageId = new Types.ObjectId();
+    const extractedMetadata = await this.extractMetadata(file);
+    const metadata = this.buildReferenceMetadata(
+      extractedMetadata,
+      file,
+      imageId.toString(),
+      metadataDefaults,
+    );
     const isImage = file.mimetype?.startsWith('image/');
     let uploadFile = file;
     let processedPath = '';
@@ -2507,6 +2551,7 @@ export class CollectionsService {
     }
 
     const image = await this.imageModel.create({
+      _id: imageId,
       userId,
       collectionId,
       setId,
@@ -2732,6 +2777,17 @@ export class CollectionsService {
     const exif = await exifr
       .parse(file.path, { exif: true, iptc: true, xmp: true })
       .catch(() => null);
+    const dateTaken = exif?.DateTimeOriginal ?? exif?.DateCreated ?? exif?.CreateDate;
+    const city = exif?.City ?? exif?.LocationCreatedCity ?? '';
+    const country =
+      exif?.Country ??
+      exif?.CountryPrimaryLocationName ??
+      exif?.LocationCreatedCountryName ??
+      '';
+    const state = exif?.State ?? exif?.ProvinceState ?? '';
+    const photographer =
+      exif?.Byline ?? exif?.Creator ?? exif?.Artist ?? exif?.Author ?? '';
+    const keywords = exif?.keywords ?? exif?.Keywords ?? exif?.Subject ?? [];
 
     return {
       filename: file.originalname,
@@ -2754,10 +2810,20 @@ export class CollectionsService {
       exposureMode: exif?.ExposureMode,
       exposureProgram: exif?.ExposureProgram,
       whiteBalance: exif?.WhiteBalance,
-      dateTaken: exif?.DateTimeOriginal ?? exif?.CreateDate,
+      dateTaken,
+      eventDate: dateTaken,
       software: exif?.Software,
       artist: exif?.Artist,
+      photographer,
+      credit: exif?.Credit ?? '',
+      source: exif?.Source ?? '',
       copyright: exif?.Copyright,
+      city,
+      state,
+      country,
+      countryCode: exif?.CountryCode ?? exif?.CountryPrimaryLocationCode ?? '',
+      location: exif?.SubLocation ?? exif?.Location ?? '',
+      cityCountry: [city, country].filter(Boolean).join(', '),
       gps:
         exif?.latitude && exif?.longitude
           ? {
@@ -2766,15 +2832,78 @@ export class CollectionsService {
               altitude: exif?.GPSAltitude,
             }
           : undefined,
-      title: exif?.title ?? '',
-      caption: exif?.description ?? '',
+      title: exif?.title ?? exif?.Title ?? '',
+      caption: exif?.description ?? exif?.Description ?? exif?.Caption ?? '',
       headline: exif?.Headline ?? '',
-      keyword: exif?.keywords ?? exif?.Keywords ?? [],
+      objectName: exif?.ObjectName ?? '',
+      genre: exif?.Genre ?? exif?.Category ?? '',
+      transmissionRef:
+        exif?.TransmissionReference ?? exif?.OriginalTransmissionReference ?? '',
+      keyword: keywords,
+      keywords,
       rating: exif?.Rating,
       colorLabel: exif?.Label,
       raw: this.compactMetadata(exif),
       starred: false,
     };
+  }
+
+  private buildReferenceMetadata(
+    extracted: Record<string, any>,
+    file: Express.Multer.File,
+    itemNumber: string,
+    defaults: ImageMetadataDefaults,
+  ) {
+    const uploadedAt = new Date();
+    const eventDate = this.metadataDate(extracted.eventDate ?? extracted.dateTaken);
+    const photographer = this.metadataText(
+      extracted.photographer || extracted.artist || defaults.photographer,
+    );
+    const credit = this.metadataText(extracted.credit || defaults.credit || photographer);
+    const source = this.metadataText(extracted.source || defaults.source || credit);
+    const city = this.metadataText(extracted.city);
+    const country = this.metadataText(extracted.country);
+    const fallbackTitle = this.metadataText(
+      file.originalname.replace(extname(file.originalname), '').replace(/[-_]+/g, ' '),
+    );
+    const year = eventDate ? new Date(eventDate).getUTCFullYear() : uploadedAt.getUTCFullYear();
+    const copyright = this.metadataText(extracted.copyright) ||
+      (credit ? `© ${year} ${credit}` : `© ${year}`);
+    const width = Number(extracted.width || 0);
+    const height = Number(extracted.height || 0);
+
+    return {
+      ...extracted,
+      itemNumber,
+      date: uploadedAt.toISOString(),
+      eventDate,
+      genre: this.metadataText(extracted.genre),
+      credit,
+      photographer,
+      objectName: this.metadataText(extracted.objectName),
+      headline: this.metadataText(extracted.headline),
+      caption: this.metadataText(extracted.caption),
+      title: this.metadataText(extracted.title) || fallbackTitle,
+      fileTitle: this.metadataText(extracted.title) || fallbackTitle,
+      description: this.metadataText(extracted.description || extracted.caption),
+      city,
+      country,
+      cityCountry: this.metadataText(extracted.cityCountry) || [city, country].filter(Boolean).join(', '),
+      copyright,
+      source,
+      size: width > 0 && height > 0 ? `${width} x ${height}` : '',
+      transmissionRef: this.metadataText(extracted.transmissionRef) || itemNumber,
+    };
+  }
+
+  private metadataText(value: unknown) {
+    return String(value ?? '').replace(/\s+/g, ' ').trim();
+  }
+
+  private metadataDate(value: unknown) {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(String(value));
+    return Number.isNaN(date.getTime()) ? this.metadataText(value) : date.toISOString();
   }
 
   private async resolveWatermark(userId: string, presetId: string) {
@@ -3088,7 +3217,9 @@ export class CollectionsService {
   private async ensureStorageAvailable(userId: string, incomingBytes: number) {
     const user = await this.userModel
       .findById(userId)
-      .select('planName storageLimitGb storageUsedBytes planExpiresAt')
+      .select(
+        'planName storageLimitGb storageUsedBytes planExpiresAt name username businessName',
+      )
       .lean();
     if (user?.planExpiresAt && user.planExpiresAt <= new Date()) {
       throw new BadRequestException(
@@ -3103,6 +3234,7 @@ export class CollectionsService {
         'Storage limit exceeded. Upgrade plan to upload more images.',
       );
     }
+    return user;
   }
 
   private async ensureVideoPlanAvailable(

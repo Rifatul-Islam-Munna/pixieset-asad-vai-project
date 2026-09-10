@@ -554,6 +554,23 @@ export function useCollectionImages() {
   });
 }
 
+export function useImageMetadata(collectionId?: string, imageId?: string) {
+  return useQuery({
+    enabled: Boolean(collectionId && imageId),
+    queryKey: ["image-metadata", collectionId, imageId],
+    queryFn: () =>
+      GetRequestNormal<ListResponse<CollectionImageRecord>>(
+        `/collections/${collectionId}/images/${imageId}/metadata`,
+      ),
+    staleTime: 5_000,
+    refetchInterval: (query) => {
+      const status = query.state.data?.data?.metadata?.ai?.status;
+      return status === "queued" || status === "processing" ? 5_000 : false;
+    },
+    refetchIntervalInBackground: false,
+  });
+}
+
 export function useImageActions() {
   const queryClient = useQueryClient();
 

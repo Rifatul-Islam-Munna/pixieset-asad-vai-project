@@ -47,6 +47,7 @@ import {
 } from 'src/store/entities/store-order.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { FaceSearchModule } from 'src/face-search/face-search.module';
+import { ImageMetadataAiModule } from 'src/image-metadata-ai/image-metadata-ai.module';
 import { MarketingScheduleModule } from 'src/marketing-schedule/marketing-schedule.module';
 import {
   MobileGalleryImage,
@@ -88,6 +89,7 @@ import {
       { name: Homepage.name, schema: HomepageSchema },
     ]),
     FaceSearchModule,
+    ImageMetadataAiModule,
     MarketingScheduleModule,
   ],
   controllers: [CollectionsController, PublicCollectionsController],

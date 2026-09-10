@@ -8,6 +8,7 @@ import sharp from 'sharp';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
+import { FaceIdentity, FaceIdentityDocument } from './entities/face-identity.entity';
 import { FacePerson, FacePersonDocument } from './entities/face-person.entity';
 
 type IndexedImage = CollectionImage & { _id?: unknown };
@@ -20,6 +21,7 @@ type FacePoint = {
     imageId?: string;
     url?: string;
     personId?: string;
+    identityKey?: string;
     faceIndex?: number;
     box?: { x: number; y: number; width: number; height: number };
   };
@@ -28,7 +30,7 @@ type DetectedFace = {
   vector: number[];
   box: { x: number; y: number; width: number; height: number };
 };
-type AssignedFace = DetectedFace & { personId: string };
+type AssignedFace = DetectedFace & { personId: string; identityKey: string };
 type FaceGroup = {
   representative: FacePoint;
   points: FacePoint[];
@@ -51,11 +53,15 @@ export class FaceSearchService implements OnModuleInit {
   private qdrant?: QdrantClient;
   private ready = false;
   private readonly reindexingCollections = new Set<string>();
+  private readonly backfillingUsers = new Set<string>();
+  private readonly identityCache = new Map<string, { expiresAt: number; items: any[] }>();
+  private faceIndexTail: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly configService: ConfigService,
     @InjectModel(Collection.name) private readonly collectionModel: Model<CollectionDocument>,
     @InjectModel(CollectionImage.name) private readonly imageModel: Model<CollectionImageDocument>,
+    @InjectModel(FaceIdentity.name) private readonly faceIdentityModel: Model<FaceIdentityDocument>,
     @InjectModel(FacePerson.name) private readonly facePersonModel: Model<FacePersonDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
   ) {}
@@ -69,6 +75,15 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   async indexImage(image: IndexedImage) {
+    const run = this.faceIndexTail.then(
+      () => this.indexImageNow(image),
+      () => this.indexImageNow(image),
+    );
+    this.faceIndexTail = run.then(() => undefined, () => undefined);
+    return run;
+  }
+
+  private async indexImageNow(image: IndexedImage) {
     if (!this.ready || !this.qdrant) return 0;
 
     const imageId = image._id?.toString();
@@ -97,7 +112,13 @@ export class FaceSearchService implements OnModuleInit {
       return 0;
     }
 
-    const assignedFaces = await this.assignPersonIds(String(image.collectionId), imageId, image.url, faces);
+    const assignedFaces = await this.assignPersonIds(
+      String(image.userId),
+      String(image.collectionId),
+      imageId,
+      image.url,
+      faces,
+    );
 
     await this.qdrant
       .upsert(this.vectorCollection(), {
@@ -112,6 +133,7 @@ export class FaceSearchService implements OnModuleInit {
             imageId,
             url: image.url,
             personId: face.personId,
+            identityKey: face.identityKey,
             faceIndex: index,
             box: face.box,
           },
@@ -157,7 +179,33 @@ export class FaceSearchService implements OnModuleInit {
         .catch((error) => this.logger.warn(`Qdrant collection face delete failed: ${error?.message ?? error}`));
     }
 
+    const [owner, linkedPeople] = await Promise.all([
+      this.collectionModel.findById(collectionId).select('userId').lean(),
+      this.facePersonModel.find({ collectionId }).select('identityKey faceCount imageCount').lean(),
+    ]);
     await this.facePersonModel.deleteMany({ collectionId }).catch(() => undefined);
+
+    if (owner?.userId && linkedPeople.length) {
+      const totals = new Map<string, { faces: number; images: number }>();
+      for (const person of linkedPeople) {
+        const key = String(person.identityKey ?? '');
+        if (!key) continue;
+        const current = totals.get(key) ?? { faces: 0, images: 0 };
+        current.faces += Math.max(0, Number(person.faceCount || 0));
+        current.images += Math.max(0, Number(person.imageCount || 0));
+        totals.set(key, current);
+      }
+      await Promise.all([...totals.entries()].map(([identityKey, totalsForPerson]) =>
+        this.faceIdentityModel.updateOne(
+          { userId: String(owner.userId), identityKey },
+          {
+            $pull: { collectionIds: collectionId },
+            $inc: { faceCount: -totalsForPerson.faces, imageCount: -totalsForPerson.images },
+          },
+        ),
+      ));
+      this.identityCache.delete(String(owner.userId));
+    }
   }
 
   async reindexCollectionFaces(collectionId: string) {
@@ -197,21 +245,36 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private async assignPersonIds(
+    userId: string,
     collectionId: string,
     imageId: string,
     imageUrl: string,
     faces: DetectedFace[],
   ): Promise<AssignedFace[]> {
+    // Migrate older per-collection people before matching a new upload, so
+    // existing identities are reusable even if the owner never opened Settings.
+    await this.backfillLegacyFacePersons(userId);
     const persons = await this.facePersonModel.find({ collectionId }).lean();
     const working = persons.map((person) => ({
       personKey: person.personKey,
+      identityKey: person.identityKey,
       centroid: this.normalizeVector(person.centroid) ?? person.centroid,
       faceCount: Number(person.faceCount || 0),
       imageCount: Number(person.imageCount || 0),
       representativeArea: this.boxArea(person.representativeBox),
     }));
+    const globalPeople = (await this.loadUserIdentities(userId)).map((identity) => ({
+      identityKey: String(identity.identityKey),
+      name: String(identity.name ?? ''),
+      centroid: this.normalizeVector(identity.centroid) ?? identity.centroid,
+      faceCount: Number(identity.faceCount || 0),
+      imageCount: Number(identity.imageCount || 0),
+      representativeArea: Number(identity.representativeArea ?? this.boxArea(identity.representativeBox)),
+      collectionIds: [...(identity.collectionIds ?? [])].map(String),
+    }));
     const minSimilarity = this.personSimilarity();
     const usedPersonIds = new Set<string>();
+    const usedIdentityKeys = new Set<string>();
     const assigned: AssignedFace[] = [];
 
     for (const [index, face] of faces.entries()) {
@@ -220,33 +283,39 @@ export class FaceSearchService implements OnModuleInit {
 
       const match = working
         .map((person) => ({ person, score: this.cosine(vector, person.centroid) }))
-        .filter(({ person, score }) =>
-          score >= minSimilarity
-          && (!usedPersonIds.has(person.personKey) || score >= this.conflictMergeSimilarity()),
-        )
+        .filter(({ person, score }) => score >= minSimilarity
+          && (!usedPersonIds.has(person.personKey) || score >= this.conflictMergeSimilarity()))
         .sort((left, right) => right.score - left.score)[0]?.person;
 
       const personKey = match?.personKey ?? this.newPersonKey(collectionId, imageId, index);
+      const linkedGlobal = match?.identityKey
+        ? globalPeople.find((person) => person.identityKey === match.identityKey)
+        : undefined;
+      const globalMatch = linkedGlobal ?? globalPeople
+        .map((person) => ({ person, score: this.cosine(vector, person.centroid) }))
+        .filter(({ person, score }) => score >= this.globalPersonSimilarity()
+          && (!usedIdentityKeys.has(person.identityKey) || score >= this.conflictMergeSimilarity()))
+        .sort((left, right) => right.score - left.score)[0]?.person;
+      const identityKey = globalMatch?.identityKey ?? this.newIdentityKey(userId, personKey);
       const area = this.boxArea(face.box);
       const oldRepresentativeArea = match?.representativeArea ?? 0;
       const isNewPerson = !match;
       const nextFaceCount = (match?.faceCount ?? 0) + 1;
       const nextCentroid = match
-        ? this.normalizeVector(
-          match.centroid.map((value, vectorIndex) =>
-            ((value * match.faceCount) + vector[vectorIndex]) / nextFaceCount,
-          ),
-        ) ?? vector
+        ? this.normalizeVector(match.centroid.map((value, vectorIndex) =>
+          ((value * match.faceCount) + vector[vectorIndex]) / nextFaceCount)) ?? vector
         : vector;
 
       if (match) {
         match.centroid = nextCentroid;
         match.faceCount = nextFaceCount;
+        match.identityKey = identityKey;
         if (!usedPersonIds.has(personKey)) match.imageCount += 1;
         if (area > match.representativeArea) match.representativeArea = area;
       } else {
         working.push({
           personKey,
+          identityKey,
           centroid: nextCentroid,
           faceCount: 1,
           imageCount: 1,
@@ -258,13 +327,15 @@ export class FaceSearchService implements OnModuleInit {
         { collectionId, personKey },
         {
           $set: {
+            userId,
             collectionId,
             personKey,
+            identityKey,
             centroid: nextCentroid,
             ...(isNewPerson || area >= oldRepresentativeArea
               ? {
                 representativeImageId: imageId,
-                representativeFaceId: String(this.pointId(`${collectionId}-${imageId}-${index}`)),
+                representativeFaceId: String(this.pointId(collectionId + '-' + imageId + '-' + index)),
                 representativeUrl: imageUrl,
                 representativeBox: face.box,
               }
@@ -278,11 +349,193 @@ export class FaceSearchService implements OnModuleInit {
         { upsert: true },
       );
 
+      const globalFaceCount = (globalMatch?.faceCount ?? 0) + 1;
+      const globalCentroid = globalMatch
+        ? this.normalizeVector(globalMatch.centroid.map((value, vectorIndex) =>
+          ((value * globalMatch.faceCount) + vector[vectorIndex]) / globalFaceCount)) ?? vector
+        : vector;
+      const globalRepresentativeArea = globalMatch?.representativeArea ?? 0;
+
+      await this.faceIdentityModel.updateOne(
+        { userId, identityKey },
+        {
+          $set: {
+            userId,
+            identityKey,
+            centroid: globalCentroid,
+            lastSeenAt: new Date(),
+            ...(!globalMatch || area >= globalRepresentativeArea
+              ? {
+                representativeImageId: imageId,
+                representativeFaceId: String(this.pointId(collectionId + '-' + imageId + '-' + index)),
+                representativeUrl: imageUrl,
+                representativeBox: face.box,
+              }
+              : {}),
+          },
+          $addToSet: { collectionIds: collectionId },
+          $inc: {
+            faceCount: 1,
+            imageCount: usedIdentityKeys.has(identityKey) ? 0 : 1,
+          },
+        },
+        { upsert: true },
+      );
+
+      if (globalMatch) {
+        globalMatch.centroid = globalCentroid;
+        globalMatch.faceCount = globalFaceCount;
+        if (!usedIdentityKeys.has(identityKey)) globalMatch.imageCount += 1;
+        if (!globalMatch.collectionIds.includes(collectionId)) globalMatch.collectionIds.push(collectionId);
+        if (area > globalMatch.representativeArea) globalMatch.representativeArea = area;
+      } else {
+        globalPeople.push({
+          identityKey,
+          name: '',
+          centroid: globalCentroid,
+          faceCount: 1,
+          imageCount: 1,
+          representativeArea: area,
+          collectionIds: [collectionId],
+        });
+      }
+
       usedPersonIds.add(personKey);
-      assigned.push({ ...face, personId: personKey });
+      usedIdentityKeys.add(identityKey);
+      assigned.push({ ...face, personId: personKey, identityKey });
     }
 
+    this.identityCache.set(userId, { expiresAt: Date.now() + 60_000, items: globalPeople });
     return assigned;
+  }
+
+  async listUserFaceIdentities(userId: string) {
+    await this.backfillLegacyFacePersons(userId);
+    const [identities, collections] = await Promise.all([
+      this.faceIdentityModel.find({ userId }).sort({ lastSeenAt: -1, updatedAt: -1 }).lean(),
+      this.collectionModel.find({ userId }).select('_id name').lean(),
+    ]);
+    const collectionMap = new Map(collections.map((item) => [item._id.toString(), item.name]));
+
+    return identities.map((identity) => {
+      const collectionIds = [...new Set((identity.collectionIds ?? []).map(String))];
+      return {
+        identityKey: identity.identityKey,
+        name: identity.name ?? '',
+        representativeImageId: identity.representativeImageId,
+        representativeFaceId: identity.representativeFaceId,
+        representativeUrl: identity.representativeUrl,
+        representativeBox: identity.representativeBox,
+        faceCount: Number(identity.faceCount || 0),
+        imageCount: Number(identity.imageCount || 0),
+        collectionCount: collectionIds.length,
+        collectionIds,
+        collections: collectionIds.map((id) => ({ id, name: collectionMap.get(id) ?? 'Deleted collection' })),
+        lastSeenAt: identity.lastSeenAt,
+      };
+    });
+  }
+
+  async renameUserFaceIdentity(userId: string, identityKey: string, value?: string) {
+    const name = String(value ?? '').trim();
+    if (name.length > 80) throw new BadRequestException('Person name must be 80 characters or fewer.');
+    const update = name ? { $set: { name } } : { $unset: { name: 1 } };
+    const identity = await this.faceIdentityModel
+      .findOneAndUpdate({ userId, identityKey }, update, { new: true })
+      .lean();
+    if (!identity) throw new BadRequestException('Face identity not found.');
+    this.identityCache.delete(userId);
+    return { identityKey: identity.identityKey, name: identity.name ?? '' };
+  }
+
+  private async loadUserIdentities(userId: string) {
+    const cached = this.identityCache.get(userId);
+    if (cached && cached.expiresAt > Date.now()) return cached.items;
+    const items = await this.faceIdentityModel.find({ userId }).lean();
+    this.identityCache.set(userId, { expiresAt: Date.now() + 60_000, items });
+    return items;
+  }
+
+  private async backfillLegacyFacePersons(userId: string) {
+    if (this.backfillingUsers.has(userId)) return;
+    this.backfillingUsers.add(userId);
+    try {
+      const collections = await this.collectionModel.find({ userId }).select('_id').lean();
+      const collectionIds = collections.map((item) => item._id.toString());
+      if (!collectionIds.length) return;
+      const legacy = await this.facePersonModel.find({
+        collectionId: { $in: collectionIds },
+        $or: [{ identityKey: { $exists: false } }, { identityKey: '' }],
+      }).lean();
+      if (!legacy.length) return;
+
+      const globals = (await this.loadUserIdentities(userId)).map((identity) => ({
+        identityKey: String(identity.identityKey),
+        centroid: this.normalizeVector(identity.centroid) ?? identity.centroid,
+        faceCount: Number(identity.faceCount || 0),
+        imageCount: Number(identity.imageCount || 0),
+        representativeArea: Number(identity.representativeArea ?? this.boxArea(identity.representativeBox)),
+        collectionIds: [...(identity.collectionIds ?? [])].map(String),
+      }));
+
+      for (const person of legacy) {
+        const vector = this.normalizeVector(person.centroid);
+        if (!vector) continue;
+        const collectionId = String(person.collectionId);
+        const match = globals
+          .map((identity) => ({ identity, score: this.cosine(vector, identity.centroid) }))
+          .filter(({ score }) => score >= this.globalPersonSimilarity())
+          .sort((left, right) => right.score - left.score)[0]?.identity;
+        const identityKey = match?.identityKey ?? this.newIdentityKey(userId, person.personKey);
+        const faceWeight = Math.max(1, Number(person.faceCount || 1));
+        const imageWeight = Math.max(1, Number(person.imageCount || 1));
+        const nextFaceCount = (match?.faceCount ?? 0) + faceWeight;
+        const centroid = match
+          ? this.normalizeVector(match.centroid.map((value, index) =>
+            ((value * match.faceCount) + (vector[index] * faceWeight)) / nextFaceCount)) ?? vector
+          : vector;
+        const area = this.boxArea(person.representativeBox);
+
+        await this.faceIdentityModel.updateOne(
+          { userId, identityKey },
+          {
+            $set: {
+              userId,
+              identityKey,
+              centroid,
+              lastSeenAt: new Date(),
+              ...(!match || area >= match.representativeArea ? {
+                representativeImageId: person.representativeImageId,
+                representativeFaceId: person.representativeFaceId,
+                representativeUrl: person.representativeUrl,
+                representativeBox: person.representativeBox,
+              } : {}),
+            },
+            $addToSet: { collectionIds: collectionId },
+            $inc: { faceCount: faceWeight, imageCount: imageWeight },
+          },
+          { upsert: true },
+        );
+        await this.facePersonModel.updateOne(
+          { _id: person._id },
+          { $set: { userId, identityKey } },
+        );
+
+        if (match) {
+          match.centroid = centroid;
+          match.faceCount = nextFaceCount;
+          match.imageCount += imageWeight;
+          if (!match.collectionIds.includes(collectionId)) match.collectionIds.push(collectionId);
+          if (area > match.representativeArea) match.representativeArea = area;
+        } else {
+          globals.push({ identityKey, centroid, faceCount: faceWeight, imageCount: imageWeight,
+            representativeArea: area, collectionIds: [collectionId] });
+        }
+      }
+      this.identityCache.delete(userId);
+    } finally {
+      this.backfillingUsers.delete(userId);
+    }
   }
 
   async listCollectionFaces(collectionIdOrSlug: string) {
@@ -659,11 +912,22 @@ export class FaceSearchService implements OnModuleInit {
     return this.configNumber('FACE_PERSON_SIMILARITY', 0.16, 0.1, 0.99);
   }
 
+  private globalPersonSimilarity() {
+    return this.configNumber('FACE_GLOBAL_PERSON_SIMILARITY', 0.24, 0.1, 0.99);
+  }
+
   private newPersonKey(collectionId: string, imageId: string, faceIndex: number) {
     return `person_${createHash('sha1')
       .update(`${collectionId}:${imageId}:${faceIndex}:${Date.now()}:${Math.random()}`)
       .digest('hex')
       .slice(0, 16)}`;
+  }
+
+  private newIdentityKey(userId: string, personKey: string) {
+    return 'identity_' + createHash('sha1')
+      .update(userId + ':' + personKey)
+      .digest('hex')
+      .slice(0, 20);
   }
 
   private boxArea(box?: { width: number; height: number }) {

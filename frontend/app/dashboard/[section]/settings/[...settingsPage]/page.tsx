@@ -12,6 +12,7 @@ const pages = [
   "watermark",
   "presets",
   "email-templates",
+  "people",
   "preferences",
   "integrations",
 ] as const;

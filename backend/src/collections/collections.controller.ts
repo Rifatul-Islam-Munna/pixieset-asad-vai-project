@@ -506,6 +506,20 @@ export class CollectionsController {
     return { data };
   }
 
+  @Get(':id/images/:imageId/metadata')
+  async findImageMetadata(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.findImageMetadata(
+      req.user.id,
+      id,
+      imageId,
+    );
+    return { data };
+  }
+
   @Patch(':id')
   async update(
     @Param('id') id: string,
