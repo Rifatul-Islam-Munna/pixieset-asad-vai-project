@@ -9,6 +9,7 @@ import { Model } from 'mongoose';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { MinioService } from 'src/lib/minio.service';
+import { User, UserDocument } from 'src/user/entities/user.entity';
 import {
   CollectionImage,
   CollectionImageDocument,
@@ -31,7 +32,7 @@ const MAX_ATTEMPTS = 5;
 
 const summarySchema = z.object({
   title: z.string().min(2).max(100),
-  description: z.string().min(4).max(280),
+  caption: z.string().min(4).max(280),
   genre: z.string().max(60),
   objectName: z.string().max(120),
   cityCountry: z.string().max(120),
@@ -59,6 +60,8 @@ export class ImageMetadataAiService implements OnModuleInit {
     private readonly lockModel: Model<ImageMetadataWorkerLockDocument>,
     @InjectModel(CollectionImage.name)
     private readonly imageModel: Model<CollectionImageDocument>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
     private readonly minioService: MinioService,
     private readonly configService: ConfigService,
   ) {}
@@ -78,6 +81,27 @@ export class ImageMetadataAiService implements OnModuleInit {
       this.logger.warn(
         'GEMINI_API_KEY is not set; image AI metadata jobs will stay queued.',
       );
+    } else {
+      await this.requeueRetiredModelFailures();
+    }
+  }
+
+  private async requeueRetiredModelFailures() {
+    const now = new Date();
+    const result = await this.jobModel.updateMany(
+      {
+        status: 'failed',
+        lastError: /gemini-2\.5-flash.*no longer available/i,
+      },
+      {
+        $set: { status: 'queued', attempts: 0, nextAttemptAt: now },
+        $unset: { leaseUntil: '', lastError: '' },
+      },
+    );
+    if (result.modifiedCount > 0) {
+      this.logger.log(
+        `Requeued ${result.modifiedCount} metadata job(s) after Gemini model upgrade.`,
+      );
     }
   }
 
@@ -96,43 +120,111 @@ export class ImageMetadataAiService implements OnModuleInit {
     const now = new Date();
     const firstAttemptAt = new Date(now.getTime() + 15_000);
     const model = this.modelName();
-    await this.jobModel.bulkWrite(
-      rows.map((row) => ({
-        updateOne: {
-          filter: { imageId: row.imageId },
-          update: {
-            $setOnInsert: {
-              ...row,
-              status: 'queued',
-              attempts: 0,
-              nextAttemptAt: firstAttemptAt,
-            },
-          },
-          upsert: true,
-        },
-      })),
-      { ordered: false },
-    );
+    const usageKey = this.currentMonthKey();
+    const userIds = [...new Set(rows.map((row) => row.userId))];
+    const [users, pendingCounts] = await Promise.all([
+      this.userModel
+        .find({ _id: { $in: userIds } })
+        .select('planFeatures aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey')
+        .lean(),
+      this.jobModel.aggregate([
+        { $match: { userId: { $in: userIds }, status: { $in: ['queued', 'processing'] } } },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+      ]),
+    ]);
+    const userMap = new Map(users.map((user: any) => [String(user._id), user]));
+    const pendingMap = new Map(pendingCounts.map((item: any) => [String(item._id), Number(item.count ?? 0)]));
+    const groupedRows = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const group = groupedRows.get(row.userId) ?? [];
+      group.push(row);
+      groupedRows.set(row.userId, group);
+    }
 
-    await this.imageModel.bulkWrite(
-      rows.map((row) => ({
-        updateOne: {
-          filter: { _id: row.imageId, userId: row.userId },
-          update: {
-            $set: {
-              'metadata.ai': {
+    const queueRows: typeof rows = [];
+    const skippedRows: Array<(typeof rows)[number] & { reason: string }> = [];
+    for (const [userId, userRows] of groupedRows) {
+      const user = userMap.get(userId) as any;
+      const enabled = Boolean(user?.planFeatures?.aiImageMetadata);
+      const limit = Math.max(0, Number(user?.aiImageMetadataLimit ?? 0));
+      const used = user?.aiImageMetadataUsageKey === usageKey
+        ? Math.max(0, Number(user?.aiImageMetadataUsed ?? 0))
+        : 0;
+      const pending = Math.max(0, pendingMap.get(userId) ?? 0);
+      let available = enabled
+        ? limit === 0 ? Number.POSITIVE_INFINITY : Math.max(0, limit - used - pending)
+        : 0;
+      for (const row of userRows) {
+        if (available > 0) {
+          queueRows.push(row);
+          if (Number.isFinite(available)) available -= 1;
+        } else {
+          skippedRows.push({ ...row, reason: enabled ? 'limit_reached' : 'not_in_plan' });
+        }
+      }
+    }
+
+    if (queueRows.length) {
+      await this.jobModel.bulkWrite(
+        queueRows.map((row) => ({
+          updateOne: {
+            filter: { imageId: row.imageId },
+            update: {
+              $setOnInsert: {
+                ...row,
                 status: 'queued',
-                provider: 'google',
-                model,
-                queuedAt: now.toISOString(),
-                nextAttemptAt: firstAttemptAt.toISOString(),
+                attempts: 0,
+                nextAttemptAt: firstAttemptAt,
+              },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
+      );
+
+      await this.imageModel.bulkWrite(
+        queueRows.map((row) => ({
+          updateOne: {
+            filter: { _id: row.imageId, userId: row.userId },
+            update: {
+              $set: {
+                'metadata.ai': {
+                  status: 'queued',
+                  provider: 'google',
+                  model,
+                  queuedAt: now.toISOString(),
+                  nextAttemptAt: firstAttemptAt.toISOString(),
+                },
               },
             },
           },
-        },
-      })),
-      { ordered: false },
-    );
+        })),
+        { ordered: false },
+      );
+    }
+
+    if (skippedRows.length) {
+      await this.imageModel.bulkWrite(
+        skippedRows.map((row) => ({
+          updateOne: {
+            filter: { _id: row.imageId, userId: row.userId },
+            update: {
+              $set: {
+                'metadata.ai': {
+                  status: 'skipped',
+                  provider: 'google',
+                  model,
+                  reason: row.reason,
+                  skippedAt: now.toISOString(),
+                },
+              },
+            },
+          },
+        })),
+        { ordered: false },
+      );
+    }
   }
 
   @Interval(3_000)
@@ -236,6 +328,12 @@ export class ImageMetadataAiService implements OnModuleInit {
       return;
     }
 
+    const quota = await this.reserveAiMetadataSlot(String(image.userId));
+    if (!quota.allowed) {
+      await this.skipForPlan(job, image, quota.reason ?? 'not_in_plan');
+      return;
+    }
+
     await this.imageModel.updateOne(
       { _id: image._id },
       {
@@ -253,8 +351,99 @@ export class ImageMetadataAiService implements OnModuleInit {
       const generated = await this.generateSummary(image, aiImage);
       await this.applyGeneratedMetadata(image, generated, job);
     } catch (error) {
+      await this.releaseAiMetadataSlot(String(image.userId), quota.usageKey);
       await this.handleFailure(job, error);
     }
+  }
+
+  private async reserveAiMetadataSlot(userId: string): Promise<{
+    allowed: boolean;
+    usageKey: string;
+    reason?: 'not_in_plan' | 'limit_reached';
+  }> {
+    const usageKey = this.currentMonthKey();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const user = await this.userModel
+        .findById(userId)
+        .select('planFeatures aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey')
+        .lean();
+      if (!user || !Boolean(user.planFeatures?.aiImageMetadata)) {
+        return { allowed: false, usageKey, reason: 'not_in_plan' };
+      }
+
+      if (user.aiImageMetadataUsageKey !== usageKey) {
+        await this.userModel.updateOne(
+          { _id: userId, aiImageMetadataUsageKey: { $ne: usageKey } },
+          { $set: { aiImageMetadataUsageKey: usageKey, aiImageMetadataUsed: 0 } },
+        );
+        continue;
+      }
+
+      const limit = Math.max(0, Number(user.aiImageMetadataLimit ?? 0));
+      const used = Math.max(0, Number(user.aiImageMetadataUsed ?? 0));
+      if (limit > 0 && used >= limit) {
+        return { allowed: false, usageKey, reason: 'limit_reached' };
+      }
+
+      const filter: Record<string, any> = {
+        _id: userId,
+        aiImageMetadataUsageKey: usageKey,
+        'planFeatures.aiImageMetadata': true,
+      };
+      if (limit === 0) {
+        filter.$or = [
+          { aiImageMetadataLimit: 0 },
+          { aiImageMetadataLimit: { $exists: false } },
+        ];
+      } else {
+        filter.aiImageMetadataLimit = limit;
+        filter.aiImageMetadataUsed = { $lt: limit };
+      }
+
+      const reserved = await this.userModel
+        .findOneAndUpdate(
+          filter,
+          { $inc: { aiImageMetadataUsed: 1 } },
+          { returnDocument: 'after' },
+        )
+        .lean();
+      if (reserved) return { allowed: true, usageKey };
+    }
+    return { allowed: false, usageKey, reason: 'limit_reached' };
+  }
+
+  private async releaseAiMetadataSlot(userId: string, usageKey: string) {
+    await this.userModel.updateOne(
+      { _id: userId, aiImageMetadataUsageKey: usageKey, aiImageMetadataUsed: { $gt: 0 } },
+      { $inc: { aiImageMetadataUsed: -1 } },
+    );
+  }
+
+  private async skipForPlan(job: any, image: any, reason: string) {
+    const skippedAt = new Date().toISOString();
+    await Promise.all([
+      this.jobModel.updateOne(
+        { _id: job._id },
+        { $set: { status: 'completed', lastError: reason }, $unset: { leaseUntil: '' } },
+      ),
+      this.imageModel.updateOne(
+        { _id: image._id, userId: image.userId },
+        {
+          $set: {
+            'metadata.ai.status': 'skipped',
+            'metadata.ai.provider': 'google',
+            'metadata.ai.model': this.modelName(),
+            'metadata.ai.reason': reason,
+            'metadata.ai.skippedAt': skippedAt,
+          },
+          $unset: { 'metadata.ai.nextAttemptAt': '', 'metadata.ai.error': '' },
+        },
+      ),
+    ]);
+  }
+
+  private currentMonthKey() {
+    return new Date().toISOString().slice(0, 7);
   }
 
   private async prepareAiImage(
@@ -327,7 +516,7 @@ export class ImageMetadataAiService implements OnModuleInit {
       'Do not guess an exact event, date, city, country, organization, or relationship from appearance alone.',
       'If a location is not supported by supplied metadata or unmistakable visible evidence, return an empty cityCountry.',
       'title: 3-10 useful words, natural title case, no filename.',
-      'description: one factual sentence, preferably under 220 characters.',
+      'caption: one factual sentence, preferably under 220 characters. This is the canonical human-readable description for the photo.',
       'genre: a broad category such as Wedding, Portrait, Event, Travel, Sports, Nature, Product, Architecture, or Documentary.',
       'objectName: a short subject/object label suitable for photo metadata.',
       'keywords: 3-8 short search terms; no speculative names.',
@@ -342,7 +531,7 @@ export class ImageMetadataAiService implements OnModuleInit {
           role: 'user',
           content: [
             { type: 'text', text: prompt },
-            { type: 'image', image: aiImage.buffer, mediaType: aiImage.mediaType },
+            { type: 'file', data: aiImage.buffer, mediaType: aiImage.mediaType },
           ],
         },
       ],
@@ -360,7 +549,7 @@ export class ImageMetadataAiService implements OnModuleInit {
   ) {
     const metadata = { ...((image.metadata ?? {}) as Record<string, any>) };
     const title = this.cleanText(generated.title, 100);
-    const description = this.cleanText(generated.description, 280);
+    const caption = this.cleanText(generated.caption, 280);
     const existingKeywords = this.keywordList(
       metadata.keywords ?? metadata.keyword,
     );
@@ -374,8 +563,9 @@ export class ImageMetadataAiService implements OnModuleInit {
       ...metadata,
       title,
       fileTitle: title,
-      description,
-      caption: this.cleanText(metadata.caption, 500) || description,
+      // AI caption is canonical. Keep description mirrored for old clients/searches.
+      description: caption,
+      caption,
       headline: this.cleanText(metadata.headline, 200) || title,
       genre: this.cleanText(metadata.genre, 80) || this.cleanText(generated.genre, 60),
       objectName:
@@ -494,9 +684,14 @@ export class ImageMetadataAiService implements OnModuleInit {
   }
 
   private modelName() {
-    return (
-      String(this.configService.get<string>('GEMINI_MODEL') ?? '').trim() ||
-      'gemini-2.5-flash'
-    );
+    const configured = String(
+      this.configService.get<string>('GEMINI_MODEL') ?? '',
+    ).trim().replace(/^models\//, '');
+    // Gemini 2.5 Flash is no longer available to new users. Transparently
+    // upgrade stale local/server config so queued jobs recover after deploy.
+    if (!configured || configured === 'gemini-2.5-flash') {
+      return 'gemini-3.6-flash';
+    }
+    return configured;
   }
 }

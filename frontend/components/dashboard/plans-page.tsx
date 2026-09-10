@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const featureLabels: Record<string, string> = {
+  aiImageMetadata: "AI Image Title & Description",
   pinSet: "PIN set",
   downloadLimit: "Download limit",
   store: "Store",
@@ -23,6 +24,7 @@ function safePlan(plan: Partial<AdminPlan> | null | undefined, index: number): A
     _id: String(plan?._id ?? index),
     name: String(plan?.name ?? "Untitled plan"),
     storageGb: Number(plan?.storageGb ?? 0),
+    aiImageMetadataLimit: Number(plan?.aiImageMetadataLimit ?? 0),
     monthlyEmails: Number(plan?.monthlyEmails ?? 0),
     videoMinutes: Number(plan?.videoMinutes ?? 0),
     videoQuality: plan?.videoQuality === "4k" ? "4k" : "hd",
@@ -160,6 +162,10 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
                   <div className="mt-6 grid gap-3 border-t pt-5 text-sm">
                     <div className="flex justify-between gap-4"><span>Photo storage</span><b>{Number(plan.storageGb ?? 0).toLocaleString()} GB</b></div>
                     <div className="flex justify-between gap-4"><span>Monthly emails</span><b>{Number(plan.monthlyEmails ?? 0).toLocaleString()}</b></div>
+                    <div className="flex justify-between gap-4">
+                      <span>AI metadata images</span>
+                      <b>{!plan.features?.aiImageMetadata ? "Not included" : Number(plan.aiImageMetadataLimit ?? 0) === 0 ? "Unlimited / month" : `${Number(plan.aiImageMetadataLimit).toLocaleString()} / month`}</b>
+                    </div>
                     <div className="flex justify-between gap-4"><span>Video uploads</span><b>{Number(plan.videoMinutes ?? 0).toLocaleString()} min · {plan.videoQuality === "4k" ? "4K" : "HD"}</b></div>
                   </div>
                   <div className="mt-5 grid gap-3 border-t pt-5">
@@ -219,6 +225,16 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
               <LabelCell label="Monthly emails" />
               {filtered.map((plan) => (
                 <ValueCell key={`${plan._id}-emails`} recommended={plan._id === recommendedId} primary={`${Number(plan.monthlyEmails ?? 0).toLocaleString()}`} secondary="emails / month" />
+              ))}
+
+              <LabelCell label="AI metadata images" />
+              {filtered.map((plan) => (
+                <ValueCell
+                  key={`${plan._id}-ai-metadata`}
+                  recommended={plan._id === recommendedId}
+                  primary={!plan.features?.aiImageMetadata ? "Not included" : Number(plan.aiImageMetadataLimit ?? 0) === 0 ? "Unlimited" : Number(plan.aiImageMetadataLimit).toLocaleString()}
+                  secondary={plan.features?.aiImageMetadata ? "AI titles + descriptions / month" : "AI metadata disabled"}
+                />
               ))}
 
               <LabelCell label="Video uploads" />

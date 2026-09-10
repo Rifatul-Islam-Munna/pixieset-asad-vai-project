@@ -1,30 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, FolderOpen, Images, Loader2, Search, UserRound } from "lucide-react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, FolderOpen, Images, Loader2, Search, UserRound } from "lucide-react";
 import { useFaceIdentities, useRenameFaceIdentity } from "@/api-hooks/use-face-identities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function FaceIdentitySettings() {
-  const identitiesQuery = useFaceIdentities();
-  const renameIdentity = useRenameFaceIdentity();
-  const identities = useMemo(() => identitiesQuery.data?.data ?? [], [identitiesQuery.data]);
+  const pageSize = 20;
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const deferredQuery = useDeferredValue(query);
+  const identitiesQuery = useFaceIdentities({ page, limit: pageSize, search: deferredQuery });
+  const renameIdentity = useRenameFaceIdentity();
+  const pageData = identitiesQuery.data?.data;
+  const identities = useMemo(() => pageData?.items ?? [], [pageData?.items]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savedKey, setSavedKey] = useState("");
-
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return identities;
-    return identities.filter((identity) => {
-      const collectionNames = identity.collections.map((collection) => collection.name).join(" ");
-      return [identity.name, identity.identityKey, collectionNames]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
-  }, [identities, query]);
 
   const saveName = async (identityKey: string) => {
     setSavedKey("");
@@ -69,7 +61,7 @@ export function FaceIdentitySettings() {
             </p>
           </div>
           <div className="rounded-xl bg-[#f7f4fd] px-4 py-3 text-right">
-            <div className="text-2xl font-semibold text-[#45209b]">{identities.length}</div>
+            <div className="text-2xl font-semibold text-[#45209b]">{pageData?.allTotal ?? 0}</div>
             <div className="text-xs font-medium text-[#756b86]">known people</div>
           </div>
         </div>
@@ -78,28 +70,32 @@ export function FaceIdentitySettings() {
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#aaa3b2]" />
           <Input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => { setQuery(event.target.value); setPage(1); }}
             placeholder="Search name, face ID, or collection"
             className="h-11 rounded-xl border-[#ddd7e6] pl-10"
           />
         </div>
+        <div className="mt-3 flex items-center gap-2 text-xs text-[#81798a]">
+          <span>Unnamed first - named people A-Z</span>
+          {identitiesQuery.isFetching && <Loader2 className="size-3.5 animate-spin text-[#6337d8]" />}
+        </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {identities.length === 0 ? (
         <div className="mt-5 rounded-2xl border border-dashed border-[#dcd5e8] bg-[#fbfafd] px-6 py-14 text-center">
           <UserRound className="mx-auto size-9 text-[#aa9fbe]" />
           <p className="mt-3 font-semibold text-[#433d49]">
-            {identities.length ? "No people match this search" : "No face IDs yet"}
+            {(pageData?.allTotal ?? 0) ? "No people match this search" : "No face IDs yet"}
           </p>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#827c89]">
-            {identities.length
+            {(pageData?.allTotal ?? 0)
               ? "Try a different person name, ID, or collection name."
               : "As gallery photos finish face indexing, learned people will appear here automatically."}
           </p>
         </div>
       ) : (
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          {filtered.map((identity) => {
+          {identities.map((identity) => {
             const saving = renameIdentity.isPending && renameIdentity.variables?.identityKey === identity.identityKey;
             const changed = String(drafts[identity.identityKey] ?? identity.name ?? "").trim() !== String(identity.name ?? "").trim();
             const box = identity.representativeBox;
@@ -189,6 +185,25 @@ export function FaceIdentitySettings() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {(pageData?.total ?? 0) > 0 && (
+        <div className="mt-6 flex flex-col gap-3 border-t border-[#ece8f1] pt-5 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-[#77717d]">
+            Showing {((pageData?.page ?? 1) - 1) * (pageData?.limit ?? pageSize) + 1}-{Math.min((pageData?.page ?? 1) * (pageData?.limit ?? pageSize), pageData?.total ?? 0)} of {pageData?.total ?? 0}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={!pageData?.hasPrevious || identitiesQuery.isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+              <ChevronLeft className="size-4" /> Previous
+            </Button>
+            <span className="min-w-[92px] text-center text-xs font-semibold text-[#5d5762]">
+              Page {pageData?.page ?? 1} of {pageData?.totalPages ?? 1}
+            </span>
+            <Button type="button" variant="outline" size="sm" disabled={!pageData?.hasNext || identitiesQuery.isFetching} onClick={() => setPage((current) => current + 1)}>
+              Next <ChevronRight className="size-4" />
+            </Button>
+          </div>
         </div>
       )}
     </div>

@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { imageDisplayName } from "@/lib/image-display-name";
 import { galleryLanguageCode } from "@/lib/gallery-language";
 
 type FavoritePageImage = {
@@ -22,6 +23,7 @@ type FavoritePageImage = {
   url: string;
   thumbnailUrl?: string;
   originalName?: string;
+  metadata?: Record<string, unknown>;
 };
 
 type FavoritePageCollection = {
@@ -308,11 +310,11 @@ export function PublicGalleryFavoritesPage({
               return (
                 <article key={image._id} className={cn("group overflow-hidden border bg-white transition", selected && "border-[#16a894] ring-2 ring-[#16a894]/20")}>
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#e9e9e6]">
-                    <img src={imageSrc(image.thumbnailUrl || image.url)} alt={image.originalName || `Favorite photo ${index + 1}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                    <img src={imageSrc(image.thumbnailUrl || image.url)} alt={imageDisplayName(image, `Favorite photo ${index + 1}`)} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
                     <button onClick={() => toggleSelected(image._id)} className={cn("absolute left-3 top-3 flex size-9 items-center justify-center rounded-full border shadow", selected ? "border-[#16a894] bg-[#16a894] text-white" : "border-white/70 bg-white/95")} aria-label={selected ? "Deselect photo" : "Select photo"}>{selected ? <Check className="size-4" /> : <span className="size-3 rounded-full border" />}</button>
                   </div>
                   <div className="p-4">
-                    <p className="truncate text-sm font-semibold">{image.originalName || `Favorite photo ${index + 1}`}</p>
+                    <p className="truncate text-sm font-semibold">{imageDisplayName(image, `Favorite photo ${index + 1}`)}</p>
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <Link href={photoPath} className="inline-flex h-10 items-center justify-center gap-2 border text-xs font-bold"><ImageIcon className="size-4" />Open in gallery</Link>
                       <button onClick={() => void downloadOne(image, index)} className="inline-flex h-10 items-center justify-center gap-2 bg-[#202326] text-xs font-bold text-white"><Download className="size-4" />Download</button>

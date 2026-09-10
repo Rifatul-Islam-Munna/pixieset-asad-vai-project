@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Loader2, Minus, Plus, Trash2, X } from "lucide-react";
 import { publicImageSrc, type PublicStoreImage } from "@/lib/public-store";
+import { imageDisplayName } from "@/lib/image-display-name";
 
 const DEFAULT_SIZES = ["4 x 6", "5 x 7", "8 x 10", "8 x 12"];
 const DEFAULT_PAPERS = ["Glossy", "Matte"];
@@ -45,7 +46,7 @@ export function FreePrintRequestDialog({ image, identifier, siteSlug, sizes, pap
   return <div className="fixed inset-0 z-[130] bg-black/65 p-0 md:p-5" role="dialog" aria-modal="true" aria-label="Free print request"><div className="mx-auto flex h-full max-h-[900px] w-full max-w-[1000px] flex-col overflow-hidden bg-white shadow-2xl">
     <header className="flex h-16 shrink-0 items-center justify-between border-b px-5 md:px-8"><div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#159d8b]">Free print request</p><h2 className="mt-1 text-base font-medium">Choose sizes, paper, and quantity for each size</h2></div><button type="button" className="flex size-10 items-center justify-center" onClick={onClose} aria-label="Close print request"><X className="size-5" /></button></header>
     {orderNumber ? <div className="flex flex-1 flex-col items-center justify-center p-8 text-center"><span className="flex size-16 items-center justify-center rounded-full bg-[#eaf8f4] text-[#159d8b]"><CheckCircle2 className="size-8" /></span><h3 className="mt-5 text-2xl font-semibold">Request sent</h3><p className="mt-3 text-sm text-[#666]">No payment charged. The photographer received every requested size, paper type, and quantity.</p>{orderNumber !== "submitted" && <p className="mt-4 border bg-[#fafafa] px-4 py-2 text-xs text-[#666]">Request {orderNumber}</p>}<button type="button" className="mt-7 h-11 bg-[#303030] px-7 text-sm font-semibold text-white" onClick={onClose}>Back to gallery</button></div> :
-    <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_390px]"><div className="flex min-h-[340px] items-center justify-center bg-[#ececea] p-5 md:p-8"><img src={publicImageSrc(image.url)} alt={image.originalName || "Selected photo"} className="max-h-[620px] max-w-full object-contain shadow-lg" /></div><div className="p-5 sm:p-7 md:p-8">
+    <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_390px]"><div className="flex min-h-[340px] items-center justify-center bg-[#ececea] p-5 md:p-8"><img src={publicImageSrc(image.url)} alt={imageDisplayName(image, "Selected photo")} className="max-h-[620px] max-w-full object-contain shadow-lg" /></div><div className="p-5 sm:p-7 md:p-8">
       <p className="text-sm leading-6 text-[#666]">Add one or more print sizes. Every size has its own paper type and quantity.</p>
       <div className="mt-6">
         <div className="flex items-center justify-between"><p className="text-sm font-semibold">Print sizes</p><button type="button" disabled={!canAddSize} onClick={addRow} className="text-xs font-semibold text-[#159d8b] disabled:opacity-40">+ Add size</button></div>

@@ -29,6 +29,8 @@ export type AdminUser = {
   storageLimitGb?: number;
   storageUsedBytes?: number;
   galleryLimit?: number;
+  aiImageMetadataLimit?: number;
+  aiImageMetadataUsed?: number;
   monthlyEmailLimit?: number;
   monthlyEmailsUsed?: number;
   videoUploadLimitMinutes?: number;
@@ -70,6 +72,7 @@ export type AdminPlan = {
   name: string;
   storageGb: number;
   galleryLimit?: number;
+  aiImageMetadataLimit?: number;
   monthlyEmails: number;
   videoMinutes?: number;
   videoQuality?: "hd" | "4k";

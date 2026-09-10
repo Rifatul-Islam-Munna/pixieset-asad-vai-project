@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export type PlanFeatureKey =
   | "aiFaceSearch"
+  | "aiImageMetadata"
   | "downloads"
   | "mobileGallery"
   | "beautifulGalleries"
@@ -25,6 +26,8 @@ export type PlanCapabilities = {
   planName: string;
   storageLimitGb: number;
   galleryLimit?: number;
+  aiImageMetadataLimit?: number;
+  aiImageMetadataUsed?: number;
   monthlyEmailLimit: number;
   videoUploadLimitMinutes?: number;
   videoUploadQuality?: "hd" | "4k";

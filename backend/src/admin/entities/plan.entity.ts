@@ -15,6 +15,10 @@ export class Plan {
   @Prop({ default: 0, min: 0 })
   galleryLimit: number;
 
+  // Monthly AI title/description image allowance. 0 means unlimited when enabled.
+  @Prop({ default: 0, min: 0 })
+  aiImageMetadataLimit: number;
+
   @Prop({ required: true, min: 0 })
   monthlyEmails: number;
 
@@ -36,6 +40,7 @@ export class Plan {
   @Prop({ type: Object, default: {} })
   features: {
     aiFaceSearch?: boolean;
+    aiImageMetadata?: boolean;
     downloads?: boolean;
     mobileGallery?: boolean;
     beautifulGalleries?: boolean;

@@ -15,6 +15,7 @@ import { galleryLanguageCode } from "@/lib/gallery-language";
 import { resolveGalleryFontFamily } from "@/lib/gallery-fonts";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
+import { imageDisplayName } from "@/lib/image-display-name";
 import { usePublicGalleryFavorites } from "./public-gallery-favorites";
 
 type PublicImage = {
@@ -27,7 +28,13 @@ type PublicImage = {
   mimetype?: string;
   mediaType?: "image" | "video";
   faceScore?: number;
-  metadata?: { filename?: string };
+  metadata?: {
+    filename?: string;
+    fileTitle?: string;
+    title?: string;
+    description?: string;
+    caption?: string;
+  };
 };
 
 type PublicFace = {
@@ -953,7 +960,7 @@ export function PublicGallery({
     );
   const sharePhoto = (photo: PublicImage) =>
     shareItem(
-      { title: photo.originalName || title, text: title, url: currentPublicUrl(photo._id) },
+      { title: displayFilename(photo) || title, text: title, url: currentPublicUrl(photo._id) },
       "Photo shared",
       "photo",
     );
@@ -1317,7 +1324,7 @@ export function PublicGallery({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                 {favoriteGalleryImages.map((photo) => (
                   <button key={photo._id} className="group relative aspect-[4/3] overflow-hidden bg-white" onClick={() => setActiveImage(photo)} type="button">
-                    <img src={imageSrc(photo.thumbnailUrl || photo.url)} alt={photo.originalName ?? ""} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+                    <img src={imageSrc(photo.thumbnailUrl || photo.url)} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                     <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white text-red-500 shadow">
                       <Star className="size-4 fill-current" />
                     </span>
@@ -1634,12 +1641,12 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
-              <button className="polished-icon-button" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={activeImage.originalName} data-buy-photo-media-type={activeImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
+              <button className="polished-icon-button" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={displayFilename(activeImage)} data-buy-photo-media-type={activeImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
                 <ShoppingBag className="size-5" />
               </button>
             )}
             {showPrintRequestButton && !isVideo(activeImage) && isPersistedImageId(activeImage._id) && (
-              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-print-request-open={activeImage._id} data-print-request-url={activeImage.url} data-print-request-thumbnail={activeImage.thumbnailUrl} data-print-request-name={activeImage.originalName} type="button" aria-label="Request print" title="Request print">
+              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-print-request-open={activeImage._id} data-print-request-url={activeImage.url} data-print-request-thumbnail={activeImage.thumbnailUrl} data-print-request-name={displayFilename(activeImage)} type="button" aria-label="Request print" title="Request print">
                 <Printer className="size-5" />
                 <span>Request Print</span>
               </button>
@@ -1666,7 +1673,7 @@ export function PublicGallery({
             <GalleryImage
               src={imageSrc(activeImage.thumbnailUrl || activeImage.url)}
               fallbackSrc={imageSrc(activeImage.url)}
-              alt={displayFilename(activeImage)}
+              alt={displayCaption(activeImage)}
               className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full object-contain"
               priority
             />
@@ -1695,12 +1702,12 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
-              <button className="polished-icon-button" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={slideshowImage.originalName} data-buy-photo-media-type={slideshowImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
+              <button className="polished-icon-button" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={displayFilename(slideshowImage)} data-buy-photo-media-type={slideshowImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
                 <ShoppingBag className="size-5" />
               </button>
             )}
             {showPrintRequestButton && !isVideo(slideshowImage) && isPersistedImageId(slideshowImage._id) && (
-              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-print-request-open={slideshowImage._id} data-print-request-url={slideshowImage.url} data-print-request-thumbnail={slideshowImage.thumbnailUrl} data-print-request-name={slideshowImage.originalName} type="button" aria-label="Request print" title="Request print">
+              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-print-request-open={slideshowImage._id} data-print-request-url={slideshowImage.url} data-print-request-thumbnail={slideshowImage.thumbnailUrl} data-print-request-name={displayFilename(slideshowImage)} type="button" aria-label="Request print" title="Request print">
                 <Printer className="size-5" />
                 <span>Request Print</span>
               </button>
@@ -1726,7 +1733,7 @@ export function PublicGallery({
               key={slideshowImage._id}
               src={imageSrc(slideshowImage.thumbnailUrl || slideshowImage.url)}
               fallbackSrc={imageSrc(slideshowImage.url)}
-              alt={displayFilename(slideshowImage)}
+              alt={displayCaption(slideshowImage)}
               className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
               priority
             />
@@ -1812,7 +1819,17 @@ function displayImageUrl(image: PublicImage) {
 
 
 function displayFilename(image: PublicImage) {
-  return image.originalName || image.metadata?.filename || "";
+  return imageDisplayName(image, "");
+}
+
+function displayCaption(image: PublicImage) {
+  return (
+    image.metadata?.caption ||
+    image.metadata?.description ||
+    image.metadata?.title ||
+    displayFilename(image) ||
+    "Photo"
+  );
 }
 
 function sharpenStyle(level: "optimal" | "low" | "high"): CSSProperties | undefined {
@@ -1905,7 +1922,7 @@ function GalleryTile({
           <GalleryImage
             src={imageSrc(displayImageUrl(photo))}
             fallbackSrc={imageSrc(photo.url)}
-            alt={photo.originalName ?? ""}
+            alt={displayCaption(photo)}
             className={crop ? "block h-full w-full object-cover" : "block h-auto w-full"}
             style={sharpenStyle(sharpeningLevel)}
             priority={priority}

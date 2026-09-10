@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFile,
   UseGuards,
@@ -51,8 +52,19 @@ export class FaceIdentityController {
   constructor(private readonly faceSearchService: FaceSearchService) {}
 
   @Get()
-  async list(@Req() req: ExpressRequest) {
-    return { data: await this.faceSearchService.listUserFaceIdentities(req.user.id) };
+  async list(
+    @Req() req: ExpressRequest,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return {
+      data: await this.faceSearchService.listUserFaceIdentities(req.user.id, {
+        page: Number(page),
+        limit: Number(limit),
+        search,
+      }),
+    };
   }
 
   @Patch(':identityKey')

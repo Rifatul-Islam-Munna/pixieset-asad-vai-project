@@ -93,6 +93,16 @@ export class User {
   @Prop({ default: 10, min: 0 })
   galleryLimit: number;
 
+  // 0 means unlimited AI metadata images when the plan feature is enabled.
+  @Prop({ default: 0, min: 0 })
+  aiImageMetadataLimit: number;
+
+  @Prop({ default: 0, min: 0 })
+  aiImageMetadataUsed: number;
+
+  @Prop()
+  aiImageMetadataUsageKey?: string;
+
   @Prop({ default: 0 })
   monthlyEmailLimit: number;
 

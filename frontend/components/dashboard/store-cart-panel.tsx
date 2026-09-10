@@ -10,6 +10,7 @@ import {
   type PublicStoreCartItem,
   type PublicStoreData,
 } from "@/lib/public-store";
+import { imageDisplayName } from "@/lib/image-display-name";
 import { PhotoAdjustDialog } from "./photo-adjust-dialog";
 import { StoreOrderPanel } from "./store-order-panel";
 
@@ -96,7 +97,7 @@ export function StoreCartPanel({
                       <div className="min-w-0">
                         <h3 className="truncate text-sm font-semibold">{item.product.name}</h3>
                         {item.variant?.label && <p className="mt-1 text-xs text-[#777]">{item.variant.label}</p>}
-                        {item.image?.originalName && <p className="mt-1 truncate text-xs text-[#777]">{item.image.originalName}</p>}
+                        {item.image && <p className="mt-1 truncate text-xs text-[#777]">{imageDisplayName(item.image)}</p>}
                       </div>
                       <button className="text-[#888] hover:text-red-600" onClick={() => onRemove(item.id)} aria-label="Remove item"><Trash2 className="size-4" /></button>
                     </div>

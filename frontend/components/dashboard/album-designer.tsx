@@ -9,6 +9,7 @@ import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { imageDisplayName } from "@/lib/image-display-name";
 
 type AlbumLayout = "full" | "split" | "triptych" | "grid";
 type AlbumImage = { id: string; url: string; thumbnailUrl?: string; name?: string };
@@ -41,7 +42,7 @@ const toAlbumImage = (image: CollectionImageRecord): AlbumImage => ({
   id: image._id,
   url: image.url,
   thumbnailUrl: image.thumbnailUrl,
-  name: image.originalName,
+  name: imageDisplayName(image),
 });
 
 export function AlbumDesigner() {

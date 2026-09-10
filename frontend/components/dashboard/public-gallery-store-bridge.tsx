@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { ChevronRight, ShoppingBag, Store, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { imageDisplayName } from "@/lib/image-display-name";
 import {
   displayPrice,
   formatMoney,
@@ -409,7 +410,7 @@ function BuyPhotoDialog({
           ) : (
             <img
               src={publicImageSrc(image.url)}
-              alt={image.originalName || "Selected photo"}
+              alt={imageDisplayName(image, "Selected photo")}
               className="relative z-10 max-h-[72%] w-full object-contain shadow-xl"
             />
           )}

@@ -426,31 +426,82 @@ export class FaceSearchService implements OnModuleInit {
     return assigned;
   }
 
-  async listUserFaceIdentities(userId: string) {
+  async listUserFaceIdentities(
+    userId: string,
+    options: { page?: number; limit?: number; search?: string } = {},
+  ) {
     await this.backfillLegacyFacePersons(userId);
-    const [identities, collections] = await Promise.all([
-      this.faceIdentityModel.find({ userId }).sort({ lastSeenAt: -1, updatedAt: -1 }).lean(),
-      this.collectionModel.find({ userId }).select('_id name').lean(),
-    ]);
-    const collectionMap = new Map(collections.map((item) => [item._id.toString(), item.name]));
+    const page = Math.max(1, Math.floor(Number(options.page) || 1));
+    const limit = Math.max(1, Math.min(60, Math.floor(Number(options.limit) || 20)));
+    const search = String(options.search ?? '').trim().slice(0, 100);
+    const filter: Record<string, any> = { userId };
 
-    return identities.map((identity) => {
-      const collectionIds = [...new Set((identity.collectionIds ?? []).map(String))];
-      return {
-        identityKey: identity.identityKey,
-        name: identity.name ?? '',
-        representativeImageId: identity.representativeImageId,
-        representativeFaceId: identity.representativeFaceId,
-        representativeUrl: identity.representativeUrl,
-        representativeBox: identity.representativeBox,
-        faceCount: Number(identity.faceCount || 0),
-        imageCount: Number(identity.imageCount || 0),
-        collectionCount: collectionIds.length,
-        collectionIds,
-        collections: collectionIds.map((id) => ({ id, name: collectionMap.get(id) ?? 'Deleted collection' })),
-        lastSeenAt: identity.lastSeenAt,
-      };
-    });
+    if (search) {
+      const escaped = [...search].map((char) => '\\^$.*+?()[]{}|'.includes(char) ? `\\${char}` : char).join('');
+      const regex = new RegExp(escaped, 'i');
+      const collectionMatches = await this.collectionModel
+        .find({ userId, name: regex })
+        .select('_id')
+        .limit(100)
+        .lean();
+      const collectionIds = collectionMatches.map((item) => item._id.toString());
+      filter.$or = [
+        { name: regex },
+        { identityKey: regex },
+        ...(collectionIds.length ? [{ collectionIds: { $in: collectionIds } }] : []),
+      ];
+    }
+
+    const [total, allTotal, identities] = await Promise.all([
+      this.faceIdentityModel.countDocuments(filter),
+      search ? this.faceIdentityModel.countDocuments({ userId }) : Promise.resolve(0),
+      this.faceIdentityModel
+        .find(filter)
+        // Empty/missing names sort before strings; named people then sort A-Z.
+        .sort({ name: 1, lastSeenAt: -1, updatedAt: -1 })
+        .collation({ locale: 'en', strength: 1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+    ]);
+    const pageCollectionIds = [
+      ...new Set(identities.flatMap((identity) => (identity.collectionIds ?? []).map(String))),
+    ];
+    const collections = pageCollectionIds.length
+      ? await this.collectionModel
+          .find({ userId, _id: { $in: pageCollectionIds } })
+          .select('_id name')
+          .lean()
+      : [];
+    const collectionMap = new Map(collections.map((item) => [item._id.toString(), item.name]));
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    return {
+      items: identities.map((identity) => {
+        const collectionIds = [...new Set((identity.collectionIds ?? []).map(String))];
+        return {
+          identityKey: identity.identityKey,
+          name: identity.name ?? '',
+          representativeImageId: identity.representativeImageId,
+          representativeFaceId: identity.representativeFaceId,
+          representativeUrl: identity.representativeUrl,
+          representativeBox: identity.representativeBox,
+          faceCount: Number(identity.faceCount || 0),
+          imageCount: Number(identity.imageCount || 0),
+          collectionCount: collectionIds.length,
+          collectionIds,
+          collections: collectionIds.map((id) => ({ id, name: collectionMap.get(id) ?? 'Deleted collection' })),
+          lastSeenAt: identity.lastSeenAt,
+        };
+      }),
+      page,
+      limit,
+      total,
+      allTotal: search ? allTotal : total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrevious: page > 1,
+    };
   }
 
   async renameUserFaceIdentity(userId: string, identityKey: string, value?: string) {

@@ -62,6 +62,7 @@ type PlanForm = {
   name: string;
   storageGb: string;
   galleryLimit: string;
+  aiImageMetadataLimit: string;
   monthlyEmails: string;
   videoMinutes: string;
   videoQuality: "hd" | "4k";
@@ -89,6 +90,7 @@ const emptyPlanForm: PlanForm = {
   name: "",
   storageGb: "",
   galleryLimit: "",
+  aiImageMetadataLimit: "",
   monthlyEmails: "",
   videoMinutes: "",
   videoQuality: "hd",
@@ -106,6 +108,7 @@ const defaultLoginEmailMessage = "Hello {{name}},\n\nUse this one-time PIN to si
 
 const planFeatures = [
   ["aiFaceSearch", "AI Face Search"],
+  ["aiImageMetadata", "AI Image Title & Description"],
   ["downloads", "Downloads"],
   ["mobileGallery", "Mobile Gallery"],
   ["beautifulGalleries", "Beautiful Galleries"],
@@ -231,6 +234,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
       name: planForm.name,
       storageGb: Number(planForm.storageGb || 0),
       galleryLimit: Number(planForm.galleryLimit || 0),
+      aiImageMetadataLimit: Number(planForm.aiImageMetadataLimit || 0),
       monthlyEmails: Number(planForm.monthlyEmails || 0),
       videoMinutes: Number(planForm.videoMinutes || 0),
       videoQuality: planForm.videoQuality,
@@ -876,6 +880,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
               <InputField label="Plan name" value={planForm.name} onChange={(value) => setPlanForm({ ...planForm, name: value })} required />
               <InputField label="Storage limit GB" value={planForm.storageGb} onChange={(value) => setPlanForm({ ...planForm, storageGb: value })} required type="number" />
               <InputField label="Gallery limit (0 = unlimited)" value={planForm.galleryLimit} onChange={(value) => setPlanForm({ ...planForm, galleryLimit: value })} required type="number" />
+              <InputField label="AI metadata images / month (0 = unlimited)" value={planForm.aiImageMetadataLimit} onChange={(value) => setPlanForm({ ...planForm, aiImageMetadataLimit: value })} required type="number" />
               <InputField label="Emails / month" value={planForm.monthlyEmails} onChange={(value) => setPlanForm({ ...planForm, monthlyEmails: value })} required type="number" />
               <InputField label="Total video minutes" value={planForm.videoMinutes} onChange={(value) => setPlanForm({ ...planForm, videoMinutes: value })} required type="number" />
               <label className="grid gap-1 text-xs font-bold uppercase tracking-[0.14em] text-[#777]">

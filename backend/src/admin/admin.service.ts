@@ -230,6 +230,9 @@ export class AdminService implements OnModuleInit {
       isOtpVerified: true,
       otpNumber: '000000',
       storageLimitGb: freePlan.storageGb,
+      aiImageMetadataLimit: 0,
+      aiImageMetadataUsed: 0,
+      aiImageMetadataUsageKey: this.currentMonthKey(),
       monthlyEmailLimit: freePlan.monthlyEmails,
       videoUploadLimitMinutes: 0,
       videoUploadQuality: 'hd',
@@ -307,6 +310,7 @@ export class AdminService implements OnModuleInit {
       name: dto.name.trim(),
       storageGb: Number(dto.storageGb ?? 0),
       galleryLimit: Number(dto.galleryLimit ?? 0),
+      aiImageMetadataLimit: Number(dto.aiImageMetadataLimit ?? 0),
       monthlyEmails: Number(dto.monthlyEmails ?? 0),
       videoMinutes: Number(dto.videoMinutes ?? 0),
       videoQuality: dto.videoQuality === '4k' ? '4k' : 'hd',
@@ -340,6 +344,7 @@ export class AdminService implements OnModuleInit {
     if (dto.name !== undefined) plan.name = dto.name.trim();
     if (dto.storageGb !== undefined) plan.storageGb = Number(dto.storageGb);
     if (dto.galleryLimit !== undefined) plan.galleryLimit = Number(dto.galleryLimit);
+    if (dto.aiImageMetadataLimit !== undefined) plan.aiImageMetadataLimit = Number(dto.aiImageMetadataLimit);
     if (dto.monthlyEmails !== undefined) plan.monthlyEmails = Number(dto.monthlyEmails);
     if (dto.videoMinutes !== undefined) plan.videoMinutes = Number(dto.videoMinutes);
     if (dto.videoQuality !== undefined) plan.videoQuality = dto.videoQuality === '4k' ? '4k' : 'hd';
@@ -361,6 +366,7 @@ export class AdminService implements OnModuleInit {
           planName: plan.name,
           storageLimitGb: Number(plan.storageGb ?? 0),
           galleryLimit: Number(plan.galleryLimit ?? 0),
+          aiImageMetadataLimit: Number(plan.aiImageMetadataLimit ?? 0),
           monthlyEmailLimit: Number(plan.monthlyEmails ?? 0),
           videoUploadLimitMinutes: Number(plan.videoMinutes ?? 0),
           videoUploadQuality: plan.videoQuality ?? 'hd',
@@ -412,6 +418,9 @@ export class AdminService implements OnModuleInit {
       {
         $set: {
           storageLimitGb: settings.storageGb,
+          aiImageMetadataLimit: 0,
+          aiImageMetadataUsed: 0,
+          aiImageMetadataUsageKey: this.currentMonthKey(),
           monthlyEmailLimit: settings.monthlyEmails,
           videoUploadLimitMinutes: 0,
           videoUploadQuality: 'hd',
@@ -649,12 +658,15 @@ export class AdminService implements OnModuleInit {
           planName: plan.name,
           storageLimitGb: plan.storageGb,
           galleryLimit: Number(plan.galleryLimit ?? 0),
+          aiImageMetadataLimit: Number(plan.aiImageMetadataLimit ?? 0),
           monthlyEmailLimit: plan.monthlyEmails,
           videoUploadLimitMinutes: plan.videoMinutes ?? 0,
           videoUploadQuality: plan.videoQuality ?? 'hd',
           planFeatures: this.normalizedPlanFeatures(plan.features ?? {}),
           monthlyEmailsUsed: 0,
           monthlyUsageKey: this.currentMonthKey(),
+          aiImageMetadataUsed: 0,
+          aiImageMetadataUsageKey: this.currentMonthKey(),
           planActivatedAt: new Date(),
           planBillingInterval: billingInterval,
           ...(source === 'checkout' ? { planExpiresAt: expiresAt } : {}),
@@ -702,12 +714,15 @@ export class AdminService implements OnModuleInit {
           planName: 'Free',
           storageLimitGb: freePlan.storageGb,
           galleryLimit: 10,
+          aiImageMetadataLimit: 0,
           monthlyEmailLimit: freePlan.monthlyEmails,
           videoUploadLimitMinutes: 0,
           videoUploadQuality: 'hd',
           planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
           monthlyEmailsUsed: 0,
           monthlyUsageKey: this.currentMonthKey(),
+          aiImageMetadataUsed: 0,
+          aiImageMetadataUsageKey: this.currentMonthKey(),
         },
         $unset: {
           planId: '',
@@ -722,8 +737,12 @@ export class AdminService implements OnModuleInit {
   async userCapabilities(userId: string) {
     const user = await this.userModel
       .findById(userId)
-      .select('planId planName planFeatures storageLimitGb galleryLimit monthlyEmailLimit videoUploadLimitMinutes videoUploadQuality')
+      .select('planId planName planFeatures storageLimitGb galleryLimit aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey monthlyEmailLimit videoUploadLimitMinutes videoUploadQuality')
       .lean();
+    const aiUsageKey = this.currentMonthKey();
+    const aiImageMetadataUsed = user?.aiImageMetadataUsageKey === aiUsageKey
+      ? Math.max(0, Number(user.aiImageMetadataUsed ?? 0))
+      : 0;
 
     // Always resolve paid-plan capabilities from the current master Plan document.
     // This self-heals users that were assigned before live plan propagation existed.
@@ -735,6 +754,7 @@ export class AdminService implements OnModuleInit {
           planName: plan.name,
           storageLimitGb: Number(plan.storageGb ?? 0),
           galleryLimit: Number(plan.galleryLimit ?? 0),
+          aiImageMetadataLimit: Number(plan.aiImageMetadataLimit ?? 0),
           monthlyEmailLimit: Number(plan.monthlyEmails ?? 0),
           videoUploadLimitMinutes: Number(plan.videoMinutes ?? 0),
           videoUploadQuality: plan.videoQuality ?? 'hd',
@@ -747,6 +767,8 @@ export class AdminService implements OnModuleInit {
           planName: current.planName,
           storageLimitGb: current.storageLimitGb,
           galleryLimit: current.galleryLimit,
+          aiImageMetadataLimit: current.aiImageMetadataLimit,
+          aiImageMetadataUsed,
           monthlyEmailLimit: current.monthlyEmailLimit,
           videoUploadLimitMinutes: current.videoUploadLimitMinutes,
           videoUploadQuality: current.videoUploadQuality,
@@ -759,6 +781,8 @@ export class AdminService implements OnModuleInit {
       planName: user?.planName ?? 'Free',
       storageLimitGb: user?.storageLimitGb ?? 0,
       galleryLimit: user?.galleryLimit ?? 10,
+      aiImageMetadataLimit: user?.aiImageMetadataLimit ?? 0,
+      aiImageMetadataUsed,
       monthlyEmailLimit: user?.monthlyEmailLimit ?? 0,
       videoUploadLimitMinutes: user?.videoUploadLimitMinutes ?? 0,
       videoUploadQuality: user?.videoUploadQuality ?? 'hd',

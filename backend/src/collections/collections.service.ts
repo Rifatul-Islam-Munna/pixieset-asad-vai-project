@@ -1107,6 +1107,7 @@ export class CollectionsService {
           thumbnailUrl: image.thumbnailUrl,
           blurDataUrl: image.blurDataUrl,
           originalName: image.originalName,
+          metadata: image.metadata,
           collectionName: collection?.name ?? 'Collection',
           collectionSlug: collection?.slug,
           galleryUrl: collection
@@ -1266,7 +1267,7 @@ export class CollectionsService {
 
     const images = await this.imageModel
       .find({ collectionId, _id: { $in: finalIds } })
-      .select('_id url originalName filename mimetype mediaType sizeBytes order')
+      .select('_id url originalName filename mimetype mediaType sizeBytes order metadata')
       .sort({ order: 1, createdAt: 1 })
       .lean();
     if (!images.length) throw new BadRequestException('Favorite files were not found');
@@ -1288,7 +1289,7 @@ export class CollectionsService {
     }
 
     const rows = images.map((image, index) => {
-      const fileName = image.originalName || image.filename || `photo-${index + 1}`;
+      const fileName = this.imageDisplayName(image, `photo-${index + 1}`);
       return {
         number: index + 1,
         fileName,
@@ -1427,7 +1428,7 @@ export class CollectionsService {
         .lean(),
       this.imageModel
         .find({ collectionId })
-        .select('_id originalName url thumbnailUrl')
+        .select('_id originalName url thumbnailUrl metadata')
         .lean(),
       this.emailRegistrationModel
         .find({ collectionId })
@@ -1493,13 +1494,13 @@ export class CollectionsService {
         photos: listImages.length,
         filenames: listImages.map(
           (favorite) =>
-            imageMap.get(favorite.imageId)?.originalName || favorite.imageId,
+            this.imageDisplayName(imageMap.get(favorite.imageId), favorite.imageId),
         ),
         images: listImages.map((favorite) => {
           const image = imageMap.get(favorite.imageId);
           return {
             imageId: favorite.imageId,
-            name: image?.originalName || favorite.imageId,
+            name: this.imageDisplayName(image, favorite.imageId),
             url: image?.url || '',
           };
         }),
@@ -1538,7 +1539,7 @@ export class CollectionsService {
           _id: privatePhoto._id,
           email: privatePhoto.email,
           imageId: privatePhoto.imageId,
-          imageName: image?.originalName || privatePhoto.imageId,
+          imageName: this.imageDisplayName(image, privatePhoto.imageId),
           imageUrl: image?.thumbnailUrl || image?.url || '',
           status: privatePhoto.status ?? 'pending',
           createdAt: privatePhoto.createdAt,
@@ -2917,6 +2918,13 @@ export class CollectionsService {
       size: width > 0 && height > 0 ? `${width} x ${height}` : '',
       transmissionRef: this.metadataText(extracted.transmissionRef) || itemNumber,
     };
+  }
+
+  private imageDisplayName(image: any, fallback = '') {
+    const metadata = (image?.metadata ?? {}) as Record<string, any>;
+    return this.metadataText(
+      metadata.fileTitle || metadata.title || image?.originalName || metadata.filename || fallback,
+    );
   }
 
   private metadataText(value: unknown) {

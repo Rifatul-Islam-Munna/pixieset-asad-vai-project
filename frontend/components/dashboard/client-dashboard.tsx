@@ -253,6 +253,7 @@ import {
   type HomeCmsData,
 } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
+import { imageDisplayName } from "@/lib/image-display-name";
 import { GALLERY_LANGUAGES, normalizeGalleryLanguage, type GalleryLanguage } from "@/lib/gallery-language";
 import { CLIENT_GALLERY_CATEGORIES } from "@/lib/gallery-categories";
 import { GALLERY_FONT_CATEGORIES, GALLERY_FONT_OPTIONS, galleryFontSample, resolveGalleryFontFamily, type GalleryFontCategory } from "@/lib/gallery-fonts";
@@ -3888,6 +3889,7 @@ type FavoriteImageRecord = {
   thumbnailUrl?: string;
   mediaType?: "image" | "video";
   originalName?: string;
+  metadata?: Record<string, any>;
   collectionName?: string;
   galleryUrl?: string;
 };
@@ -4059,7 +4061,7 @@ function FavoriteCollectionsPanel() {
                     {favorite.url ? (
                       <img
                         src={imageSrc(favorite.thumbnailUrl || favorite.url)}
-                        alt={favorite.originalName ?? ""}
+                        alt={imageDisplayName(favorite)}
                         className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
                       />
                     ) : (
@@ -4070,7 +4072,7 @@ function FavoriteCollectionsPanel() {
                     <Heart className="absolute right-3 top-3 size-5 fill-red-500 text-red-500 drop-shadow" />
                   </span>
                   <span className="mt-3 block truncate text-sm font-semibold text-[#222]">
-                    {favorite.originalName ?? "Favorite photo"}
+                    {imageDisplayName(favorite, "Favorite photo")}
                   </span>
                   <span className="mt-1 block truncate text-xs text-[#777]">
                     {favorite.collectionName ?? "Gallery"}
@@ -4101,7 +4103,7 @@ function FavoriteCollectionsPanel() {
               <div className="flex min-h-[62dvh] items-center justify-center bg-[#111] p-4 lg:min-h-[86dvh]">
                 <img
                   src={imageSrc(previewImage.url)}
-                  alt={previewImage.originalName ?? ""}
+                  alt={collectionImageCaption(previewImage)}
                   className="max-h-[84dvh] max-w-full object-contain"
                 />
               </div>
@@ -4109,7 +4111,7 @@ function FavoriteCollectionsPanel() {
                 <div>
                   <DialogHeader className="text-left">
                     <DialogTitle className="truncate text-2xl">
-                      {previewImage.originalName ?? "Favorite photo"}
+                      {imageDisplayName(previewImage, "Favorite photo")}
                     </DialogTitle>
                     <DialogDescription>
                       {previewImage.collectionName ?? "Gallery"}
@@ -4243,7 +4245,7 @@ function StarredGrid({
         const src = isCollection ? collection.coverImage : image.url;
         const title = isCollection
           ? collection.name
-          : (image.originalName ?? image.metadata?.filename ?? "Image");
+          : imageDisplayName(image, "Image");
         const subtitle = isCollection
           ? `${collection.imageCount ?? 0} images`
           : `${image.collectionName ?? "Gallery"} / ${image.setName ?? "Featured"}`;
@@ -4429,7 +4431,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                 <span className="block overflow-hidden">
                   <img
                     src={imageSrc(photo.url)}
-                    alt={photo.originalName ?? ""}
+                    alt={collectionImageCaption(photo)}
                     className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
                   />
                 </span>
@@ -4529,7 +4531,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-4 text-sm text-[#666]">
                 <span className="truncate">
-                  {previewImage.originalName ?? "Image"}
+                  {imageDisplayName(previewImage, "Image")}
                 </span>
                 <span>
                   {formatMetaValue(previewImage.metadata?.width)} x{" "}
@@ -4539,7 +4541,7 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
               <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
                 <img
                   src={imageSrc(previewImage.url)}
-                  alt={previewImage.originalName ?? ""}
+                  alt={collectionImageCaption(previewImage)}
                   className="max-h-[76dvh] max-w-full object-contain"
                 />
               </div>
@@ -6578,7 +6580,7 @@ function PresetDesignPanel({
                           <button
                             key={image._id}
                             type="button"
-                            aria-label={`Use ${image.originalName || "photo"} as cover`}
+                            aria-label={`Use ${imageDisplayName(image, "photo")} as cover`}
                             aria-pressed={selected}
                             className={cn(
                               "group relative overflow-hidden border-2 bg-muted text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring",
@@ -14010,9 +14012,7 @@ function CollectionDetailView({
       return Number.isFinite(time) ? time : uploadedTime(image);
     };
     const name = (image: CollectionImageRecord) =>
-      String(
-        image.originalName ?? image.metadata?.filename ?? "",
-      ).toLowerCase();
+      imageDisplayName(image, "").toLowerCase();
 
     if (photoSort === "uploaded-new-old") return next;
     if (photoSort === "uploaded-old-new") return next.reverse();
@@ -16270,7 +16270,7 @@ function CollectionDetailView({
                         ) : (
                           <DashboardImageWithSkeleton
                             src={imageSrc(image.thumbnailUrl || image.url)}
-                            alt={image.originalName ?? ""}
+                            alt={collectionImageCaption(image)}
                             placeholder={image.blurDataUrl}
                             className={cn(
                               "aspect-[1.35] w-full object-contain transition-transform duration-500 ease-out group-hover:scale-[1.02]",
@@ -16471,10 +16471,9 @@ function CollectionDetailView({
                       {showCollectionFilenames && (
                         <p
                           className="mt-2 truncate px-1 text-xs text-[#777]"
-                          title={image.originalName ?? ""}
+                          title={imageDisplayName(image, "Untitled")}
                         >
-                          {image.originalName ||
-                            String(image.metadata?.filename ?? "Untitled")}
+                          {imageDisplayName(image, "Untitled")}
                         </p>
                       )}
                     </div>
@@ -16555,7 +16554,7 @@ function CollectionDetailView({
                       <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between gap-4 text-sm text-[#666]">
                           <span className="truncate">
-                            {activeImage.originalName ?? "Image"}
+                            {imageDisplayName(activeImage, "Image")}
                           </span>
                           <span>
                             {formatMetaValue(activeImage.metadata?.width)} x{" "}
@@ -16565,7 +16564,7 @@ function CollectionDetailView({
                         <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
                           <img
                             src={imageSrc(activeImage.url)}
-                            alt={activeImage.originalName ?? ""}
+                            alt={collectionImageCaption(activeImage)}
                             className="max-h-[76dvh] max-w-full object-contain"
                           />
                         </div>
@@ -18815,10 +18814,9 @@ const metadataGroups = [
     items: [
       ["fileTitle", "File Title"],
       ["title", "Title"],
-      ["description", "Short Description"],
       ["objectName", "Object Name"],
       ["headline", "Headline"],
-      ["caption", "Caption"],
+      ["caption", "AI Caption"],
       ["keywords", "Keywords"],
     ],
   },
@@ -18906,7 +18904,7 @@ function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
 
       {aiPending && (
         <div className="border-b border-[#e8e1fb] bg-[#f8f5ff] px-5 py-3 text-xs leading-5 text-[#5f45a6]">
-          Title and short description are being generated slowly in the background.
+          Title and caption are being generated slowly in the background.
           This modal refreshes only while it is open, so the rest of the dashboard stays quiet.
         </div>
       )}
@@ -19110,6 +19108,17 @@ function csvCell(value: unknown) {
 function csvCellWhenNeeded(value: unknown) {
   const text = String(value ?? "");
   return /[",\r\n]/.test(text) ? csvCell(text) : text;
+}
+
+function collectionImageCaption(image?: CollectionImageRecord | null) {
+  return (
+    image?.metadata?.caption ||
+    image?.metadata?.description ||
+    image?.metadata?.title ||
+    image?.originalName ||
+    image?.metadata?.filename ||
+    "Photo"
+  );
 }
 
 function imageSrc(url?: string) {

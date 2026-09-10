@@ -14,6 +14,7 @@ type PlanEditorForm = {
   name: string;
   storageGb: string;
   galleryLimit: string;
+  aiImageMetadataLimit: string;
   monthlyEmails: string;
   videoMinutes: string;
   videoQuality: "hd" | "4k";
@@ -35,6 +36,13 @@ const featureGroups = [
       ["mobileGallery", "Mobile Gallery", "Allows creation and management of installable mobile gallery apps. Backend blocks creation when disabled."],
       ["beautifulGalleries", "Beautiful Galleries", "Unlocks the premium gallery design controls such as layouts, covers, advanced design and custom covers."],
       ["passwordProtection", "Password Protection", "Allows protected gallery/homepage access and related password/PIN controls. Backend blocks protected settings when unavailable."],
+    ],
+  },
+  {
+    title: "AI automation",
+    description: "Automated AI metadata that can be sold as a plan entitlement.",
+    features: [
+      ["aiImageMetadata", "AI Image Title & Description", "Automatically generates searchable AI titles, captions/descriptions, genre, object name and keywords for uploaded photos. Backend enforces the monthly image quota before Gemini is called."],
     ],
   },
   {
@@ -65,6 +73,7 @@ function makeInitial(plan?: AdminPlan | null): PlanEditorForm {
     name: plan?.name ?? "",
     storageGb: String(plan?.storageGb ?? ""),
     galleryLimit: String(plan?.galleryLimit ?? ""),
+    aiImageMetadataLimit: String(plan?.aiImageMetadataLimit ?? ""),
     monthlyEmails: String(plan?.monthlyEmails ?? ""),
     videoMinutes: String(plan?.videoMinutes ?? ""),
     videoQuality: plan?.videoQuality === "4k" ? "4k" : "hd",
@@ -89,6 +98,7 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
       name: form.name.trim(),
       storageGb: Number(form.storageGb || 0),
       galleryLimit: Number(form.galleryLimit || 0),
+      aiImageMetadataLimit: Number(form.aiImageMetadataLimit || 0),
       monthlyEmails: Number(form.monthlyEmails || 0),
       videoMinutes: Number(form.videoMinutes || 0),
       videoQuality: form.videoQuality,
@@ -144,6 +154,7 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
               <PlanField label="Monthly price EUR" value={form.priceMonthly} onChange={(priceMonthly) => setForm({ ...form, priceMonthly })} type="number" required />
               <PlanField label="Storage limit GB" value={form.storageGb} onChange={(storageGb) => setForm({ ...form, storageGb })} type="number" required help="Backend upload quota." />
               <PlanField label="Gallery limit" value={form.galleryLimit} onChange={(galleryLimit) => setForm({ ...form, galleryLimit })} type="number" required help="Use 0 for unlimited galleries." />
+              <PlanField label="AI metadata images / month" value={form.aiImageMetadataLimit} onChange={(aiImageMetadataLimit) => setForm({ ...form, aiImageMetadataLimit })} type="number" required help="Maximum uploaded photos that receive AI title + description each month. Use 0 for unlimited when AI Image Title & Description is enabled." />
               <PlanField label="Emails / month" value={form.monthlyEmails} onChange={(monthlyEmails) => setForm({ ...form, monthlyEmails })} type="number" required help="Monthly email usage allowance." />
               <PlanField label="Total video minutes" value={form.videoMinutes} onChange={(videoMinutes) => setForm({ ...form, videoMinutes })} type="number" required />
               <label className="grid gap-2 text-sm font-semibold">
@@ -197,6 +208,7 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
             <div className="mt-5 grid gap-3 text-sm">
               <Summary icon={<HardDrive className="size-4" />} label="Storage" value={`${form.storageGb || 0} GB`} />
               <Summary icon={<Images className="size-4" />} label="Galleries" value={Number(form.galleryLimit || 0) === 0 ? "Unlimited" : form.galleryLimit || "0"} />
+              <Summary icon={<Check className="size-4" />} label="AI metadata" value={!form.features.aiImageMetadata ? "Not included" : Number(form.aiImageMetadataLimit || 0) === 0 ? "Unlimited / month" : `${form.aiImageMetadataLimit || 0} / month`} />
               <Summary icon={<Check className="size-4" />} label="Enabled capabilities" value={String(selectedCount)} />
             </div>
           </section>

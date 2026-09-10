@@ -16,6 +16,7 @@ import {
   visibleVariants,
 } from "@/lib/public-store";
 import { cn } from "@/lib/utils";
+import { imageDisplayName } from "@/lib/image-display-name";
 
 type BuilderStep = "product" | "photos" | "crop";
 
@@ -311,7 +312,7 @@ export function PublicStoreProductBuilder({
                     className={cn("group relative aspect-square overflow-hidden bg-[#eee]", selected && "ring-2 ring-[#6337d8] ring-offset-2")}
                     onClick={() => choosePhoto(image._id)}
                   >
-                    <img src={publicImageSrc(image.thumbnailUrl || image.url)} alt={image.originalName || "Collection photo"} className="h-full w-full object-cover" />
+                    <img src={publicImageSrc(image.thumbnailUrl || image.url)} alt={imageDisplayName(image, "Collection photo")} className="h-full w-full object-cover" />
                     <span className={cn("absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border bg-white/95", selected ? "border-[#6337d8] bg-[#6337d8] text-white" : "border-white text-transparent") }>
                       <Check className="size-4" />
                     </span>
@@ -389,7 +390,7 @@ function ProductPreview({
     <div className="flex min-h-[320px] flex-col bg-[#f3f3f2] p-5 sm:min-h-[420px] sm:p-6 md:p-10">
       <div className="flex min-h-[260px] flex-1 items-center justify-center sm:min-h-[380px]">
         {previews[active] ? (
-          <img src={publicImageSrc(previews[active])} alt={selectedImage?.originalName || product.name} className="max-h-[680px] w-full object-contain" />
+          <img src={publicImageSrc(previews[active])} alt={selectedImage ? imageDisplayName(selectedImage, product.name) : product.name} className="max-h-[680px] w-full object-contain" />
         ) : (
           <div className="flex flex-col items-center text-[#8b8b8b]"><ImageIcon className="size-10" /><span className="mt-3 text-sm">Product preview</span></div>
         )}
