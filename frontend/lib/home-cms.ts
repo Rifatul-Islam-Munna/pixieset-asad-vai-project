@@ -40,6 +40,7 @@ export type BrandSettings = {
   brandImageUrl: string;
   accentColor: string;
   brandingPosition?: "top" | "bottom";
+  blockOrder?: string[];
 };
 
 export type CustomCoverElement = {
@@ -84,6 +85,7 @@ export type EmailTemplateItem = {
   showBranding?: boolean;
   useBrandColor?: boolean;
   brandingPosition?: "top" | "bottom";
+  blockOrder?: string[];
   category?: EmailTemplateCategory | string;
   galleryCategory?: string;
   customGalleryCategoryLabel?: string;

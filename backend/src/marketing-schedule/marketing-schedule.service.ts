@@ -4,6 +4,8 @@ import { Interval } from '@nestjs/schedule';
 import { Model, Types } from 'mongoose';
 import { CollectionEmailRegistration, CollectionEmailRegistrationDocument } from 'src/collections/entities/collection-email-registration.entity';
 import { BrandingEmailService, buildBrandedGalleryEmailHtml, type BrandingEmailPosition } from 'src/mail/branding-email.service';
+
+const EMAIL_BLOCK_IDS = ['branding', 'eyebrow', 'title', 'image', 'message', 'button', 'footer'];
 import { MailService } from 'src/mail/mail.service';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { MarketingEmailAutomation, MarketingEmailAutomationDocument } from './entities/marketing-email-automation.entity';
@@ -90,6 +92,7 @@ export class MarketingScheduleService implements OnModuleInit {
       showImage: body.showImage !== false,
       showBranding: body.showBranding !== false,
       brandingPosition: body.brandingPosition === 'bottom' ? 'bottom' : 'top',
+      blockOrder: this.blockOrderList(body.blockOrder),
       collectionId: this.text(body.collectionId, 120) || undefined,
       collectionName: this.text(body.collectionName, 220) || undefined,
       scheduledAt,
@@ -148,7 +151,7 @@ export class MarketingScheduleService implements OnModuleInit {
     if (body.trigger !== undefined) automation.trigger = this.automationTrigger(body.trigger);
     if (body.recipientCategory !== undefined) automation.recipientCategory = this.text(body.recipientCategory, 180) || undefined;
     if (body.delayMinutes !== undefined) automation.delayMinutes = this.delayMinutes(body.delayMinutes);
-    const hasContent = ['templateId', 'templateName', 'subject', 'message', 'previewText', 'footerText', 'eyebrowText', 'buttonText', 'buttonLink', 'buttonColor', 'image', 'showImage', 'showBranding', 'brandingPosition', 'collectionId', 'collectionName'].some((key) => body[key] !== undefined);
+    const hasContent = ['templateId', 'templateName', 'titleText', 'subject', 'message', 'previewText', 'footerText', 'eyebrowText', 'buttonText', 'buttonLink', 'buttonColor', 'image', 'showImage', 'showBranding', 'brandingPosition', 'blockOrder', 'collectionId', 'collectionName'].some((key) => body[key] !== undefined);
     if (hasContent) Object.assign(automation, this.automationContent({ ...automation.toObject(), ...body }));
     await automation.save();
     if (body.enabled === false) {
@@ -358,6 +361,9 @@ export class MarketingScheduleService implements OnModuleInit {
         imageUrl: schedule.image || '',
         showImage: schedule.showImage !== false,
         showBranding: schedule.showBranding !== false,
+        blockOrder: Array.isArray(schedule.blockOrder) && schedule.blockOrder.length
+          ? schedule.blockOrder
+          : undefined,
         brandingPosition: (schedule.brandingPosition as BrandingEmailPosition) || undefined,
       },
       brand,
@@ -406,6 +412,7 @@ export class MarketingScheduleService implements OnModuleInit {
       showImage: body.showImage !== false,
       showBranding: body.showBranding !== false,
       brandingPosition: body.brandingPosition === 'bottom' ? 'bottom' : 'top',
+      blockOrder: this.blockOrderList(body.blockOrder),
       collectionId: this.text(body.collectionId, 120) || undefined,
       collectionName: this.text(body.collectionName, 220) || undefined,
     };
@@ -438,6 +445,7 @@ export class MarketingScheduleService implements OnModuleInit {
       showImage: automation.showImage !== false,
       showBranding: automation.showBranding !== false,
       brandingPosition: automation.brandingPosition === 'bottom' ? 'bottom' : 'top',
+      blockOrder: this.blockOrderList(automation.blockOrder),
       collectionId: automation.collectionId || undefined,
       collectionName: automation.collectionName || undefined,
       scheduledAt,
@@ -480,6 +488,7 @@ export class MarketingScheduleService implements OnModuleInit {
       showImage: automation.showImage !== false,
       showBranding: automation.showBranding !== false,
       brandingPosition: automation.brandingPosition === 'bottom' ? 'bottom' : 'top',
+      blockOrder: this.blockOrderList(automation.blockOrder),
       collectionId: event.collectionId,
       collectionName: event.collectionName,
       scheduledAt,
@@ -532,6 +541,11 @@ export class MarketingScheduleService implements OnModuleInit {
   private emailList(value: unknown) {
     const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
     return [...new Set(raw.map((item) => String(item ?? '').trim().toLowerCase()).filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))];
+  }
+
+  private blockOrderList(value: unknown) {
+    const raw = Array.isArray(value) ? value : [];
+    return [...new Set(raw.map((item) => String(item)).filter((item) => EMAIL_BLOCK_IDS.includes(item)))];
   }
 
   private text(value: unknown, max: number) { return String(value ?? '').trim().slice(0, max); }

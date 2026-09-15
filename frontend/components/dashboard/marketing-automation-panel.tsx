@@ -213,6 +213,7 @@ function AutomationDialog({ open, onOpenChange, categories, contactsCount, colle
         showImage: activeTemplate.showImage,
         showBranding: activeTemplate.showBranding,
         brandingPosition: activeTemplate.brandingPosition,
+        blockOrder: activeTemplate.blockOrder,
         collectionId: activeCollection?._id,
         collectionName: activeCollection?.name,
       });

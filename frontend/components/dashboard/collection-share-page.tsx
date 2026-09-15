@@ -32,6 +32,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { DashboardSection } from "@/components/dashboard/client-dashboard";
+import { EmailBlockOrderEditor } from "@/components/dashboard/email-block-order-editor";
 import { baseEmailTemplates, type EmailTemplateItem } from "@/lib/dashboard-store";
 import {
   buildGalleryEmailHtml,
@@ -150,6 +151,7 @@ export function CollectionSharePage({
   const [brandingPosition, setBrandingPosition] = useState<"top" | "bottom">(
     branding.brandingPosition ?? "top",
   );
+  const [blockOrder, setBlockOrder] = useState<string[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateSearch, setTemplateSearch] = useState("");
   const [sending, setSending] = useState(false);
@@ -179,6 +181,7 @@ export function CollectionSharePage({
     setFooterText(template?.footerText?.trim() || "");
     setShowBranding(template?.showBranding !== false);
     setShowImage(template?.showImage !== false);
+    setBlockOrder(template?.blockOrder ?? []);
   };
 
   useEffect(() => {
@@ -198,6 +201,7 @@ export function CollectionSharePage({
       setFooterText(template?.footerText?.trim() || "");
       setShowBranding(template?.showBranding !== false);
       setShowImage(template?.showImage !== false);
+      setBlockOrder(template?.blockOrder ?? []);
       setInitialised(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -234,6 +238,11 @@ export function CollectionSharePage({
     ? configuredButtonLink
     : publicLink;
   const emailTitle = collection?.name || selectedTemplate?.title || "Your photos";
+  const effectiveBlockOrder = blockOrder.length
+    ? blockOrder
+    : selectedTemplate?.blockOrder?.length
+      ? selectedTemplate.blockOrder
+      : branding.blockOrder;
   const eyebrowText =
     selectedTemplate?.eyebrowText ||
     selectedTemplate?.galleryCategory ||
@@ -255,12 +264,14 @@ export function CollectionSharePage({
         imageUrl: coverImageUrl,
         showBranding,
         showImage,
+        blockOrder: effectiveBlockOrder,
         brandingPosition,
       }),
     [
       accent,
       branding.brandText,
       brandingPosition,
+      effectiveBlockOrder,
       buttonLink,
       buttonText,
       coverImageUrl,
@@ -310,6 +321,7 @@ export function CollectionSharePage({
       imageUrl: inlineCover ? "cid:gallery-cover" : coverImageUrl,
       showBranding,
       showImage,
+      blockOrder: effectiveBlockOrder,
       brandingPosition,
     });
 
@@ -522,6 +534,18 @@ export function CollectionSharePage({
               <span className="rounded-full bg-[#f4f4f2] px-3 py-1.5">
                 {showImage ? "Cover image on" : "Cover image off"}
               </span>
+            </div>
+
+            <div className="mt-8 border border-[#ececec] p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9a8f82]">
+                Email layout — drag to arrange
+              </p>
+              <EmailBlockOrderEditor
+                className="mt-3"
+                value={effectiveBlockOrder}
+                onChange={setBlockOrder}
+                hint="Drag any block and drop it anywhere. The preview and the sent email both follow this exact order."
+              />
             </div>
           </div>
 

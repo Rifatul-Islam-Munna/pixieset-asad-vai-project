@@ -102,6 +102,7 @@ export function MarketingScheduleDialog({ open, onOpenChange }: { open: boolean;
         showImage: activeTemplate.showImage,
         showBranding: activeTemplate.showBranding,
         brandingPosition: activeTemplate.brandingPosition,
+        blockOrder: activeTemplate.blockOrder,
         collectionId: activeCollection._id,
         collectionName: activeCollection.name,
         scheduledLocal,

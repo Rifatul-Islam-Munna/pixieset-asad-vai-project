@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { CreateMarketingAutomationPayload, MarketingAutomationRecord } from "@/api-hooks/use-marketing-automations";
 import type { EmailTemplateItem } from "@/lib/dashboard-store";
 import { Button } from "@/components/ui/button";
+import { EmailBlockOrderEditor } from "@/components/dashboard/email-block-order-editor";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -27,6 +28,7 @@ type AutomationEmailDraft = {
   showImage: boolean;
   showBranding: boolean;
   brandingPosition: "top" | "bottom";
+  blockOrder: string[];
 };
 
 function draftFromAutomation(automation: MarketingAutomationRecord): AutomationEmailDraft {
@@ -46,6 +48,7 @@ function draftFromAutomation(automation: MarketingAutomationRecord): AutomationE
     showImage: automation.showImage !== false,
     showBranding: automation.showBranding !== false,
     brandingPosition: automation.brandingPosition === "bottom" ? "bottom" : "top",
+    blockOrder: Array.isArray(automation.blockOrder) ? automation.blockOrder : [],
   };
 }
 
@@ -79,6 +82,7 @@ export function AutomationEmailEditorDialog({ automation, emailTemplates, busy, 
       showImage: template.showImage !== false,
       showBranding: template.showBranding !== false,
       brandingPosition: template.brandingPosition === "bottom" ? "bottom" : "top",
+      blockOrder: Array.isArray(template.blockOrder) ? template.blockOrder : [],
     }));
   };
 
@@ -127,9 +131,7 @@ export function AutomationEmailEditorDialog({ automation, emailTemplates, busy, 
 
           <label className="flex items-center justify-between gap-4 border p-4 text-sm font-bold"><span><span className="block">Show hero image</span><span className="mt-1 block text-xs font-normal text-[#777]">Turn this off without deleting the saved image URL.</span></span><Switch checked={draft.showImage} onCheckedChange={(value) => setDraft((current) => ({ ...current, showImage: value }))} /></label>
           <label className="flex items-center justify-between gap-4 border p-4 text-sm font-bold"><span><span className="block">Show studio branding</span><span className="mt-1 block text-xs font-normal text-[#777]">Your logo and studio name from Settings → Branding, in the accent color you saved.</span></span><Switch checked={draft.showBranding} onCheckedChange={(value) => setDraft((current) => ({ ...current, showBranding: value }))} /></label>
-          {draft.showBranding && (
-            <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Branding position</span><div className="grid grid-cols-2 gap-2">{(["top", "bottom"] as const).map((position) => <button key={position} type="button" onClick={() => setDraft((current) => ({ ...current, brandingPosition: position }))} className={`h-10 rounded-none border px-3 text-xs font-bold ${draft.brandingPosition === position ? "border-[#6337d8] bg-[#6337d8] text-white" : "border-[#dedede] bg-white text-[#333]"}`}>{position === "top" ? "Top of email" : "Bottom of email"}</button>)}</div></label>
-          )}
+          <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Email layout — drag to arrange</span><EmailBlockOrderEditor value={draft.blockOrder} onChange={(order) => setDraft((current) => ({ ...current, blockOrder: order }))} hint="Drag any block and drop it anywhere. The delivered email follows this exact order." /></label>
           <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Footer</span><Textarea value={draft.footerText} onChange={(event) => setDraft((value) => ({ ...value, footerText: event.target.value }))} className="min-h-24 rounded-none" /></label>
 
           {automation.trigger !== "new-subscriber" && (

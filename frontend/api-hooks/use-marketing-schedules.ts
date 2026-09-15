@@ -45,6 +45,7 @@ export type CreateMarketingSchedulePayload = {
   showImage?: boolean;
   showBranding?: boolean;
   brandingPosition?: "top" | "bottom";
+  blockOrder?: string[];
   collectionId?: string;
   collectionName?: string;
   scheduledLocal: string;

@@ -26,6 +26,7 @@ export type MarketingAutomationRecord = {
   showImage?: boolean;
   showBranding?: boolean;
   brandingPosition?: "top" | "bottom";
+  blockOrder?: string[];
   collectionId?: string;
   collectionName?: string;
   stats?: MarketingAutomationStats;
@@ -54,6 +55,7 @@ export type CreateMarketingAutomationPayload = {
   showImage?: boolean;
   showBranding?: boolean;
   brandingPosition?: "top" | "bottom";
+  blockOrder?: string[];
   collectionId?: string;
   collectionName?: string;
 };

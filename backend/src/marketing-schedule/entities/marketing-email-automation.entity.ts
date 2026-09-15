@@ -27,6 +27,7 @@ export class MarketingEmailAutomation {
   @Prop({ default: true }) showImage: boolean;
   @Prop({ default: true }) showBranding: boolean;
   @Prop({ default: 'top', enum: ['top', 'bottom'] }) brandingPosition: string;
+  @Prop({ type: [String], default: [] }) blockOrder: string[];
   @Prop({ trim: true }) collectionId?: string;
   @Prop({ trim: true }) collectionName?: string;
   @Prop({ default: () => new Date(), index: true }) cursorUpdatedAt: Date;

@@ -258,6 +258,7 @@ import { GALLERY_LANGUAGES, normalizeGalleryLanguage, type GalleryLanguage } fro
 import { CLIENT_GALLERY_CATEGORIES } from "@/lib/gallery-categories";
 import { GALLERY_FONT_CATEGORIES, GALLERY_FONT_OPTIONS, galleryFontSample, resolveGalleryFontFamily, type GalleryFontCategory } from "@/lib/gallery-fonts";
 import { ClientGalleryOverview } from "@/components/dashboard/client-gallery-overview";
+import { EmailBlockOrderEditor } from "@/components/dashboard/email-block-order-editor";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
 import {
   PlanFeatureLock,
@@ -3198,6 +3199,8 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
     campaignPreviewText,
     campaignSubject,
     campaignTemplate,
+    campaignBlockOrder,
+    setCampaignBlockOrder,
     selectedRecipients,
     setCampaignTab,
     setCampaignButtonColor,
@@ -3336,6 +3339,7 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
       image: campaignImage,
       eyebrowText: campaignEyebrowText,
       showImage: campaignShowImage,
+      blockOrder: campaignOrder,
     });
     saveEmailTemplate();
     const saved = useDashboardStore.getState().emailTemplates.find((item) => item.id === id);
@@ -3349,6 +3353,9 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
     router.push(`/dashboard/${section}/settings/email-templates/new`);
   };
 
+  const campaignOrder = campaignBlockOrder.length
+    ? campaignBlockOrder
+    : campaignBranding.blockOrder ?? [];
   const campaignBrandLogoUrl = imageSrc(
     campaignBranding.logoUrl || campaignBranding.brandImageUrl || "",
   );
@@ -3367,6 +3374,7 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
     imageUrl: campaignImage,
     showImage: campaignShowImage,
     showBranding: true,
+    blockOrder: campaignOrder,
     brandingPosition: campaignBranding.brandingPosition,
   });
   const sendNow = () => {
@@ -3642,6 +3650,16 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
                       }
                     />
                   </div>
+                </Field>
+                <Field>
+                  <FieldLabel className="font-bold uppercase text-[#777]">
+                    Email Layout — Drag To Arrange
+                  </FieldLabel>
+                  <EmailBlockOrderEditor
+                    value={campaignOrder}
+                    onChange={setCampaignBlockOrder}
+                    hint="Grab any block and drop it anywhere: branding, label, headline, image, message, button, footer. The inbox email is generated from this exact order."
+                  />
                 </Field>
                 <Field>
                   <FieldLabel className="font-bold uppercase text-[#777]">
@@ -5090,38 +5108,16 @@ function BrandingSettings() {
           </Field>
           <Field>
             <FieldLabel className="font-bold">
-              Email Branding Position
+              Email Layout — Drag To Arrange
             </FieldLabel>
-            <div className="flex gap-2">
-              {(
-                [
-                  { value: "top", label: "Top of email" },
-                  { value: "bottom", label: "Bottom of email" },
-                ] as const
-              ).map((option) => {
-                const active =
-                  (form.brandingPosition ?? "top") === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() =>
-                      setForm({ ...form, brandingPosition: option.value })
-                    }
-                    className={`h-11 flex-1 rounded-none border px-4 text-sm font-bold ${
-                      active
-                        ? "border-[#6337d8] bg-[#6337d8] text-white"
-                        : "border-[#dedede] bg-white text-[#333]"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
+            <EmailBlockOrderEditor
+              value={form.blockOrder}
+              onChange={(order) => setForm({ ...form, blockOrder: order })}
+              hint="Drag any block anywhere: branding, label, headline, image, message, button, footer. Every gallery email uses this exact order."
+            />
             <p className="mt-2 text-xs leading-5 text-[#888]">
-              Where your logo and studio name appear inside gallery emails —
-              drag-and-drop placement for the branding block.
+              This is the default layout for all your emails. Individual
+              templates and campaigns can still be arranged separately.
             </p>
           </Field>
         </FieldGroup>
@@ -5608,6 +5604,20 @@ function EmailTemplatesPanel({
                 }
               />
             </Field>
+            <Field>
+              <FieldLabel className="font-bold uppercase text-[#777]">
+                Email Layout — Drag To Arrange
+              </FieldLabel>
+              <EmailBlockOrderEditor
+                value={
+                  activeTemplate.blockOrder?.length
+                    ? activeTemplate.blockOrder
+                    : branding.blockOrder
+                }
+                onChange={(order) => updateEmailTemplate({ blockOrder: order })}
+                hint="Drag any block and drop it anywhere. The preview and the delivered email both follow this order."
+              />
+            </Field>
           </FieldGroup>
         </section>
 
@@ -5641,6 +5651,9 @@ function EmailTemplatesPanel({
               imageUrl: activeTemplate.image,
               showImage: activeTemplate.showImage ?? true,
               showBranding: activeTemplate.showBranding !== false,
+              blockOrder: activeTemplate.blockOrder?.length
+                ? activeTemplate.blockOrder
+                : branding.blockOrder,
               brandingPosition:
                 activeTemplate.brandingPosition ?? branding.brandingPosition,
             })}
@@ -14552,6 +14565,9 @@ function CollectionDetailView({
       imageUrl: inlineCover ? "cid:gallery-cover" : coverImageUrl,
       showBranding: shareShowBranding,
       showImage: shareShowImage,
+      blockOrder: selectedShareTemplate?.blockOrder?.length
+        ? selectedShareTemplate.blockOrder
+        : branding.blockOrder,
     });
     setShareSending(true);
     try {
@@ -14615,6 +14631,9 @@ function CollectionDetailView({
     imageUrl: imageSrc(shareHeroImage),
     showBranding: shareShowBranding,
     showImage: shareShowImage,
+    blockOrder: selectedShareTemplate?.blockOrder?.length
+      ? selectedShareTemplate.blockOrder
+      : branding.blockOrder,
   });
 
   const isFileDrag = (event: DragEvent<HTMLElement>) =>
@@ -17612,6 +17631,9 @@ function CollectionActivityPanel({
       showBranding: template.showBranding !== false,
       showImage: template.showImage !== false,
       imageUrl: template.image || "",
+      blockOrder: template.blockOrder?.length
+        ? template.blockOrder
+        : mailBranding.blockOrder,
       brandingPosition: mailBranding.brandingPosition,
     });
     await recordEmailUsage(1);

@@ -19,6 +19,7 @@ import { toast } from "sonner";
 
 import { updateHomeCms } from "@/actions/admin";
 import { AdminResourceShell } from "@/components/dashboard/admin-resource-shell";
+import { EmailBlockOrderEditor } from "@/components/dashboard/email-block-order-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -48,6 +49,7 @@ const blankTemplate = (): EmailTemplateItem => ({
   showImage: true,
   showBranding: true,
   useBrandColor: true,
+  blockOrder: ["branding", "eyebrow", "title", "image", "message", "button", "footer"],
   category: "Gallery Delivery",
   galleryCategory: "Wedding",
   customGalleryCategoryLabel: "",
@@ -128,6 +130,7 @@ export function AdminEmailTemplatesPage({
       imageUrl: draft.image,
       showBranding: draft.showBranding !== false,
       showImage: draft.showImage !== false,
+      blockOrder: draft.blockOrder,
       brandingPosition: draft.brandingPosition,
     });
   }, [draft]);
@@ -545,8 +548,15 @@ export function AdminEmailTemplatesPage({
                         update({ showBranding: checked })
                       }
                     />
+                    <Field label="Email layout — drag to arrange">
+                      <EmailBlockOrderEditor
+                        value={draft.blockOrder}
+                        onChange={(order) => update({ blockOrder: order })}
+                        hint="Drag any block and drop it anywhere. The delivered email is generated from this order."
+                      />
+                    </Field>
                     {draft.showBranding !== false && (
-                      <Field label="Branding position">
+                      <Field label="Legacy branding position">
                         <div className="grid grid-cols-2 gap-2">
                           {(
                             [

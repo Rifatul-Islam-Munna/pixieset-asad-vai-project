@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { CoverAnimationDesign } from "@/lib/cover-animation";
+import { EMAIL_DEFAULT_BLOCK_ORDER } from "@/lib/gallery-email";
 import {
   defaultEmailTemplates,
   type CustomCoverTemplate,
@@ -174,6 +175,7 @@ type DashboardState = {
   campaignButtonLink: string;
   campaignButtonColor: string;
   campaignFooterText: string;
+  campaignBlockOrder: string[];
   campaignTab: "email" | "recipients";
   campaignSearch: string;
   showCampaignTemplates: boolean;
@@ -226,6 +228,7 @@ type DashboardState = {
   setCampaignButtonLink: (value: string) => void;
   setCampaignButtonColor: (value: string) => void;
   setCampaignFooterText: (value: string) => void;
+  setCampaignBlockOrder: (value: string[]) => void;
   setCampaignTab: (value: "email" | "recipients") => void;
   setCampaignSearch: (value: string) => void;
   setShowCampaignTemplates: (value: boolean) => void;
@@ -499,6 +502,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
   campaignButtonLink: "Collection URL",
   campaignButtonColor: "#444444",
   campaignFooterText: defaultFooterText,
+  campaignBlockOrder: [],
   campaignTab: "email",
   campaignSearch: "",
   showCampaignTemplates: false,
@@ -560,6 +564,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
           campaignImage: savedTemplate.image,
           campaignEyebrowText: savedTemplate.eyebrowText ?? "Client Gallery",
           campaignShowImage: savedTemplate.showImage ?? true,
+          campaignBlockOrder: savedTemplate.blockOrder ?? [],
           campaignTab: "email",
           showCampaignTemplates: false,
         };
@@ -578,6 +583,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
       campaignImage: "",
       campaignEyebrowText: "Client Gallery",
       campaignShowImage: true,
+      campaignBlockOrder: [],
       campaignTab: "email",
       showCampaignTemplates: false,
     };
@@ -593,6 +599,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
   setCampaignButtonLink: (value) => set({ campaignButtonLink: value }),
   setCampaignButtonColor: (value) => set({ campaignButtonColor: value }),
   setCampaignFooterText: (value) => set({ campaignFooterText: value }),
+  setCampaignBlockOrder: (value) => set({ campaignBlockOrder: value }),
   setCampaignSearch: (value) => set({ campaignSearch: value }),
   setShowCampaignTemplates: (value) => set({ showCampaignTemplates: value }),
   setCampaignTab: (value) => set({ campaignTab: value }),
@@ -842,6 +849,7 @@ export const useDashboardStore = create<DashboardState>((set) => {
         image: "",
         eyebrowText: "Client Gallery",
         showImage: true,
+        blockOrder: [...EMAIL_DEFAULT_BLOCK_ORDER],
         category: "Gallery Delivery",
         galleryCategory: "Wedding",
         customGalleryCategoryLabel: "",
