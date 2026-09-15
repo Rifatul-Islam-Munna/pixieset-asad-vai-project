@@ -67,6 +67,19 @@ export class MailService implements OnModuleInit {
 
   async fetchInlineImage(url: string, contentId: string, filename: string): Promise<GlobalMailAttachment | undefined> {
     const value = String(url || '').trim();
+    if (/^data:image\//i.test(value)) {
+      const match = value.match(/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i);
+      if (!match) return undefined;
+      const content = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
+      if (!content.length || content.length > 8 * 1024 * 1024) return undefined;
+      return {
+        filename,
+        content,
+        contentType: match[1].toLowerCase(),
+        contentId,
+        disposition: 'inline',
+      };
+    }
     if (!/^https?:\/\//i.test(value)) return undefined;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);

@@ -27,6 +27,10 @@ function emailLines(value: string) {
   return escapeEmailHtml(value).replace(/\r?\n/g, "<br>");
 }
 
+export function canInlineEmailAsset(value: string) {
+  return /^(https?:\/\/|data:image\/)/i.test(String(value ?? "").trim());
+}
+
 export function buildGalleryEmailHtml(input: GalleryEmailHtmlInput) {
   const showBranding = input.showBranding !== false;
   const showImage = input.showImage !== false;

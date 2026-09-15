@@ -33,7 +33,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { DashboardSection } from "@/components/dashboard/client-dashboard";
 import { baseEmailTemplates, type EmailTemplateItem } from "@/lib/dashboard-store";
-import { buildGalleryEmailHtml } from "@/lib/gallery-email";
+import {
+  buildGalleryEmailHtml,
+  canInlineEmailAsset,
+} from "@/lib/gallery-email";
 import type { BrandSettings, HomeCmsData } from "@/lib/home-cms";
 import { publicCollectionUrl } from "@/lib/public-site-url";
 
@@ -61,10 +64,6 @@ function plainText(value?: string) {
     .replace(/\s+\n/g, "\n")
     .replace(/\n\s+/g, "\n")
     .trim();
-}
-
-function canEmbedInline(value: string) {
-  return /^https?:\/\//i.test(value);
 }
 
 const subscribeToOrigin = () => () => undefined;
@@ -284,8 +283,8 @@ export function CollectionSharePage({
       return;
     }
 
-    const inlineLogo = Boolean(logoUrl && canEmbedInline(logoUrl));
-    const inlineCover = Boolean(coverImageUrl && canEmbedInline(coverImageUrl));
+    const inlineLogo = Boolean(logoUrl && canInlineEmailAsset(logoUrl));
+    const inlineCover = Boolean(coverImageUrl && canInlineEmailAsset(coverImageUrl));
     const html = buildGalleryEmailHtml({
       previewText: selectedTemplate?.previewText,
       eyebrowText,

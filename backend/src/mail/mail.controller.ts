@@ -20,7 +20,7 @@ export class MailController {
     const inlineImages = Array.isArray(body.inlineImages) ? body.inlineImages.slice(0, 4) : [];
     const attachments = (await Promise.all(inlineImages.map((item: Record<string, unknown>, index: number) =>
       this.mailService.fetchInlineImage(
-        this.text(item?.url, 2048),
+        this.text(item?.url, 12 * 1024 * 1024),
         this.text(item?.cid, 120) || `gallery-image-${index + 1}`,
         this.text(item?.filename, 140) || `gallery-image-${index + 1}.jpg`,
       ),

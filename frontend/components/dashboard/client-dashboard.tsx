@@ -278,6 +278,7 @@ import { MarketingScheduleDialog } from "@/components/dashboard/marketing-schedu
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { publicCollectionUrl } from "@/lib/public-site-url";
+import { buildGalleryEmailHtml, canInlineEmailAsset } from "@/lib/gallery-email";
 import { useMarketingSchedules, type MarketingScheduleRecord } from "@/api-hooks/use-marketing-schedules";
 import {
   checkUsername,
@@ -415,6 +416,8 @@ async function sendUniversalEmail(payload: {
   text: string;
   html?: string;
   replyTo?: string;
+  senderName?: string;
+  inlineImages?: { url: string; cid: string; filename: string }[];
 }) {
   const [data, error] = await PostRequestAxios<{
     data: { sent: boolean; skipped?: boolean; reason?: string };
@@ -13884,6 +13887,8 @@ function CollectionDetailView({
   const [shareMessage, setShareMessage] = useState("");
   const [shareButtonText, setShareButtonText] = useState("View Gallery");
   const [shareFooterText, setShareFooterText] = useState("");
+  const [shareShowBranding, setShareShowBranding] = useState(true);
+  const [shareShowImage, setShareShowImage] = useState(true);
   const [shareSending, setShareSending] = useState(false);
   const [galleryPinDraft, setGalleryPinDraft] = useState(
     String((collection?.settings?.access as CollectionAccessSettings | undefined)?.pinCode ?? ""),
@@ -14471,6 +14476,8 @@ function CollectionDetailView({
     setShareFooterText(
       template?.footerText?.trim() || branding.brandText || "",
     );
+    setShareShowBranding(template?.showBranding !== false);
+    setShareShowImage(template?.showImage !== false);
   };
   const openShareComposer = () => {
     router.push(`/dashboard/${section}/collections/${collectionId}/share`);
@@ -14488,37 +14495,40 @@ function CollectionDetailView({
       toast.error("Email subject is required");
       return;
     }
-    const escapeHtml = (value: string) =>
-      value
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
     const heroImage =
       selectedShareTemplate?.image ||
       form.coverImage ||
       images.find((image) => image.mediaType !== "video")?.url ||
       "";
     const logo = branding.logoUrl || branding.brandImageUrl || "";
+    const logoUrl = imageSrc(logo);
+    const coverImageUrl = imageSrc(heroImage);
+    const inlineLogo = Boolean(logoUrl && canInlineEmailAsset(logoUrl));
+    const inlineCover = Boolean(
+      coverImageUrl && canInlineEmailAsset(coverImageUrl),
+    );
     const accent =
-      selectedShareTemplate?.buttonColor || branding.accentColor || "#333333";
-    const html = `
-      <div style="margin:0;background:#f5f5f5;padding:36px 16px;font-family:Arial,sans-serif;color:#222">
-        <div style="max-width:640px;margin:0 auto;background:#fff;text-align:center">
-          <div style="padding:38px 36px 26px">
-            ${logo ? `<img src="${escapeHtml(logo)}" alt="" style="max-height:54px;max-width:170px;margin-bottom:18px"/>` : ""}
-            ${branding.brandText ? `<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#555">${escapeHtml(branding.brandText)}</div>` : ""}
-            <h1 style="margin:28px 0 0;font-size:27px;font-weight:500;letter-spacing:4px;text-transform:uppercase">${escapeHtml(shareHeading || collection?.name || "Your photos")}</h1>
-          </div>
-          ${heroImage ? `<img src="${escapeHtml(imageSrc(heroImage))}" alt="" style="display:block;width:100%;max-height:430px;object-fit:cover"/>` : ""}
-          <div style="padding:42px 42px 34px">
-            <p style="margin:0 auto 30px;max-width:500px;font-size:15px;line-height:1.8;color:#555;white-space:pre-line">${escapeHtml(shareMessage)}</p>
-            <a href="${escapeHtml(publicLink)}" style="display:inline-block;background:${escapeHtml(accent)};color:#fff;text-decoration:none;padding:15px 34px;font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">${escapeHtml(shareButtonText || "View Gallery")}</a>
-            ${shareFooterText ? `<p style="margin:34px 0 0;font-size:11px;line-height:1.7;color:#777">${escapeHtml(shareFooterText)}</p>` : ""}
-          </div>
-        </div>
-      </div>`;
+      shareShowBranding && selectedShareTemplate?.useBrandColor !== false
+        ? branding.accentColor || selectedShareTemplate?.buttonColor || "#444444"
+        : selectedShareTemplate?.buttonColor || "#444444";
+    const html = buildGalleryEmailHtml({
+      previewText: selectedShareTemplate?.previewText,
+      eyebrowText:
+        selectedShareTemplate?.eyebrowText ||
+        selectedShareTemplate?.galleryCategory ||
+        "Client Gallery",
+      title: shareHeading || collection?.name || "Your photos",
+      message: shareMessage,
+      buttonText: shareButtonText || "View Gallery",
+      buttonLink: publicLink,
+      buttonColor: accent,
+      footerText: shareFooterText,
+      logoUrl: inlineLogo ? "cid:gallery-logo" : logoUrl,
+      brandText: branding.brandText,
+      imageUrl: inlineCover ? "cid:gallery-cover" : coverImageUrl,
+      showBranding: shareShowBranding,
+      showImage: shareShowImage,
+    });
     setShareSending(true);
     try {
       await sendUniversalEmail({
@@ -14526,6 +14536,20 @@ function CollectionDetailView({
         subject: shareSubject.trim(),
         text: `${shareMessage.trim()}\n\n${publicLink}`,
         html,
+        inlineImages: [
+          ...(shareShowBranding && inlineLogo
+            ? [{ url: logoUrl, cid: "gallery-logo", filename: "brand-logo" }]
+            : []),
+          ...(shareShowImage && inlineCover
+            ? [
+                {
+                  url: coverImageUrl,
+                  cid: "gallery-cover",
+                  filename: "gallery-cover",
+                },
+              ]
+            : []),
+        ],
       });
       await recordEmailUsage(recipients.length).catch(() => null);
       toast.success(
@@ -14540,6 +14564,35 @@ function CollectionDetailView({
       setShareSending(false);
     }
   };
+
+  const shareHeroImage =
+    selectedShareTemplate?.image ||
+    form.coverImage ||
+    images.find((image) => image.mediaType !== "video")?.url ||
+    "";
+  const shareLogo = branding.logoUrl || branding.brandImageUrl || "";
+  const sharePreviewHtml = buildGalleryEmailHtml({
+    previewText: selectedShareTemplate?.previewText,
+    eyebrowText:
+      selectedShareTemplate?.eyebrowText ||
+      selectedShareTemplate?.galleryCategory ||
+      "Client Gallery",
+    title: shareHeading || collection?.name || "Your photos",
+    message: shareMessage,
+    buttonText: shareButtonText || "View Gallery",
+    buttonLink: publicLink,
+    buttonColor:
+      shareShowBranding && selectedShareTemplate?.useBrandColor !== false
+        ? branding.accentColor || selectedShareTemplate?.buttonColor || "#444444"
+        : selectedShareTemplate?.buttonColor || "#444444",
+    footerText: shareFooterText,
+    logoUrl: imageSrc(shareLogo),
+    brandText: branding.brandText,
+    imageUrl: imageSrc(shareHeroImage),
+    showBranding: shareShowBranding,
+    showImage: shareShowImage,
+  });
+
   const isFileDrag = (event: DragEvent<HTMLElement>) =>
     Array.from(event.dataTransfer.types).includes("Files");
   const droppedMediaFiles = (files: FileList) =>
@@ -15195,62 +15248,15 @@ function CollectionDetailView({
                 </footer>
               </section>
               <aside className="min-h-0 overflow-y-auto bg-[#f5f5f5] p-6 lg:p-10">
-                <div className="mx-auto max-w-[560px] bg-white text-center shadow-sm">
-                  <div className="px-8 pb-8 pt-10">
-                    {(branding.logoUrl || branding.brandImageUrl) && (
-                      <img
-                        src={branding.logoUrl || branding.brandImageUrl}
-                        alt=""
-                        className="mx-auto max-h-14 max-w-44 object-contain"
-                      />
-                    )}
-                    {branding.brandText && (
-                      <p className="mt-5 text-[10px] uppercase tracking-[0.22em] text-[#555]">
-                        {branding.brandText}
-                      </p>
-                    )}
-                    <h3 className="mt-8 text-2xl font-medium uppercase tracking-[0.18em]">
-                      {shareHeading || collection.name}
-                    </h3>
-                  </div>
-                  {(selectedShareTemplate?.image ||
-                    form.coverImage ||
-                    images.find((image) => image.mediaType !== "video")
-                      ?.url) && (
-                    <img
-                      src={imageSrc(
-                        selectedShareTemplate?.image ||
-                          form.coverImage ||
-                          images.find((image) => image.mediaType !== "video")
-                            ?.url ||
-                          "",
-                      )}
-                      alt=""
-                      className="max-h-[430px] w-full object-cover"
-                    />
-                  )}
-                  <div className="px-10 py-10">
-                    <p className="whitespace-pre-line text-sm leading-7 text-[#666]">
-                      {shareMessage}
-                    </p>
-                    <span
-                      className="mt-8 inline-flex min-h-11 items-center justify-center px-8 text-xs font-bold uppercase tracking-[0.13em] text-white"
-                      style={{
-                        backgroundColor:
-                          selectedShareTemplate?.buttonColor ||
-                          branding.accentColor ||
-                          "#444",
-                      }}
-                    >
-                      {shareButtonText || "View Gallery"}
-                    </span>
-                    {shareFooterText && (
-                      <p className="mt-8 text-xs leading-6 text-[#777]">
-                        {shareFooterText}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <div
+                  className="mx-auto max-w-[760px] overflow-hidden rounded-sm shadow-[0_24px_70px_rgba(40,35,25,0.12)]"
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("a")) {
+                      event.preventDefault();
+                    }
+                  }}
+                  dangerouslySetInnerHTML={{ __html: sharePreviewHtml }}
+                />
               </aside>
             </div>
           </div>
