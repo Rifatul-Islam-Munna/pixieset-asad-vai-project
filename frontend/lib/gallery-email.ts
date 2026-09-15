@@ -43,6 +43,7 @@ export function normalizeBlockOrder(value: unknown): GalleryEmailBlockId[] {
 
 export type GalleryEmailHtmlInput = {
   previewText?: string;
+  /** Optional overrides so the same layout can render preview vs delivered sources. */
   eyebrowText?: string;
   title: string;
   message: string;
@@ -81,6 +82,28 @@ function emailLines(value: string) {
 
 export function canInlineEmailAsset(value: string) {
   return /^(https?:\/\/|data:image\/)/i.test(String(value ?? "").trim());
+}
+
+export type EmailInlineAsset = {
+  src: string;
+  inline: { url: string; cid: string; filename: string } | null;
+};
+
+/**
+ * Email clients (Gmail included) block `data:` image sources, so any inlinable
+ * logo or cover must travel as a CID attachment and be referenced as
+ * `cid:<id>` in the HTML. This keeps the HTML tiny and renders everywhere.
+ */
+export function emailInlineAsset(
+  value: string | undefined,
+  cid: string,
+): EmailInlineAsset {
+  const url = String(value ?? "").trim();
+  if (!canInlineEmailAsset(url)) return { src: "", inline: null };
+  return {
+    src: `cid:${cid}`,
+    inline: { url, cid, filename: cid },
+  };
 }
 
 /**

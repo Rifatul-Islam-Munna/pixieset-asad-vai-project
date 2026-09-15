@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -12,6 +13,10 @@ import {
   type BrandingEmailData,
   type BrandingEmailPayload,
 } from './email-layout';
+import { sanitizeEmailHtml } from './html-guard';
+
+const LOGO_CID = 'gallery-logo';
+const COVER_CID = 'gallery-cover';
 
 export {
   buildBrandedGalleryEmailHtml,
@@ -32,6 +37,7 @@ export class BrandingEmailService {
     @InjectModel(DashboardSetting.name)
     private readonly settingModel: Model<DashboardSettingDocument>,
     private readonly mailService: MailService,
+    private readonly configService: ConfigService,
   ) {}
 
   async loadBrandData(userId: string): Promise<BrandingEmailData> {
@@ -41,8 +47,76 @@ export class BrandingEmailService {
     return ((setting?.data ?? {}) as BrandingEmailData) || {};
   }
 
+  /** Uploaded assets are stored as `/uploads/...` and must become absolute. */
+  private absoluteAssetUrl(value: string) {
+    if (!value) return '';
+    if (/^(https?:\/\/|data:image\/)/i.test(value)) return value;
+    if (!value.startsWith('/')) return '';
+    const base = String(
+      this.configService.get<string>('PUBLIC_BASE_URL') ||
+        this.configService.get<string>('NEXT_PUBLIC_BASE_URL') ||
+        this.configService.get<string>('FRONTEND_URL') ||
+        this.configService.get<string>('PUBLIC_API_URL') ||
+        '',
+    ).replace(/\/$/, '');
+    return base ? `${base}${value}` : '';
+  }
+
   senderName(brand: BrandingEmailData, fallback = 'Gallery sender') {
     return String(brand.brandText || brand.brandName || brand.name || fallback).trim().slice(0, 120) || fallback;
+  }
+
+  /**
+   * Attaches the studio logo and hero image as CID parts and rewrites the HTML
+   * to `cid:` sources. Email clients block `data:` images, and shipping base64
+   * inside the body is what broke previously delivered emails.
+   */
+  async renderWithInlineAssets(payload: BrandingEmailPayload, brand: BrandingEmailData) {
+    const attachments: GlobalMailAttachment[] = [];
+    const resolve = async (value: unknown, cid: string) => {
+      const url = this.absoluteAssetUrl(String(value ?? '').trim());
+      if (!url) return '';
+      const attachment = await this.mailService
+        .fetchInlineImage(url, cid, cid)
+        .catch(() => undefined);
+      if (!attachment) return '';
+      attachments.push(attachment);
+      return `cid:${cid}`;
+    };
+
+    const logoSrc = await resolve(String(brand.logoUrl || brand.logo || ''), LOGO_CID);
+    const imageSrc = await resolve(payload.imageUrl, COVER_CID);
+    const html = buildBrandedGalleryEmailHtml(
+      { ...payload, ...(imageSrc ? { imageUrl: imageSrc } : {}) },
+      { ...brand, logoUrl: logoSrc, logo: undefined, brandImageUrl: undefined },
+    );
+    return { html: sanitizeEmailHtml(html), attachments };
+  }
+
+  /** Single entry point used by every backend email flow. */
+  async sendBranded(
+    payload: BrandingEmailPayload & {
+      to: string | string[];
+      subject: string;
+      text?: string;
+      cc?: string | string[];
+      bcc?: string | string[];
+      replyTo?: string;
+    },
+  ) {
+    const brand = await this.loadBrandData(payload.userId);
+    const { html, attachments } = await this.renderWithInlineAssets(payload, brand);
+    return this.mailService.send({
+      to: payload.to,
+      ...(payload.cc ? { cc: payload.cc } : {}),
+      ...(payload.bcc ? { bcc: payload.bcc } : {}),
+      ...(payload.replyTo ? { replyTo: payload.replyTo } : {}),
+      subject: payload.subject,
+      text: payload.text,
+      html,
+      fromName: this.senderName(brand),
+      ...(attachments.length ? { attachments } : {}),
+    });
   }
 
   async send(payload: BrandingEmailPayload & {
@@ -55,7 +129,7 @@ export class BrandingEmailService {
     attachments?: GlobalMailAttachment[];
   }) {
     const brand = await this.loadBrandData(payload.userId);
-    const html = buildBrandedGalleryEmailHtml(payload, brand);
+    const { html, attachments } = await this.renderWithInlineAssets(payload, brand);
     return this.mailService.send({
       to: payload.to,
       ...(payload.cc ? { cc: payload.cc } : {}),
@@ -65,7 +139,7 @@ export class BrandingEmailService {
       text: payload.text,
       html,
       fromName: this.senderName(brand),
-      ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
+      attachments: [...(payload.attachments ?? []), ...attachments],
     });
   }
 }

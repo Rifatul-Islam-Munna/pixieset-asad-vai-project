@@ -279,7 +279,11 @@ import { MarketingScheduleDialog } from "@/components/dashboard/marketing-schedu
 import { useCollectionStoreAdmin } from "@/api-hooks/use-collection-store-admin";
 import { useHomepageSettings } from "@/api-hooks/use-homepage";
 import { publicCollectionUrl } from "@/lib/public-site-url";
-import { buildGalleryEmailHtml, canInlineEmailAsset } from "@/lib/gallery-email";
+import {
+  buildGalleryEmailHtml,
+  canInlineEmailAsset,
+  emailInlineAsset,
+} from "@/lib/gallery-email";
 import { useMarketingSchedules, type MarketingScheduleRecord } from "@/api-hooks/use-marketing-schedules";
 import {
   checkUsername,
@@ -3359,7 +3363,9 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
   const campaignBrandLogoUrl = imageSrc(
     campaignBranding.logoUrl || campaignBranding.brandImageUrl || "",
   );
-  const campaignHtml = buildGalleryEmailHtml({
+  const campaignLogoAsset = emailInlineAsset(campaignBrandLogoUrl, "gallery-logo");
+  const campaignCoverAsset = emailInlineAsset(campaignImage, "gallery-cover");
+  const campaignEmailInput = {
     previewText: campaignPreviewText,
     eyebrowText: campaignEyebrowText,
     title: campaignTemplate || "Untitled Template",
@@ -3369,14 +3375,63 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
       campaignButtonLink === "Collection URL" ? "#" : campaignButtonLink,
     buttonColor: campaignButtonColor || "#444444",
     footerText: campaignFooterText,
-    logoUrl: campaignBrandLogoUrl,
     brandText: campaignBranding.brandText,
-    imageUrl: campaignImage,
     showImage: campaignShowImage,
     showBranding: true,
     blockOrder: campaignOrder,
     brandingPosition: campaignBranding.brandingPosition,
+  };
+  // Preview uses the real sources so the dashboard shows the artwork.
+  const campaignHtml = buildGalleryEmailHtml({
+    ...campaignEmailInput,
+    logoUrl: campaignBrandLogoUrl,
+    imageUrl: campaignImage,
   });
+  // Delivered email references CID attachments: Gmail blocks data: images.
+  const campaignSendHtml = buildGalleryEmailHtml({
+    ...campaignEmailInput,
+    logoUrl: campaignLogoAsset.src,
+    imageUrl: campaignCoverAsset.src,
+  });
+  const campaignInlineImages = [campaignLogoAsset.inline, campaignCoverAsset.inline]
+    .filter((item): item is NonNullable<typeof campaignLogoAsset.inline> => Boolean(item));
+  const campaignTextBody = [
+    campaignMessage,
+    "",
+    campaignButtonText && campaignButtonLink
+      ? `${campaignButtonText}: ${campaignButtonLink}`
+      : "",
+    "",
+    campaignFooterText,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const campaignTestAddress =
+    accountQuery.data?.data?.email || selectedEmails[0] || "";
+  const [testPending, setTestPending] = useState(false);
+  const sendTest = async () => {
+    if (!campaignTestAddress) {
+      toast.error("Select a recipient or save your account email to send a test");
+      return;
+    }
+    setTestPending(true);
+    try {
+      await sendUniversalEmail({
+        to: campaignTestAddress,
+        subject: `[Test] ${campaignSubject || campaignTemplate}`,
+        text: campaignTextBody || campaignPreviewText || campaignTemplate,
+        html: campaignSendHtml,
+        inlineImages: campaignInlineImages,
+      });
+      toast.success(`Test email sent to ${campaignTestAddress}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Test email could not be sent",
+      );
+    } finally {
+      setTestPending(false);
+    }
+  };
   const sendNow = () => {
     setSendError("");
     startSendTransition(async () => {
@@ -3384,32 +3439,12 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
         const emails = selectedEmails;
         await recordEmailUsage(Math.max(1, selectedRecipients.length));
         if (emails.length) {
-          const body = [
-            campaignMessage,
-            "",
-            campaignButtonText && campaignButtonLink
-              ? `${campaignButtonText}: ${campaignButtonLink}`
-              : "",
-            "",
-            campaignFooterText,
-          ]
-            .filter(Boolean)
-            .join("\n");
-          const inlineLogo = canInlineEmailAsset(campaignBrandLogoUrl);
-          const inlineCover = canInlineEmailAsset(campaignImage);
           await sendUniversalEmail({
             to: emails,
             subject: campaignSubject || campaignTemplate,
-            text: body || campaignPreviewText || campaignTemplate,
-            html: campaignHtml,
-            inlineImages: [
-              ...(inlineLogo
-                ? [{ url: campaignBrandLogoUrl, cid: "gallery-logo", filename: "brand-logo" }]
-                : []),
-              ...(inlineCover
-                ? [{ url: campaignImage, cid: "gallery-cover", filename: "gallery-cover" }]
-                : []),
-            ],
+            text: campaignTextBody || campaignPreviewText || campaignTemplate,
+            html: campaignSendHtml,
+            inlineImages: campaignInlineImages,
           });
           toast.success("Campaign sent by universal SMTP");
         }
@@ -3437,7 +3472,14 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
         <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap md:gap-3">
           <Button variant="outline" className="h-10 rounded-none px-4 text-sm font-bold" onClick={createNewTemplate}><PlusCircle className="size-4" /> New Template</Button>
           <Button variant="outline" className="h-10 rounded-none px-4 text-sm font-bold" disabled={saveSetting.isPending} onClick={() => void saveAsMyTemplate()}><Save className="size-4" /> {saveSetting.isPending ? "Saving..." : "Save as My Template"}</Button>
-          <button className="px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40" disabled={!selectedEmails.length}>Send Test</button>
+          <button
+            type="button"
+            className="px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={testPending || !campaignTestAddress}
+            onClick={() => void sendTest()}
+          >
+            {testPending ? "Sending test..." : "Send Test"}
+          </button>
           <Button
             className="h-12 rounded-none bg-[#6337d8] px-9 text-sm font-bold text-white hover:bg-[#542bc2]"
             onClick={sendNow}
@@ -3553,7 +3595,13 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
                         className="h-12 rounded-none"
                         onChange={(event) => {
                           const file = event.target.files?.[0];
-                          if (file) setCampaignImage(URL.createObjectURL(file));
+                          if (!file) return;
+                          // A blob: URL cannot be fetched by the mail server, so
+                          // read the file as a data URL and mail it inline.
+                          const reader = new FileReader();
+                          reader.onload = () =>
+                            setCampaignImage(String(reader.result ?? ""));
+                          reader.readAsDataURL(file);
                         }}
                       />
                       <div className="mt-3 flex h-28 items-center justify-center overflow-hidden bg-[#090d0f] text-white">
@@ -17614,6 +17662,8 @@ function CollectionActivityPanel({
     const logoUrl = imageSrc(
       mailBranding.logoUrl || mailBranding.brandImageUrl || "",
     );
+    const logoAsset = emailInlineAsset(logoUrl, "gallery-logo");
+    const coverAsset = emailInlineAsset(template.image || "", "gallery-cover");
     const useBrandColor = template.useBrandColor !== false;
     const html = buildGalleryEmailHtml({
       previewText: template.previewText,
@@ -17626,11 +17676,11 @@ function CollectionActivityPanel({
         ? mailBranding.accentColor || template.buttonColor || "#1f2937"
         : template.buttonColor || "#1f2937",
       footerText: template.footerText || "",
-      logoUrl,
+      logoUrl: logoAsset.src,
       brandText: mailBranding.brandText,
       showBranding: template.showBranding !== false,
       showImage: template.showImage !== false,
-      imageUrl: template.image || "",
+      imageUrl: coverAsset.src,
       blockOrder: template.blockOrder?.length
         ? template.blockOrder
         : mailBranding.blockOrder,
@@ -17642,9 +17692,9 @@ function CollectionActivityPanel({
       subject: template.subject || collectionName,
       text: body,
       html,
-      inlineImages: canInlineEmailAsset(logoUrl)
-        ? [{ url: logoUrl, cid: "gallery-logo", filename: "brand-logo" }]
-        : [],
+      inlineImages: [logoAsset.inline, coverAsset.inline].filter(
+        (item): item is NonNullable<typeof logoAsset.inline> => Boolean(item),
+      ),
     }).catch(() => null);
     if (result?.sent) toast.success("Email sent by universal SMTP");
     window.sessionStorage.setItem(

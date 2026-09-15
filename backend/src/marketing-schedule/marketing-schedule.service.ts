@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Interval } from '@nestjs/schedule';
 import { Model, Types } from 'mongoose';
 import { CollectionEmailRegistration, CollectionEmailRegistrationDocument } from 'src/collections/entities/collection-email-registration.entity';
-import { BrandingEmailService, buildBrandedGalleryEmailHtml, type BrandingEmailPosition } from 'src/mail/branding-email.service';
+import { BrandingEmailService, type BrandingEmailPosition } from 'src/mail/branding-email.service';
 
 const EMAIL_BLOCK_IDS = ['branding', 'eyebrow', 'title', 'image', 'message', 'button', 'footer'];
 import { MailService } from 'src/mail/mail.service';
@@ -345,36 +345,28 @@ export class MarketingScheduleService implements OnModuleInit {
     }
 
     const text = buildCampaignText(schedule);
-    const brand = await this.brandingEmailService.loadBrandData(String(schedule.userId));
-    const html = buildBrandedGalleryEmailHtml(
-      {
-        userId: String(schedule.userId),
-        previewText: schedule.previewText,
-        eyebrowText: schedule.eyebrowText,
-        title: schedule.titleText || schedule.templateName || schedule.subject,
-        message: schedule.message,
-        buttonText: schedule.buttonText || '',
-        buttonLink: schedule.buttonLink || '',
-        buttonColor: schedule.buttonColor || undefined,
-        useBrandColor: schedule.buttonColor ? false : true,
-        footerText: schedule.footerText,
-        imageUrl: schedule.image || '',
-        showImage: schedule.showImage !== false,
-        showBranding: schedule.showBranding !== false,
-        blockOrder: Array.isArray(schedule.blockOrder) && schedule.blockOrder.length
-          ? schedule.blockOrder
-          : undefined,
-        brandingPosition: (schedule.brandingPosition as BrandingEmailPosition) || undefined,
-      },
-      brand,
-    );
-    const result = await this.mailService.send({
+    const result = await this.brandingEmailService.sendBranded({
+      userId: String(schedule.userId),
       to: [],
       bcc: recipients,
       subject: schedule.subject,
       text,
-      html,
-      fromName: this.brandingEmailService.senderName(brand),
+      previewText: schedule.previewText,
+      eyebrowText: schedule.eyebrowText,
+      title: schedule.titleText || schedule.templateName || schedule.subject,
+      message: schedule.message,
+      buttonText: schedule.buttonText || '',
+      buttonLink: schedule.buttonLink || '',
+      buttonColor: schedule.buttonColor || undefined,
+      useBrandColor: schedule.buttonColor ? false : true,
+      footerText: schedule.footerText,
+      imageUrl: schedule.image || '',
+      showImage: schedule.showImage !== false,
+      showBranding: schedule.showBranding !== false,
+      blockOrder: Array.isArray(schedule.blockOrder) && schedule.blockOrder.length
+        ? schedule.blockOrder
+        : undefined,
+      brandingPosition: (schedule.brandingPosition as BrandingEmailPosition) || undefined,
     });
     if (!result.sent) throw new Error(result.reason === 'SMTP_NOT_CONFIGURED' ? 'SMTP is not configured' : 'SMTP delivery failed');
 

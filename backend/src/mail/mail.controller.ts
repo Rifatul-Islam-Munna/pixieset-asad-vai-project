@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
+import { sanitizeEmailHtml } from './html-guard';
 import { MailService } from './mail.service';
 
 @Controller('mail')
@@ -15,7 +16,9 @@ export class MailController {
     const replyTo = this.email(body.replyTo);
     const subject = this.text(body.subject, 180);
     const text = this.text(body.text, 8000);
-    const html = this.text(body.html, 20000);
+    // Layouts are small once images travel as CID attachments; the generous cap
+    // prevents any silent mid-tag truncation, and data: sources are stripped.
+    const html = sanitizeEmailHtml(this.text(body.html, 400000));
     const senderName = this.text(body.senderName, 120);
     const inlineImages = Array.isArray(body.inlineImages) ? body.inlineImages.slice(0, 4) : [];
     const attachments = (await Promise.all(inlineImages.map((item: Record<string, unknown>, index: number) =>

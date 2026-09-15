@@ -406,7 +406,7 @@ function encodeDisplayName(value: string) {
     : `=?UTF-8?B?${Buffer.from(safe).toString('base64')}?=`;
 }
 
-function buildMimeMessage(input: {
+export function buildMimeMessage(input: {
   from: string;
   to: string[];
   cc: string[];

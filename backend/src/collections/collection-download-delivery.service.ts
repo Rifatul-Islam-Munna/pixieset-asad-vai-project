@@ -13,7 +13,7 @@ import { Readable } from 'stream';
 import { finished, pipeline } from 'stream/promises';
 import { MinioService } from 'src/lib/minio.service';
 import { MailService } from 'src/mail/mail.service';
-import { BrandingEmailService, buildBrandedGalleryEmailHtml } from 'src/mail/branding-email.service';
+import { BrandingEmailService } from 'src/mail/branding-email.service';
 import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
@@ -216,25 +216,18 @@ export class CollectionDownloadDeliveryService {
     const expiresText = expiresAt.toLocaleString();
     const text = `Your download from ${job.collectionName} is ready.\n\nDownload: ${buttonLink}\n\nThis secure link expires in 30 hours (${expiresText}).`;
     const brand = await this.brandingEmailService.loadBrandData(String(job.userId));
-    const html = buildBrandedGalleryEmailHtml(
-      {
-        userId: String(job.userId),
-        previewText: 'Your requested files are ready to download.',
-        eyebrowText: 'Download Ready',
-        title: brandText(brand, 'Your photos are ready'),
-        message: `Your requested files from ${job.collectionName} are ready. Use the button below to download them.`,
-        buttonText: 'Download photos',
-        buttonLink,
-        footerText: 'This secure link expires in 30 hours.',
-      },
-      brand,
-    );
-    const result = await this.mailService.send({
+    const result = await this.brandingEmailService.sendBranded({
+      userId: String(job.userId),
       to: job.email,
       subject: `Your download from ${job.collectionName} is ready`,
       text,
-      html,
-      fromName: this.brandingEmailService.senderName(brand),
+      previewText: 'Your requested files are ready to download.',
+      eyebrowText: 'Download Ready',
+      title: brandText(brand, 'Your photos are ready'),
+      message: `Your requested files from ${job.collectionName} are ready. Use the button below to download them.`,
+      buttonText: 'Download photos',
+      buttonLink,
+      footerText: 'This secure link expires in 30 hours.',
     });
     if (!result.sent) {
       await this.deliveryModel.updateOne({ _id: job._id }, { $set: { lastError: result.reason === 'SMTP_NOT_CONFIGURED' ? 'Archive is ready, but SMTP is not configured' : 'Archive is ready, but email delivery failed' } });
