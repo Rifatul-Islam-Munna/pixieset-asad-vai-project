@@ -1641,8 +1641,9 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
-              <button className="polished-icon-button" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={displayFilename(activeImage)} data-buy-photo-media-type={activeImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
+              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={displayFilename(activeImage)} data-buy-photo-media-type={activeImage.mediaType} type="button" aria-label="Print order" title="Print order">
                 <ShoppingBag className="size-5" />
+                <span>Print Order</span>
               </button>
             )}
             {showPrintRequestButton && !isVideo(activeImage) && isPersistedImageId(activeImage._id) && (
@@ -1702,8 +1703,9 @@ export function PublicGallery({
           </button>
           <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
-              <button className="polished-icon-button" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={displayFilename(slideshowImage)} data-buy-photo-media-type={slideshowImage.mediaType} type="button" aria-label="Buy this photo" title="Buy this photo">
+              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={displayFilename(slideshowImage)} data-buy-photo-media-type={slideshowImage.mediaType} type="button" aria-label="Print order" title="Print order">
                 <ShoppingBag className="size-5" />
+                <span>Print Order</span>
               </button>
             )}
             {showPrintRequestButton && !isVideo(slideshowImage) && isPersistedImageId(slideshowImage._id) && (

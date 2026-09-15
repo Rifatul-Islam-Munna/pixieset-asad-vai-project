@@ -80,6 +80,8 @@ export type EmailTemplateItem = {
   image: string;
   eyebrowText?: string;
   showImage?: boolean;
+  showBranding?: boolean;
+  useBrandColor?: boolean;
   category?: EmailTemplateCategory | string;
   galleryCategory?: string;
   customGalleryCategoryLabel?: string;

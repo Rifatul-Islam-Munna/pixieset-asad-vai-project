@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowLeft,
+  ChevronDown,
   FileUp,
-  Home,
-  Link2,
   Loader2,
   Search,
   Send,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,8 +21,11 @@ import { recordEmailUsage } from "@/actions/billing";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -31,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { DashboardSection } from "@/components/dashboard/client-dashboard";
 import { baseEmailTemplates, type EmailTemplateItem } from "@/lib/dashboard-store";
+import { buildGalleryEmailHtml } from "@/lib/gallery-email";
 import type { BrandSettings, HomeCmsData } from "@/lib/home-cms";
 import { publicCollectionUrl } from "@/lib/public-site-url";
 
@@ -40,7 +43,6 @@ const defaultBranding: BrandSettings = {
   brandImageUrl: "",
   accentColor: "#22bda7",
 };
-
 
 function mediaUrl(value?: string) {
   const url = String(value ?? "").trim();
@@ -61,20 +63,21 @@ function plainText(value?: string) {
     .trim();
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+function canEmbedInline(value: string) {
+  return /^https?:\/\//i.test(value);
 }
+
+const subscribeToOrigin = () => () => undefined;
+const readBrowserOrigin = () => window.location.origin;
+const readServerOrigin = () => "";
 
 async function sendCollectionEmail(payload: {
   to: string[];
   subject: string;
   text: string;
   html: string;
+  senderName?: string;
+  inlineImages?: { url: string; cid: string; filename: string }[];
 }) {
   const [data, error] = await PostRequestAxios<{
     data: { sent: boolean; skipped?: boolean; reason?: string };
@@ -86,20 +89,25 @@ async function sendCollectionEmail(payload: {
 export function CollectionSharePage({
   section,
   collectionId,
+  senderName,
 }: {
   section: DashboardSection;
   collectionId: string;
+  senderName: string;
 }) {
   const router = useRouter();
   const { collectionQuery } = useCollectionDetail(collectionId);
-  const emailTemplateSettings = useDashboardSettings<EmailTemplateItem>("email-template");
+  const emailTemplateSettings =
+    useDashboardSettings<EmailTemplateItem>("email-template");
   const brandingSettings = useDashboardSettings<BrandSettings>("branding");
   const homepageQuery = useHomepageSettings().query;
   const globalTemplatesQuery = useQuery({
     queryKey: ["global-email-templates"],
     queryFn: async () => {
       const response = await fetch("/api/home-cms", { cache: "no-store" });
-      if (!response.ok) throw new Error("Pre-built templates could not be loaded");
+      if (!response.ok) {
+        throw new Error("Pre-built templates could not be loaded");
+      }
       const payload = (await response.json()) as { data?: HomeCmsData };
       return payload.data?.emailTemplates ?? baseEmailTemplates;
     },
@@ -122,19 +130,22 @@ export function CollectionSharePage({
   const branding =
     brandingSettings.query.data?.data?.[0]?.data ?? defaultBranding;
 
-  const [origin, setOrigin] = useState("");
+  const origin = useSyncExternalStore(
+    subscribeToOrigin,
+    readBrowserOrigin,
+    readServerOrigin,
+  );
   const [recipient, setRecipient] = useState("");
   const [subject, setSubject] = useState("");
-  const [heading, setHeading] = useState("");
   const [message, setMessage] = useState("");
   const [buttonText, setButtonText] = useState("View Gallery");
   const [footerText, setFooterText] = useState("");
+  const [showBranding, setShowBranding] = useState(true);
+  const [showImage, setShowImage] = useState(true);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateSearch, setTemplateSearch] = useState("");
   const [sending, setSending] = useState(false);
   const [initialised, setInitialised] = useState(false);
-
-  useEffect(() => setOrigin(window.location.origin), []);
 
   const collectionSlug = collection?.slug ?? collectionId;
   const homepageSlug = homepageQuery.data?.data?.slug;
@@ -143,7 +154,8 @@ export function CollectionSharePage({
     : `${origin}/collection/${encodeURIComponent(collection?.name ?? collectionId)}/${encodeURIComponent(collectionSlug)}`;
 
   const selectedTemplate =
-    templates.find((template) => template.id === selectedTemplateId) ?? templates[0];
+    templates.find((template) => template.id === selectedTemplateId) ??
+    templates[0];
 
   const applyTemplate = (template?: EmailTemplateItem) => {
     setSelectedTemplateId(template?.id ?? "");
@@ -151,37 +163,107 @@ export function CollectionSharePage({
       template?.subject?.trim() ||
         `Photos for ${collection?.name ?? "your collection"} are ready`,
     );
-    setHeading(
-      template?.title?.trim() || collection?.name || "Your photos are ready",
-    );
     setMessage(
       plainText(template?.message) ||
         "Your photos are ready. Use the button below to view the gallery.",
     );
     setButtonText(template?.buttonText?.trim() || "View Gallery");
-    setFooterText(template?.footerText?.trim() || branding.brandText || "");
+    setFooterText(template?.footerText?.trim() || "");
+    setShowBranding(template?.showBranding !== false);
+    setShowImage(template?.showImage !== false);
   };
 
   useEffect(() => {
     if (!collection || initialised) return;
-    applyTemplate(templates[0]);
-    setInitialised(true);
+    const template = templates[0];
+    const timer = window.setTimeout(() => {
+      setSelectedTemplateId(template?.id ?? "");
+      setSubject(
+        template?.subject?.trim() ||
+          `Photos for ${collection.name || "your collection"} are ready`,
+      );
+      setMessage(
+        plainText(template?.message) ||
+          "Your photos are ready. Use the button below to view the gallery.",
+      );
+      setButtonText(template?.buttonText?.trim() || "View Gallery");
+      setFooterText(template?.footerText?.trim() || "");
+      setShowBranding(template?.showBranding !== false);
+      setShowImage(template?.showImage !== false);
+      setInitialised(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [collection, initialised, templates]);
 
   const filteredTemplates = templates.filter((template) =>
-    [template.name, template.subject, template.previewText]
+    [
+      template.name,
+      template.subject,
+      template.previewText,
+      template.galleryCategory,
+      template.language,
+    ]
       .join(" ")
       .toLowerCase()
       .includes(templateSearch.toLowerCase()),
   );
 
-  const coverImage =
+  const rawCoverImage =
     selectedTemplate?.image ||
     collection?.coverImage ||
     images.find((image) => image.mediaType !== "video")?.url ||
     "";
+  const coverImage = showImage ? rawCoverImage : "";
   const logo = branding.logoUrl || branding.brandImageUrl || "";
-  const accent = selectedTemplate?.buttonColor || branding.accentColor || "#444";
+  const logoUrl = mediaUrl(logo);
+  const coverImageUrl = mediaUrl(coverImage);
+  const accent =
+    showBranding && selectedTemplate?.useBrandColor !== false
+      ? branding.accentColor || selectedTemplate?.buttonColor || "#444444"
+      : selectedTemplate?.buttonColor || "#444444";
+  const configuredButtonLink = selectedTemplate?.buttonLink?.trim() || "";
+  const buttonLink = /^(https?:\/\/|mailto:)/i.test(configuredButtonLink)
+    ? configuredButtonLink
+    : publicLink;
+  const emailTitle = collection?.name || selectedTemplate?.title || "Your photos";
+  const eyebrowText =
+    selectedTemplate?.eyebrowText ||
+    selectedTemplate?.galleryCategory ||
+    "Client Gallery";
+
+  const previewHtml = useMemo(
+    () =>
+      buildGalleryEmailHtml({
+        previewText: selectedTemplate?.previewText,
+        eyebrowText,
+        title: emailTitle,
+        message,
+        buttonText,
+        buttonLink,
+        buttonColor: accent,
+        footerText,
+        logoUrl,
+        brandText: branding.brandText,
+        imageUrl: coverImageUrl,
+        showBranding,
+        showImage,
+      }),
+    [
+      accent,
+      branding.brandText,
+      buttonLink,
+      buttonText,
+      coverImageUrl,
+      emailTitle,
+      eyebrowText,
+      footerText,
+      logoUrl,
+      message,
+      selectedTemplate?.previewText,
+      showBranding,
+      showImage,
+    ],
+  );
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(publicLink);
@@ -202,37 +284,57 @@ export function CollectionSharePage({
       return;
     }
 
-    const html = `
-      <div style="margin:0;background:#f5f5f5;padding:36px 16px;font-family:Arial,sans-serif;color:#222">
-        <div style="max-width:640px;margin:0 auto;background:#fff;text-align:center">
-          <div style="padding:38px 36px 26px">
-            ${logo ? `<img src="${escapeHtml(mediaUrl(logo))}" alt="" style="max-height:54px;max-width:170px;margin-bottom:18px"/>` : ""}
-            ${branding.brandText ? `<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#555">${escapeHtml(branding.brandText)}</div>` : ""}
-            <h1 style="margin:28px 0 0;font-size:27px;font-weight:500;letter-spacing:4px;text-transform:uppercase">${escapeHtml(heading || collection?.name || "Your photos")}</h1>
-          </div>
-          ${coverImage ? `<img src="${escapeHtml(mediaUrl(coverImage))}" alt="" style="display:block;width:100%;max-height:430px;object-fit:cover"/>` : ""}
-          <div style="padding:42px 42px 34px">
-            <p style="margin:0 auto 30px;max-width:500px;font-size:15px;line-height:1.8;color:#555;white-space:pre-line">${escapeHtml(message)}</p>
-            <a href="${escapeHtml(publicLink)}" style="display:inline-block;background:${escapeHtml(accent)};color:#fff;text-decoration:none;padding:15px 34px;font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">${escapeHtml(buttonText || "View Gallery")}</a>
-            ${footerText ? `<p style="margin:34px 0 0;font-size:11px;line-height:1.7;color:#777">${escapeHtml(footerText)}</p>` : ""}
-          </div>
-        </div>
-      </div>`;
+    const inlineLogo = Boolean(logoUrl && canEmbedInline(logoUrl));
+    const inlineCover = Boolean(coverImageUrl && canEmbedInline(coverImageUrl));
+    const html = buildGalleryEmailHtml({
+      previewText: selectedTemplate?.previewText,
+      eyebrowText,
+      title: emailTitle,
+      message,
+      buttonText,
+      buttonLink,
+      buttonColor: accent,
+      footerText,
+      logoUrl: inlineLogo ? "cid:gallery-logo" : logoUrl,
+      brandText: branding.brandText,
+      imageUrl: inlineCover ? "cid:gallery-cover" : coverImageUrl,
+      showBranding,
+      showImage,
+    });
 
     setSending(true);
     try {
       await sendCollectionEmail({
         to: recipients,
         subject: subject.trim(),
-        text: `${message.trim()}\n\n${publicLink}`,
+        text: [message.trim(), publicLink, footerText.trim()]
+          .filter(Boolean)
+          .join("\n\n"),
         html,
+        senderName,
+        inlineImages: [
+          ...(showBranding && inlineLogo
+            ? [{ url: logoUrl, cid: "gallery-logo", filename: "brand-logo" }]
+            : []),
+          ...(showImage && inlineCover
+            ? [
+                {
+                  url: coverImageUrl,
+                  cid: "gallery-cover",
+                  filename: "gallery-cover",
+                },
+              ]
+            : []),
+        ],
       });
       await recordEmailUsage(recipients.length).catch(() => null);
       toast.success(
         `Collection shared with ${recipients.length} recipient${recipients.length === 1 ? "" : "s"}`,
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Email could not be sent");
+      toast.error(
+        error instanceof Error ? error.message : "Email could not be sent",
+      );
     } finally {
       setSending(false);
     }
@@ -248,97 +350,99 @@ export function CollectionSharePage({
 
   return (
     <main className="flex min-h-screen flex-col bg-white text-[#151515]">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b px-5 md:px-7">
-        <div className="flex items-center gap-3 md:gap-5">
+      <header className="flex h-[88px] shrink-0 items-center justify-between border-b border-[#e7e7e7] px-5 md:px-10">
+        <div className="flex items-center gap-4 md:gap-5">
           <button
             type="button"
-            onClick={() => router.push(`/dashboard/${section}/collections/${collectionId}`)}
-            className="flex size-10 items-center justify-center hover:bg-[#f4f4f4]"
-            aria-label="Back to collection"
+            onClick={() =>
+              router.push(
+                `/dashboard/${section}/collections/${collectionId}`,
+              )
+            }
+            className="flex size-9 items-center justify-center text-[#555] transition hover:bg-[#f6f6f6]"
+            aria-label="Close sharing"
           >
-            <ArrowLeft className="size-5" />
+            <X className="size-5" />
           </button>
-          <button
-            type="button"
-            onClick={() => router.push(`/dashboard/${section}`)}
-            className="flex size-10 items-center justify-center hover:bg-[#f4f4f4]"
-            aria-label="Go to dashboard home"
-            title="Home"
-          >
-            <Home className="size-5" />
-          </button>
-          <div>
-            <h1 className="font-medium">Share Collection</h1>
-            <p className="mt-1 text-xs text-[#777]">{collection.name}</p>
-          </div>
+          <h1 className="text-[17px] font-medium">Share Collection</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => void copyLink()}
-          className="inline-flex items-center gap-2 text-sm font-medium"
-        >
-          <Link2 className="size-4" />
-          <span className="hidden sm:inline">Get direct link</span>
-        </button>
+        <div className="flex items-center gap-4 text-sm md:gap-8">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 text-[#333]"
+              >
+                More <ChevronDown className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>Email appearance</DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={showBranding}
+                onCheckedChange={(checked) => setShowBranding(checked === true)}
+              >
+                Show studio branding
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={showImage}
+                onCheckedChange={(checked) => setShowImage(checked === true)}
+              >
+                Show gallery cover
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => void copyLink()}>
+                Copy direct gallery link
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => void copyLink()}
+            className="hidden font-medium text-[#333] sm:block"
+          >
+            Get direct link
+          </button>
+        </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[1.05fr_1fr]">
-        <section className="flex min-h-[calc(100vh-4rem)] flex-col border-r bg-white">
-          <div className="flex-1 px-5 py-7 md:px-8">
-            <FieldGroup className="gap-6">
-              <Field>
-                <FieldLabel className="text-xs font-bold uppercase tracking-wide text-[#777]">
-                  To
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(390px,0.92fr)_minmax(0,1.08fr)]">
+        <section className="flex min-h-[calc(100vh-5.5rem)] flex-col border-r border-[#ececec] bg-white">
+          <div className="flex-1 px-6 py-8 md:px-10 lg:px-12">
+            <FieldGroup className="gap-0">
+              <div className="grid grid-cols-[52px_1fr] items-center border-b border-[#ececec] py-1">
+                <span className="text-sm text-[#777]">From:</span>
+                <span className="truncate py-3 text-sm font-medium text-[#333]">
+                  {senderName || "Account owner"}
+                </span>
+              </div>
+              <Field className="grid grid-cols-[52px_1fr] items-start border-b border-[#ececec] py-1">
+                <FieldLabel className="pt-3 text-sm font-normal text-[#777]">
+                  To:
                 </FieldLabel>
                 <Textarea
                   value={recipient}
                   onChange={(event) => setRecipient(event.target.value)}
                   placeholder="guest@email.com"
-                  className="min-h-20 rounded-none"
+                  className="min-h-12 resize-none rounded-none border-0 px-0 py-3 text-sm shadow-none focus-visible:ring-0"
                 />
               </Field>
-              <Field>
-                <FieldLabel>Subject</FieldLabel>
+              <Field className="border-b border-[#ececec] py-8">
                 <Input
                   value={subject}
                   onChange={(event) => setSubject(event.target.value)}
-                  className="h-12 rounded-none"
+                  placeholder="Email subject"
+                  className="h-auto rounded-none border-0 px-0 py-0 text-[17px] font-semibold shadow-none focus-visible:ring-0"
                 />
               </Field>
-              <Field>
-                <FieldLabel>Heading</FieldLabel>
-                <Input
-                  value={heading}
-                  onChange={(event) => setHeading(event.target.value)}
-                  className="h-12 rounded-none"
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Description</FieldLabel>
+              <Field className="pt-8">
                 <Textarea
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
-                  className="min-h-40 rounded-none"
+                  placeholder="Write a message for your client..."
+                  className="min-h-[290px] resize-none rounded-none border-0 px-0 text-[15px] leading-8 shadow-none focus-visible:ring-0"
                 />
               </Field>
-              <div className="grid gap-5 md:grid-cols-2">
-                <Field>
-                  <FieldLabel>Button text</FieldLabel>
-                  <Input
-                    value={buttonText}
-                    onChange={(event) => setButtonText(event.target.value)}
-                    className="h-12 rounded-none"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Footer text</FieldLabel>
-                  <Input
-                    value={footerText}
-                    onChange={(event) => setFooterText(event.target.value)}
-                    className="h-12 rounded-none"
-                  />
-                </Field>
-              </div>
             </FieldGroup>
 
             <DropdownMenu>
@@ -351,8 +455,11 @@ export function CollectionSharePage({
                   Insert Email Template
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[340px] rounded-none p-3">
-                <div className="mb-3 flex h-10 items-center gap-2 border px-3">
+              <DropdownMenuContent
+                align="start"
+                className="w-[min(360px,calc(100vw-32px))] rounded-xl p-3"
+              >
+                <div className="mb-3 flex h-10 items-center gap-2 rounded-lg border px-3">
                   <Search className="size-4 text-[#888]" />
                   <Input
                     value={templateSearch}
@@ -362,11 +469,11 @@ export function CollectionSharePage({
                     onKeyDown={(event) => event.stopPropagation()}
                   />
                 </div>
-                <div className="max-h-64 overflow-y-auto">
+                <div className="max-h-72 overflow-y-auto">
                   {filteredTemplates.map((template) => (
                     <DropdownMenuItem
                       key={template.id}
-                      className="block h-auto rounded-none px-3 py-3"
+                      className="block h-auto px-3 py-3"
                       onSelect={() => applyTemplate(template)}
                     >
                       <span className="block truncate font-bold">
@@ -385,6 +492,15 @@ export function CollectionSharePage({
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-[#777]">
+              <span className="rounded-full bg-[#f4f4f2] px-3 py-1.5">
+                {showBranding ? "Branding on" : "Branding off"}
+              </span>
+              <span className="rounded-full bg-[#f4f4f2] px-3 py-1.5">
+                {showImage ? "Cover image on" : "Cover image off"}
+              </span>
+            </div>
           </div>
 
           <footer className="flex shrink-0 items-center justify-end border-t px-5 py-4 md:px-8">
@@ -393,53 +509,32 @@ export function CollectionSharePage({
               disabled={sending || !recipient.trim() || !subject.trim()}
               onClick={() => void send()}
             >
-              {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+              {sending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Send className="size-4" />
+              )}
               {sending ? "Sending..." : "Send"}
             </Button>
           </footer>
         </section>
 
-        <aside className="min-h-[calc(100vh-4rem)] overflow-y-auto bg-[#f5f5f5] p-5 md:p-10">
-          <div className="mx-auto max-w-[560px] bg-white text-center shadow-sm">
-            <div className="px-8 pb-8 pt-10">
-              {logo && (
-                <img
-                  src={mediaUrl(logo)}
-                  alt=""
-                  className="mx-auto max-h-14 max-w-44 object-contain"
-                />
-              )}
-              {branding.brandText && (
-                <p className="mt-5 text-[10px] uppercase tracking-[0.22em] text-[#555]">
-                  {branding.brandText}
-                </p>
-              )}
-              <h2 className="mt-8 text-2xl font-medium uppercase tracking-[0.18em]">
-                {heading || collection.name}
-              </h2>
-            </div>
-            {coverImage && (
-              <img
-                src={mediaUrl(coverImage)}
-                alt=""
-                className="max-h-[430px] w-full object-cover"
-              />
-            )}
-            <div className="px-10 py-10">
-              <p className="whitespace-pre-line text-sm leading-7 text-[#666]">
-                {message}
-              </p>
-              <span
-                className="mt-8 inline-flex min-h-11 items-center justify-center px-8 text-xs font-bold uppercase tracking-[0.13em] text-white"
-                style={{ backgroundColor: accent }}
-              >
-                {buttonText || "View Gallery"}
-              </span>
-              {footerText && (
-                <p className="mt-8 text-xs leading-6 text-[#777]">{footerText}</p>
-              )}
-            </div>
+        <aside className="min-h-[calc(100vh-5.5rem)] overflow-y-auto bg-[#f3f2ef] px-3 py-6 md:px-8 md:py-10">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#777]">
+              Live email preview
+            </p>
+            <p className="text-xs text-[#8b8782]">Matches the sent email</p>
           </div>
+          <div
+            className="mx-auto max-w-[760px] overflow-hidden rounded-sm shadow-[0_24px_70px_rgba(40,35,25,0.12)]"
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest("a")) {
+                event.preventDefault();
+              }
+            }}
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
+          />
         </aside>
       </div>
     </main>

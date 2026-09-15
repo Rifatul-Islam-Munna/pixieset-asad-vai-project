@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { getUser } from "@/actions/auth";
 import { CollectionSharePage } from "@/components/dashboard/collection-share-page";
 import type { DashboardSection } from "@/components/dashboard/client-dashboard";
 
@@ -10,8 +11,12 @@ export default async function ShareCollectionPage({
 }: {
   params: Promise<{ section: string; collectionId: string }>;
 }) {
-  const { section, collectionId } = await params;
+  const [{ section, collectionId }, user] = await Promise.all([
+    params,
+    getUser(),
+  ]);
 
+  if (!user) redirect("/login");
   if (!sections.includes(section as DashboardSection)) {
     redirect("/dashboard/client-gallery");
   }
@@ -20,6 +25,7 @@ export default async function ShareCollectionPage({
     <CollectionSharePage
       section={section as DashboardSection}
       collectionId={collectionId}
+      senderName={user.name || "Account owner"}
     />
   );
 }

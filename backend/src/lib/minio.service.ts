@@ -22,33 +22,102 @@ const DEFAULT_BUCKET_NAME = 'gallerista.app';
 const IMAGE_MAX_BYTES = 150 * 1024 * 1024;
 const VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 
+function parseS3ApiUrl(value: string, fallbackBucket: string) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) return undefined;
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    const bucket = decodeURIComponent(pathParts[0] || fallbackBucket).trim();
+    if (!bucket) return undefined;
+    const endpoint = url.origin;
+    return {
+      endpoint,
+      bucket,
+      apiBaseUrl: `${endpoint}/${encodeURIComponent(bucket)}`,
+      isCloudflareR2: url.hostname.endsWith('.r2.cloudflarestorage.com'),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 @Injectable()
 export class MinioService implements OnModuleInit {
   private readonly logger = new Logger(MinioService.name);
   private s3?: S3Client;
   private bucketName = DEFAULT_BUCKET_NAME;
+  private endpointUrl = '';
+  private publicBaseUrl = '';
+  private isCloudflareR2 = false;
 
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit() {
-    const minioUrl = this.configService.get<string>('MINIO_URL')?.trim();
-    const accessKeyId = this.configService.get<string>('MINIO_ACCESS_KEY')?.trim();
-    const secretAccessKey = this.configService.get<string>('MINIO_SECRET_KEY')?.trim();
-    const region = this.configService.get<string>('MINIO_REGION')?.trim() || 'us-east-1';
-    const forcePathStyle = this.configBoolean('MINIO_FORCE_PATH_STYLE', false);
-    this.bucketName = this.configService.get<string>('MINIO_BUCKET')?.trim() || DEFAULT_BUCKET_NAME;
+    const rawS3Url =
+      this.configService.get<string>('STORAGE_S3_URL')?.trim() ||
+      this.configService.get<string>('R2_S3_API_URL')?.trim() ||
+      this.configService.get<string>('MINIO_URL')?.trim() ||
+      '';
+    const configuredBucket =
+      this.configService.get<string>('STORAGE_BUCKET')?.trim() ||
+      this.configService.get<string>('MINIO_BUCKET')?.trim() ||
+      DEFAULT_BUCKET_NAME;
+    const connection = parseS3ApiUrl(rawS3Url, configuredBucket);
+    const accessKeyId =
+      this.configService.get<string>('STORAGE_ACCESS_KEY')?.trim() ||
+      this.configService.get<string>('R2_ACCESS_KEY_ID')?.trim() ||
+      this.configService.get<string>('MINIO_ACCESS_KEY')?.trim();
+    const secretAccessKey =
+      this.configService.get<string>('STORAGE_SECRET_KEY')?.trim() ||
+      this.configService.get<string>('R2_SECRET_ACCESS_KEY')?.trim() ||
+      this.configService.get<string>('MINIO_SECRET_KEY')?.trim();
+    const region =
+      this.configService.get<string>('STORAGE_REGION')?.trim() ||
+      (connection?.isCloudflareR2
+        ? 'auto'
+        : this.configService.get<string>('MINIO_REGION')?.trim() || 'us-east-1');
+    const hasStoragePathStyle =
+      this.configService.get<string>('STORAGE_FORCE_PATH_STYLE') !== undefined;
+    const forcePathStyle = hasStoragePathStyle
+      ? this.configBoolean('STORAGE_FORCE_PATH_STYLE', connection?.isCloudflareR2 ?? false)
+      : connection?.isCloudflareR2
+        ? true
+        : this.configBoolean('MINIO_FORCE_PATH_STYLE', false);
+    const explicitPublicUrl =
+      this.configService.get<string>('STORAGE_PUBLIC_URL')?.trim() ||
+      this.configService.get<string>('R2_PUBLIC_URL')?.trim() ||
+      '';
 
-    if (!minioUrl || !accessKeyId || !secretAccessKey) {
-      this.logger.error('MinIO env missing; uploads will fail until MINIO_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY are set');
+    if (!connection || !accessKeyId || !secretAccessKey) {
+      this.logger.error(
+        'Object storage is not configured. Set STORAGE_S3_URL, STORAGE_ACCESS_KEY, and STORAGE_SECRET_KEY.',
+      );
       return;
     }
 
+    this.endpointUrl = connection.endpoint;
+    this.bucketName = connection.bucket;
+    this.isCloudflareR2 = connection.isCloudflareR2;
+    this.publicBaseUrl = explicitPublicUrl.replace(/\/+$/, '') || connection.apiBaseUrl;
+
     this.s3 = new S3Client({
       region,
-      endpoint: minioUrl,
+      endpoint: this.endpointUrl,
       credentials: { accessKeyId, secretAccessKey },
       forcePathStyle,
     });
+
+    if (this.isCloudflareR2) {
+      this.logger.log(`Cloudflare R2 storage configured for bucket '${this.bucketName}'.`);
+      if (!explicitPublicUrl) {
+        this.logger.warn(
+          'R2 S3 API URLs are private for asset delivery. Enable an r2.dev/custom domain and set STORAGE_PUBLIC_URL for public galleries.',
+        );
+      }
+      await this.enablePublicAssetCors(this.bucketName);
+      return;
+    }
 
     await this.createBucketIfNotExists(this.bucketName);
     await this.makeBucketPublic(this.bucketName);
@@ -111,14 +180,14 @@ export class MinioService implements OnModuleInit {
         }),
       );
     } catch (error: any) {
-      this.logger.warn(`MinIO CORS setup failed: ${error?.message || error}`);
+      this.logger.warn(`Object storage CORS setup failed: ${error?.message || error}`);
     }
   }
 
   async uploadFile(file: Express.Multer.File) {
     const body = createReadStream(file.path);
     try {
-      if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
+      if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
       await this.s3.send(
         new PutObjectCommand({
           Bucket: this.bucketName,
@@ -128,7 +197,7 @@ export class MinioService implements OnModuleInit {
         }),
       );
       await finished(body);
-      return `${this.configService.get('MINIO_URL')}/${this.bucketName}/${file.filename}`;
+      return this.publicUrl(file.filename);
     } catch (error) {
       this.logger.error(`Error uploading file: ${error instanceof Error ? error.message : String(error)}`);
       throw new HttpException('Failed to upload file', HttpStatus.INTERNAL_SERVER_ERROR);
@@ -138,7 +207,7 @@ export class MinioService implements OnModuleInit {
   }
 
   async createDirectUpload(userId: string, input: { name: string; type: string; size: number }) {
-    if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
+    if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
     const size = Math.max(0, Number(input.size));
     const type = String(input.type || '').toLowerCase();
     const isVideo = type.startsWith('video/');
@@ -158,7 +227,7 @@ export class MinioService implements OnModuleInit {
   }
 
   async verifyDirectUpload(userId: string, input: { objectKey: string; name: string; type: string; size: number }) {
-    if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
+    if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
     const objectKey = this.assertDirectObjectKey(userId, input.objectKey);
     const head = await this.s3.send(new HeadObjectCommand({ Bucket: this.bucketName, Key: objectKey }));
     const actualSize = Math.max(0, Number(head.ContentLength ?? 0));
@@ -204,7 +273,11 @@ export class MinioService implements OnModuleInit {
   }
 
   private publicUrl(objectKey: string) {
-    return `${this.configService.get('MINIO_URL')}/${this.bucketName}/${objectKey}`;
+    const encodedKey = objectKey
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/');
+    return `${this.publicBaseUrl}/${encodedKey}`;
   }
 
   private configBoolean(key: string, fallback: boolean) {
@@ -216,7 +289,7 @@ export class MinioService implements OnModuleInit {
   async openReadStream(fileReference: string) {
     const fileName = this.objectKey(fileReference);
     if (!fileName) throw new HttpException('Invalid file name', HttpStatus.BAD_REQUEST);
-    if (!this.s3) throw new HttpException('MinIO is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
+    if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
     const response = await this.s3.send(new GetObjectCommand({ Bucket: this.bucketName, Key: fileName }));
     if (!response.Body) throw new HttpException('File is unavailable', HttpStatus.NOT_FOUND);
     return {
@@ -244,9 +317,13 @@ export class MinioService implements OnModuleInit {
     const trimmed = fileReference.trim();
     try {
       const url = new URL(trimmed);
+      const publicPrefix = this.publicBaseUrl ? `${this.publicBaseUrl}/` : '';
+      if (publicPrefix && trimmed.startsWith(publicPrefix)) {
+        return decodeURIComponent(trimmed.slice(publicPrefix.length).split(/[?#]/)[0]);
+      }
       const parts = url.pathname.split('/').filter(Boolean);
       const bucketIndex = parts.indexOf(this.bucketName);
-      const keyParts = bucketIndex >= 0 ? parts.slice(bucketIndex + 1) : parts.slice(-1);
+      const keyParts = bucketIndex >= 0 ? parts.slice(bucketIndex + 1) : parts;
       return decodeURIComponent(keyParts.join('/'));
     } catch {
       const withoutQuery = trimmed.split(/[?#]/)[0].replace(/^\/+/, '');

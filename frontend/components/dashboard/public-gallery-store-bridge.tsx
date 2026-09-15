@@ -418,7 +418,7 @@ function BuyPhotoDialog({
 
         <div className="min-h-0 overflow-y-auto bg-white">
           <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-white px-4 py-4 md:px-10 md:py-5">
-            <h2 className="min-w-0 text-lg font-medium">Buy This Photo</h2>
+            <h2 className="min-w-0 text-lg font-medium">Print Order</h2>
             <div className="flex shrink-0 items-center gap-3 sm:gap-5">
               <button type="button" onClick={onOpenStore} className="whitespace-nowrap text-sm text-[#777] hover:text-black">
                 Visit Store <ChevronRight className="ml-1 inline size-4" />

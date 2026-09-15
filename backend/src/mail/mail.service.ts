@@ -14,6 +14,7 @@ export type GlobalMailPayload = {
   bcc?: string | string[];
   replyTo?: string;
   from?: string;
+  fromName?: string;
   attachments?: GlobalMailAttachment[];
 };
 
@@ -21,6 +22,8 @@ export type GlobalMailAttachment = {
   filename: string;
   content: Buffer | Uint8Array;
   contentType?: string;
+  contentId?: string;
+  disposition?: 'attachment' | 'inline';
 };
 
 export type GlobalMailResult = {
@@ -62,6 +65,28 @@ export class MailService implements OnModuleInit {
     return Boolean(this.config);
   }
 
+  async fetchInlineImage(url: string, contentId: string, filename: string): Promise<GlobalMailAttachment | undefined> {
+    const value = String(url || '').trim();
+    if (!/^https?:\/\//i.test(value)) return undefined;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(value, { signal: controller.signal });
+      if (!response.ok) return undefined;
+      const contentType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      if (!contentType.startsWith('image/')) return undefined;
+      const contentLength = Number(response.headers.get('content-length') || 0);
+      if (contentLength > 8 * 1024 * 1024) return undefined;
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (!buffer.length || buffer.length > 8 * 1024 * 1024) return undefined;
+      return { filename, content: buffer, contentType, contentId, disposition: 'inline' };
+    } catch {
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async send(payload: GlobalMailPayload): Promise<GlobalMailResult> {
     if (!this.config) {
       if (!this.warnedNotConfigured) {
@@ -82,8 +107,11 @@ export class MailService implements OnModuleInit {
       return { sent: false, reason: 'SMTP_SEND_FAILED' };
     }
 
-    const fromHeader = sanitizeHeader(payload.from || this.config.from);
-    const fromAddress = extractAddress(fromHeader);
+    const configuredFrom = sanitizeHeader(payload.from || this.config.from);
+    const fromAddress = extractAddress(configuredFrom);
+    const fromHeader = payload.fromName
+      ? `${encodeDisplayName(payload.fromName)} <${fromAddress}>`
+      : configuredFrom;
     if (!fromAddress) {
       this.logger.error('SMTP email delivery failed: SMTP_FROM is not a valid email address');
       return { sent: false, reason: 'SMTP_SEND_FAILED' };
@@ -357,6 +385,14 @@ function encodeHeader(value: string) {
   return /^[\x20-\x7E]*$/.test(safe) ? safe : `=?UTF-8?B?${Buffer.from(safe).toString('base64')}?=`;
 }
 
+function encodeDisplayName(value: string) {
+  const safe = sanitizeHeader(value).slice(0, 120);
+  if (!safe) return 'Gallery sender';
+  return /^[a-z0-9 ._-]+$/i.test(safe)
+    ? safe
+    : `=?UTF-8?B?${Buffer.from(safe).toString('base64')}?=`;
+}
+
 function buildMimeMessage(input: {
   from: string;
   to: string[];
@@ -402,7 +438,9 @@ function buildMimeMessage(input: {
   for (const attachment of attachments) {
     const filename = safeAttachmentFilename(attachment.filename);
     const contentType = safeAttachmentContentType(attachment.contentType);
-    body += `--${mixedBoundary}\r\nContent-Type: ${contentType}; name="${filename}"\r\nContent-Disposition: attachment; filename="${filename}"\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64BufferLines(attachment.content)}\r\n`;
+    const disposition = attachment.disposition === 'inline' ? 'inline' : 'attachment';
+    const contentId = attachment.contentId ? safeContentId(attachment.contentId) : '';
+    body += `--${mixedBoundary}\r\nContent-Type: ${contentType}; name="${filename}"\r\nContent-Disposition: ${disposition}; filename="${filename}"\r\n${contentId ? `Content-ID: <${contentId}>\r\n` : ''}Content-Transfer-Encoding: base64\r\n\r\n${base64BufferLines(attachment.content)}\r\n`;
   }
   body += `--${mixedBoundary}--\r\n`;
   return `${headers.join('\r\n')}\r\n\r\n${body}`;
@@ -424,4 +462,8 @@ function safeAttachmentFilename(value: string) {
 function safeAttachmentContentType(value?: string) {
   const clean = String(value || '').trim().toLowerCase();
   return /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(clean) ? clean : 'application/octet-stream';
+}
+
+function safeContentId(value: string) {
+  return String(value || '').replace(/[^a-z0-9._@-]+/gi, '-').slice(0, 120) || 'image';
 }

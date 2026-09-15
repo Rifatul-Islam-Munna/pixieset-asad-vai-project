@@ -16,6 +16,15 @@ export class MailController {
     const subject = this.text(body.subject, 180);
     const text = this.text(body.text, 8000);
     const html = this.text(body.html, 20000);
+    const senderName = this.text(body.senderName, 120);
+    const inlineImages = Array.isArray(body.inlineImages) ? body.inlineImages.slice(0, 4) : [];
+    const attachments = (await Promise.all(inlineImages.map((item: Record<string, unknown>, index: number) =>
+      this.mailService.fetchInlineImage(
+        this.text(item?.url, 2048),
+        this.text(item?.cid, 120) || `gallery-image-${index + 1}`,
+        this.text(item?.filename, 140) || `gallery-image-${index + 1}.jpg`,
+      ),
+    ))).filter((item): item is NonNullable<typeof item> => Boolean(item));
 
     if (!to.length) throw new BadRequestException('A valid recipient email is required');
     if (!subject) throw new BadRequestException('Email subject is required');
@@ -29,6 +38,8 @@ export class MailController {
       subject,
       text,
       html,
+      ...(senderName ? { fromName: senderName } : {}),
+      ...(attachments.length ? { attachments } : {}),
     });
 
     return { data: { ...result, userId: req.user.id } };
