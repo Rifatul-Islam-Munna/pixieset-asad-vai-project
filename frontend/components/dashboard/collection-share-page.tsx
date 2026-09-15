@@ -45,7 +45,13 @@ const defaultBranding: BrandSettings = {
   brandText: "",
   brandImageUrl: "",
   accentColor: "#22bda7",
+  brandingPosition: "top",
 };
+
+const brandingPositionOptions = [
+  { value: "top", label: "Top of email" },
+  { value: "bottom", label: "Bottom of email" },
+] as const;
 
 function mediaUrl(value?: string) {
   const url = String(value ?? "").trim();
@@ -141,6 +147,9 @@ export function CollectionSharePage({
   const [footerText, setFooterText] = useState("");
   const [showBranding, setShowBranding] = useState(true);
   const [showImage, setShowImage] = useState(true);
+  const [brandingPosition, setBrandingPosition] = useState<"top" | "bottom">(
+    branding.brandingPosition ?? "top",
+  );
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateSearch, setTemplateSearch] = useState("");
   const [sending, setSending] = useState(false);
@@ -246,10 +255,12 @@ export function CollectionSharePage({
         imageUrl: coverImageUrl,
         showBranding,
         showImage,
+        brandingPosition,
       }),
     [
       accent,
       branding.brandText,
+      brandingPosition,
       buttonLink,
       buttonText,
       coverImageUrl,
@@ -299,6 +310,7 @@ export function CollectionSharePage({
       imageUrl: inlineCover ? "cid:gallery-cover" : coverImageUrl,
       showBranding,
       showImage,
+      brandingPosition,
     });
 
     setSending(true);
@@ -389,6 +401,17 @@ export function CollectionSharePage({
               >
                 Show gallery cover
               </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Branding position</DropdownMenuLabel>
+              {brandingPositionOptions.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option.value}
+                  checked={brandingPosition === option.value}
+                  onCheckedChange={() => setBrandingPosition(option.value)}
+                >
+                  {option.label}
+                </DropdownMenuCheckboxItem>
+              ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => void copyLink()}>
                 Copy direct gallery link

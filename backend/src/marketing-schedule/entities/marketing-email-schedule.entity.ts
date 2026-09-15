@@ -14,6 +14,7 @@ export class MarketingEmailSchedule {
   @Prop({ trim: true, maxlength: 180 }) recipientCategory?: string;
   @Prop({ required: true, trim: true, maxlength: 180 }) templateId: string;
   @Prop({ required: true, trim: true, maxlength: 180 }) templateName: string;
+  @Prop({ default: '', maxlength: 220 }) titleText: string;
   @Prop({ required: true, trim: true, maxlength: 220 }) subject: string;
   @Prop({ default: '', maxlength: 500 }) previewText: string;
   @Prop({ default: '', maxlength: 12000 }) message: string;
@@ -24,6 +25,8 @@ export class MarketingEmailSchedule {
   @Prop({ default: '#444444', maxlength: 30 }) buttonColor: string;
   @Prop({ default: '', maxlength: 1500 }) image: string;
   @Prop({ default: true }) showImage: boolean;
+  @Prop({ default: true }) showBranding: boolean;
+  @Prop({ default: 'top', enum: ['top', 'bottom'] }) brandingPosition: string;
   @Prop({ trim: true }) collectionId?: string;
   @Prop({ trim: true }) collectionName?: string;
   @Prop({ trim: true, index: true }) automationId?: string;

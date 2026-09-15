@@ -3217,6 +3217,10 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
     saveEmailTemplate,
   } = useDashboardStore();
   const { saveSetting } = useDashboardSettings<EmailTemplateItem>("email-template");
+  const campaignBrandingSettings = useDashboardSettings<BrandSettings>("branding");
+  const campaignBranding =
+    (campaignBrandingSettings.query.data?.data?.[0]?.data as BrandSettings | undefined) ??
+    defaultCampaignBranding;
   const [sendPending, startSendTransition] = useTransition();
   const [sendError, setSendError] = useState("");
   const [recipientSearch, setRecipientSearch] = useState("");
@@ -3345,6 +3349,26 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
     router.push(`/dashboard/${section}/settings/email-templates/new`);
   };
 
+  const campaignBrandLogoUrl = imageSrc(
+    campaignBranding.logoUrl || campaignBranding.brandImageUrl || "",
+  );
+  const campaignHtml = buildGalleryEmailHtml({
+    previewText: campaignPreviewText,
+    eyebrowText: campaignEyebrowText,
+    title: campaignTemplate || "Untitled Template",
+    message: campaignMessage,
+    buttonText: campaignButtonText || "Open Gallery",
+    buttonLink:
+      campaignButtonLink === "Collection URL" ? "#" : campaignButtonLink,
+    buttonColor: campaignButtonColor || "#444444",
+    footerText: campaignFooterText,
+    logoUrl: campaignBrandLogoUrl,
+    brandText: campaignBranding.brandText,
+    imageUrl: campaignImage,
+    showImage: campaignShowImage,
+    showBranding: true,
+    brandingPosition: campaignBranding.brandingPosition,
+  });
   const sendNow = () => {
     setSendError("");
     startSendTransition(async () => {
@@ -3363,10 +3387,21 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
           ]
             .filter(Boolean)
             .join("\n");
+          const inlineLogo = canInlineEmailAsset(campaignBrandLogoUrl);
+          const inlineCover = canInlineEmailAsset(campaignImage);
           await sendUniversalEmail({
             to: emails,
             subject: campaignSubject || campaignTemplate,
             text: body || campaignPreviewText || campaignTemplate,
+            html: campaignHtml,
+            inlineImages: [
+              ...(inlineLogo
+                ? [{ url: campaignBrandLogoUrl, cid: "gallery-logo", filename: "brand-logo" }]
+                : []),
+              ...(inlineCover
+                ? [{ url: campaignImage, cid: "gallery-cover", filename: "gallery-cover" }]
+                : []),
+            ],
           });
           toast.success("Campaign sent by universal SMTP");
         }
@@ -3740,17 +3775,9 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
 
         <div className="bg-[#f3f3f3] lg:sticky lg:top-0 lg:h-[calc(100vh-48px)] lg:overflow-auto">
           <CampaignPreview
-            buttonColor={campaignButtonColor}
-            buttonLink={campaignButtonLink}
-            buttonText={campaignButtonText}
-            eyebrowText={campaignEyebrowText}
-            footerText={campaignFooterText}
-            image={campaignImage}
-            showImage={campaignShowImage}
-            message={campaignMessage}
+            html={campaignHtml}
+            subject={campaignSubject || campaignTemplate}
             previewText={campaignPreviewText}
-            subject={campaignSubject}
-            template={campaignTemplate}
           />
         </div>
       </div>
@@ -3759,88 +3786,26 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
 }
 
 function CampaignPreview({
-  buttonColor,
-  buttonLink,
-  buttonText,
-  eyebrowText,
-  footerText,
-  image,
-  showImage,
-  message,
-  previewText,
+  html,
   subject,
-  template,
+  previewText,
 }: {
-  buttonColor: string;
-  buttonLink: string;
-  buttonText: string;
-  eyebrowText: string;
-  footerText: string;
-  image: string;
-  showImage: boolean;
-  message: string;
-  previewText: string;
+  html: string;
   subject: string;
-  template: string;
+  previewText: string;
 }) {
-  const headline = template?.trim() || "Untitled Template";
-  const safeSubject = subject?.trim() || "Your gallery is ready";
-  const safePreview =
-    previewText?.trim() || "A short preview line will appear here.";
-  const safeMessage =
-    message?.trim() || "Write a polished note for your client here.";
-  const safeButton = buttonText?.trim() || "Open Gallery";
-  const safeFooter = footerText?.trim() || "";
-  const safeEyebrow = eyebrowText?.trim() || "Client Gallery";
   return (
     <section className="flex justify-center overflow-auto">
       <div className="w-full max-w-[640px] overflow-hidden bg-white shadow-[0_22px_80px_rgba(0,0,0,0.10)]">
-        <div className="bg-[#111412] px-6 py-10 text-center text-white sm:px-12">
-          <p className="text-[11px] font-bold uppercase tracking-[0.32em] text-white/45">
-            {safeEyebrow}
+        <div className="border-b bg-[#fafafa] px-6 py-4">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#8a8178]">
+            {subject?.trim() || "Your gallery is ready"}
           </p>
-          <h1 className="mt-4 break-words text-3xl font-semibold uppercase tracking-[0.08em] sm:text-5xl">
-            {headline}
-          </h1>
-        </div>
-        {showImage && (
-          <div className="h-[260px] overflow-hidden bg-[#111412]">
-            {image ? (
-              <img
-                src={image}
-                alt={headline}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_center,#26302d_0,#111412_55%,#070908_100%)] px-8 text-center text-3xl font-bold uppercase tracking-[0.14em] text-white/10">
-                {headline}
-              </div>
-            )}
-          </div>
-        )}
-        <div className="px-8 py-10 text-base leading-7 sm:px-16">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#8a8178]">
-            {safeSubject}
+          <p className="mt-1 truncate text-xs text-[#999]">
+            {previewText?.trim() || "A short preview line will appear here."}
           </p>
-          <p className="mt-2 text-sm text-[#777]">{safePreview}</p>
-          <div className="mt-7 whitespace-pre-line text-[#222]">
-            {safeMessage}
-          </div>
-          <div className="mt-9 text-center">
-            <a
-              href={buttonLink === "Collection URL" ? "#" : buttonLink}
-              className="inline-flex h-12 min-w-48 items-center justify-center px-9 text-sm font-bold uppercase tracking-[0.12em] text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]"
-              style={{ backgroundColor: buttonColor }}
-            >
-              {safeButton}
-            </a>
-          </div>
-          {safeFooter && (
-            <p className="mt-10 border-t pt-7 whitespace-pre-line text-center text-xs leading-6 text-[#777]">
-              {safeFooter}
-            </p>
-          )}
         </div>
+        <div dangerouslySetInnerHTML={{ __html: html }} />
       </div>
     </section>
   );
@@ -5007,6 +4972,14 @@ function IntegrationsPanel() {
   );
 }
 
+const defaultCampaignBranding: BrandSettings = {
+  logoUrl: "",
+  brandText: "",
+  brandImageUrl: "",
+  accentColor: "#6337d8",
+  brandingPosition: "top",
+};
+
 const defaultBrandSettings: BrandSettings = {
   logoUrl: "",
   brandText: "Studio Brand",
@@ -5024,7 +4997,7 @@ function BrandingSettings() {
 
   useEffect(() => {
     setForm(saved);
-  }, [saved.logoUrl, saved.brandText, saved.brandImageUrl, saved.accentColor]);
+  }, [saved.logoUrl, saved.brandText, saved.brandImageUrl, saved.accentColor, saved.brandingPosition]);
 
   const readImage = (
     file: File | undefined,
@@ -5115,6 +5088,42 @@ function BrandingSettings() {
               className="h-12 rounded-none bg-white"
             />
           </Field>
+          <Field>
+            <FieldLabel className="font-bold">
+              Email Branding Position
+            </FieldLabel>
+            <div className="flex gap-2">
+              {(
+                [
+                  { value: "top", label: "Top of email" },
+                  { value: "bottom", label: "Bottom of email" },
+                ] as const
+              ).map((option) => {
+                const active =
+                  (form.brandingPosition ?? "top") === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() =>
+                      setForm({ ...form, brandingPosition: option.value })
+                    }
+                    className={`h-11 flex-1 rounded-none border px-4 text-sm font-bold ${
+                      active
+                        ? "border-[#6337d8] bg-[#6337d8] text-white"
+                        : "border-[#dedede] bg-white text-[#333]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs leading-5 text-[#888]">
+              Where your logo and studio name appear inside gallery emails —
+              drag-and-drop placement for the branding block.
+            </p>
+          </Field>
         </FieldGroup>
         <Button
           className="mt-8 h-11 rounded-none bg-[#6337d8] px-8 text-white"
@@ -5192,6 +5201,10 @@ function EmailTemplatesPanel({
     updateEmailTemplate,
   } = useDashboardStore();
   const { saveSetting, deleteSetting } = useDashboardSettings("email-template");
+  const templateBrandingSettings = useDashboardSettings<BrandSettings>("branding");
+  const branding =
+    (templateBrandingSettings.query.data?.data?.[0]?.data as BrandSettings | undefined) ??
+    defaultCampaignBranding;
   const activeTemplate =
     emailTemplates.find((template) => template.id === activeEmailTemplateId) ??
     emailTemplates[0];
@@ -5611,17 +5624,28 @@ function EmailTemplatesPanel({
             </span>
           </div>
           <CampaignPreview
-            buttonColor={activeTemplate.buttonColor}
-            buttonLink={activeTemplate.buttonLink}
-            buttonText={activeTemplate.buttonText}
-            eyebrowText={activeTemplate.eyebrowText ?? "Client Gallery"}
-            footerText={activeTemplate.footerText}
-            image={activeTemplate.image}
-            showImage={activeTemplate.showImage ?? true}
-            message={activeTemplate.message}
-            previewText={activeTemplate.previewText}
+            html={buildGalleryEmailHtml({
+              previewText: activeTemplate.previewText,
+              eyebrowText: activeTemplate.eyebrowText ?? "Client Gallery",
+              title: activeTemplate.title || "Untitled Template",
+              message: activeTemplate.message,
+              buttonText: activeTemplate.buttonText || "Open Gallery",
+              buttonLink:
+                activeTemplate.buttonLink === "Collection URL"
+                  ? "#"
+                  : activeTemplate.buttonLink,
+              buttonColor: activeTemplate.buttonColor || "#444444",
+              footerText: activeTemplate.footerText,
+              logoUrl: imageSrc(branding.logoUrl || branding.brandImageUrl || ""),
+              brandText: branding.brandText,
+              imageUrl: activeTemplate.image,
+              showImage: activeTemplate.showImage ?? true,
+              showBranding: activeTemplate.showBranding !== false,
+              brandingPosition:
+                activeTemplate.brandingPosition ?? branding.brandingPosition,
+            })}
             subject={activeTemplate.subject}
-            template={activeTemplate.title}
+            previewText={activeTemplate.previewText}
           />
         </div>
       </div>
@@ -17203,6 +17227,7 @@ function CollectionDetailView({
               activityPage={activeTab === "settings" ? "email" : activityPage}
               emailTemplates={emailTemplates}
               favoriteSettings={form.favorite}
+              mailBranding={branding}
               accessSettings={
                 (collection.settings?.access as
                   CollectionAccessSettings | undefined) ?? {}
@@ -17336,6 +17361,7 @@ function CollectionActivityPanel({
   activityPage,
   emailTemplates = [],
   favoriteSettings,
+  mailBranding,
   accessSettings = {},
   emailAccessEnabled,
   setEmailAccessEnabled,
@@ -17362,6 +17388,7 @@ function CollectionActivityPanel({
     "download" | "favorite" | "orders" | "email" | "contacts" | "private";
   emailTemplates: EmailTemplateItem[];
   favoriteSettings: PresetFavoriteSettings;
+  mailBranding: BrandSettings;
   accessSettings: CollectionAccessSettings;
   emailAccessEnabled: boolean;
   setEmailAccessEnabled: (enabled: boolean) => Promise<void>;
@@ -17565,16 +17592,27 @@ function CollectionActivityPanel({
     ]
       .filter(Boolean)
       .join("\n");
+    const logoUrl = imageSrc(
+      mailBranding.logoUrl || mailBranding.brandImageUrl || "",
+    );
+    const useBrandColor = template.useBrandColor !== false;
     const html = buildGalleryEmailHtml({
       previewText: template.previewText,
-      eyebrowText: template.eyebrowText,
+      eyebrowText: template.eyebrowText || "Client Gallery",
       title: template.title || collectionName,
       message: template.message || "",
       buttonText: template.buttonText || "Open Gallery",
       buttonLink: publicLink,
-      buttonColor: template.buttonColor || "#1f2937",
+      buttonColor: useBrandColor
+        ? mailBranding.accentColor || template.buttonColor || "#1f2937"
+        : template.buttonColor || "#1f2937",
       footerText: template.footerText || "",
-      showBranding: true,
+      logoUrl,
+      brandText: mailBranding.brandText,
+      showBranding: template.showBranding !== false,
+      showImage: template.showImage !== false,
+      imageUrl: template.image || "",
+      brandingPosition: mailBranding.brandingPosition,
     });
     await recordEmailUsage(1);
     const result = await sendUniversalEmail({
@@ -17582,6 +17620,9 @@ function CollectionActivityPanel({
       subject: template.subject || collectionName,
       text: body,
       html,
+      inlineImages: canInlineEmailAsset(logoUrl)
+        ? [{ url: logoUrl, cid: "gallery-logo", filename: "brand-logo" }]
+        : [],
     }).catch(() => null);
     if (result?.sent) toast.success("Email sent by universal SMTP");
     window.sessionStorage.setItem(

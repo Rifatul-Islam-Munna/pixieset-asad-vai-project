@@ -200,6 +200,7 @@ function AutomationDialog({ open, onOpenChange, categories, contactsCount, colle
         includeExistingContacts: trigger === "new-subscriber" ? includeExisting : false,
         templateId: activeTemplate.id,
         templateName: activeTemplate.name,
+        titleText: activeTemplate.title || activeTemplate.name,
         subject: activeTemplate.subject || activeTemplate.title || "Gallery update",
         previewText: activeTemplate.previewText,
         message: activeTemplate.message || activeTemplate.previewText || activeTemplate.title,
@@ -210,6 +211,8 @@ function AutomationDialog({ open, onOpenChange, categories, contactsCount, colle
         buttonColor: activeTemplate.buttonColor,
         image: activeTemplate.image,
         showImage: activeTemplate.showImage,
+        showBranding: activeTemplate.showBranding,
+        brandingPosition: activeTemplate.brandingPosition,
         collectionId: activeCollection?._id,
         collectionName: activeCollection?.name,
       });

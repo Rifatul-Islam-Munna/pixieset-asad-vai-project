@@ -13,6 +13,7 @@ import { Readable } from 'stream';
 import { finished, pipeline } from 'stream/promises';
 import { MinioService } from 'src/lib/minio.service';
 import { MailService } from 'src/mail/mail.service';
+import { BrandingEmailService, buildBrandedGalleryEmailHtml } from 'src/mail/branding-email.service';
 import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
@@ -52,6 +53,7 @@ export class CollectionDownloadDeliveryService {
     private readonly minioService: MinioService,
     private readonly marketingScheduleService: MarketingScheduleService,
     private readonly mailService: MailService,
+    private readonly brandingEmailService: BrandingEmailService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -213,8 +215,27 @@ export class CollectionDownloadDeliveryService {
 
     const expiresText = expiresAt.toLocaleString();
     const text = `Your download from ${job.collectionName} is ready.\n\nDownload: ${buttonLink}\n\nThis secure link expires in 30 hours (${expiresText}).`;
-    const html = `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:32px;color:#202326"><h1>Your photos are ready</h1><p>Your requested files from <strong>${escapeHtml(job.collectionName)}</strong> are ready.</p><p style="margin:28px 0"><a href="${escapeHtml(buttonLink)}" style="display:inline-block;background:#6337d8;color:#fff;padding:14px 22px;text-decoration:none;font-weight:700">Download photos</a></p><p style="font-size:13px;color:#777">This secure link expires in 30 hours.</p></div>`;
-    const result = await this.mailService.send({ to: job.email, subject: `Your download from ${job.collectionName} is ready`, text, html });
+    const brand = await this.brandingEmailService.loadBrandData(String(job.userId));
+    const html = buildBrandedGalleryEmailHtml(
+      {
+        userId: String(job.userId),
+        previewText: 'Your requested files are ready to download.',
+        eyebrowText: 'Download Ready',
+        title: brandText(brand, 'Your photos are ready'),
+        message: `Your requested files from ${job.collectionName} are ready. Use the button below to download them.`,
+        buttonText: 'Download photos',
+        buttonLink,
+        footerText: 'This secure link expires in 30 hours.',
+      },
+      brand,
+    );
+    const result = await this.mailService.send({
+      to: job.email,
+      subject: `Your download from ${job.collectionName} is ready`,
+      text,
+      html,
+      fromName: this.brandingEmailService.senderName(brand),
+    });
     if (!result.sent) {
       await this.deliveryModel.updateOne({ _id: job._id }, { $set: { lastError: result.reason === 'SMTP_NOT_CONFIGURED' ? 'Archive is ready, but SMTP is not configured' : 'Archive is ready, but email delivery failed' } });
     }
@@ -481,6 +502,6 @@ export class CollectionDownloadDeliveryService {
   }
 }
 
-function escapeHtml(value: unknown) {
-  return String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character));
+function brandText(brand: Record<string, any>, fallback: string) {
+  return String(brand?.brandText || brand?.brandName || brand?.name || '').trim() || fallback;
 }

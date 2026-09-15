@@ -15,6 +15,7 @@ import * as exifr from 'exifr';
 import { setTimeout as delay } from 'timers/promises';
 import { MinioService } from 'src/lib/minio.service';
 import { MailService, type GlobalMailAttachment } from 'src/mail/mail.service';
+import { BrandingEmailService } from 'src/mail/branding-email.service';
 import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
 import { FaceSearchService } from 'src/face-search/face-search.service';
 import { ImageMetadataAiService } from 'src/image-metadata-ai/image-metadata-ai.service';
@@ -135,6 +136,7 @@ export class CollectionsService {
     private readonly faceSearchService: FaceSearchService,
     private readonly imageMetadataAiService: ImageMetadataAiService,
     private readonly mailService: MailService,
+    private readonly brandingEmailService: BrandingEmailService,
     private readonly marketingScheduleService: MarketingScheduleService,
     private readonly configService: ConfigService,
   ) {}
@@ -1328,12 +1330,16 @@ export class CollectionsService {
         : '<p>All requested photo files are attached to this email.</p>',
     ].join('');
 
+    const brand = await this.brandingEmailService.loadBrandData(String(collection.userId));
+    const brandedHtml = `<div style="font-family:Arial,sans-serif">${html}</div>`;
+
     const result = await this.mailService.send({
       to: recipient,
       replyTo: email,
       subject: `Print request - ${collection.name} - ${email}`,
       text,
-      html,
+      html: brandedHtml,
+      fromName: this.brandingEmailService.senderName(brand),
       attachments,
     });
     return {

@@ -12,7 +12,14 @@ export type GalleryEmailHtmlInput = {
   imageUrl?: string;
   showBranding?: boolean;
   showImage?: boolean;
+  brandingPosition?: "top" | "bottom";
 };
+
+export type GalleryEmailBrandingPosition = "top" | "bottom";
+
+export function normalizeBrandingPosition(value: unknown): GalleryEmailBrandingPosition {
+  return value === "bottom" ? "bottom" : "top";
+}
 
 export function escapeEmailHtml(value: string) {
   return String(value ?? "")
@@ -34,6 +41,7 @@ export function canInlineEmailAsset(value: string) {
 export function buildGalleryEmailHtml(input: GalleryEmailHtmlInput) {
   const showBranding = input.showBranding !== false;
   const showImage = input.showImage !== false;
+  const brandingPosition = normalizeBrandingPosition(input.brandingPosition);
   const logo = showBranding ? String(input.logoUrl ?? "").trim() : "";
   const brandText = showBranding ? String(input.brandText ?? "").trim() : "";
   const image = showImage ? String(input.imageUrl ?? "").trim() : "";
@@ -57,6 +65,12 @@ export function buildGalleryEmailHtml(input: GalleryEmailHtmlInput) {
           </td>
         </tr>`
       : "";
+  const brandingBlockWithPadding = brandingBlock
+    ? brandingBlock.replace(
+        'style="padding:38px 36px 0"',
+        `style="padding:${brandingPosition === "bottom" ? "38px" : "38px"} 36px 0"`,
+      )
+    : "";
 
   const imageBlock = image
     ? `<tr>
@@ -66,20 +80,15 @@ export function buildGalleryEmailHtml(input: GalleryEmailHtmlInput) {
       </tr>`
     : "";
 
-  return `<div style="margin:0;background:#f3f2ef;padding:36px 16px;font-family:Arial,Helvetica,sans-serif;color:#202020">
-    ${previewText ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeEmailHtml(previewText)}</div>` : ""}
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background:#f3f2ef">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="680" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:680px;border-collapse:collapse;background:#ffffff">
-            ${brandingBlock}
+  const headBlock = `
             <tr>
               <td align="center" style="padding:${brandingBlock ? "26px" : "42px"} 36px 38px">
                 ${eyebrow ? `<div style="margin:0 0 16px;font-size:10px;line-height:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#96918b">${escapeEmailHtml(eyebrow)}</div>` : ""}
                 <h1 style="margin:0;font-size:28px;line-height:38px;font-weight:500;letter-spacing:4px;text-transform:uppercase;color:#2f2f2f">${escapeEmailHtml(title)}</h1>
               </td>
-            </tr>
-            ${imageBlock}
+            </tr>`;
+
+  const bodyBlock = `
             <tr>
               <td align="center" style="padding:42px 42px 36px">
                 ${message ? `<div style="max-width:520px;margin:0 auto;font-size:15px;line-height:27px;color:#585858;text-align:left">${emailLines(message)}</div>` : ""}
@@ -92,7 +101,18 @@ export function buildGalleryEmailHtml(input: GalleryEmailHtmlInput) {
                 </table>
                 ${footerText ? `<div style="margin:34px 0 0;font-size:11px;line-height:19px;color:#7a7a7a">${emailLines(footerText)}</div>` : ""}
               </td>
-            </tr>
+            </tr>`;
+
+  return `<div style="margin:0;background:#f3f2ef;padding:36px 16px;font-family:Arial,Helvetica,sans-serif;color:#202020">
+    ${previewText ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeEmailHtml(previewText)}</div>` : ""}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background:#f3f2ef">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="680" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:680px;border-collapse:collapse;background:#ffffff">
+            ${brandingPosition === "top" ? `${brandingBlockWithPadding}${headBlock}` : headBlock}
+            ${imageBlock}
+            ${bodyBlock}
+            ${brandingPosition === "bottom" ? brandingBlockWithPadding : ""}
           </table>
         </td>
       </tr>

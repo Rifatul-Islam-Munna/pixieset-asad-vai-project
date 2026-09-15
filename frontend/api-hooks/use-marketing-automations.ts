@@ -13,6 +13,7 @@ export type MarketingAutomationRecord = {
   delayMinutes: number;
   templateId: string;
   templateName: string;
+  titleText?: string;
   subject: string;
   previewText?: string;
   message: string;
@@ -23,6 +24,8 @@ export type MarketingAutomationRecord = {
   buttonColor?: string;
   image?: string;
   showImage?: boolean;
+  showBranding?: boolean;
+  brandingPosition?: "top" | "bottom";
   collectionId?: string;
   collectionName?: string;
   stats?: MarketingAutomationStats;
@@ -38,6 +41,7 @@ export type CreateMarketingAutomationPayload = {
   includeExistingContacts?: boolean;
   templateId: string;
   templateName: string;
+  titleText?: string;
   subject: string;
   previewText?: string;
   message: string;
@@ -48,6 +52,8 @@ export type CreateMarketingAutomationPayload = {
   buttonColor?: string;
   image?: string;
   showImage?: boolean;
+  showBranding?: boolean;
+  brandingPosition?: "top" | "bottom";
   collectionId?: string;
   collectionName?: string;
 };

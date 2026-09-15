@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Interval } from '@nestjs/schedule';
 import { Model, Types } from 'mongoose';
 import { CollectionEmailRegistration, CollectionEmailRegistrationDocument } from 'src/collections/entities/collection-email-registration.entity';
+import { BrandingEmailService, buildBrandedGalleryEmailHtml, type BrandingEmailPosition } from 'src/mail/branding-email.service';
 import { MailService } from 'src/mail/mail.service';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { MarketingEmailAutomation, MarketingEmailAutomationDocument } from './entities/marketing-email-automation.entity';
@@ -31,6 +32,7 @@ export class MarketingScheduleService implements OnModuleInit {
     @InjectModel(CollectionEmailRegistration.name) private readonly contactModel: Model<CollectionEmailRegistrationDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly mailService: MailService,
+    private readonly brandingEmailService: BrandingEmailService,
   ) {}
 
   onModuleInit() {
@@ -75,6 +77,7 @@ export class MarketingScheduleService implements OnModuleInit {
       recipientCategory: recipientMode === 'category' ? recipientCategory : undefined,
       templateId: this.text(body.templateId, 180) || 'custom',
       templateName,
+      titleText: this.text(body.titleText || body.templateName, 220),
       subject,
       previewText,
       message,
@@ -85,6 +88,8 @@ export class MarketingScheduleService implements OnModuleInit {
       buttonColor: this.safeColor(body.buttonColor),
       image: this.text(body.image, 1500),
       showImage: body.showImage !== false,
+      showBranding: body.showBranding !== false,
+      brandingPosition: body.brandingPosition === 'bottom' ? 'bottom' : 'top',
       collectionId: this.text(body.collectionId, 120) || undefined,
       collectionName: this.text(body.collectionName, 220) || undefined,
       scheduledAt,
@@ -143,7 +148,7 @@ export class MarketingScheduleService implements OnModuleInit {
     if (body.trigger !== undefined) automation.trigger = this.automationTrigger(body.trigger);
     if (body.recipientCategory !== undefined) automation.recipientCategory = this.text(body.recipientCategory, 180) || undefined;
     if (body.delayMinutes !== undefined) automation.delayMinutes = this.delayMinutes(body.delayMinutes);
-    const hasContent = ['templateId', 'templateName', 'subject', 'message', 'previewText', 'footerText', 'eyebrowText', 'buttonText', 'buttonLink', 'buttonColor', 'image', 'showImage', 'collectionId', 'collectionName'].some((key) => body[key] !== undefined);
+    const hasContent = ['templateId', 'templateName', 'subject', 'message', 'previewText', 'footerText', 'eyebrowText', 'buttonText', 'buttonLink', 'buttonColor', 'image', 'showImage', 'showBranding', 'brandingPosition', 'collectionId', 'collectionName'].some((key) => body[key] !== undefined);
     if (hasContent) Object.assign(automation, this.automationContent({ ...automation.toObject(), ...body }));
     await automation.save();
     if (body.enabled === false) {
@@ -337,8 +342,34 @@ export class MarketingScheduleService implements OnModuleInit {
     }
 
     const text = buildCampaignText(schedule);
-    const html = buildCampaignHtml(schedule);
-    const result = await this.mailService.send({ to: [], bcc: recipients, subject: schedule.subject, text, html });
+    const brand = await this.brandingEmailService.loadBrandData(String(schedule.userId));
+    const html = buildBrandedGalleryEmailHtml(
+      {
+        userId: String(schedule.userId),
+        previewText: schedule.previewText,
+        eyebrowText: schedule.eyebrowText,
+        title: schedule.titleText || schedule.templateName || schedule.subject,
+        message: schedule.message,
+        buttonText: schedule.buttonText || '',
+        buttonLink: schedule.buttonLink || '',
+        buttonColor: schedule.buttonColor || undefined,
+        useBrandColor: schedule.buttonColor ? false : true,
+        footerText: schedule.footerText,
+        imageUrl: schedule.image || '',
+        showImage: schedule.showImage !== false,
+        showBranding: schedule.showBranding !== false,
+        brandingPosition: (schedule.brandingPosition as BrandingEmailPosition) || undefined,
+      },
+      brand,
+    );
+    const result = await this.mailService.send({
+      to: [],
+      bcc: recipients,
+      subject: schedule.subject,
+      text,
+      html,
+      fromName: this.brandingEmailService.senderName(brand),
+    });
     if (!result.sent) throw new Error(result.reason === 'SMTP_NOT_CONFIGURED' ? 'SMTP is not configured' : 'SMTP delivery failed');
 
     await Promise.all([
@@ -362,6 +393,7 @@ export class MarketingScheduleService implements OnModuleInit {
     return {
       templateId: this.text(body.templateId, 180) || 'custom',
       templateName: this.text(body.templateName, 180) || 'Automated email',
+      titleText: this.text(body.titleText || body.templateName, 220),
       subject,
       previewText,
       message,
@@ -372,6 +404,8 @@ export class MarketingScheduleService implements OnModuleInit {
       buttonColor: this.safeColor(body.buttonColor),
       image: this.text(body.image, 1500),
       showImage: body.showImage !== false,
+      showBranding: body.showBranding !== false,
+      brandingPosition: body.brandingPosition === 'bottom' ? 'bottom' : 'top',
       collectionId: this.text(body.collectionId, 120) || undefined,
       collectionName: this.text(body.collectionName, 220) || undefined,
     };
@@ -391,6 +425,7 @@ export class MarketingScheduleService implements OnModuleInit {
       subscriptionRequired: true,
       templateId: automation.templateId,
       templateName: automation.templateName,
+      titleText: automation.titleText || automation.templateName || '',
       subject: automation.subject,
       previewText: automation.previewText || '',
       message: automation.message || '',
@@ -401,6 +436,8 @@ export class MarketingScheduleService implements OnModuleInit {
       buttonColor: automation.buttonColor || '#444444',
       image: automation.image || '',
       showImage: automation.showImage !== false,
+      showBranding: automation.showBranding !== false,
+      brandingPosition: automation.brandingPosition === 'bottom' ? 'bottom' : 'top',
       collectionId: automation.collectionId || undefined,
       collectionName: automation.collectionName || undefined,
       scheduledAt,
@@ -441,6 +478,8 @@ export class MarketingScheduleService implements OnModuleInit {
       buttonColor: automation.buttonColor || '#444444',
       image: automation.image || '',
       showImage: automation.showImage !== false,
+      showBranding: automation.showBranding !== false,
+      brandingPosition: automation.brandingPosition === 'bottom' ? 'bottom' : 'top',
       collectionId: event.collectionId,
       collectionName: event.collectionName,
       scheduledAt,
@@ -526,20 +565,6 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function escapeHtml(value: string) {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
-
 function buildCampaignText(schedule: MarketingEmailScheduleDocument) {
   return [schedule.eyebrowText, schedule.message, schedule.buttonText && schedule.buttonLink ? `${schedule.buttonText}: ${schedule.buttonLink}` : '', schedule.footerText].filter(Boolean).join('\n\n');
-}
-
-function buildCampaignHtml(schedule: MarketingEmailScheduleDocument) {
-  const button = schedule.buttonText && schedule.buttonLink
-    ? `<p style="margin:28px 0"><a href="${escapeHtml(schedule.buttonLink)}" style="display:inline-block;background:${escapeHtml(schedule.buttonColor || '#444444')};color:#fff;padding:13px 22px;text-decoration:none;font-weight:700">${escapeHtml(schedule.buttonText)}</a></p>`
-    : '';
-  const image = schedule.showImage && schedule.image
-    ? `<img src="${escapeHtml(schedule.image)}" alt="" style="display:block;width:100%;max-height:420px;object-fit:cover;margin:22px 0" />`
-    : '';
-  return `<div dir="auto" style="font-family:Arial,sans-serif;max-width:680px;margin:auto;padding:32px;color:#202326;line-height:1.7">${schedule.previewText ? `<span style="display:none;max-height:0;overflow:hidden">${escapeHtml(schedule.previewText)}</span>` : ''}${schedule.eyebrowText ? `<p style="font-size:11px;text-transform:uppercase;letter-spacing:.18em;color:#777">${escapeHtml(schedule.eyebrowText)}</p>` : ''}${image}<div style="white-space:pre-line">${escapeHtml(schedule.message)}</div>${button}${schedule.footerText ? `<div style="margin-top:34px;padding-top:20px;border-top:1px solid #eee;font-size:12px;color:#777;white-space:pre-line">${escapeHtml(schedule.footerText)}</div>` : ''}</div>`;
 }

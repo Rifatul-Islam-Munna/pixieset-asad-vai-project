@@ -128,6 +128,7 @@ export function AdminEmailTemplatesPage({
       imageUrl: draft.image,
       showBranding: draft.showBranding !== false,
       showImage: draft.showImage !== false,
+      brandingPosition: draft.brandingPosition,
     });
   }, [draft]);
 
@@ -544,6 +545,37 @@ export function AdminEmailTemplatesPage({
                         update({ showBranding: checked })
                       }
                     />
+                    {draft.showBranding !== false && (
+                      <Field label="Branding position">
+                        <div className="grid grid-cols-2 gap-2">
+                          {(
+                            [
+                              { value: "top", label: "Top of email" },
+                              { value: "bottom", label: "Bottom of email" },
+                            ] as const
+                          ).map((option) => {
+                            const active =
+                              (draft.brandingPosition ?? "top") === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() =>
+                                  update({ brandingPosition: option.value })
+                                }
+                                className={`h-10 rounded-lg border px-3 text-xs font-bold ${
+                                  active
+                                    ? "border-[#6d5ce7] bg-[#6d5ce7] text-white"
+                                    : "border-black/10 bg-white text-[#333]"
+                                }`}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </Field>
+                    )}
                     <ToggleRow
                       icon={Palette}
                       title="Use brand accent"

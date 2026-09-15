@@ -1,5 +1,6 @@
 jest.mock('src/collections/entities/collection-email-registration.entity', () => ({ CollectionEmailRegistration: class CollectionEmailRegistration {} }), { virtual: true });
 jest.mock('src/mail/mail.service', () => ({ MailService: class MailService {} }), { virtual: true });
+jest.mock('src/mail/branding-email.service', () => ({ BrandingEmailService: class BrandingEmailService {} }), { virtual: true });
 jest.mock('src/user/entities/user.entity', () => ({ User: class User {} }), { virtual: true });
 
 import { MarketingScheduleService } from './marketing-schedule.service';
@@ -17,12 +18,14 @@ describe('MarketingScheduleService automations', () => {
   const contactModel: any = { find: jest.fn() };
   const userModel: any = {};
   const mailService: any = {};
+  const brandingEmailService: any = { loadBrandData: jest.fn().mockResolvedValue({}), senderName: jest.fn().mockReturnValue('Studio') };
   const service = new MarketingScheduleService(
     scheduleModel,
     automationModel,
     contactModel,
     userModel,
     mailService,
+    brandingEmailService,
   );
 
   beforeEach(() => jest.clearAllMocks());

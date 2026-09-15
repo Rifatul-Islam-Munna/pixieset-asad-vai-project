@@ -32,6 +32,7 @@ export type CreateMarketingSchedulePayload = {
   recipientCategory?: string;
   templateId: string;
   templateName: string;
+  titleText?: string;
   subject: string;
   previewText?: string;
   message: string;
@@ -42,6 +43,8 @@ export type CreateMarketingSchedulePayload = {
   buttonColor?: string;
   image?: string;
   showImage?: boolean;
+  showBranding?: boolean;
+  brandingPosition?: "top" | "bottom";
   collectionId?: string;
   collectionName?: string;
   scheduledLocal: string;
