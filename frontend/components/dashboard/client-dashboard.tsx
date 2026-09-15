@@ -17565,12 +17565,17 @@ function CollectionActivityPanel({
     ]
       .filter(Boolean)
       .join("\n");
-    const html = [
-      `<h1>${template.title || collectionName}</h1>`,
-      `<p>${template.message || ""}</p>`,
-      `<p><a href="${publicLink}">${template.buttonText || "Open Gallery"}</a></p>`,
-      `<p>${template.footerText || ""}</p>`,
-    ].join("");
+    const html = buildGalleryEmailHtml({
+      previewText: template.previewText,
+      eyebrowText: template.eyebrowText,
+      title: template.title || collectionName,
+      message: template.message || "",
+      buttonText: template.buttonText || "Open Gallery",
+      buttonLink: publicLink,
+      buttonColor: template.buttonColor || "#1f2937",
+      footerText: template.footerText || "",
+      showBranding: true,
+    });
     await recordEmailUsage(1);
     const result = await sendUniversalEmail({
       to: mailList.email,
