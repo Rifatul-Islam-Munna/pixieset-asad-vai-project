@@ -334,7 +334,7 @@ export function CollectionSharePage({
           .filter(Boolean)
           .join("\n\n"),
         html,
-        senderName,
+        senderName: branding.brandText?.trim() || senderName,
         inlineImages: [
           ...(showBranding && inlineLogo
             ? [{ url: logoUrl, cid: "gallery-logo", filename: "brand-logo" }]

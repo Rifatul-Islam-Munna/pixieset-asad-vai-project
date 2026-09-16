@@ -3421,6 +3421,7 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
         subject: `[Test] ${campaignSubject || campaignTemplate}`,
         text: campaignTextBody || campaignPreviewText || campaignTemplate,
         html: campaignSendHtml,
+        senderName: campaignBranding.brandText || undefined,
         inlineImages: campaignInlineImages,
       });
       toast.success(`Test email sent to ${campaignTestAddress}`);
@@ -3444,6 +3445,7 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
             subject: campaignSubject || campaignTemplate,
             text: campaignTextBody || campaignPreviewText || campaignTemplate,
             html: campaignSendHtml,
+            senderName: campaignBranding.brandText || undefined,
             inlineImages: campaignInlineImages,
           });
           toast.success("Campaign sent by universal SMTP");
@@ -17692,6 +17694,7 @@ function CollectionActivityPanel({
       subject: template.subject || collectionName,
       text: body,
       html,
+      senderName: mailBranding.brandText || undefined,
       inlineImages: [logoAsset.inline, coverAsset.inline].filter(
         (item): item is NonNullable<typeof logoAsset.inline> => Boolean(item),
       ),

@@ -18,6 +18,21 @@ import { sanitizeEmailHtml } from './html-guard';
 const LOGO_CID = 'gallery-logo';
 const COVER_CID = 'gallery-cover';
 
+/** From display name for a user: explicit override → brand name → undefined. */
+export function resolveSenderName(
+  override?: string,
+  brand?: BrandingEmailData | null,
+): string | undefined {
+  const explicit = String(override ?? '').trim().slice(0, 120);
+  if (explicit) return explicit;
+  const name = String(
+    brand?.brandText || brand?.brandName || brand?.name || '',
+  )
+    .trim()
+    .slice(0, 120);
+  return name || undefined;
+}
+
 export {
   buildBrandedGalleryEmailHtml,
   escapeBrandingEmailHtml,

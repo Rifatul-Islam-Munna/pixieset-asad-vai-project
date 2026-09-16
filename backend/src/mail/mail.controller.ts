@@ -1,12 +1,16 @@
 import { BadRequestException, Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
+import { BrandingEmailService, resolveSenderName } from './branding-email.service';
 import { sanitizeEmailHtml } from './html-guard';
 import { MailService } from './mail.service';
 
 @Controller('mail')
 @UseGuards(AuthGuard)
 export class MailController {
-  constructor(private readonly mailService: MailService) {}
+  constructor(
+    private readonly mailService: MailService,
+    private readonly brandingEmailService: BrandingEmailService,
+  ) {}
 
   @Post('send')
   async send(@Req() req: ExpressRequest, @Body() body: Record<string, any>) {
@@ -33,6 +37,15 @@ export class MailController {
     if (!subject) throw new BadRequestException('Email subject is required');
     if (!text && !html) throw new BadRequestException('Email body is required');
 
+    // The From display name must be the studio's brand name (Settings →
+    // Branding), never the platform default. Callers may override explicitly.
+    const brand = senderName
+      ? null
+      : await this.brandingEmailService
+          .loadBrandData(req.user.id)
+          .catch(() => null);
+    const fromName = resolveSenderName(senderName, brand);
+
     const result = await this.mailService.send({
       to,
       ...(cc.length ? { cc } : {}),
@@ -41,7 +54,7 @@ export class MailController {
       subject,
       text,
       html,
-      ...(senderName ? { fromName: senderName } : {}),
+      ...(fromName ? { fromName } : {}),
       ...(attachments.length ? { attachments } : {}),
     });
 
