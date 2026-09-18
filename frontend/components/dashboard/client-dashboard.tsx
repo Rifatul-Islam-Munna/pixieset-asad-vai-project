@@ -8778,6 +8778,16 @@ function StoreDashboardPanel() {
     </div>
   );
 }
+function storeOrderOriginalSrc(
+  orderId: string,
+  imageId?: string,
+  download = false,
+) {
+  if (!orderId || !imageId) return "";
+  const source = `/api/store/orders/${encodeURIComponent(orderId)}/images/${encodeURIComponent(imageId)}/original`;
+  return download ? `${source}?download=1` : source;
+}
+
 function storeOrderImageSrc(url?: string) {
   if (!url) return "";
   if (
@@ -8790,20 +8800,34 @@ function storeOrderImageSrc(url?: string) {
   return url.startsWith("/") ? `${base}${url}` : url;
 }
 
+function downloadStoreOrderOriginal(
+  item: StoreOrderRecord["items"][number],
+  orderId: string,
+) {
+  const source =
+    storeOrderOriginalSrc(orderId, item.imageId, true) ||
+    storeOrderImageSrc(item.imageUrl);
+  if (!source) return;
+  const link = document.createElement("a");
+  link.href = source;
+  if (!item.imageId) link.download = "";
+  link.click();
+}
+
 async function downloadStoreOrderImage(
   item: StoreOrderRecord["items"][number],
   filename: string,
+  orderId: string,
 ) {
-  const source = storeOrderImageSrc(item.imageUrl);
-  if (!source) return;
-
   if (!item.crop) {
-    const link = document.createElement("a");
-    link.href = source;
-    link.download = `${filename}.jpg`;
-    link.click();
+    downloadStoreOrderOriginal(item, orderId);
     return;
   }
+
+  const source =
+    storeOrderOriginalSrc(orderId, item.imageId) ||
+    storeOrderImageSrc(item.imageUrl);
+  if (!source) return;
 
   try {
     const image = new Image();
@@ -8863,9 +8887,9 @@ function storeCropRatio(value?: string) {
 }
 
 async function downloadStoreOrderImages(order: StoreOrderRecord) {
-  for (const [index, item] of order.items.entries()) {
-    if (item.imageUrl) {
-      await downloadStoreOrderImage(item, `${order.orderNumber}-${index + 1}`);
+  for (const item of order.items) {
+    if (item.imageId || item.imageUrl) {
+      downloadStoreOrderOriginal(item, order._id);
       await new Promise((resolve) => window.setTimeout(resolve, 120));
     }
   }
@@ -9037,7 +9061,7 @@ function StoreOrdersPanel() {
           </DialogHeader>
           {viewOrder && (
             <div className="max-h-[70vh] overflow-y-auto pr-1">
-              {viewOrder.items.some((item) => item.imageUrl) && (
+              {viewOrder.items.some((item) => item.imageId || item.imageUrl) && (
                 <button
                   className="mb-4 inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
                   onClick={() => void downloadStoreOrderImages(viewOrder)}
@@ -9101,9 +9125,12 @@ function StoreOrdersPanel() {
                         aspectRatio: storeCropRatio(item.crop?.aspectRatio),
                       }}
                     >
-                      {item.imageUrl ? (
+                      {item.imageId || item.imageUrl ? (
                         <img
-                          src={storeOrderImageSrc(item.imageUrl)}
+                          src={
+                            storeOrderOriginalSrc(viewOrder._id, item.imageId) ||
+                            storeOrderImageSrc(item.imageUrl)
+                          }
                           alt={item.name}
                           className="absolute left-1/2 top-1/2 h-full w-full max-w-none"
                           style={{
@@ -9154,22 +9181,35 @@ function StoreOrdersPanel() {
                           {Number(item.crop.zoom ?? 1).toFixed(2)}
                         </p>
                       )}
-                      {item.imageUrl && (
-                        <button
-                          className="mt-4 inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
-                          onClick={() =>
-                            void downloadStoreOrderImage(
-                              item,
-                              `${viewOrder.orderNumber}-${index + 1}`,
-                            )
-                          }
-                          type="button"
-                        >
-                          <Download className="size-4" />
-                          {item.crop
-                            ? "Download modified image"
-                            : "Download image"}
-                        </button>
+                      {(item.imageId || item.imageUrl) && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            className="inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
+                            onClick={() =>
+                              downloadStoreOrderOriginal(item, viewOrder._id)
+                            }
+                            type="button"
+                          >
+                            <Download className="size-4" />
+                            Download original
+                          </button>
+                          {item.crop && (
+                            <button
+                              className="inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
+                              onClick={() =>
+                                void downloadStoreOrderImage(
+                                  item,
+                                  `${viewOrder.orderNumber}-${index + 1}`,
+                                  viewOrder._id,
+                                )
+                              }
+                              type="button"
+                            >
+                              <Download className="size-4" />
+                              Download modified image
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </article>

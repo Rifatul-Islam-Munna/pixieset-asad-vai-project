@@ -30,6 +30,7 @@ import { CollectionImage, CollectionImageSchema } from 'src/collections/entities
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity';
 import { DashboardSetting, DashboardSettingSchema } from 'src/settings/entities/dashboard-setting.entity';
+import { MinioService } from 'src/lib/minio.service';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { DashboardSetting, DashboardSettingSchema } from 'src/settings/entities/
     StorePaymentVerifyService,
     StoreDefaultProductService,
     PrintLabNotificationService,
+    MinioService,
   ],
   exports: [StoreDefaultProductService, PrintLabNotificationService],
 })

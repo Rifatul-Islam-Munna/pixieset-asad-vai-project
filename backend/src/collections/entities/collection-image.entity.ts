@@ -29,6 +29,18 @@ export class CollectionImage {
   @Prop()
   filename?: string;
 
+  @Prop({ select: false })
+  originalObjectKey?: string;
+
+  @Prop({ select: false })
+  originalFilename?: string;
+
+  @Prop({ select: false })
+  originalMimeType?: string;
+
+  @Prop({ default: 0, select: false })
+  originalSizeBytes?: number;
+
   @Prop()
   mimetype?: string;
 

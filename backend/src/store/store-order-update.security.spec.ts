@@ -97,6 +97,7 @@ describe('StoreService owner order update security', () => {
       { findOne: jest.fn(() => ({ lean: jest.fn().mockResolvedValue(null) })) } as any,
       imageModel,
       { send: jest.fn() } as any,
+      { openPrivateReadStream: jest.fn() } as any,
     );
 
     await expect(

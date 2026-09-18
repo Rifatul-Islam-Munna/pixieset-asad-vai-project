@@ -74,8 +74,10 @@ describe('PrintLabNotificationService', () => {
         _id: IMAGE_ID,
         userId: 'owner-1',
         collectionId: COLLECTION_ID,
-        url: 'https://storage.test/private-original.jpg',
+        url: 'https://storage.test/gallery-preview.jpg',
         thumbnailUrl: 'https://storage.test/thumb.jpg',
+        originalObjectKey: 'originals/owner-1/wedding/ceremony.jpg',
+        originalMimeType: 'image/jpeg',
         originalName: 'ceremony & vows.jpg',
         filename: 'stored-image.jpg',
       },
@@ -149,6 +151,7 @@ describe('PrintLabNotificationService', () => {
       collectionModel,
       imageModel,
       mail as any,
+      { openPrivateReadStream: jest.fn() } as any,
     );
   });
 
@@ -270,8 +273,9 @@ describe('PrintLabNotificationService', () => {
     const result = await service.notify(order.id, 'free');
 
     await expect(service.authorizeImage(order.id, IMAGE_ID, result.token!)).resolves.toEqual({
-      url: 'https://storage.test/private-original.jpg',
+      objectKey: 'originals/owner-1/wedding/ceremony.jpg',
       filename: 'ceremony & vows.jpg',
+      contentType: 'image/jpeg',
     });
     await expect(service.authorizeImage(order.id, OTHER_IMAGE_ID, result.token!)).rejects.toBeInstanceOf(
       NotFoundException,
@@ -576,8 +580,9 @@ describe('PrintLabNotificationService', () => {
     images[0].originalName = 'evil";\r\nname?.jpg';
     const result = await service.notify(order.id, 'free');
     await expect(service.authorizeImage(order.id, IMAGE_ID, result.token!)).resolves.toEqual({
-      url: 'https://storage.test/private-original.jpg',
+      objectKey: 'originals/owner-1/wedding/ceremony.jpg',
       filename: 'evil_name_.jpg',
+      contentType: 'image/jpeg',
     });
 
     images[0].originalName = 'CON.txt';

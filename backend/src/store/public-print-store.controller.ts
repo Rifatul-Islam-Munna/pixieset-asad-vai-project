@@ -100,10 +100,15 @@ export class PublicPrintLabController {
     @Res() response: Response,
   ) {
     if (!token) throw new NotFoundException('Print order unavailable');
-    const asset = await this.printLab.authorizeImage(orderId, imageId, token);
+    const asset = await this.printLab.openPrintImage(orderId, imageId, token);
     const filename = asset.filename.replace(/["\r\n]/g, '_');
     response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.setHeader('Cache-Control', 'private, no-store');
-    return response.redirect(asset.url);
+    response.setHeader('Content-Type', asset.contentType);
+    if (asset.contentLength > 0) {
+      response.setHeader('Content-Length', String(asset.contentLength));
+    }
+    asset.body.pipe(response);
+    return response;
   }
 }

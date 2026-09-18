@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { CreatePriceSheetDto } from './dto/create-price-sheet.dto';
 import { CreateStoreProductDto } from './dto/create-store-product.dto';
@@ -257,6 +258,29 @@ export class StoreController {
   async findOrders(@Req() req: ExpressRequest) {
     const data = await this.storeService.findOrders(req.user.id);
     return { data };
+  }
+
+  @Get('orders/:orderId/images/:imageId/original')
+  async orderOriginalImage(
+    @Param('orderId') orderId: string,
+    @Param('imageId') imageId: string,
+    @Req() req: ExpressRequest,
+    @Res() response: Response,
+  ) {
+    const asset = await this.printLabNotification.openOwnerImage(
+      req.user.id,
+      orderId,
+      imageId,
+    );
+    const filename = asset.filename.replace(/["\r\n]/g, '_');
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('Content-Type', asset.contentType);
+    if (asset.contentLength > 0) {
+      response.setHeader('Content-Length', String(asset.contentLength));
+    }
+    asset.body.pipe(response);
+    return response;
   }
 
   @Post('orders/:id/print-lab/resend')

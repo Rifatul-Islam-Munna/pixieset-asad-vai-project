@@ -1969,6 +1969,7 @@ export class CollectionsService {
 
     const images = await this.imageModel
       .find({ collectionId: id, userId })
+      .select('+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes')
       .sort({ order: 1, createdAt: -1 })
       .lean();
     const name = `${source.name} Copy`;
@@ -2003,6 +2004,10 @@ export class CollectionsService {
           blurDataUrl: image.blurDataUrl,
           originalName: image.originalName,
           filename: image.filename,
+          originalObjectKey: image.originalObjectKey,
+          originalFilename: image.originalFilename,
+          originalMimeType: image.originalMimeType,
+          originalSizeBytes: image.originalSizeBytes,
           mimetype: image.mimetype,
           sizeBytes: image.sizeBytes,
           watermarked: image.watermarked,
@@ -2029,7 +2034,9 @@ export class CollectionsService {
     const collection = await this.collectionModel.findOne({ _id: id, userId });
     if (!collection) throw new NotFoundException('Collection not found');
 
-    const images = await this.imageModel.find({ collectionId: id, userId });
+    const images = await this.imageModel
+      .find({ collectionId: id, userId })
+      .select('+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes');
     let reclaimedBytes = 0;
     for (const image of images)
       reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
@@ -2221,7 +2228,9 @@ export class CollectionsService {
     );
     await this.ensureVideoPlanAvailable(userId, files);
     return Promise.all(
-      files.map((file) => this.minioService.createDirectUpload(userId, file)),
+      files.map((file) =>
+        this.minioService.createDirectUpload(userId, file, { privateImage: true }),
+      ),
     );
   }
 
@@ -2347,11 +2356,13 @@ export class CollectionsService {
   }
 
   async removeImage(userId: string, collectionId: string, imageId: string) {
-    const image = await this.imageModel.findOne({
-      _id: imageId,
-      userId,
-      collectionId,
-    });
+    const image = await this.imageModel
+      .findOne({
+        _id: imageId,
+        userId,
+        collectionId,
+      })
+      .select('+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes');
     if (!image) throw new NotFoundException('Image not found');
     const collection = await this.collectionModel
       .findOne({ _id: collectionId, userId })
@@ -2373,7 +2384,7 @@ export class CollectionsService {
     }
     await this.collectionModel.updateOne({ _id: collectionId, userId }, update);
 
-    return image.toObject();
+    return this.publicImageRecord(image.toObject());
   }
 
   async updateImage(
@@ -2539,77 +2550,277 @@ export class CollectionsService {
       imageId.toString(),
       metadataDefaults,
     );
-    const isImage = file.mimetype?.startsWith('image/');
-    let uploadFile = file;
+    const extension =
+      extname(file.originalname)
+        .toLowerCase()
+        .replace(/[^.a-z0-9]/g, '')
+        .slice(0, 12) || '.img';
+    const originalObjectKey =
+      `originals/${userId}/${collectionId}/${imageId.toString()}${extension}`;
+    let originalTempPath = '';
     let processedPath = '';
+    let galleryPath = '';
     let previewPath = '';
     let watermarked = false;
     let thumbnailUrl = '';
-    let blurDataUrl = '';
-
-    if (isImage && watermark) {
-      const processed = await this.applyWatermark(file, watermark);
-      if (processed) {
-        processedPath = processed.path;
-        uploadFile = {
-          ...file,
-          path: processed.path,
-          filename: processed.filename,
-        };
-        watermarked = true;
-      }
-    }
-
     let url = '';
+    let blurDataUrl = '';
+    let originalStored = false;
+
     try {
-      if (isImage) {
-        const preview = await this.createImagePreview(uploadFile);
-        previewPath = preview.path;
-        blurDataUrl = preview.blurDataUrl;
-        thumbnailUrl = await this.minioService.uploadFile({
-          ...file,
-          path: preview.path,
-          filename: preview.filename,
-          mimetype: 'image/jpeg',
-        });
+      const original = await this.preparePrivateOriginal(file);
+      originalTempPath = original.tempPath;
+      await this.minioService.uploadPrivateFile(
+        original.file,
+        originalObjectKey,
+      );
+      originalStored = true;
+
+      let gallerySource = file;
+      if (watermark) {
+        const processed = await this.applyWatermark(file, watermark);
+        if (processed) {
+          processedPath = processed.path;
+          gallerySource = {
+            ...file,
+            path: processed.path,
+            filename: processed.filename,
+          };
+          watermarked = true;
+        }
       }
-      url = await this.minioService.uploadFile(uploadFile);
+
+      const gallery = await this.createGalleryImage(gallerySource);
+      galleryPath = gallery.path;
+      const galleryFile = {
+        ...file,
+        path: gallery.path,
+        filename: gallery.filename,
+        mimetype: 'image/jpeg',
+        size: gallery.size,
+      } as Express.Multer.File;
+
+      const preview = await this.createImagePreview(galleryFile);
+      previewPath = preview.path;
+      blurDataUrl = preview.blurDataUrl;
+      thumbnailUrl = await this.minioService.uploadFile({
+        ...galleryFile,
+        path: preview.path,
+        filename: preview.filename,
+        size: preview.size,
+      });
+      url = await this.minioService.uploadFile(galleryFile);
+
+      const storedBytes =
+        Math.max(0, original.size) +
+        Math.max(0, gallery.size) +
+        Math.max(0, preview.size);
+      const image = await this.imageModel.create({
+        _id: imageId,
+        userId,
+        collectionId,
+        setId,
+        url,
+        thumbnailUrl,
+        blurDataUrl,
+        originalName: file.originalname,
+        filename: gallery.filename,
+        originalObjectKey,
+        originalFilename: file.originalname,
+        originalMimeType: file.mimetype,
+        originalSizeBytes: original.size,
+        mimetype: 'image/jpeg',
+        mediaType: 'image',
+        sizeBytes: storedBytes,
+        watermarked,
+        order,
+        metadata,
+      });
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $inc: { storageUsedBytes: storedBytes } },
+      );
+      return this.publicImageRecord(image.toObject());
+    } catch (error) {
+      await Promise.allSettled([
+        ...(url ? [this.minioService.deleteService(url)] : []),
+        ...(thumbnailUrl
+          ? [this.minioService.deleteService(thumbnailUrl)]
+          : []),
+        ...(originalStored
+          ? [this.minioService.deletePrivateFile(originalObjectKey)]
+          : []),
+      ]);
+      throw error;
     } finally {
       await this.safeUnlink(file.path);
+      if (originalTempPath) await this.safeUnlink(originalTempPath);
       if (processedPath) await this.safeUnlink(processedPath);
+      if (galleryPath) await this.safeUnlink(galleryPath);
       if (previewPath) await this.safeUnlink(previewPath);
     }
+  }
 
-    const image = await this.imageModel.create({
-      _id: imageId,
-      userId,
-      collectionId,
-      setId,
-      url,
-      thumbnailUrl,
-      blurDataUrl,
-      originalName: file.originalname,
-      filename: uploadFile.filename,
-      mimetype: uploadFile.mimetype,
-      mediaType: 'image',
-      sizeBytes: uploadFile.size ?? file.size ?? 0,
-      watermarked,
-      order,
-      metadata,
-    });
-    await this.userModel.updateOne(
-      { _id: userId },
-      {
-        $inc: {
-          storageUsedBytes: Math.max(
-            0,
-            Number(image.sizeBytes ?? uploadFile.size ?? file.size ?? 0),
-          ),
-        },
-      },
+  private async preparePrivateOriginal(file: Express.Multer.File): Promise<{
+    file: Express.Multer.File;
+    tempPath: string;
+    size: number;
+  }> {
+    const maxBytes = 20 * 1024 * 1024;
+    const targetBytes = 18 * 1024 * 1024;
+    const originalSize = Math.max(0, Number(file.size ?? 0));
+    if (!originalSize || originalSize <= maxBytes) {
+      return { file, tempPath: '', size: originalSize };
+    }
+
+    const mime = String(file.mimetype || '').toLowerCase();
+    const supported = new Set([
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'image/avif',
+      'image/heic',
+      'image/heif',
+      'image/tiff',
+      'image/gif',
+    ]);
+    if (!supported.has(mime)) {
+      throw new BadRequestException(
+        'Images larger than 20 MB must use a format that can be optimized without changing file type',
+      );
+    }
+
+    const extension =
+      extname(file.originalname)
+        .toLowerCase()
+        .replace(/[^.a-z0-9]/g, '')
+        .slice(0, 12) || '.img';
+    const outputPath = join(
+      cwd(),
+      'uploads',
+      `original-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`,
     );
+    const sourceMetadata = await sharp(file.path, {
+      animated: mime === 'image/gif',
+    })
+      .metadata()
+      .catch(() => ({} as Metadata));
+    let scale = 1;
 
-    return image.toObject();
+    try {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        let output = sharp(file.path, {
+          animated: mime === 'image/gif',
+        }).withMetadata();
+
+        if (
+          scale < 0.999 &&
+          sourceMetadata.width &&
+          sourceMetadata.height
+        ) {
+          output = output.resize({
+            width: Math.max(1, Math.round(sourceMetadata.width * scale)),
+            height: Math.max(1, Math.round(sourceMetadata.height * scale)),
+            fit: 'inside',
+            withoutEnlargement: true,
+          });
+        }
+
+        if (mime === 'image/jpeg' || mime === 'image/jpg') {
+          output = output.jpeg({
+            quality: attempt < 3 ? 90 : 84,
+            mozjpeg: true,
+            progressive: true,
+          });
+        } else if (mime === 'image/png') {
+          output = output.png({
+            compressionLevel: 9,
+            adaptiveFiltering: true,
+          });
+        } else if (mime === 'image/webp') {
+          output = output.webp({ quality: attempt < 3 ? 90 : 82 });
+        } else if (mime === 'image/avif') {
+          output = output.avif({ quality: attempt < 3 ? 78 : 68 });
+        } else if (mime === 'image/heic' || mime === 'image/heif') {
+          output = output.heif({
+            quality: attempt < 3 ? 82 : 72,
+            compression: 'hevc',
+          });
+        } else if (mime === 'image/tiff') {
+          output = output.tiff({
+            quality: attempt < 3 ? 90 : 82,
+            compression: 'jpeg',
+          });
+        } else if (mime === 'image/gif') {
+          output = output.gif({ effort: 7 });
+        }
+
+        const info = await output.toFile(outputPath);
+        if (info.size <= maxBytes) {
+          return {
+            file: {
+              ...file,
+              path: outputPath,
+              filename: `original-${file.filename}`,
+              size: info.size,
+            },
+            tempPath: outputPath,
+            size: info.size,
+          };
+        }
+
+        await this.safeUnlink(outputPath);
+        const ratio = Math.sqrt(targetBytes / Math.max(1, info.size));
+        scale = Math.max(0.1, scale * Math.min(0.9, ratio));
+      }
+      throw new BadRequestException(
+        'Original image could not be optimized below 20 MB while preserving its file format',
+      );
+    } catch (error) {
+      await this.safeUnlink(outputPath);
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(
+        'Original image could not be optimized below 20 MB while preserving its file format',
+      );
+    }
+  }
+
+  private async createGalleryImage(file: Express.Multer.File) {
+    const filename =
+      `gallery-${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
+    const outputPath = join(cwd(), 'uploads', filename);
+    const info = await sharp(file.path)
+      .rotate()
+      .resize({
+        width: 1920,
+        height: 1080,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({
+        quality: 64,
+        mozjpeg: true,
+        progressive: true,
+      })
+      .toFile(outputPath);
+
+    return {
+      path: outputPath,
+      filename,
+      size: info.size,
+    };
+  }
+
+  private publicImageRecord(image: Record<string, any>) {
+    const {
+      originalObjectKey: _originalObjectKey,
+      originalFilename: _originalFilename,
+      originalMimeType: _originalMimeType,
+      originalSizeBytes: _originalSizeBytes,
+      ...safe
+    } = image ?? {};
+    return safe;
   }
 
   private imageProcessingConcurrency() {
@@ -2738,7 +2949,7 @@ export class CollectionsService {
       .then((buffer) => `data:image/jpeg;base64,${buffer.toString('base64')}`)
       .catch(() => '');
 
-    await image
+    const info = await image
       .resize({
         width: 900,
         height: 900,
@@ -2748,7 +2959,7 @@ export class CollectionsService {
       .jpeg({ quality: 74, mozjpeg: true })
       .toFile(outputPath);
 
-    return { path: outputPath, filename, blurDataUrl };
+    return { path: outputPath, filename, blurDataUrl, size: info.size };
   }
 
   private async ensureCollectionPreviews(collectionId: string) {
@@ -3104,8 +3315,15 @@ export class CollectionsService {
       Boolean,
     ) as string[];
 
-    for (const reference of [...new Set(references)]) {
-      await this.minioService.deleteService(reference);
+    await Promise.all(
+      [...new Set(references)].map((reference) =>
+        this.minioService.deleteService(reference).catch(() => null),
+      ),
+    );
+    if (image.originalObjectKey) {
+      await this.minioService
+        .deletePrivateFile(image.originalObjectKey)
+        .catch(() => null);
     }
   }
 

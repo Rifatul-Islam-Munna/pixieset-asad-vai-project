@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 const baseUrl =
@@ -7,24 +8,30 @@ const baseUrl =
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ orderId: string; imageId: string }> },
+  {
+    params,
+  }: {
+    params: Promise<{ orderId: string; imageId: string }>;
+  },
 ) {
   const { orderId, imageId } = await params;
-  const token = new URL(request.url).searchParams.get("token") ?? "";
+  const token = (await cookies()).get("access_token")?.value ?? "";
   if (!token) {
     return NextResponse.json(
-      { message: "Print image unavailable." },
-      { status: 404 },
+      { message: "Order image unavailable." },
+      { status: 401 },
     );
   }
-
   const target =
-    `${baseUrl}/public/print-lab/orders/${encodeURIComponent(orderId)}/images/${encodeURIComponent(imageId)}?token=${encodeURIComponent(token)}`;
-  const response = await fetch(target, { cache: "no-store" }).catch(() => null);
+    `${baseUrl}/store/orders/${encodeURIComponent(orderId)}/images/${encodeURIComponent(imageId)}/original`;
+  const response = await fetch(target, {
+    cache: "no-store",
+    headers: { access_token: token },
+  }).catch(() => null);
 
   if (!response) {
     return NextResponse.json(
-      { message: "Print service is unavailable." },
+      { message: "Image service is unavailable." },
       { status: 503 },
     );
   }

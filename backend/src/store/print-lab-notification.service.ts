@@ -9,6 +9,7 @@ import {
 } from '../collections/entities/collection-image.entity';
 import { MailService } from '../mail/mail.service';
 import { StoreOrder, StoreOrderDocument } from './entities/store-order.entity';
+import { MinioService } from '../lib/minio.service';
 
 export type PrintLabDeliveryResult = {
   status: 'sent' | 'failed' | 'skipped';
@@ -64,6 +65,7 @@ export class PrintLabNotificationService {
     @InjectModel(CollectionImage.name)
     private readonly imageModel: Model<CollectionImageDocument>,
     private readonly mailService: MailService,
+    private readonly minioService: MinioService,
   ) {}
 
   async notify(
@@ -240,7 +242,7 @@ export class PrintLabNotificationService {
         return {
           ...(item.imageId ? { imageId: String(item.imageId) } : {}),
           filename: filenameFor(image, item),
-          available: Boolean(image?.url),
+          available: Boolean(image?.originalObjectKey),
           name: String(item.name ?? ''),
           type: String(item.type ?? ''),
           ...(item.variantLabel ? { variantLabel: String(item.variantLabel) } : {}),
@@ -260,25 +262,75 @@ export class PrintLabNotificationService {
     orderId: string,
     imageId: string,
     token: string,
-  ): Promise<{ url: string; filename: string }> {
-    if (!Types.ObjectId.isValid(orderId) || !Types.ObjectId.isValid(imageId)) throw unavailable();
+  ) {
+    if (!Types.ObjectId.isValid(orderId) || !Types.ObjectId.isValid(imageId))
+      throw unavailable();
     const order = await this.validatedOrder(orderId, token);
+    return this.authorizeOrderImage(order, imageId);
+  }
+
+  async openPrintImage(
+    orderId: string,
+    imageId: string,
+    token: string,
+  ) {
+    const asset = await this.authorizeImage(orderId, imageId, token);
+    const source = await this.minioService.openPrivateReadStream(
+      asset.objectKey,
+    );
+    return { ...asset, ...source };
+  }
+
+  async openOwnerImage(
+    userId: string,
+    orderId: string,
+    imageId: string,
+  ) {
+    if (!Types.ObjectId.isValid(orderId) || !Types.ObjectId.isValid(imageId))
+      throw new NotFoundException('Order image not found');
+    const order = await this.orderModel
+      .findOne({ _id: orderId, userId })
+      .lean();
+    if (!order) throw new NotFoundException('Order image not found');
+    const asset = await this.authorizeOrderImage(order, imageId).catch(() => {
+      throw new NotFoundException('Order image not found');
+    });
+    const source = await this.minioService.openPrivateReadStream(
+      asset.objectKey,
+    );
+    return { ...asset, ...source };
+  }
+
+  private async authorizeOrderImage(order: any, imageId: string) {
     const ownsImage = (order.items ?? []).some(
-      (item: any) => item.imageId && String(item.imageId) === String(imageId),
+      (item: any) =>
+        item.imageId && String(item.imageId) === String(imageId),
     );
     if (!ownsImage || !order.collectionId) throw unavailable();
 
     const image = await this.imageModel
-      .findOne({
-        _id: imageId,
-        userId: order.userId,
-        collectionId: order.collectionId,
-      })
+      .findOne(
+        {
+          _id: imageId,
+          userId: order.userId,
+          collectionId: order.collectionId,
+        },
+        '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+      )
       .lean();
-    if (!image?.url) throw unavailable();
+    if (!image?.originalObjectKey) throw unavailable();
+
     return {
-      url: String(image.url),
-      filename: safeFilename(image.originalName || image.filename || `image-${imageId}`),
+      objectKey: String(image.originalObjectKey),
+      filename: safeFilename(
+        image.originalFilename ||
+          image.originalName ||
+          image.filename ||
+          `image-${imageId}`,
+      ),
+      contentType: String(
+        image.originalMimeType || 'application/octet-stream',
+      ),
     };
   }
 
@@ -349,11 +401,14 @@ export class PrintLabNotificationService {
     );
     if (!imageIds.length || !order.collectionId) return new Map();
     const images = await this.imageModel
-      .find({
-        _id: { $in: imageIds },
-        userId: order.userId,
-        collectionId: order.collectionId,
-      })
+      .find(
+        {
+          _id: { $in: imageIds },
+          userId: order.userId,
+          collectionId: order.collectionId,
+        },
+        '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+      )
       .lean();
     return new Map((images ?? []).map((image: any) => [idOf(image), image]));
   }

@@ -155,7 +155,7 @@ export default async function PrintLabOrderPage({
                   </div>                  <div className="flex items-start justify-start sm:justify-end">
                     {item.available && imageHref ? (
                       <a
-                        href={imageHref}
+                        href={`${imageHref}&download=1`}
                         className="inline-flex h-10 items-center border border-black/20 px-4 text-sm font-semibold transition hover:bg-black hover:text-white"
                       >
                         Download original
