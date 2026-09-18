@@ -51,6 +51,7 @@ function normalizePlans(value: unknown): AdminPlan[] {
     priceYearly: Number(plan?.priceYearly ?? 0),
     features: plan?.features ?? {},
     recommended: Boolean(plan?.recommended),
+    sortOrder: Number(plan?.sortOrder ?? index),
     active: plan?.active ?? true,
     createdAt: plan?.createdAt,
   }));

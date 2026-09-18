@@ -33,6 +33,7 @@ function safePlan(plan: Partial<AdminPlan> | null | undefined, index: number): A
     priceYearly: Number(plan?.priceYearly ?? 0),
     features: plan?.features ?? {},
     recommended: Boolean(plan?.recommended),
+    sortOrder: Number(plan?.sortOrder ?? index),
     active: plan?.active ?? true,
     createdAt: plan?.createdAt,
   };
@@ -57,7 +58,7 @@ export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadE
 
   const safePlans = useMemo(() => {
     const normalized = Array.isArray(plans) ? plans.map((plan, index) => safePlan(plan, index)) : [];
-    return normalized.sort((a, b) => Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)));
+    return normalized.sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
   }, [plans]);
 
   const filtered = useMemo(() => {
