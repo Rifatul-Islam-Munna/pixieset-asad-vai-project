@@ -228,13 +228,30 @@ function mergeCmsEmailTemplates(value: EmailTemplateItem[] | undefined) {
 
 export type SiteSeo = {
   siteTitle: string;
+  titleTemplate: string;
   siteDescription: string;
   siteKeywords: string;
   siteCanonicalUrl: string;
   siteImageUrl: string;
+  siteLocale: string;
+  publisherName: string;
+  publisherLogoUrl: string;
+  defaultAuthor: string;
+  socialProfiles: string;
   googleTagManagerId: string;
+  googleSiteVerification: string;
+  bingSiteVerification: string;
   robots: string;
+  robotsTxt: string;
+  robotsTxtAppendSitemap: boolean;
+  sitemapEnabled: boolean;
+  sitemapIncludeStaticPages: boolean;
+  sitemapIncludeBlog: boolean;
+  sitemapIncludeDynamicPages: boolean;
+  sitemapExtraUrls: string;
   twitterCard: string;
+  twitterSite: string;
+  twitterCreator: string;
   extraMetaTags: SeoMetaTag[];
   jsonLd: string;
   faviconUrl: string;
@@ -428,15 +445,32 @@ export const defaultHomeCms: HomeCmsData = {
   },
   seo: {
     siteTitle: "Gallerista",
+    titleTemplate: "%s | Gallerista",
     siteDescription:
       "An all-in-one platform for modern photographers with client galleries, websites, stores, and studio tools.",
     siteKeywords:
       "photography platform, client galleries, photo store, photographer website, studio tools",
     siteCanonicalUrl: "",
     siteImageUrl: "",
+    siteLocale: "en_US",
+    publisherName: "Gallerista",
+    publisherLogoUrl: "",
+    defaultAuthor: "Gallerista",
+    socialProfiles: "",
     googleTagManagerId: "",
-    robots: "index, follow",
+    googleSiteVerification: "",
+    bingSiteVerification: "",
+    robots: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+    robotsTxt: "User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /dashboard/\nDisallow: /api/\nDisallow: /login\nDisallow: /register",
+    robotsTxtAppendSitemap: true,
+    sitemapEnabled: true,
+    sitemapIncludeStaticPages: true,
+    sitemapIncludeBlog: true,
+    sitemapIncludeDynamicPages: true,
+    sitemapExtraUrls: "",
     twitterCard: "summary_large_image",
+    twitterSite: "",
+    twitterCreator: "",
     extraMetaTags: [],
     jsonLd: "",
     faviconUrl: "",
@@ -878,6 +912,19 @@ export function mergeHomeCms(data?: Partial<HomeCmsData> | null): HomeCmsData {
   }
   if (!Array.isArray(seo.extraMetaTags)) seo.extraMetaTags = [];
   if (seo.twitterCard !== "summary") seo.twitterCard = "summary_large_image";
+  if (!String(seo.titleTemplate ?? "").includes("%s")) seo.titleTemplate = `%s | ${seo.siteTitle || "Gallerista"}`;
+  if (!String(seo.siteLocale ?? "").trim()) seo.siteLocale = "en_US";
+  if (!String(seo.publisherName ?? "").trim()) seo.publisherName = seo.siteTitle || "Gallerista";
+  if (!String(seo.defaultAuthor ?? "").trim()) seo.defaultAuthor = seo.publisherName;
+  if (String(seo.robots ?? "").trim().toLowerCase() === "index, follow") {
+    seo.robots = defaultHomeCms.seo.robots;
+  }
+  if (!String(seo.robotsTxt ?? "").trim()) seo.robotsTxt = defaultHomeCms.seo.robotsTxt;
+  if (typeof seo.robotsTxtAppendSitemap !== "boolean") seo.robotsTxtAppendSitemap = true;
+  if (typeof seo.sitemapEnabled !== "boolean") seo.sitemapEnabled = true;
+  if (typeof seo.sitemapIncludeStaticPages !== "boolean") seo.sitemapIncludeStaticPages = true;
+  if (typeof seo.sitemapIncludeBlog !== "boolean") seo.sitemapIncludeBlog = true;
+  if (typeof seo.sitemapIncludeDynamicPages !== "boolean") seo.sitemapIncludeDynamicPages = true;
 
   const incomingGr = data?.content?.gr;
   const grMatchesEnglish =

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, FileImage, Mail, Newspaper, Package, ShoppingBag } from "lucide-react";
+import { BarChart3, FileImage, FileText, Mail, Newspaper, Package, ShoppingBag } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -11,10 +11,11 @@ const links = [
   { href: "/admin/email-templates", label: "Email templates", icon: Mail },
   { href: "/admin/default-products", label: "Default products", icon: ShoppingBag },
   { href: "/admin/blogs", label: "Blog posts", icon: Newspaper },
+  { href: "/admin/pages", label: "Dynamic pages", icon: FileText },
 ];
 
 export function AdminResourceShell({ active, title, subtitle, action, children }: {
-  active: "covers" | "emails" | "products" | "blogs";
+  active: "covers" | "emails" | "products" | "blogs" | "pages";
   title: string;
   subtitle: string;
   action?: ReactNode;

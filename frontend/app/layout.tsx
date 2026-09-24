@@ -48,8 +48,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cms = await getHomeCms();
-  const jsonLd =
-    parseJsonLd(cms.seo.jsonLd) ?? defaultOrganizationJsonLd(cms.seo);
+  const autoJsonLd = defaultOrganizationJsonLd(cms.seo);
+  const customJsonLd = parseJsonLd(cms.seo.jsonLd);
   const gtmId =
     String(cms.seo.googleTagManagerId ?? "")
       .trim()
@@ -102,7 +102,8 @@ export default async function RootLayout({
             />
           );
         })}
-        <JsonLdScript data={jsonLd} id="site-json-ld" />
+        <JsonLdScript data={autoJsonLd} id="site-auto-json-ld" />
+        {customJsonLd && <JsonLdScript data={customJsonLd} id="site-custom-json-ld" />}
       </head>
       <body suppressHydrationWarning className="min-h-full flex flex-col">
         {gtmId && <GoogleTagManager gtmId={gtmId} />}

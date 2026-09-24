@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CalendarDays, Search, Star } from "lucide-react";
 import { getUser } from "@/actions/auth";
@@ -5,10 +6,72 @@ import { SiteNav } from "@/components/home/site-nav";
 import { getBlogs, type BlogPost } from "@/lib/blog";
 import { GALLERY_LANGUAGES } from "@/lib/gallery-language";
 import { getHomeCms } from "@/lib/home-cms-server";
+import {
+  autoDescription,
+  autoKeywords,
+  collectSeoText,
+  contentRobots,
+  JsonLdScript,
+  siteUrl,
+} from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export default async function BlogPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string; language?: string }> }) {
+type BlogSearchParams = { q?: string; category?: string; language?: string };
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<BlogSearchParams>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const [posts, cms] = await Promise.all([getBlogs().catch(() => []), getHomeCms()]);
+  const autoText = collectSeoText(posts.map((post) => ({
+    title: post.title,
+    excerpt: post.excerpt,
+    category: post.category,
+    language: post.language,
+  })));
+  const description = autoDescription(
+    autoText,
+    "Photography education, client experience, marketing ideas, inspiration, and product updates from Gallerista.",
+  );
+  const hasFilters = Boolean(
+    String(params.q || "").trim() ||
+    (params.category && params.category !== "All") ||
+    (params.language && params.language !== "All"),
+  );
+  const canonical = siteUrl("/blog", cms.seo);
+
+  return {
+    title: "Blog",
+    description,
+    keywords: autoKeywords(autoText, cms.seo.siteKeywords),
+    alternates: { canonical },
+    robots: contentRobots(cms.seo, !hasFilters, true),
+    openGraph: {
+      title: `Blog | ${cms.seo.siteTitle}`,
+      description,
+      siteName: cms.seo.siteTitle,
+      locale: cms.seo.siteLocale || "en_US",
+      type: "website",
+      url: canonical,
+      images: cms.seo.siteImageUrl
+        ? [{ url: siteUrl(cms.seo.siteImageUrl, cms.seo), alt: `${cms.seo.siteTitle} Blog` }]
+        : undefined,
+    },
+    twitter: {
+      card: cms.seo.twitterCard === "summary" ? "summary" : "summary_large_image",
+      site: cms.seo.twitterSite || undefined,
+      creator: cms.seo.twitterCreator || undefined,
+      title: `Blog | ${cms.seo.siteTitle}`,
+      description,
+      images: cms.seo.siteImageUrl ? [siteUrl(cms.seo.siteImageUrl, cms.seo)] : undefined,
+    },
+  };
+}
+
+export default async function BlogPage({ searchParams }: { searchParams: Promise<BlogSearchParams> }) {
   const params = await searchParams;
   const [posts, cms, user] = await Promise.all([getBlogs().catch(() => []), getHomeCms(), getUser()]);
   const t = cms.content.en;
@@ -20,14 +83,38 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
   const filtered = posts.filter((post) => {
     const postCategory = post.category || "Guides";
     const postLanguage = post.language || "English";
-    const haystack = [post.title, post.excerpt, ...(post.keywords ?? [])].join(" ").toLowerCase();
+    const haystack = [post.title, post.excerpt, post.content, ...(post.keywords ?? [])].join(" ").toLowerCase();
     return (category === "All" || postCategory === category) && (language === "All" || postLanguage === language) && (!query || haystack.includes(query));
   });
   const featured = filtered.find((post) => post.featured);
   const regular = featured ? filtered.filter((post) => post._id !== featured._id) : filtered;
+  const blogUrl = siteUrl("/blog", cms.seo);
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        "@id": blogUrl,
+        url: blogUrl,
+        name: `${cms.seo.siteTitle} Blog`,
+        description: "Photography education, client experience, marketing ideas, inspiration, and product updates.",
+        isPartOf: { "@id": `${new URL(blogUrl).origin}/#website` },
+      },
+      {
+        "@type": "ItemList",
+        itemListElement: filtered.map((post, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          url: siteUrl(`/blog/${post.slug}`, cms.seo),
+          name: post.title,
+        })),
+      },
+    ],
+  };
 
   return (
     <main className="min-h-screen bg-[#fbfaff] text-[#111]">
+      <JsonLdScript data={structuredData} id="blog-index-json-ld" />
       <SiteNav brand={cms.brand} nav={t.nav} lang="en" dashboardHref={dashboardHref} />
       <section className="border-y border-[#eee9fb] bg-white px-5 py-16 text-center sm:py-24">
         <p className="text-xs font-bold uppercase tracking-[.28em] text-[#6337d8]">Ideas, guides & updates</p>

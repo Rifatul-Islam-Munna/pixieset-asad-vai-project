@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getHomeCms } from "@/lib/home-cms-server";
-import { absoluteUrl } from "@/lib/seo";
+import { siteUrl } from "@/lib/seo";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   const cms = await getHomeCms();
@@ -37,7 +40,7 @@ export async function GET(request: NextRequest) {
       },
     ],
     screenshots: cms.seo.siteImageUrl
-      ? [{ src: absoluteUrl(cms.seo.siteImageUrl), sizes: "1280x720", type: "image/png", form_factor: "wide" }]
+      ? [{ src: siteUrl(cms.seo.siteImageUrl, cms.seo), sizes: "1280x720", type: "image/png", form_factor: "wide" }]
       : undefined,
   }), {
     headers: {

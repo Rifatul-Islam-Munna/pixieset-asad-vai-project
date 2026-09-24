@@ -1,5 +1,14 @@
 import { apiBaseUrl } from "@/lib/api-base-url";
 
+export type BlogCtaButton = {
+  id?: string;
+  enabled?: boolean;
+  label?: string;
+  url?: string;
+  style?: string;
+  newTab?: boolean;
+};
+
 export type BlogPost = {
   _id: string;
   title: string;
@@ -11,7 +20,19 @@ export type BlogPost = {
   category?: string;
   language?: string;
   featured?: boolean;
+  ctaEnabled?: boolean;
+  ctaTitle?: string;
+  ctaText?: string;
+  ctaButtons?: BlogCtaButton[];
   keywords?: string[];
+  seoTitle?: string;
+  seoDescription?: string;
+  canonicalUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageUrl?: string;
+  robotsIndex?: boolean;
+  robotsFollow?: boolean;
   published: boolean;
   publishedAt?: string;
   createdAt?: string;

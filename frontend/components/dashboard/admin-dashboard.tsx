@@ -1540,19 +1540,22 @@ function SeoCmsPanel({
     <div className="mt-6 grid gap-5">
       <div className="sticky top-0 z-20 border border-[#dfe5e2] bg-[#12201c] p-5 text-white shadow-[0_14px_35px_rgba(0,0,0,.12)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div><p className="text-xs font-bold uppercase tracking-[.18em] text-white/60">Search & Social</p><h2 className="mt-1 text-2xl font-semibold">Homepage SEO</h2></div>
+          <div><p className="text-xs font-bold uppercase tracking-[.18em] text-white/60">Search, Crawling & Social</p><h2 className="mt-1 text-2xl font-semibold">Site-wide SEO control center</h2><p className="mt-1 text-xs text-white/60">Global defaults feed the homepage, blog, dynamic pages, robots.txt, sitemap.xml and structured data.</p></div>
           <div className="flex items-center gap-3"><span className="text-xs text-white/65">{saveState === "saving" ? "Saving" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved"}</span><Button type="button" onClick={onSave} disabled={busy} className="h-10 rounded-none bg-[#6337d8] px-6 text-white hover:bg-[#19a995]">Save SEO</Button></div>
         </div>
       </div>
 
-      <CmsSection eyebrow="SEO 1" title="Homepage search result" defaultOpen>
+      <CmsSection eyebrow="SEO 1" title="Global search defaults" defaultOpen>
         <div className="grid gap-5 lg:grid-cols-2">
           <CmsRepeater title="Main metadata">
-            <CmsInput label="Homepage title" value={seo.siteTitle} onChange={(siteTitle) => patchSeo({ siteTitle })} />
-            <CmsTextarea label="Meta description" value={seo.siteDescription} onChange={(siteDescription) => patchSeo({ siteDescription })} />
-            <CmsTextarea label="Keywords — separate with commas" value={seo.siteKeywords} onChange={(siteKeywords) => patchSeo({ siteKeywords })} />
-            <CmsInput label="Canonical homepage URL" value={seo.siteCanonicalUrl} onChange={(siteCanonicalUrl) => patchSeo({ siteCanonicalUrl })} />
-            <CmsInput label="Robots directive" value={seo.robots} onChange={(robots) => patchSeo({ robots })} />
+            <CmsInput label="Site title" value={seo.siteTitle} onChange={(siteTitle) => patchSeo({ siteTitle })} />
+            <CmsInput label="Title template — use %s where the page title should appear" value={seo.titleTemplate} onChange={(titleTemplate) => patchSeo({ titleTemplate })} />
+            <CmsTextarea label="Default meta description" value={seo.siteDescription} onChange={(siteDescription) => patchSeo({ siteDescription })} />
+            <CmsTextarea label="Fallback keywords — separate with commas" value={seo.siteKeywords} onChange={(siteKeywords) => patchSeo({ siteKeywords })} />
+            <CmsInput label="Canonical site/homepage URL" value={seo.siteCanonicalUrl} onChange={(siteCanonicalUrl) => patchSeo({ siteCanonicalUrl })} />
+            <CmsInput label="Site locale (Open Graph, e.g. en_US)" value={seo.siteLocale} onChange={(siteLocale) => patchSeo({ siteLocale })} />
+            <CmsInput label="Default meta robots directive" value={seo.robots} onChange={(robots) => patchSeo({ robots })} />
+            <p className="text-xs leading-5 text-[#777]">Advanced robots values such as max-image-preview:large, max-snippet:-1, max-video-preview:-1, noarchive and noimageindex are supported.</p>
           </CmsRepeater>
           <CmsRepeater title="Search preview">
             <div className="rounded-lg border bg-white p-5"><p className="text-sm text-[#237804]">{seo.siteCanonicalUrl || "https://gallerista.app"}</p><h3 className="mt-1 text-xl text-[#1a0dab]">{seo.siteTitle || "Homepage title"}</h3><p className="mt-2 text-sm leading-6 text-[#4d5156]">{seo.siteDescription || "Your homepage description will appear here."}</p></div>
@@ -1565,7 +1568,9 @@ function SeoCmsPanel({
           <CmsRepeater title="Open Graph and social image">
             <CmsImageInput label="Social share image — recommended 1200 × 630 px" value={seo.siteImageUrl} onChange={(siteImageUrl) => patchSeo({ siteImageUrl })} onUpload={onUpload} busy={busy} />
             <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Twitter card type</span><select value={seo.twitterCard} onChange={(event) => patchSeo({ twitterCard: event.target.value })} className="h-11 border px-3 text-sm"><option value="summary_large_image">Large image</option><option value="summary">Summary</option></select></label>
-            <p className="text-xs leading-5 text-[#777]">The homepage title, description and social image are used for Facebook, LinkedIn, X/Twitter, WhatsApp and other link previews.</p>
+            <CmsInput label="X/Twitter site handle (e.g. @gallerista)" value={seo.twitterSite} onChange={(twitterSite) => patchSeo({ twitterSite })} />
+            <CmsInput label="Default X/Twitter creator handle" value={seo.twitterCreator} onChange={(twitterCreator) => patchSeo({ twitterCreator })} />
+            <p className="text-xs leading-5 text-[#777]">These defaults automatically feed Facebook, LinkedIn, X/Twitter, WhatsApp and other link previews. Blog/page-specific images and text override them when available.</p>
           </CmsRepeater>
           <CmsRepeater title="Website icon">
             <CmsImageInput label="Custom favicon — recommended square PNG/SVG, 512 × 512 px" value={seo.faviconUrl} onChange={(faviconUrl) => patchSeo({ faviconUrl })} onUpload={onUpload} busy={busy} />
@@ -1574,7 +1579,46 @@ function SeoCmsPanel({
         </div>
       </CmsSection>
 
-      <CmsSection eyebrow="SEO 3" title="Analytics and structured data">
+      <CmsSection eyebrow="SEO 3" title="Publisher identity and search verification">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="Publisher / Organization defaults">
+            <CmsInput label="Publisher / organization name" value={seo.publisherName} onChange={(publisherName) => patchSeo({ publisherName })} />
+            <CmsImageInput label="Publisher logo for structured data" value={seo.publisherLogoUrl} onChange={(publisherLogoUrl) => patchSeo({ publisherLogoUrl })} onUpload={onUpload} busy={busy} />
+            <CmsInput label="Default article author" value={seo.defaultAuthor} onChange={(defaultAuthor) => patchSeo({ defaultAuthor })} />
+            <CmsTextarea label="Official social profile URLs — one per line or comma separated" value={seo.socialProfiles} onChange={(socialProfiles) => patchSeo({ socialProfiles })} />
+            <p className="text-xs leading-5 text-[#777]">These values are used automatically in Organization, WebSite, BlogPosting and page structured data.</p>
+          </CmsRepeater>
+          <CmsRepeater title="Search engine verification">
+            <CmsInput label="Google Search Console verification token" value={seo.googleSiteVerification} onChange={(googleSiteVerification) => patchSeo({ googleSiteVerification })} />
+            <CmsInput label="Bing Webmaster Tools verification token" value={seo.bingSiteVerification} onChange={(bingSiteVerification) => patchSeo({ bingSiteVerification })} />
+            <p className="text-xs leading-5 text-[#777]">Paste only the verification content/token. The correct meta tags are generated automatically in the site head.</p>
+            <div className="grid gap-2 border bg-white p-4 text-sm">
+              <a href="/robots.txt" target="_blank" className="font-bold text-[#6337d8] hover:underline">Open live robots.txt ↗</a>
+              <a href="/sitemap.xml" target="_blank" className="font-bold text-[#6337d8] hover:underline">Open live sitemap.xml ↗</a>
+            </div>
+          </CmsRepeater>
+        </div>
+      </CmsSection>
+
+      <CmsSection eyebrow="SEO 4" title="Global robots.txt and sitemap">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CmsRepeater title="robots.txt file">
+            <CmsTextarea label="Global robots.txt — edit the complete crawler file" value={seo.robotsTxt} onChange={(robotsTxt) => patchSeo({ robotsTxt })} />
+            <label className="flex items-center justify-between border bg-white px-4 py-3 text-sm font-semibold"><span>Automatically append Sitemap: /sitemap.xml</span><input type="checkbox" checked={seo.robotsTxtAppendSitemap} onChange={(event) => patchSeo({ robotsTxtAppendSitemap: event.target.checked })} /></label>
+            <p className="text-xs leading-5 text-[#777]">This controls crawling at /robots.txt. Page-level noindex/follow rules are separate and remain available on blogs and dynamic pages.</p>
+          </CmsRepeater>
+          <CmsRepeater title="XML sitemap">
+            <label className="flex items-center justify-between border bg-white px-4 py-3 text-sm font-semibold"><span>Enable sitemap.xml</span><input type="checkbox" checked={seo.sitemapEnabled} onChange={(event) => patchSeo({ sitemapEnabled: event.target.checked })} /></label>
+            <label className="flex items-center justify-between border bg-white px-4 py-3 text-sm font-semibold"><span>Include core static pages</span><input type="checkbox" checked={seo.sitemapIncludeStaticPages} onChange={(event) => patchSeo({ sitemapIncludeStaticPages: event.target.checked })} /></label>
+            <label className="flex items-center justify-between border bg-white px-4 py-3 text-sm font-semibold"><span>Include published blog posts</span><input type="checkbox" checked={seo.sitemapIncludeBlog} onChange={(event) => patchSeo({ sitemapIncludeBlog: event.target.checked })} /></label>
+            <label className="flex items-center justify-between border bg-white px-4 py-3 text-sm font-semibold"><span>Include published dynamic pages</span><input type="checkbox" checked={seo.sitemapIncludeDynamicPages} onChange={(event) => patchSeo({ sitemapIncludeDynamicPages: event.target.checked })} /></label>
+            <CmsTextarea label="Extra sitemap URLs — one URL/path per line" value={seo.sitemapExtraUrls} onChange={(sitemapExtraUrls) => patchSeo({ sitemapExtraUrls })} />
+            <p className="text-xs leading-5 text-[#777]">Published blogs and dynamic pages automatically carry last-modified dates and image sitemap entries. Pages marked noindex are excluded.</p>
+          </CmsRepeater>
+        </div>
+      </CmsSection>
+
+      <CmsSection eyebrow="SEO 5" title="Analytics, custom structured data and auth SEO">
         <div className="grid gap-5 lg:grid-cols-2">
           <CmsRepeater title="Tracking">
             <CmsInput label="Google Tag Manager ID" value={seo.googleTagManagerId} onChange={(googleTagManagerId) => patchSeo({ googleTagManagerId })} />
@@ -1591,7 +1635,7 @@ function SeoCmsPanel({
         </div>
       </CmsSection>
 
-      <CmsSection eyebrow="SEO 4" title="Custom meta tags">
+      <CmsSection eyebrow="SEO 6" title="Custom meta tags">
         <CmsRepeater title="Advanced tags">
           {seo.extraMetaTags.map((tag, index) => <div key={index} className="grid gap-3 border p-4 lg:grid-cols-[150px_1fr_1fr_auto]"><select value={tag.type} onChange={(event) => updateMeta(index, { type: event.target.value as SeoMetaTag["type"] })} className="h-11 border px-3 text-sm"><option value="name">name</option><option value="property">property</option><option value="httpEquiv">httpEquiv</option></select><CmsInput label="Meta key" value={tag.key} onChange={(key) => updateMeta(index, { key })} /><CmsInput label="Meta value" value={tag.value} onChange={(value) => updateMeta(index, { value })} /><Button type="button" variant="outline" className="mt-6 h-11 rounded-none" onClick={() => removeMeta(index)}><Trash2 className="size-4" /></Button></div>)}
           <Button type="button" className="w-fit rounded-none bg-[#6337d8] text-white hover:bg-[#5430bd]" onClick={addMeta}><PlusCircle className="size-4" /> Add meta tag</Button>

@@ -15,6 +15,20 @@ export function absoluteUrl(pathOrUrl?: string) {
   ).toString();
 }
 
+export function siteBaseUrl(seo?: Pick<SiteSeo, "siteCanonicalUrl">) {
+  const configured = String(seo?.siteCanonicalUrl ?? "").trim();
+  try {
+    return configured ? new URL(configured).origin : new URL(frontendUrl).origin;
+  } catch {
+    return new URL(frontendUrl).origin;
+  }
+}
+
+export function siteUrl(pathOrUrl: string, seo?: Pick<SiteSeo, "siteCanonicalUrl">) {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return new URL(pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`, siteBaseUrl(seo)).toString();
+}
+
 export function splitKeywords(value?: string) {
   return (value ?? "")
     .split(",")
@@ -70,8 +84,8 @@ export function autoKeywords(text: string, fallback?: string) {
     "photos",
   ]);
   const counts = plainSeoText(text)
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
+    .toLocaleLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2 && !stop.has(word))
     .reduce<Record<string, number>>((acc, word) => {
       acc[word] = (acc[word] ?? 0) + 1;
@@ -83,7 +97,7 @@ export function autoKeywords(text: string, fallback?: string) {
     .map(([word]) => word);
 }
 
-function plainSeoText(value?: string) {
+export function plainSeoText(value?: string) {
   return (value ?? "")
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;/g, " ")
@@ -96,34 +110,65 @@ function plainSeoText(value?: string) {
 
 export function parseRobots(value?: string): Metadata["robots"] {
   const text = (value ?? "index, follow").toLowerCase();
-  return {
+  const maxSnippet = text.match(/max-snippet\s*:\s*(-?\d+)/)?.[1];
+  const maxVideoPreview = text.match(/max-video-preview\s*:\s*(-?\d+)/)?.[1];
+  const maxImagePreview = text.match(/max-image-preview\s*:\s*(none|standard|large)/)?.[1] as "none" | "standard" | "large" | undefined;
+  const shared = {
     index: !text.includes("noindex"),
     follow: !text.includes("nofollow"),
-    googleBot: {
-      index: !text.includes("noindex"),
-      follow: !text.includes("nofollow"),
-    },
+    noarchive: text.includes("noarchive"),
+    nosnippet: text.includes("nosnippet"),
+    noimageindex: text.includes("noimageindex"),
+    notranslate: text.includes("notranslate"),
+    "max-snippet": maxSnippet === undefined ? undefined : Number(maxSnippet),
+    "max-video-preview": maxVideoPreview === undefined ? undefined : Number(maxVideoPreview),
+    "max-image-preview": maxImagePreview,
+  };
+  return {
+    ...shared,
+    googleBot: shared,
   };
 }
 
+export function contentRobots(seo: SiteSeo, index = true, follow = true): Metadata["robots"] {
+  const base = parseRobots(seo.robots);
+  if (!base || typeof base === "string") return { index, follow };
+  const googleBot = typeof base.googleBot === "object" && base.googleBot
+    ? { ...base.googleBot, index, follow }
+    : { index, follow };
+  return { ...base, index, follow, googleBot };
+}
+
 export function siteMetadata(seo: SiteSeo, autoText = ""): Metadata {
-  const image = absoluteUrl(seo.siteImageUrl);
-  const canonical = absoluteUrl(seo.siteCanonicalUrl);
+  const base = siteBaseUrl(seo);
+  const image = seo.siteImageUrl ? siteUrl(seo.siteImageUrl, seo) : undefined;
+  const canonical = siteUrl("/", seo);
   const description =
     String(seo.siteDescription ?? "").trim() ||
     autoDescription(autoText, String(seo.siteTitle ?? ""));
+  const titleTemplate = String(seo.titleTemplate ?? "").includes("%s")
+    ? seo.titleTemplate
+    : `%s | ${seo.siteTitle}`;
   return {
-    metadataBase: new URL(frontendUrl),
+    metadataBase: new URL(base),
     title: {
       default: seo.siteTitle,
-      template: `%s | ${seo.siteTitle}`,
+      template: titleTemplate,
     },
     description,
     keywords: autoKeywords(autoText, seo.siteKeywords),
     applicationName: seo.siteTitle,
+    creator: seo.defaultAuthor || seo.publisherName || seo.siteTitle,
+    publisher: seo.publisherName || seo.siteTitle,
     manifest: "/manifest.webmanifest",
     robots: parseRobots(seo.robots),
-    alternates: canonical ? { canonical } : undefined,
+    alternates: { canonical },
+    verification: {
+      google: seo.googleSiteVerification || undefined,
+      other: seo.bingSiteVerification
+        ? { "msvalidate.01": seo.bingSiteVerification }
+        : undefined,
+    },
     appleWebApp: {
       capable: true,
       statusBarStyle: "black-translucent",
@@ -150,12 +195,15 @@ export function siteMetadata(seo: SiteSeo, autoText = ""): Metadata {
       title: seo.siteTitle,
       description,
       siteName: seo.siteTitle,
+      locale: seo.siteLocale || "en_US",
       type: "website",
       url: canonical,
-      images: image ? [{ url: image }] : undefined,
+      images: image ? [{ url: image, alt: seo.siteTitle }] : undefined,
     },
     twitter: {
       card: seo.twitterCard === "summary" ? "summary" : "summary_large_image",
+      site: seo.twitterSite || undefined,
+      creator: seo.twitterCreator || undefined,
       title: seo.siteTitle,
       description,
       images: image ? [image] : undefined,
@@ -182,8 +230,8 @@ export function pageMetadata({
   autoText?: string;
   type?: "website" | "article";
 }): Metadata {
-  const url = absoluteUrl(path);
-  const ogImage = absoluteUrl(image || seo.siteImageUrl);
+  const url = path ? siteUrl(path, seo) : siteUrl("/", seo);
+  const ogImage = image || seo.siteImageUrl ? siteUrl(image || seo.siteImageUrl, seo) : undefined;
   const nextDescription =
     description.trim() || autoDescription(autoText, seo.siteDescription);
   return {
@@ -202,12 +250,15 @@ export function pageMetadata({
       title,
       description: nextDescription,
       siteName: seo.siteTitle,
+      locale: seo.siteLocale || "en_US",
       type,
       url,
-      images: ogImage ? [{ url: ogImage }] : undefined,
+      images: ogImage ? [{ url: ogImage, alt: title }] : undefined,
     },
     twitter: {
       card: seo.twitterCard === "summary" ? "summary" : "summary_large_image",
+      site: seo.twitterSite || undefined,
+      creator: seo.twitterCreator || undefined,
       title,
       description: nextDescription,
       images: ogImage ? [ogImage] : undefined,
@@ -243,13 +294,160 @@ export function JsonLdScript({
   );
 }
 
+function socialProfileUrls(value?: string) {
+  return String(value ?? "")
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter((item) => /^https?:\/\//i.test(item));
+}
+
 export function defaultOrganizationJsonLd(seo: SiteSeo) {
+  const base = siteBaseUrl(seo);
+  const logo = seo.publisherLogoUrl || seo.siteImageUrl || seo.faviconUrl;
+  const organizationId = `${base}/#organization`;
   return {
     "@context": "https://schema.org",
-    "@type": "Organization",
-    name: seo.siteTitle,
-    url: absoluteUrl(seo.siteCanonicalUrl || "/"),
-    description: seo.siteDescription,
-    logo: absoluteUrl(seo.siteImageUrl || seo.faviconUrl),
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": organizationId,
+        name: seo.publisherName || seo.siteTitle,
+        url: base,
+        description: seo.siteDescription,
+        logo: logo
+          ? {
+              "@type": "ImageObject",
+              url: siteUrl(logo, seo),
+            }
+          : undefined,
+        sameAs: socialProfileUrls(seo.socialProfiles),
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${base}/#website`,
+        url: base,
+        name: seo.siteTitle,
+        description: seo.siteDescription,
+        publisher: { "@id": organizationId },
+        inLanguage: String(seo.siteLocale || "en_US").replace("_", "-"),
+      },
+    ],
+  };
+}
+
+export function breadcrumbJsonLd(
+  items: Array<{ name: string; path: string }>,
+  seo: SiteSeo,
+) {
+  return {
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: siteUrl(item.path, seo),
+    })),
+  };
+}
+
+export function blogPostingJsonLd({
+  seo,
+  title,
+  description,
+  path,
+  image,
+  author,
+  publishedAt,
+  modifiedAt,
+  section,
+  keywords,
+  language,
+  content,
+}: {
+  seo: SiteSeo;
+  title: string;
+  description: string;
+  path: string;
+  image?: string;
+  author?: string;
+  publishedAt?: string;
+  modifiedAt?: string;
+  section?: string;
+  keywords?: string[];
+  language?: string;
+  content?: string;
+}) {
+  const url = siteUrl(path, seo);
+  const imageUrl = image ? siteUrl(image, seo) : seo.siteImageUrl ? siteUrl(seo.siteImageUrl, seo) : undefined;
+  const authorName = author || seo.defaultAuthor || seo.publisherName || seo.siteTitle;
+  const cleanContent = plainSeoText(content);
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BlogPosting",
+        "@id": `${url}#article`,
+        headline: title,
+        description,
+        image: imageUrl ? [imageUrl] : undefined,
+        datePublished: publishedAt || undefined,
+        dateModified: modifiedAt || publishedAt || undefined,
+        author: { "@type": "Person", name: authorName },
+        publisher: { "@id": `${siteBaseUrl(seo)}/#organization` },
+        mainEntityOfPage: { "@type": "WebPage", "@id": url },
+        articleSection: section || undefined,
+        keywords: keywords?.length ? keywords.join(", ") : undefined,
+        inLanguage: language || String(seo.siteLocale || "en_US").replace("_", "-"),
+        wordCount: cleanContent ? cleanContent.split(/\s+/).length : undefined,
+      },
+      breadcrumbJsonLd(
+        [
+          { name: "Home", path: "/" },
+          { name: "Blog", path: "/blog" },
+          { name: title, path },
+        ],
+        seo,
+      ),
+    ],
+  };
+}
+
+export function webPageJsonLd({
+  seo,
+  title,
+  description,
+  path,
+  image,
+}: {
+  seo: SiteSeo;
+  title: string;
+  description: string;
+  path: string;
+  image?: string;
+}) {
+  const url = siteUrl(path, seo);
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": url,
+        url,
+        name: title,
+        description,
+        primaryImageOfPage: image
+          ? { "@type": "ImageObject", url: siteUrl(image, seo) }
+          : undefined,
+        isPartOf: { "@id": `${siteBaseUrl(seo)}/#website` },
+        inLanguage: String(seo.siteLocale || "en_US").replace("_", "-"),
+      },
+      breadcrumbJsonLd(
+        [
+          { name: "Home", path: "/" },
+          { name: title, path },
+        ],
+        seo,
+      ),
+    ],
   };
 }

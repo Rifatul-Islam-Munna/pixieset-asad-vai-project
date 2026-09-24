@@ -5,7 +5,7 @@ import { collectSeoText, pageMetadata } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const cms = await getHomeCms();
-  return pageMetadata({
+  const metadata = pageMetadata({
     title: cms.seo.registerTitle,
     description: cms.seo.registerDescription,
     keywords: cms.seo.registerKeywords,
@@ -13,6 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
     seo: cms.seo,
     autoText: collectSeoText(cms.auth),
   });
+  return { ...metadata, robots: { index: false, follow: false } };
 }
 
 export default async function RegisterPage() {

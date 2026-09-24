@@ -429,6 +429,15 @@ export async function deleteAdminDefaultStoreProduct(id: string) {
   return data;
 }
 
+export type AdminBlogCtaButton = {
+  id?: string;
+  enabled?: boolean;
+  label?: string;
+  url?: string;
+  style?: string;
+  newTab?: boolean;
+};
+
 export type AdminBlog = {
   _id: string;
   title: string;
@@ -440,7 +449,19 @@ export type AdminBlog = {
   category?: string;
   language?: string;
   featured?: boolean;
+  ctaEnabled?: boolean;
+  ctaTitle?: string;
+  ctaText?: string;
+  ctaButtons?: AdminBlogCtaButton[];
   keywords?: string[];
+  seoTitle?: string;
+  seoDescription?: string;
+  canonicalUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageUrl?: string;
+  robotsIndex?: boolean;
+  robotsFollow?: boolean;
   published: boolean;
   publishedAt?: string;
   createdAt?: string;
@@ -466,5 +487,129 @@ export async function updateAdminBlog(id: string, payload: Partial<AdminBlog>) {
 export async function deleteAdminBlog(id: string) {
   const data = await adminRequest<AdminBlog>(`/blogs/admin/${id}`, { method: "DELETE" });
   revalidatePath("/admin/blogs"); revalidatePath("/blog");
+  return data;
+}
+
+export type AdminDynamicPageColumn = {
+  eyebrow?: string;
+  title?: string;
+  body?: string;
+  imageUrl?: string;
+  linkLabel?: string;
+  linkUrl?: string;
+};
+
+export type AdminDynamicPageButton = {
+  id?: string;
+  enabled?: boolean;
+  label?: string;
+  url?: string;
+  style?: string;
+  newTab?: boolean;
+};
+
+export type AdminDynamicPageSectionItem = {
+  id?: string;
+  eyebrow?: string;
+  title?: string;
+  body?: string;
+  imageUrl?: string;
+  label?: string;
+  value?: string;
+  linkLabel?: string;
+  linkUrl?: string;
+};
+
+export type AdminDynamicPageSectionType = "split" | "rich-text" | "feature-grid" | "gallery" | "stats" | "testimonial" | "cta" | "logo-strip" | "steps";
+
+export type AdminDynamicPageSection = {
+  id?: string;
+  type: AdminDynamicPageSectionType;
+  enabled?: boolean;
+  eyebrow?: string;
+  title?: string;
+  body?: string;
+  imageUrl?: string;
+  layout?: string;
+  tone?: string;
+  alignment?: string;
+  buttonLabel?: string;
+  buttonUrl?: string;
+  secondaryButtonLabel?: string;
+  secondaryButtonUrl?: string;
+  buttons?: AdminDynamicPageButton[];
+  columns?: number;
+  items?: AdminDynamicPageSectionItem[];
+};
+
+export type AdminDynamicPage = {
+  _id: string;
+  title: string;
+  slug: string;
+  navLabel?: string;
+  navDescription?: string;
+  showInNavbar: boolean;
+  navOrder: number;
+  eyebrow?: string;
+  heroTitle?: string;
+  heroDescription?: string;
+  heroImageUrl?: string;
+  heroEnabled?: boolean;
+  heroLayout?: string;
+  heroTone?: string;
+  heroPrimaryLabel?: string;
+  heroPrimaryUrl?: string;
+  heroSecondaryLabel?: string;
+  heroSecondaryUrl?: string;
+  heroButtons?: AdminDynamicPageButton[];
+  columnCount: number;
+  legacyGridEnabled?: boolean;
+  columns: AdminDynamicPageColumn[];
+  sections?: AdminDynamicPageSection[];
+  seoTitle?: string;
+  seoDescription?: string;
+  seoKeywords?: string[];
+  canonicalUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImageUrl?: string;
+  robotsIndex: boolean;
+  robotsFollow: boolean;
+  published: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export async function getAdminDynamicPages() {
+  return adminRequest<AdminDynamicPage[]>("/dynamic-pages/admin/all");
+}
+
+export async function createAdminDynamicPage(payload: Partial<AdminDynamicPage>) {
+  const data = await adminRequest<AdminDynamicPage>("/dynamic-pages/admin", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/admin/pages");
+  revalidatePath("/", "layout");
+  revalidatePath(`/info/${data.slug}`);
+  return data;
+}
+export async function updateAdminDynamicPage(id: string, payload: Partial<AdminDynamicPage>) {
+  const data = await adminRequest<AdminDynamicPage>(`/dynamic-pages/admin/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  revalidatePath("/admin/pages");
+  revalidatePath("/", "layout");
+  revalidatePath(`/info/${data.slug}`);
+  return data;
+}
+
+export async function deleteAdminDynamicPage(id: string) {
+  const data = await adminRequest<AdminDynamicPage>(`/dynamic-pages/admin/${id}`, {
+    method: "DELETE",
+  });
+  revalidatePath("/admin/pages");
+  revalidatePath("/", "layout");
   return data;
 }

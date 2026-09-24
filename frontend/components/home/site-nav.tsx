@@ -15,6 +15,14 @@ type NavCopy = {
   cta: string;
 };
 
+type DynamicNavPage = {
+  _id: string;
+  title: string;
+  slug: string;
+  navLabel?: string;
+  navDescription?: string;
+};
+
 const productLinks = [
   {
     title: "Client Gallery",
@@ -46,6 +54,8 @@ export function SiteNav({
 }) {
   const [open, setOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
+  const [pagesOpen, setPagesOpen] = useState(false);
+  const [dynamicPages, setDynamicPages] = useState<DynamicNavPage[]>([]);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [activeLanguage, setActiveLanguage] = useState<"en" | "gr" | "fr" | "de" | "ar">(lang);
   const brandText = brand?.brandText?.trim() || "";
@@ -53,6 +63,13 @@ export function SiteNav({
   const brandLabel = logoUrl ? "Home" : brandText;
   const productHref = (href: string) =>
     dashboardHref ? href : `/login?next=${encodeURIComponent(href)}`;
+
+  useEffect(() => {
+    fetch("/api/public/dynamic-pages", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => setDynamicPages(Array.isArray(payload?.data) ? payload.data : []))
+      .catch(() => setDynamicPages([]));
+  }, []);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("home_selected_language");
@@ -125,6 +142,33 @@ export function SiteNav({
       <nav className="hidden items-center gap-9 text-[13px] font-semibold text-[#151515] md:flex">
         <Link href="/pricing">{nav.pricing}</Link>
         <Link href="/blog">Blog</Link>
+        {dynamicPages.length > 0 && (
+          <div className="relative">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1"
+              onClick={() => setPagesOpen((value) => !value)}
+            >
+              Pages
+              <ChevronDown className="size-3.5" />
+            </button>
+            {pagesOpen && (
+              <div className="absolute left-1/2 top-9 grid w-[720px] -translate-x-1/2 grid-cols-3 gap-2 rounded-[10px] border border-[#EEEAE5] bg-white p-4 text-[#151515] shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
+                {dynamicPages.map((item) => (
+                  <Link
+                    key={item._id}
+                    href={`/info/${item.slug}`}
+                    className="rounded-[7px] px-4 py-3 transition hover:bg-[#F8F7F4]"
+                    onClick={() => setPagesOpen(false)}
+                  >
+                    <span className="block text-sm font-bold">{item.navLabel || item.title}</span>
+                    {item.navDescription && <span className="mt-1 block text-xs leading-5 text-[#77716A]">{item.navDescription}</span>}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="relative">
           <button
             type="button"
@@ -243,6 +287,19 @@ export function SiteNav({
               {nav.pricing}
             </Link>
             <Link href="/blog" onClick={() => setOpen(false)}>Blog</Link>
+            {dynamicPages.length > 0 && (
+              <div className="grid gap-4">
+                <span>Pages</span>
+                <div className="grid gap-3 text-base font-semibold">
+                  {dynamicPages.map((item) => (
+                    <Link key={item._id} href={`/info/${item.slug}`} onClick={() => setOpen(false)}>
+                      <span className="block">{item.navLabel || item.title}</span>
+                      {item.navDescription && <span className="block text-sm font-normal leading-5 text-[#777]">{item.navDescription}</span>}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
             <span>{nav.products}</span>
             <div className="grid gap-4 text-base font-semibold">
               {productLinks.map((item) => (
