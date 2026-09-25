@@ -91,6 +91,8 @@ type DirectUploadFile = {
   durationSeconds?: number;
   width?: number;
   height?: number;
+  uploadId?: string;
+  parts?: Array<{ partNumber: number; etag: string }>;
 };
 
 type ImageMetadataDefaults = {
@@ -2244,11 +2246,19 @@ export class CollectionsService {
     if (!Array.isArray(files) || !files.length || files.length > 10)
       throw new BadRequestException('1 to 10 completed files are required');
     const verified: Array<DirectUploadFile & { url: string }> = [];
-    for (const file of files)
+    for (const file of files) {
+      if (file.uploadId && file.parts?.length) {
+        await this.minioService.completeDirectMultipartUpload(userId, {
+          objectKey: file.objectKey,
+          uploadId: file.uploadId,
+          parts: file.parts,
+        });
+      }
       verified.push({
         ...file,
         ...(await this.minioService.verifyDirectUpload(userId, file)),
       });
+    }
     await this.ensureStorageAvailable(
       userId,
       verified.reduce((sum, file) => sum + file.size, 0),

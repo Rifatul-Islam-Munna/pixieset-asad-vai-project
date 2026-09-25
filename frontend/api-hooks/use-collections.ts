@@ -314,7 +314,7 @@ export function useCollectionDetail(collectionId?: string) {
       const metadata = await directUploadMetadata(selected);
       const [authorization, authorizationError] = await PostRequestAxios<{ data: DirectUploadTicket[] }>(`/collections/${collectionId}/images/direct-upload`, { files: metadata });
       if (authorizationError || !authorization) throw new Error(authorizationError?.message || "Could not authorize upload");
-      const completed = await uploadFilesDirectlyToS3(selected, authorization.data, onProgress, 3);
+      const completed = await uploadFilesDirectlyToS3(selected, authorization.data, onProgress);
       const uploaded: CollectionImageRecord[] = [];
       for (const batch of batches(completed, 2)) {
         const [result, error] = await PostRequestAxios<ListResponse<CollectionImageRecord[]> & { message: string }>(`/collections/${collectionId}/images/direct-upload/complete`, { files: batch, setId, watermarkId });

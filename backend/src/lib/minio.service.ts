@@ -1,5 +1,7 @@
 import {
+  CompleteMultipartUploadCommand,
   CreateBucketCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -7,6 +9,7 @@ import {
   PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -291,12 +294,55 @@ export class MinioService implements OnModuleInit {
     const extension = extname(String(input.name || '')).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 12);
     const privateImage = isImage && options.privateImage === true;
     const objectKey = `${privateImage ? 'private-direct' : 'direct'}/${userId}/${randomUUID()}${extension}`;
-    const uploadUrl = await getSignedUrl(this.s3, new PutObjectCommand({
-      Bucket: privateImage ? this.privateBucketName : this.bucketName,
+    const bucket = privateImage ? this.privateBucketName : this.bucketName;
+    const multipart = isVideo || size >= 100 * 1024 * 1024;
+    if (!multipart) {
+      const uploadUrl = await getSignedUrl(this.s3, new PutObjectCommand({
+        Bucket: bucket,
+        Key: objectKey,
+        ContentType: type,
+      }), { expiresIn: 15 * 60 });
+      return { objectKey, strategy: 'single' as const, uploadUrl, expiresInSeconds: 15 * 60 };
+    }
+    const partSize = size >= 500 * 1024 * 1024 ? 20 * 1024 * 1024 : 10 * 1024 * 1024;
+    const created = await this.s3.send(new CreateMultipartUploadCommand({
+      Bucket: bucket,
       Key: objectKey,
       ContentType: type,
-    }), { expiresIn: 15 * 60 });
-    return { objectKey, uploadUrl, expiresInSeconds: 15 * 60 };
+    }));
+    if (!created.UploadId) throw new HttpException('Could not start multipart upload', HttpStatus.INTERNAL_SERVER_ERROR);
+    const partCount = Math.ceil(size / partSize);
+    const parts = await Promise.all(Array.from({ length: partCount }, async (_, index) => ({
+      partNumber: index + 1,
+      url: await getSignedUrl(this.s3!, new UploadPartCommand({
+        Bucket: bucket,
+        Key: objectKey,
+        UploadId: created.UploadId,
+        PartNumber: index + 1,
+      }), { expiresIn: 15 * 60 }),
+    })));
+    return { objectKey, strategy: 'multipart' as const, uploadId: created.UploadId, partSize, parts, expiresInSeconds: 15 * 60 };
+  }
+
+  async completeDirectMultipartUpload(
+    userId: string,
+    input: { objectKey: string; uploadId: string; parts: Array<{ partNumber: number; etag: string }> },
+  ) {
+    if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
+    const objectKey = this.assertDirectObjectKey(userId, input.objectKey);
+    if (!input.uploadId || !Array.isArray(input.parts) || !input.parts.length)
+      throw new HttpException('Invalid multipart upload completion', HttpStatus.BAD_REQUEST);
+    await this.s3.send(new CompleteMultipartUploadCommand({
+      Bucket: this.directBucket(objectKey),
+      Key: objectKey,
+      UploadId: input.uploadId,
+      MultipartUpload: {
+        Parts: input.parts
+          .map((part) => ({ PartNumber: Number(part.partNumber), ETag: String(part.etag || '') }))
+          .sort((a, b) => Number(a.PartNumber) - Number(b.PartNumber)),
+      },
+    }));
+    return { objectKey };
   }
 
   async verifyDirectUpload(userId: string, input: { objectKey: string; name: string; type: string; size: number }) {

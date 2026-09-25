@@ -184,7 +184,7 @@ export function useMobileGalleryApp(appId?: string) {
       const metadata = await directUploadMetadata(selected);
       const [authorization, authorizationError] = await PostRequestAxios<Data<DirectUploadTicket[]>>(`/mobile-gallery/apps/${appId}/images/direct-upload`, { files: metadata });
       if (authorizationError || !authorization) throw new Error(authorizationError?.message || "Could not authorize upload");
-      const completed = await uploadFilesDirectlyToS3(selected, authorization.data, "files" in input ? input.onProgress : undefined, 3);
+      const completed = await uploadFilesDirectlyToS3(selected, authorization.data, "files" in input ? input.onProgress : undefined);
       const uploaded: MobileGalleryImage[] = [];
       for (const batch of batches(completed, 10)) {
         const [result, error] = await PostRequestAxios<Data<MobileGalleryImage[]>>(`/mobile-gallery/apps/${appId}/images/direct-upload/complete`, { files: batch });
