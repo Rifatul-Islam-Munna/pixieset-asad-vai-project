@@ -1,5 +1,6 @@
 import {
   CompleteMultipartUploadCommand,
+  CopyObjectCommand,
   CreateBucketCommand,
   CreateMultipartUploadCommand,
   DeleteObjectCommand,
@@ -15,6 +16,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createReadStream, createWriteStream } from 'fs';
+import { unlink } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { extname, join } from 'path';
 import { cwd } from 'process';
@@ -220,45 +222,77 @@ export class MinioService implements OnModuleInit {
     }
   }
 
-  async uploadFile(file: Express.Multer.File) {
-    const body = createReadStream(file.path);
-    try {
-      if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
-      await this.s3.send(
-        new PutObjectCommand({
-          Bucket: this.bucketName,
-          Key: file.filename,
-          Body: body,
-          ContentType: file.mimetype,
-        }),
+  private async putLocalFileWithRetry(
+    bucket: string,
+    key: string,
+    file: Express.Multer.File,
+  ) {
+    if (!this.s3)
+      throw new HttpException(
+        'Object storage is not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
-      await finished(body);
+
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const body = createReadStream(file.path);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120_000);
+      try {
+        await this.s3.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            Body: body,
+            ContentType: file.mimetype,
+          }),
+          { abortSignal: controller.signal },
+        );
+        await finished(body);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 3) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 350 * 2 ** (attempt - 1)),
+          );
+        }
+      } finally {
+        clearTimeout(timeout);
+        body.destroy();
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Object storage upload failed');
+  }
+
+  async uploadFile(file: Express.Multer.File) {
+    try {
+      await this.putLocalFileWithRetry(
+        this.bucketName,
+        file.filename,
+        file,
+      );
       return this.publicUrl(file.filename);
     } catch (error) {
-      this.logger.error(`Error uploading file: ${error instanceof Error ? error.message : String(error)}`);
-      throw new HttpException('Failed to upload file', HttpStatus.INTERNAL_SERVER_ERROR);
-    } finally {
-      body.destroy();
+      this.logger.error(
+        `Error uploading file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new HttpException(
+        'Failed to upload file',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
   async uploadPrivateFile(file: Express.Multer.File, objectKey: string) {
-    const body = createReadStream(file.path);
     try {
-      if (!this.s3)
-        throw new HttpException(
-          'Object storage is not configured',
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      await this.s3.send(
-        new PutObjectCommand({
-          Bucket: this.privateBucketName,
-          Key: objectKey,
-          Body: body,
-          ContentType: file.mimetype,
-        }),
+      await this.putLocalFileWithRetry(
+        this.privateBucketName,
+        objectKey,
+        file,
       );
-      await finished(body);
       return {
         objectKey,
         size: Math.max(0, Number(file.size ?? 0)),
@@ -272,8 +306,6 @@ export class MinioService implements OnModuleInit {
         'Failed to upload private file',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
-    } finally {
-      body.destroy();
     }
   }
 
@@ -295,16 +327,21 @@ export class MinioService implements OnModuleInit {
     const privateImage = isImage && options.privateImage === true;
     const objectKey = `${privateImage ? 'private-direct' : 'direct'}/${userId}/${randomUUID()}${extension}`;
     const bucket = privateImage ? this.privateBucketName : this.bucketName;
-    const multipart = isVideo || size >= 100 * 1024 * 1024;
+    const multipart = isVideo || size > 5 * 1024 * 1024;
     if (!multipart) {
       const uploadUrl = await getSignedUrl(this.s3, new PutObjectCommand({
         Bucket: bucket,
         Key: objectKey,
         ContentType: type,
-      }), { expiresIn: 15 * 60 });
-      return { objectKey, strategy: 'single' as const, uploadUrl, expiresInSeconds: 15 * 60 };
+      }), { expiresIn: 60 * 60 });
+      return { objectKey, strategy: 'single' as const, uploadUrl, expiresInSeconds: 60 * 60 };
     }
-    const partSize = size >= 500 * 1024 * 1024 ? 20 * 1024 * 1024 : 10 * 1024 * 1024;
+    const partSize =
+      size < 40 * 1024 * 1024
+        ? 5 * 1024 * 1024
+        : size >= 500 * 1024 * 1024
+          ? 20 * 1024 * 1024
+          : 10 * 1024 * 1024;
     const created = await this.s3.send(new CreateMultipartUploadCommand({
       Bucket: bucket,
       Key: objectKey,
@@ -319,9 +356,9 @@ export class MinioService implements OnModuleInit {
         Key: objectKey,
         UploadId: created.UploadId,
         PartNumber: index + 1,
-      }), { expiresIn: 15 * 60 }),
+      }), { expiresIn: 60 * 60 }),
     })));
-    return { objectKey, strategy: 'multipart' as const, uploadId: created.UploadId, partSize, parts, expiresInSeconds: 15 * 60 };
+    return { objectKey, strategy: 'multipart' as const, uploadId: created.UploadId, partSize, parts, expiresInSeconds: 60 * 60 };
   }
 
   async completeDirectMultipartUpload(
@@ -369,27 +406,149 @@ export class MinioService implements OnModuleInit {
     };
   }
 
+  async promoteDirectUploadToPublic(
+    userId: string,
+    input: { objectKey: string; name: string; type: string; size: number },
+    destinationKey: string,
+  ) {
+    if (!this.s3)
+      throw new HttpException(
+        'Object storage is not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    const verified = await this.verifyDirectUpload(userId, input);
+    const key = String(destinationKey || '')
+      .trim()
+      .replace(/^\/+/, '');
+    if (!key || key.includes('..')) {
+      throw new HttpException(
+        'Invalid destination object key',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (!verified.objectKey.startsWith('private-direct/')) {
+      return {
+        objectKey: verified.objectKey,
+        url: verified.url || this.publicUrl(verified.objectKey),
+        size: verified.size,
+        type: verified.type,
+      };
+    }
+
+    const encodedSourceKey = verified.objectKey
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/');
+    const copySource = `${this.privateBucketName}/${encodedSourceKey}`;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        await this.s3.send(
+          new CopyObjectCommand({
+            Bucket: this.bucketName,
+            Key: key,
+            CopySource: copySource,
+            ContentType: verified.type,
+            MetadataDirective: 'REPLACE',
+          }),
+          { abortSignal: AbortSignal.timeout(60_000) },
+        );
+        return {
+          objectKey: key,
+          url: this.publicUrl(key),
+          size: verified.size,
+          type: verified.type,
+        };
+      } catch (error) {
+        lastError = error;
+        if (attempt < 3) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 350 * 2 ** (attempt - 1)),
+          );
+        }
+      }
+    }
+
+    this.logger.error(
+      `Error promoting direct upload: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    );
+    throw new HttpException(
+      'Raw image could not be promoted to the gallery bucket',
+      HttpStatus.BAD_GATEWAY,
+    );
+  }
+
   async downloadDirectUpload(userId: string, input: { objectKey: string; name: string; type: string; size: number }) {
     const verified = await this.verifyDirectUpload(userId, input);
-    const response = await this.s3!.send(
-      new GetObjectCommand({
-        Bucket: this.directBucket(verified.objectKey),
-        Key: verified.objectKey,
-      }),
-    );
-    if (!response.Body) throw new HttpException('Uploaded file is unavailable', HttpStatus.BAD_REQUEST);
     const path = join(cwd(), 'uploads', `direct-${randomUUID()}${extname(verified.name)}`);
-    await pipeline(response.Body as Readable, createWriteStream(path));
-    return {
-      fieldname: 'files',
-      originalname: verified.name,
-      encoding: '7bit',
-      mimetype: verified.type,
-      destination: join(cwd(), 'uploads'),
-      filename: `${randomUUID()}${extname(verified.name)}`,
-      path,
-      size: verified.size,
-    } as Express.Multer.File;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      let body: Readable | undefined;
+      let stallTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const response = await this.s3!.send(
+          new GetObjectCommand({
+            Bucket: this.directBucket(verified.objectKey),
+            Key: verified.objectKey,
+          }),
+          { abortSignal: AbortSignal.timeout(120_000) },
+        );
+        if (!response.Body)
+          throw new HttpException(
+            'Uploaded file is unavailable',
+            HttpStatus.BAD_REQUEST,
+          );
+
+        body = response.Body as Readable;
+        const armStallTimer = () => {
+          if (stallTimer) clearTimeout(stallTimer);
+          stallTimer = setTimeout(() => {
+            body?.destroy(new Error('R2 download stalled'));
+          }, 45_000);
+        };
+        body.on('data', armStallTimer);
+        armStallTimer();
+
+        try {
+          await pipeline(body, createWriteStream(path));
+        } finally {
+          if (stallTimer) clearTimeout(stallTimer);
+          body.off('data', armStallTimer);
+        }
+
+        return {
+          fieldname: 'files',
+          originalname: verified.name,
+          encoding: '7bit',
+          mimetype: verified.type,
+          destination: join(cwd(), 'uploads'),
+          filename: `${randomUUID()}${extname(verified.name)}`,
+          path,
+          size: verified.size,
+        } as Express.Multer.File;
+      } catch (error) {
+        lastError = error;
+        if (stallTimer) clearTimeout(stallTimer);
+        body?.destroy();
+        await unlink(path).catch(() => undefined);
+        if (attempt < 3) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 350 * 2 ** (attempt - 1)),
+          );
+        }
+      }
+    }
+
+    this.logger.error(
+      `Error downloading direct upload: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    );
+    throw new HttpException(
+      'Uploaded file could not be downloaded from storage',
+      HttpStatus.BAD_GATEWAY,
+    );
   }
 
   async deleteDirectUpload(userId: string, objectKey: string) {

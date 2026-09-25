@@ -46,36 +46,36 @@ export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSe
   };
 
   return (
-    <main className="min-h-screen bg-[#f7f6f3] px-4 py-4 text-[#111] sm:px-7 sm:py-7 lg:px-10 lg:py-10">
-      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-[1435px] overflow-hidden rounded-[18px] bg-white shadow-[0_22px_70px_rgba(31,25,18,.08)] sm:min-h-[calc(100vh-3.5rem)] lg:grid-cols-[41%_59%]">
-        <section className="flex flex-col px-7 py-7 sm:px-12 sm:py-10 lg:px-14 xl:px-16">
+    <main className="min-h-[100dvh] overflow-x-hidden bg-[#f7f6f3] px-0 py-0 text-[#111] sm:px-5 sm:py-5 lg:px-10 lg:py-10">
+      <div className="mx-auto grid min-h-[100dvh] w-full max-w-[1435px] overflow-hidden rounded-none bg-white shadow-[0_22px_70px_rgba(31,25,18,.08)] sm:min-h-[calc(100dvh-2.5rem)] sm:rounded-[18px] lg:grid-cols-[41%_59%]">
+        <section className="flex min-w-0 flex-col px-5 py-5 sm:px-9 sm:py-8 lg:px-14 lg:py-10 xl:px-16">
           <AuthBrand brand={brand} />
 
-          <div className="flex flex-1 items-center py-10 lg:py-8">
-            <form onSubmit={submit} className="w-full max-w-[460px]">
-              <p className="text-[17px] font-medium text-[#5f35c8]">Welcome back!</p>
-              <h1 className="mt-3 font-serif text-[38px] leading-[1.08] tracking-[-.025em] text-[#111] sm:text-[42px]">{auth.loginTitle}</h1>
-              <p className="mt-4 max-w-[390px] text-[17px] leading-7 text-[#69686d]">{auth.loginSubtitle}</p>
+          <div className="flex flex-1 items-start py-8 sm:items-center sm:py-10 lg:py-8">
+            <form onSubmit={submit} className="w-full max-w-none sm:max-w-[460px]">
+              <p className="text-[15px] font-medium text-[#5f35c8] sm:text-[17px]">Welcome back!</p>
+              <h1 className="mt-3 break-words font-serif text-[34px] leading-[1.06] tracking-[-.025em] text-[#111] sm:text-[42px] sm:leading-[1.08]">{auth.loginTitle}</h1>
+              <p className="mt-3 max-w-[390px] text-[15px] leading-6 text-[#69686d] sm:mt-4 sm:text-[17px] sm:leading-7">{auth.loginSubtitle}</p>
 
-              <div className="mt-8 grid grid-cols-2 overflow-hidden rounded-[9px] border border-[#dedde1] bg-[#f7f6f3] p-1 text-sm font-semibold"><button type="button" onClick={() => setMode("password")} className={mode === "password" ? "rounded-[7px] bg-white px-3 py-2.5 text-[#5f35c8] shadow-sm" : "px-3 py-2.5 text-[#77767b]"}>Password</button><button type="button" onClick={() => setMode("pin")} className={mode === "pin" ? "rounded-[7px] bg-white px-3 py-2.5 text-[#5f35c8] shadow-sm" : "px-3 py-2.5 text-[#77767b]"}>One-time PIN</button></div>
+              <div className="mt-6 grid grid-cols-2 overflow-hidden rounded-[9px] border border-[#dedde1] bg-[#f7f6f3] p-1 text-xs font-semibold sm:mt-8 sm:text-sm"><button type="button" onClick={() => setMode("password")} className={mode === "password" ? "rounded-[7px] bg-white px-3 py-2.5 text-[#5f35c8] shadow-sm" : "px-3 py-2.5 text-[#77767b]"}>Password</button><button type="button" onClick={() => setMode("pin")} className={mode === "pin" ? "rounded-[7px] bg-white px-3 py-2.5 text-[#5f35c8] shadow-sm" : "px-3 py-2.5 text-[#77767b]"}>One-time PIN</button></div>
 
               <div className="mt-6 grid gap-6">
                 <label className="grid gap-2.5">
                   <span className="text-[15px] font-medium">Email or Phone Number</span>
-                  <div className="flex h-[60px] items-center rounded-[9px] border border-[#6f43d6] bg-white px-4 shadow-[0_0_0_1px_rgba(111,67,214,.06)] focus-within:ring-2 focus-within:ring-[#6f43d6]/10">
+                  <div className="flex h-14 min-w-0 items-center rounded-[9px] border border-[#6f43d6] bg-white px-3 shadow-[0_0_0_1px_rgba(111,67,214,.06)] focus-within:ring-2 focus-within:ring-[#6f43d6]/10 sm:h-[60px] sm:px-4">
                     <UserRound className="mr-4 size-5 text-[#6e6d72]" />
                     <Input value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} placeholder="ceoatsi@gmail.com" className="h-12 rounded-none border-0 px-0 text-[16px] shadow-none focus-visible:ring-0" required />
                   </div>
                 </label>
 
                 {mode === "password" ? (
-                  <label className="grid gap-2.5"><span className="text-[15px] font-medium">Password</span><div className="flex h-[60px] items-center rounded-[9px] border border-[#dedde1] bg-white px-4 focus-within:border-[#6f43d6]"><LockKeyhole className="mr-4 size-5 text-[#747378]" /><Input value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Password" type={showPassword ? "text" : "password"} className="h-12 rounded-none border-0 px-0 text-[16px] shadow-none focus-visible:ring-0" required={mode === "password"} /><button type="button" onClick={() => setShowPassword((value) => !value)} className="ml-3 text-[#77767b]" aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}</button></div></label>
+                  <label className="grid gap-2.5"><span className="text-[15px] font-medium">Password</span><div className="flex h-14 min-w-0 items-center rounded-[9px] border border-[#dedde1] bg-white px-3 focus-within:border-[#6f43d6] sm:h-[60px] sm:px-4"><LockKeyhole className="mr-4 size-5 text-[#747378]" /><Input value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Password" type={showPassword ? "text" : "password"} className="h-12 rounded-none border-0 px-0 text-[16px] shadow-none focus-visible:ring-0" required={mode === "password"} /><button type="button" onClick={() => setShowPassword((value) => !value)} className="ml-3 text-[#77767b]" aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}</button></div></label>
                 ) : (
-                  <label className="grid gap-2.5"><span className="text-[15px] font-medium">6-digit PIN from your login email</span><div className="flex h-[60px] items-center rounded-[9px] border border-[#dedde1] bg-white px-4 focus-within:border-[#6f43d6]"><ShieldCheck className="mr-4 size-5 text-[#747378]" /><Input value={form.pin} onChange={(event) => setForm({ ...form, pin: event.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="000000" inputMode="numeric" className="h-12 rounded-none border-0 px-0 text-[20px] tracking-[.3em] shadow-none focus-visible:ring-0" required={mode === "pin"} /></div><span className="text-xs leading-5 text-[#77767b]">The PIN and direct link use the expiry chosen by your administrator and work once.</span></label>
+                  <label className="grid gap-2.5"><span className="text-[15px] font-medium">6-digit PIN from your login email</span><div className="flex h-14 min-w-0 items-center rounded-[9px] border border-[#dedde1] bg-white px-3 focus-within:border-[#6f43d6] sm:h-[60px] sm:px-4"><ShieldCheck className="mr-4 size-5 text-[#747378]" /><Input value={form.pin} onChange={(event) => setForm({ ...form, pin: event.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="000000" inputMode="numeric" className="h-12 rounded-none border-0 px-0 text-[20px] tracking-[.3em] shadow-none focus-visible:ring-0" required={mode === "pin"} /></div><span className="text-xs leading-5 text-[#77767b]">The PIN and direct link use the expiry chosen by your administrator and work once.</span></label>
                 )}
               </div>
 
-              <div className="mt-5 flex items-center justify-between gap-4 text-[14px]">
+              <div className="mt-5 flex flex-col items-start gap-3 text-[14px] sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <label className="flex cursor-pointer items-center gap-2.5 text-[#66656a]">
                   <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="size-[19px] accent-[#673bd2]" />
                   Remember me
@@ -85,12 +85,12 @@ export function LoginPageClient({ auth, brand }: { auth: AuthCms; brand: BrandSe
 
               {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{error}</p>}
 
-              <Button className="mt-8 h-[62px] w-full rounded-[8px] bg-gradient-to-r from-[#4f24bd] to-[#823bd9] text-[16px] font-semibold text-white shadow-[0_12px_28px_rgba(95,53,200,.24)] hover:opacity-95" disabled={pending}>
+              <Button className="mt-7 h-14 w-full rounded-[8px] bg-gradient-to-r from-[#4f24bd] to-[#823bd9] text-[16px] font-semibold text-white shadow-[0_12px_28px_rgba(95,53,200,.24)] hover:opacity-95 sm:mt-8 sm:h-[62px]" disabled={pending}>
                 {pending ? <Loader2 className="size-5 animate-spin" /> : "Log in"}
                 {!pending && <ArrowRight className="size-5" />}
               </Button>
 
-              <div className="my-7 flex items-center gap-5 text-[13px] font-medium uppercase text-[#77767b]">
+              <div className="my-6 flex items-center gap-4 text-[12px] font-medium uppercase text-[#77767b] sm:my-7 sm:gap-5 sm:text-[13px]">
                 <span className="h-px flex-1 bg-[#dedde1]" />
                 or
                 <span className="h-px flex-1 bg-[#dedde1]" />
@@ -233,7 +233,7 @@ function AuthBrand({ brand }: { brand: BrandSettings }) {
   return (
     <Link href="/" className="inline-flex w-fit min-w-0 items-center" aria-label={logoUrl ? "Home" : brandText || "Home"}>
       {logoUrl ? (
-        <img src={logoUrl} alt="" className="h-11 w-auto max-w-[220px] object-contain" />
+        <img src={logoUrl} alt="" className="h-9 w-auto max-w-[180px] object-contain sm:h-11 sm:max-w-[220px]" />
       ) : brandText ? (
         <span className="max-w-[240px] truncate font-heading text-xl font-semibold tracking-[0.14em]">{brandText}</span>
       ) : null}

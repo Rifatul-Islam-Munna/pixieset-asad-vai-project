@@ -597,20 +597,45 @@ export class CollectionsController {
         name: string;
         type: string;
         size: number;
+        durationSeconds?: number;
+        width?: number;
+        height?: number;
+        uploadId?: string;
+        parts?: Array<{ partNumber: number; etag: string }>;
       }>;
       setId?: string;
       watermarkId?: string;
+      replaceImageId?: string;
     },
     @Req() req: ExpressRequest,
   ) {
+    const result = await this.collectionsService.completeDirectUploads(
+      req.user.id,
+      id,
+      body.files,
+      body.setId,
+      body.watermarkId,
+      body.replaceImageId,
+    );
     return {
-      message: 'Images uploaded',
-      data: await this.collectionsService.completeDirectUploads(
+      message:
+        result.queued > 0
+          ? 'Upload complete. Image processing continues in background.'
+          : 'Upload complete.',
+      data: result.items,
+      queued: result.queued,
+    };
+  }
+
+  @Get(':id/images/direct-upload/status')
+  async directUploadProcessingStatus(
+    @Param('id') id: string,
+    @Req() req: ExpressRequest,
+  ) {
+    return {
+      data: await this.collectionsService.getDirectUploadProcessingStatus(
         req.user.id,
         id,
-        body.files,
-        body.setId,
-        body.watermarkId,
       ),
     };
   }

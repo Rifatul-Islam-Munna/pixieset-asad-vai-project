@@ -1,8 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
-import { batches, directUploadMetadata, uploadFilesDirectlyToS3, type DirectUploadTicket } from "@/lib/direct-s3-upload";
+import {
+  batches,
+  directUploadMetadata,
+  uploadFilesDirectlyToS3,
+  type DirectUploadEvent,
+  type DirectUploadTicket,
+} from "@/lib/direct-s3-upload";
 
 function notifyStorageChanged() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("storage-usage-changed"));
@@ -102,6 +109,32 @@ export type CollectionPrivatePhotoActivityRecord = {
 };
 
 type ListResponse<T> = { data: T };
+export type DirectUploadProcessingStatus = {
+  queued: number;
+  processing: number;
+  failed: number;
+  pending: number;
+  optimized: number;
+  rawFallback: number;
+  current: {
+    name: string;
+    status: "queued" | "processing";
+    attempts: number;
+    message: string;
+  } | null;
+};
+
+export type CollectionUploadActivity = {
+  stage:
+    | "preparing"
+    | "authorizing"
+    | "uploading"
+    | "retrying"
+    | "finalizing"
+    | "queued";
+  message: string;
+  fileName?: string;
+};
 export type ImagesPage<T> = { items: T[]; total: number; limit: number; offset: number; hasMore: boolean };
 
 export function useCollections() {
@@ -263,6 +296,44 @@ export function useCollectionDetail(collectionId?: string) {
       >(`/collections/${collectionId}?limit=60&offset=0`),
   });
 
+  const processingStatusQuery = useQuery({
+    enabled: Boolean(collectionId),
+    queryKey: ["collections", collectionId, "upload-processing"],
+    queryFn: () =>
+      GetRequestNormal<ListResponse<DirectUploadProcessingStatus>>(
+        `/collections/${collectionId}/images/direct-upload/status`,
+      ),
+    refetchInterval: (query) => {
+      const status = (
+        query.state.data as ListResponse<DirectUploadProcessingStatus> | undefined
+      )?.data;
+      return status?.pending ? 3000 : false;
+    },
+    refetchIntervalInBackground: false,
+  });
+
+  useEffect(() => {
+    const status = processingStatusQuery.data?.data;
+    if (!status) return;
+    if (
+      status.pending > 0 ||
+      status.failed > 0 ||
+      status.optimized > 0 ||
+      status.rawFallback > 0
+    ) {
+      void queryClient.invalidateQueries({
+        queryKey: ["collections", collectionId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["collections"] });
+    }
+    if (status.pending === 0) notifyStorageChanged();
+  }, [
+    collectionId,
+    processingStatusQuery.dataUpdatedAt,
+    processingStatusQuery.data?.data,
+    queryClient,
+  ]);
+
   const updateCollection = useMutation({
     mutationFn: async (payload: Partial<CollectionRecord>) => {
       if (!collectionId) throw new Error("Collection is required");
@@ -302,30 +373,177 @@ export function useCollectionDetail(collectionId?: string) {
       files,
       setId,
       watermarkId,
+      replaceImageId,
       onProgress,
+      onNetworkActivity,
+      onActivity,
     }: {
       files: FileList | File[];
       setId?: string;
       watermarkId?: string;
+      replaceImageId?: string;
       onProgress?: (percent: number) => void;
+      onNetworkActivity?: () => void;
+      onActivity?: (activity: CollectionUploadActivity) => void;
     }) => {
       if (!collectionId) throw new Error("Collection is required");
       const selected = Array.from(files);
-      const metadata = await directUploadMetadata(selected);
-      const [authorization, authorizationError] = await PostRequestAxios<{ data: DirectUploadTicket[] }>(`/collections/${collectionId}/images/direct-upload`, { files: metadata });
-      if (authorizationError || !authorization) throw new Error(authorizationError?.message || "Could not authorize upload");
-      const completed = await uploadFilesDirectlyToS3(selected, authorization.data, onProgress);
+      const totalBytes = selected.reduce((sum, file) => sum + file.size, 0);
       const uploaded: CollectionImageRecord[] = [];
-      for (const batch of batches(completed, 2)) {
-        const [result, error] = await PostRequestAxios<ListResponse<CollectionImageRecord[]> & { message: string }>(`/collections/${collectionId}/images/direct-upload/complete`, { files: batch, setId, watermarkId });
-        if (error || !result) throw new Error(error?.message || "Could not finalize upload");
-        uploaded.push(...(result.data ?? []));
+      let transferredBytes = 0;
+      let queued = 0;
+      const uploadBatchSize = selected.every(
+        (file) =>
+          !file.type.startsWith("video/") &&
+          file.size <= 5 * 1024 * 1024,
+      )
+        ? 8
+        : 4;
+
+      for (const uploadBatch of batches(selected, uploadBatchSize)) {
+        onActivity?.({
+          stage: "preparing",
+          message: `Preparing ${uploadBatch.length} file${uploadBatch.length === 1 ? "" : "s"} without changing the originals`,
+        });
+        const metadata = await directUploadMetadata(uploadBatch);
+        onActivity?.({
+          stage: "authorizing",
+          message: "Getting fresh secure upload permission from R2",
+        });
+        const [authorization, authorizationError] = await PostRequestAxios<{
+          data: DirectUploadTicket[];
+        }>(
+          `/collections/${collectionId}/images/direct-upload`,
+          { files: metadata },
+          { timeoutMs: 20_000 },
+        );
+        if (authorizationError || !authorization) {
+          throw new Error(
+            authorizationError?.message || "Could not authorize upload",
+          );
+        }
+
+        onActivity?.({
+          stage: "uploading",
+          message: `Uploading ${uploadBatch.length} file${uploadBatch.length === 1 ? "" : "s"} directly from browser to Cloudflare R2`,
+        });
+        const batchBytes = uploadBatch.reduce(
+          (sum, file) => sum + file.size,
+          0,
+        );
+        const batchStartBytes = transferredBytes;
+        const completed = await uploadFilesDirectlyToS3(
+          uploadBatch,
+          authorization.data,
+          (percent) => {
+            const batchTransferred = (batchBytes * percent) / 100;
+            const overall = totalBytes
+              ? Math.round(
+                  ((batchStartBytes + batchTransferred) / totalBytes) * 100,
+                )
+              : 100;
+            onProgress?.(Math.min(99, overall));
+          },
+          undefined,
+          onNetworkActivity,
+          (event: DirectUploadEvent) => {
+            onActivity?.({
+              stage: event.type === "retrying" ? "retrying" : "uploading",
+              message: event.message,
+              fileName: event.fileName,
+            });
+          },
+        );
+        transferredBytes += batchBytes;
+
+        for (const completionBatch of batches(completed, 4)) {
+          onActivity?.({
+            stage: "finalizing",
+            message:
+              "Raw upload reached R2. Confirming storage and queueing background optimization.",
+          });
+          let result:
+            | (ListResponse<CollectionImageRecord[]> & {
+                message: string;
+                queued?: number;
+              })
+            | null = null;
+          let completionError:
+            | { message: string; statusCode: number }
+            | null = null;
+
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
+            [result, completionError] = await PostRequestAxios<
+              ListResponse<CollectionImageRecord[]> & {
+                message: string;
+                queued?: number;
+              }
+            >(
+              `/collections/${collectionId}/images/direct-upload/complete`,
+              {
+                files: completionBatch,
+                setId,
+                watermarkId,
+                replaceImageId,
+              },
+              { timeoutMs: 30_000 },
+            );
+            if (result) break;
+            if (
+              completionError &&
+              completionError.statusCode >= 400 &&
+              completionError.statusCode < 500
+            ) {
+              break;
+            }
+            if (attempt < 3) {
+              onActivity?.({
+                stage: "retrying",
+                message: `Storage confirmation did not return cleanly. Retrying automatically (${attempt + 1}/3).`,
+              });
+              await new Promise((resolve) =>
+                setTimeout(resolve, 500 * 2 ** (attempt - 1)),
+              );
+            }
+          }
+
+          if (completionError || !result) {
+            throw new Error(
+              completionError?.message || "Could not finalize direct upload",
+            );
+          }
+          uploaded.push(...(result.data ?? []));
+          const newlyQueued = Math.max(0, Number(result.queued ?? 0));
+          queued += newlyQueued;
+          onActivity?.({
+            stage: "queued",
+            message:
+              newlyQueued > 0
+                ? `Raw upload is safe in R2. ${newlyQueued} photo${newlyQueued === 1 ? "" : "s"} moved to non-blocking background optimization.`
+                : "Upload confirmed and ready.",
+          });
+        }
       }
-      return { data: uploaded, message: "Images uploaded" } as ListResponse<CollectionImageRecord[]> & { message: string };
+
+      onProgress?.(100);
+      return {
+        data: uploaded,
+        message:
+          queued > 0
+            ? "Upload complete. Image processing continues in background."
+            : "Upload complete.",
+        queued,
+      } as ListResponse<CollectionImageRecord[]> & {
+        message: string;
+        queued: number;
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+      queryClient.invalidateQueries({
+        queryKey: ["collections", collectionId, "upload-processing"],
+      });
       notifyStorageChanged();
     },
   });
@@ -414,7 +632,17 @@ export function useCollectionDetail(collectionId?: string) {
     },
   });
 
-  return { collectionQuery, updateCollection, addSet, uploadImages, deleteImage, reorderImages, updateImage, copyMoveImage };
+  return {
+    collectionQuery,
+    processingStatusQuery,
+    updateCollection,
+    addSet,
+    uploadImages,
+    deleteImage,
+    reorderImages,
+    updateImage,
+    copyMoveImage,
+  };
 }
 
 export function fetchCollectionImagesPage(collectionId: string, offset: number, limit = 60) {

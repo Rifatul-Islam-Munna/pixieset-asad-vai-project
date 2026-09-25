@@ -18,6 +18,10 @@ import {
   CollectionImageSchema,
 } from './entities/collection-image.entity';
 import {
+  CollectionImageProcessingJob,
+  CollectionImageProcessingJobSchema,
+} from './entities/collection-image-processing-job.entity';
+import {
   CollectionFavorite,
   CollectionFavoriteSchema,
 } from './entities/collection-favorite.entity';
@@ -64,6 +68,10 @@ import {
       { name: Collection.name, schema: CollectionSchema },
       { name: CollectionDownloadDelivery.name, schema: CollectionDownloadDeliverySchema },
       { name: CollectionImage.name, schema: CollectionImageSchema },
+      {
+        name: CollectionImageProcessingJob.name,
+        schema: CollectionImageProcessingJobSchema,
+      },
       { name: CollectionFavorite.name, schema: CollectionFavoriteSchema },
       {
         name: CollectionImageFavorite.name,

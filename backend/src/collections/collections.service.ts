@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
+import { Interval } from '@nestjs/schedule';
 import { existsSync } from 'fs';
 import { readFile, unlink } from 'fs/promises';
 import { Model, Types } from 'mongoose';
@@ -40,6 +41,10 @@ import {
   CollectionImage,
   CollectionImageDocument,
 } from './entities/collection-image.entity';
+import {
+  CollectionImageProcessingJob,
+  CollectionImageProcessingJobDocument,
+} from './entities/collection-image-processing-job.entity';
 import {
   CollectionFavorite,
   CollectionFavoriteDocument,
@@ -99,6 +104,7 @@ type ImageMetadataDefaults = {
   photographer?: string;
   credit?: string;
   source?: string;
+  directUploadObjectKey?: string;
 };
 
 type FaceIndexQueueImage = Pick<
@@ -113,6 +119,8 @@ export class CollectionsService {
     private readonly collectionModel: Model<CollectionDocument>,
     @InjectModel(CollectionImage.name)
     private readonly imageModel: Model<CollectionImageDocument>,
+    @InjectModel(CollectionImageProcessingJob.name)
+    private readonly imageProcessingJobModel: Model<CollectionImageProcessingJobDocument>,
     @InjectModel(CollectionFavorite.name)
     private readonly favoriteModel: Model<CollectionFavoriteDocument>,
     @InjectModel(CollectionImageFavorite.name)
@@ -142,6 +150,9 @@ export class CollectionsService {
     private readonly marketingScheduleService: MarketingScheduleService,
     private readonly configService: ConfigService,
   ) {}
+
+  private directImageWorkerRunning = false;
+  private lastDirectImageRecoveryAt = 0;
 
   async create(userId: string, dto: CreateCollectionDto) {
     const owner = await this.userModel.findById(userId).select('galleryLimit').lean();
@@ -2122,6 +2133,7 @@ export class CollectionsService {
     files: Express.Multer.File[],
     setId?: string,
     uploadWatermarkId?: string,
+    metadataOverrides: ImageMetadataDefaults = {},
   ) {
     if (!files?.length) throw new BadRequestException('Files are required');
     this.assertImageFiles(files);
@@ -2139,6 +2151,7 @@ export class CollectionsService {
       photographer,
       credit,
       source: credit,
+      ...metadataOverrides,
     };
 
     const collection = await this.collectionModel
@@ -2217,8 +2230,8 @@ export class CollectionsService {
       height?: number;
     }>,
   ) {
-    if (!Array.isArray(files) || !files.length || files.length > 100)
-      throw new BadRequestException('1 to 100 files are required');
+    if (!Array.isArray(files) || !files.length || files.length > 500)
+      throw new BadRequestException('1 to 500 files are required');
     const collection = await this.collectionModel.exists({
       _id: collectionId,
       userId,
@@ -2242,23 +2255,36 @@ export class CollectionsService {
     files: DirectUploadFile[],
     setId?: string,
     watermarkId?: string,
+    replaceImageId?: string,
   ) {
     if (!Array.isArray(files) || !files.length || files.length > 10)
       throw new BadRequestException('1 to 10 completed files are required');
-    const verified: Array<DirectUploadFile & { url: string }> = [];
-    for (const file of files) {
-      if (file.uploadId && file.parts?.length) {
-        await this.minioService.completeDirectMultipartUpload(userId, {
-          objectKey: file.objectKey,
-          uploadId: file.uploadId,
-          parts: file.parts,
-        });
-      }
-      verified.push({
-        ...file,
-        ...(await this.minioService.verifyDirectUpload(userId, file)),
-      });
-    }
+    const verified = await this.mapWithConcurrency(
+      files,
+      6,
+      async (file) => {
+        let verified:
+          | Awaited<ReturnType<MinioService['verifyDirectUpload']>>
+          | undefined;
+        if (file.uploadId && file.parts?.length) {
+          verified = await this.minioService
+            .verifyDirectUpload(userId, file)
+            .catch(() => undefined);
+          if (!verified) {
+            await this.minioService.completeDirectMultipartUpload(userId, {
+              objectKey: file.objectKey,
+              uploadId: file.uploadId,
+              parts: file.parts,
+            });
+          }
+        }
+        return {
+          ...file,
+          ...(verified ??
+            (await this.minioService.verifyDirectUpload(userId, file))),
+        };
+      },
+    );
     await this.ensureStorageAvailable(
       userId,
       verified.reduce((sum, file) => sum + file.size, 0),
@@ -2277,7 +2303,8 @@ export class CollectionsService {
         .select('order')
         .lean();
       const startOrder = Math.max(0, Number(lastImage?.order ?? 0));
-      for (const [index, file] of verified.entries()) {
+      let videoOrder = 0;
+      for (const file of verified) {
         if (this.mediaType(file.type) === 'image') continue;
         const image = await this.imageModel.create({
           userId,
@@ -2295,7 +2322,7 @@ export class CollectionsService {
           width: this.safeDimension(file.width),
           height: this.safeDimension(file.height),
           watermarked: false,
-          order: startOrder + index + 1,
+          order: startOrder + ++videoOrder,
           metadata: {
             videoQuality: this.videoQuality(file.width, file.height),
           },
@@ -2306,42 +2333,466 @@ export class CollectionsService {
         );
         savedVideos.push(image.toObject());
       }
-      await this.collectionModel.updateOne(
-        { _id: collectionId, userId },
-        { $inc: { imageCount: savedVideos.length } },
-      );
-      const imageFiles = verified.filter(
-        (file) => this.mediaType(file.type) === 'image',
-      );
-      if (!imageFiles.length) return savedVideos;
-    }
-    const localFiles: Express.Multer.File[] = [];
-    try {
-      for (const file of verified.filter(
-        (item) => this.mediaType(item.type) === 'image',
-      ))
-        localFiles.push(
-          await this.minioService.downloadDirectUpload(userId, file),
+      if (savedVideos.length) {
+        await this.collectionModel.updateOne(
+          { _id: collectionId, userId },
+          { $inc: { imageCount: savedVideos.length } },
         );
-      const savedImages = await this.uploadImages(
-        userId,
-        collectionId,
-        localFiles,
-        setId,
-        watermarkId,
+      }
+    }
+
+    const imageDirectFiles = verified.filter(
+      (item) => this.mediaType(item.type) === 'image',
+    );
+
+    if (imageDirectFiles.length) {
+      await this.imageProcessingJobModel.bulkWrite(
+        imageDirectFiles.map((file) => ({
+          updateOne: {
+            filter: { objectKey: file.objectKey },
+            update: {
+              $setOnInsert: {
+                userId,
+                collectionId,
+                setId,
+                watermarkId,
+                replaceImageId,
+                objectKey: file.objectKey,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                durationSeconds: this.safeSeconds(file.durationSeconds),
+                width: this.safeDimension(file.width),
+                height: this.safeDimension(file.height),
+                status: 'queued',
+                attempts: 0,
+                lastError: '',
+                resultMode: '',
+                statusMessage:
+                  'Raw upload is safe in R2. Waiting for background optimization.',
+              },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
       );
-      return [...savedVideos, ...savedImages];
-    } finally {
+    }
+
+    return {
+      items: savedVideos,
+      queued: imageDirectFiles.length,
+    };
+  }
+
+  async getDirectUploadProcessingStatus(userId: string, collectionId: string) {
+    const recentSince = new Date(Date.now() - 10 * 60 * 1000);
+    const [rows, recentRows, processingJob, queuedJob] = await Promise.all([
+      this.imageProcessingJobModel.aggregate<{
+        _id: string;
+        count: number;
+      }>([
+        {
+          $match: {
+            userId,
+            collectionId,
+            status: { $in: ['queued', 'processing', 'failed'] },
+          },
+        },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      this.imageProcessingJobModel.aggregate<{
+        _id: string;
+        count: number;
+      }>([
+        {
+          $match: {
+            userId,
+            collectionId,
+            status: 'completed',
+            completedAt: { $gte: recentSince },
+          },
+        },
+        { $group: { _id: '$resultMode', count: { $sum: 1 } } },
+      ]),
+      this.imageProcessingJobModel
+        .findOne({ userId, collectionId, status: 'processing' })
+        .sort({ processingStartedAt: 1, createdAt: 1 })
+        .select('name status attempts statusMessage')
+        .lean(),
+      this.imageProcessingJobModel
+        .findOne({ userId, collectionId, status: 'queued' })
+        .sort({ createdAt: 1 })
+        .select('name status attempts statusMessage')
+        .lean(),
+    ]);
+
+    const counts = new Map(rows.map((row) => [row._id, row.count]));
+    const recentCounts = new Map(
+      recentRows.map((row) => [row._id || '', row.count]),
+    );
+    const queued = counts.get('queued') ?? 0;
+    const processing = counts.get('processing') ?? 0;
+    const failed = counts.get('failed') ?? 0;
+    const current = processingJob ?? queuedJob;
+
+    return {
+      queued,
+      processing,
+      failed,
+      pending: queued + processing,
+      optimized: recentCounts.get('optimized') ?? 0,
+      rawFallback: recentCounts.get('raw-fallback') ?? 0,
+      current: current
+        ? {
+            name: current.name,
+            status: current.status,
+            attempts: Math.max(0, Number(current.attempts ?? 0)),
+            message: String(current.statusMessage ?? ''),
+          }
+        : null,
+    };
+  }
+
+  @Interval(1000)
+  async processDirectImageQueueTick() {
+    if (this.directImageWorkerRunning) return;
+    this.directImageWorkerRunning = true;
+    try {
+      const now = Date.now();
+      if (now - this.lastDirectImageRecoveryAt >= 60_000) {
+        this.lastDirectImageRecoveryAt = now;
+        const staleBefore = new Date(now - 3 * 60 * 1000);
+        await this.imageProcessingJobModel.updateMany(
+          {
+            status: 'processing',
+            processingStartedAt: { $lte: staleBefore },
+          },
+          {
+            $set: {
+              status: 'queued',
+              lastError: 'Recovered after an interrupted image-processing worker',
+              statusMessage:
+                'Recovered after a restart. Background optimization will retry automatically.',
+            },
+            $unset: { processingStartedAt: 1 },
+          },
+        );
+        await this.imageProcessingJobModel.deleteMany({
+          status: 'completed',
+          completedAt: { $lte: new Date(now - 7 * 24 * 60 * 60 * 1000) },
+        });
+      }
+
+      const workerCount = this.directImageWorkerConcurrency();
       await Promise.all(
-        verified
-          .filter((item) => this.mediaType(item.type) === 'image')
-          .map((file) =>
-            this.minioService
-              .deleteDirectUpload(userId, file.objectKey)
-              .catch(() => null),
-          ),
+        Array.from({ length: workerCount }, () =>
+          this.processNextDirectImageJob(),
+        ),
       );
-      await Promise.all(localFiles.map((file) => this.safeUnlink(file.path)));
+    } finally {
+      this.directImageWorkerRunning = false;
+    }
+  }
+
+  private directImageWorkerConcurrency() {
+    const configured = Number(
+      this.configService.get<string>(
+        'IMAGE_BACKGROUND_PROCESSING_CONCURRENCY',
+      ) ?? 2,
+    );
+    return Math.max(
+      1,
+      Math.min(
+        4,
+        Number.isFinite(configured) ? Math.floor(configured) : 2,
+      ),
+    );
+  }
+
+  private async processNextDirectImageJob() {
+    const job = await this.imageProcessingJobModel.findOneAndUpdate(
+      {
+        status: 'queued',
+        attempts: { $lt: 4 },
+      },
+      {
+        $set: {
+          status: 'processing',
+          processingStartedAt: new Date(),
+          lastError: '',
+          statusMessage:
+            'Optimizing in background. Raw original is already safe in R2.',
+        },
+        $inc: { attempts: 1 },
+      },
+      {
+        new: true,
+        sort: { createdAt: 1 },
+      },
+    );
+    if (!job) return;
+
+    const heartbeat = setInterval(() => {
+      void this.imageProcessingJobModel
+        .updateOne(
+          { _id: job._id, status: 'processing' },
+          { $set: { processingStartedAt: new Date() } },
+        )
+        .catch(() => undefined);
+    }, 30_000);
+    let localFile: Express.Multer.File | undefined;
+
+    try {
+      const alreadyProcessed = await this.imageModel
+        .findOne({
+          userId: job.userId,
+          collectionId: job.collectionId,
+          'metadata.directUploadObjectKey': job.objectKey,
+        })
+        .select('metadata')
+        .lean();
+      let resultMode: 'optimized' | 'raw-fallback' =
+        (alreadyProcessed?.metadata as Record<string, any> | undefined)
+          ?.rawFallback === true
+          ? 'raw-fallback'
+          : 'optimized';
+
+      if (!alreadyProcessed) {
+        const directFile: DirectUploadFile = {
+          objectKey: job.objectKey,
+          name: job.name,
+          type: job.type,
+          size: job.size,
+          durationSeconds: job.durationSeconds,
+          width: job.width,
+          height: job.height,
+        };
+        localFile = await this.minioService.downloadDirectUpload(
+          job.userId,
+          directFile,
+        );
+        await this.uploadImages(
+          job.userId,
+          job.collectionId,
+          [localFile],
+          job.setId,
+          job.watermarkId,
+          { directUploadObjectKey: job.objectKey },
+        );
+        resultMode = 'optimized';
+      }
+
+      await this.replaceImageAfterDirectProcessing(job);
+      await this.imageProcessingJobModel.updateOne(
+        { _id: job._id },
+        {
+          $set: {
+            status: 'completed',
+            resultMode,
+            statusMessage:
+              resultMode === 'raw-fallback'
+                ? 'Raw original published because optimization was too slow.'
+                : 'Optimized gallery copy ready. Raw original preserved in R2.',
+            completedAt: new Date(),
+            lastError: '',
+          },
+          $unset: { processingStartedAt: 1 },
+        },
+      );
+    } catch (error) {
+      let message = error instanceof Error ? error.message : String(error);
+      const attempts = Math.max(1, Number(job.attempts ?? 1));
+      const timedOut = this.isBackgroundImageOptimizationTimeout(error);
+      const shouldUseRawFallback = timedOut || attempts >= 2;
+
+      if (shouldUseRawFallback) {
+        try {
+          const reason = timedOut
+            ? 'Optimization exceeded the processing deadline.'
+            : 'Optimization failed twice.';
+          await this.saveDirectRawFallback(job, reason);
+          await this.replaceImageAfterDirectProcessing(job);
+          await this.imageProcessingJobModel.updateOne(
+            { _id: job._id },
+            {
+              $set: {
+                status: 'completed',
+                resultMode: 'raw-fallback',
+                statusMessage:
+                  'Optimization was skipped. Raw original is live in the gallery.',
+                completedAt: new Date(),
+                lastError: '',
+              },
+              $unset: { processingStartedAt: 1 },
+            },
+          );
+          return;
+        } catch (fallbackError) {
+          const fallbackMessage =
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : String(fallbackError);
+          message = `${message}; raw fallback failed: ${fallbackMessage}`;
+        }
+      }
+
+      await this.imageProcessingJobModel.updateOne(
+        { _id: job._id },
+        attempts >= 4
+          ? {
+              $set: {
+                status: 'failed',
+                statusMessage:
+                  'Background processing failed after automatic retries.',
+                lastError: message.slice(0, 1600),
+              },
+              $unset: { processingStartedAt: 1 },
+            }
+          : {
+              $set: {
+                status: 'queued',
+                statusMessage: `Retrying background processing automatically (attempt ${attempts + 1} of 4).`,
+                lastError: message.slice(0, 1600),
+              },
+              $unset: { processingStartedAt: 1 },
+            },
+      );
+    } finally {
+      clearInterval(heartbeat);
+      if (localFile?.path) await this.safeUnlink(localFile.path);
+    }
+  }
+
+  private async replaceImageAfterDirectProcessing(
+    job: CollectionImageProcessingJobDocument,
+  ) {
+    if (!job.replaceImageId) return;
+    const oldImageExists = await this.imageModel.exists({
+      _id: job.replaceImageId,
+      userId: job.userId,
+      collectionId: job.collectionId,
+    });
+    if (!oldImageExists) return;
+    await this.removeImage(
+      job.userId,
+      job.collectionId,
+      job.replaceImageId,
+    );
+  }
+
+  private isBackgroundImageOptimizationTimeout(error: unknown) {
+    const message =
+      error instanceof Error ? error.message : String(error ?? '');
+    return /timeout|timed out|processing deadline|operation.*time/i.test(message);
+  }
+
+  private async saveDirectRawFallback(
+    job: CollectionImageProcessingJobDocument,
+    reason: string,
+  ) {
+    const existing = await this.imageModel
+      .findOne({
+        userId: job.userId,
+        collectionId: job.collectionId,
+        'metadata.directUploadObjectKey': job.objectKey,
+      })
+      .lean();
+    if (existing) return existing;
+
+    const collection = await this.collectionModel
+      .findOne({ _id: job.collectionId, userId: job.userId })
+      .lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const extension =
+      extname(job.name)
+        .toLowerCase()
+        .replace(/[^.a-z0-9]/g, '')
+        .slice(0, 12) || '.img';
+    const publicObjectKey =
+      `raw/${job.userId}/${job.collectionId}/${job._id.toString()}${extension}`;
+    const storedBytes = Math.max(0, Number(job.size ?? 0)) * 2;
+    await this.ensureStorageAvailable(job.userId, storedBytes);
+
+    let promotedUrl = '';
+    try {
+      const promoted = await this.minioService.promoteDirectUploadToPublic(
+        job.userId,
+        {
+          objectKey: job.objectKey,
+          name: job.name,
+          type: job.type,
+          size: job.size,
+        },
+        publicObjectKey,
+      );
+      promotedUrl = promoted.url;
+
+      const lastImage = await this.imageModel
+        .findOne({ collectionId: job.collectionId, userId: job.userId })
+        .sort({ order: -1, createdAt: -1 })
+        .select('order')
+        .lean();
+      const resolvedSetId =
+        job.setId || collection.sets?.[0]?.id || 'highlights';
+      const fallbackTitle = String(job.name || 'Image')
+        .replace(extname(job.name), '')
+        .replace(/[-_]+/g, ' ')
+        .trim();
+
+      const image = await this.imageModel.create({
+        userId: job.userId,
+        collectionId: job.collectionId,
+        setId: resolvedSetId,
+        url: promoted.url,
+        thumbnailUrl: '',
+        blurDataUrl: '',
+        originalName: job.name,
+        filename: promoted.objectKey,
+        originalObjectKey: job.objectKey,
+        originalFilename: job.name,
+        originalMimeType: job.type,
+        originalSizeBytes: Math.max(0, Number(job.size ?? 0)),
+        mimetype: job.type,
+        mediaType: 'image',
+        sizeBytes: storedBytes,
+        width: this.safeDimension(job.width),
+        height: this.safeDimension(job.height),
+        watermarked: false,
+        order: Math.max(0, Number(lastImage?.order ?? 0)) + 1,
+        metadata: {
+          filename: job.name,
+          title: fallbackTitle,
+          fileTitle: fallbackTitle,
+          date: new Date().toISOString(),
+          directUploadObjectKey: job.objectKey,
+          rawFallback: true,
+          optimizationStatus: 'raw-fallback',
+          optimizationMessage: reason,
+          watermarkSkipped: Boolean(job.watermarkId),
+        },
+      });
+
+      await Promise.all([
+        this.userModel.updateOne(
+          { _id: job.userId },
+          { $inc: { storageUsedBytes: storedBytes } },
+        ),
+        this.collectionModel.updateOne(
+          { _id: job.collectionId, userId: job.userId },
+          {
+            $inc: { imageCount: 1 },
+            $set: { coverImage: collection.coverImage ?? promoted.url },
+          },
+        ),
+      ]);
+      return image.toObject();
+    } catch (error) {
+      if (promotedUrl) {
+        await this.minioService.deleteService(promotedUrl).catch(() => null);
+      }
+      throw error;
     }
   }
 
@@ -2553,7 +3004,12 @@ export class CollectionsService {
     metadataDefaults: ImageMetadataDefaults = {},
   ) {
     const imageId = new Types.ObjectId();
-    const extractedMetadata = await this.extractMetadata(file);
+    const directOriginalObjectKey = String(
+      metadataDefaults.directUploadObjectKey ?? '',
+    ).trim();
+    const extractedMetadata = directOriginalObjectKey
+      ? {}
+      : await this.extractMetadata(file);
     const metadata = this.buildReferenceMetadata(
       extractedMetadata,
       file,
@@ -2566,6 +3022,7 @@ export class CollectionsService {
         .replace(/[^.a-z0-9]/g, '')
         .slice(0, 12) || '.img';
     const originalObjectKey =
+      directOriginalObjectKey ||
       `originals/${userId}/${collectionId}/${imageId.toString()}${extension}`;
     let originalTempPath = '';
     let processedPath = '';
@@ -2578,13 +3035,21 @@ export class CollectionsService {
     let originalStored = false;
 
     try {
-      const original = await this.preparePrivateOriginal(file);
+      const original = directOriginalObjectKey
+        ? {
+            file,
+            tempPath: '',
+            size: Math.max(0, Number(file.size ?? 0)),
+          }
+        : await this.preparePrivateOriginal(file);
       originalTempPath = original.tempPath;
-      await this.minioService.uploadPrivateFile(
-        original.file,
-        originalObjectKey,
-      );
-      originalStored = true;
+      if (!directOriginalObjectKey) {
+        await this.minioService.uploadPrivateFile(
+          original.file,
+          originalObjectKey,
+        );
+        originalStored = true;
+      }
 
       let gallerySource = file;
       if (watermark) {
@@ -2613,13 +3078,15 @@ export class CollectionsService {
       const preview = await this.createImagePreview(galleryFile);
       previewPath = preview.path;
       blurDataUrl = preview.blurDataUrl;
-      thumbnailUrl = await this.minioService.uploadFile({
-        ...galleryFile,
-        path: preview.path,
-        filename: preview.filename,
-        size: preview.size,
-      });
-      url = await this.minioService.uploadFile(galleryFile);
+      [thumbnailUrl, url] = await Promise.all([
+        this.minioService.uploadFile({
+          ...galleryFile,
+          path: preview.path,
+          filename: preview.filename,
+          size: preview.size,
+        }),
+        this.minioService.uploadFile(galleryFile),
+      ]);
 
       const storedBytes =
         Math.max(0, original.size) +
@@ -2714,15 +3181,19 @@ export class CollectionsService {
     const sourceMetadata = await sharp(file.path, {
       animated: mime === 'image/gif',
     })
+      .timeout({ seconds: 60 })
       .metadata()
       .catch(() => ({} as Metadata));
-    let scale = 1;
+    const initialRatio = Math.sqrt(targetBytes / Math.max(1, originalSize));
+    let scale = Math.min(1, Math.max(0.3, initialRatio * 1.35));
 
     try {
-      for (let attempt = 0; attempt < 12; attempt += 1) {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
         let output = sharp(file.path, {
           animated: mime === 'image/gif',
-        }).withMetadata();
+        })
+          .timeout({ seconds: 120 })
+          .withMetadata();
 
         if (
           scale < 0.999 &&
@@ -2738,32 +3209,33 @@ export class CollectionsService {
         }
 
         if (mime === 'image/jpeg' || mime === 'image/jpg') {
+          const jpegQuality = [84, 80, 76, 72][attempt] ?? 72;
           output = output.jpeg({
-            quality: attempt < 3 ? 90 : 84,
-            mozjpeg: true,
+            quality: jpegQuality,
+            mozjpeg: false,
             progressive: true,
           });
         } else if (mime === 'image/png') {
           output = output.png({
-            compressionLevel: 9,
+            compressionLevel: 6,
             adaptiveFiltering: true,
           });
         } else if (mime === 'image/webp') {
-          output = output.webp({ quality: attempt < 3 ? 90 : 82 });
+          output = output.webp({ quality: [84, 80, 76, 72][attempt] ?? 72 });
         } else if (mime === 'image/avif') {
-          output = output.avif({ quality: attempt < 3 ? 78 : 68 });
+          output = output.avif({ quality: [68, 62, 58, 54][attempt] ?? 54 });
         } else if (mime === 'image/heic' || mime === 'image/heif') {
           output = output.heif({
-            quality: attempt < 3 ? 82 : 72,
+            quality: [76, 72, 68, 64][attempt] ?? 64,
             compression: 'hevc',
           });
         } else if (mime === 'image/tiff') {
           output = output.tiff({
-            quality: attempt < 3 ? 90 : 82,
+            quality: [84, 80, 76, 72][attempt] ?? 72,
             compression: 'jpeg',
           });
         } else if (mime === 'image/gif') {
-          output = output.gif({ effort: 7 });
+          output = output.gif({ effort: 4 });
         }
 
         const info = await output.toFile(outputPath);
@@ -2782,7 +3254,7 @@ export class CollectionsService {
 
         await this.safeUnlink(outputPath);
         const ratio = Math.sqrt(targetBytes / Math.max(1, info.size));
-        scale = Math.max(0.1, scale * Math.min(0.9, ratio));
+        scale = Math.max(0.1, scale * Math.min(0.88, ratio * 0.98));
       }
       throw new BadRequestException(
         'Original image could not be optimized below 20 MB while preserving its file format',
@@ -2801,6 +3273,7 @@ export class CollectionsService {
       `gallery-${Date.now()}-${Math.round(Math.random() * 1e9)}.jpg`;
     const outputPath = join(cwd(), 'uploads', filename);
     const info = await sharp(file.path)
+      .timeout({ seconds: 25 })
       .rotate()
       .resize({
         width: 1920,
@@ -2809,8 +3282,8 @@ export class CollectionsService {
         withoutEnlargement: true,
       })
       .jpeg({
-        quality: 64,
-        mozjpeg: true,
+        quality: 68,
+        mozjpeg: false,
         progressive: true,
       })
       .toFile(outputPath);
@@ -2940,7 +3413,9 @@ export class CollectionsService {
   }
 
   private async createImagePreview(file: Express.Multer.File) {
-    return this.createImagePreviewFromSharp(sharp(file.path).rotate());
+    return this.createImagePreviewFromSharp(
+      sharp(file.path).timeout({ seconds: 12 }).rotate(),
+    );
   }
 
   private async createImagePreviewFromSharp(image: Sharp) {
@@ -2989,7 +3464,7 @@ export class CollectionsService {
       let previewPath = '';
       try {
         const preview = await this.createImagePreviewFromSharp(
-          sharp(buffer).rotate(),
+          sharp(buffer).timeout({ seconds: 12 }).rotate(),
         );
         previewPath = preview.path;
         const thumbnailUrl = await this.minioService.uploadFile({
@@ -3023,6 +3498,7 @@ export class CollectionsService {
 
   private async extractMetadata(file: Express.Multer.File) {
     const sharpMeta: Partial<Metadata> = await sharp(file.path)
+      .timeout({ seconds: 8 })
       .metadata()
       .catch(() => ({}));
     const exif = await exifr
@@ -3144,6 +3620,9 @@ export class CollectionsService {
       source,
       size: width > 0 && height > 0 ? `${width} x ${height}` : '',
       transmissionRef: this.metadataText(extracted.transmissionRef) || itemNumber,
+      ...(defaults.directUploadObjectKey
+        ? { directUploadObjectKey: defaults.directUploadObjectKey }
+        : {}),
     };
   }
 
@@ -3212,7 +3691,9 @@ export class CollectionsService {
     file: Express.Multer.File,
     watermark: WatermarkData,
   ) {
-    const image = sharp(file.path).rotate();
+    const image = sharp(file.path)
+      .timeout({ seconds: 25 })
+      .rotate();
     const meta = await image.metadata();
     const width = meta.width ?? 1200;
     const height = meta.height ?? 800;
@@ -3260,10 +3741,13 @@ export class CollectionsService {
 
       const overlayWidth = this.watermarkImageWidth(width, watermark.scale);
       const overlayBuffer = await sharp(overlay)
+        .timeout({ seconds: 12 })
         .resize({ width: overlayWidth, withoutEnlargement: true })
         .ensureAlpha(opacity)
         .toBuffer();
-      const overlayMeta = await sharp(overlayBuffer).metadata();
+      const overlayMeta = await sharp(overlayBuffer)
+        .timeout({ seconds: 8 })
+        .metadata();
       const overlayHeight = overlayMeta.height ?? overlayWidth;
       const position = {
         x: this.clampPercent(

@@ -13949,6 +13949,7 @@ function CollectionDetailView({
   const { ordersQuery } = useStoreOrders();
   const {
     collectionQuery,
+    processingStatusQuery,
     updateCollection,
     addSet,
     uploadImages,
@@ -13963,6 +13964,7 @@ function CollectionDetailView({
   const collection =
     collectionQuery.data?.data ??
     collections.find((item) => item._id === collectionId);
+  const backgroundProcessing = processingStatusQuery.data?.data;
   const savedPreferences = collectionPreferencesFromGlobal(
     preferenceSettings.data?.data?.[0]?.data as
       Partial<PreferenceSettings> | undefined,
@@ -14046,7 +14048,16 @@ function CollectionDetailView({
     uploaded: 0,
     currentName: "",
     currentPercent: 0,
+    phase: "preparing" as
+      | "preparing"
+      | "authorizing"
+      | "uploading"
+      | "retrying"
+      | "finalizing"
+      | "queued",
   });
+  const uploadNetworkActivityRef = useRef(Date.now());
+  const [slowUploadNetwork, setSlowUploadNetwork] = useState(false);
   const [draggingUpload, setDraggingUpload] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -14726,6 +14737,19 @@ function CollectionDetailView({
       : branding.blockOrder,
   });
 
+  useEffect(() => {
+    if (!uploadProgress.active || uploadProgress.phase !== "uploading") {
+      setSlowUploadNetwork(false);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setSlowUploadNetwork(
+        Date.now() - uploadNetworkActivityRef.current >= 12_000,
+      );
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [uploadProgress.active, uploadProgress.phase]);
+
   const isFileDrag = (event: DragEvent<HTMLElement>) =>
     Array.from(event.dataTransfer.types).includes("Files");
   const droppedMediaFiles = (files: FileList) =>
@@ -14739,68 +14763,86 @@ function CollectionDetailView({
     const selectedFiles = replaceImageId
       ? Array.from(files).slice(0, 1)
       : Array.from(files);
+    uploadNetworkActivityRef.current = Date.now();
+    setSlowUploadNetwork(false);
     setUploadProgress({
       active: true,
       total: selectedFiles.length,
       uploaded: 0,
-      currentName: selectedFiles[0]?.name ?? "",
+      currentName:
+        selectedFiles.length === 1
+          ? selectedFiles[0]?.name ?? ""
+          : `${selectedFiles.length} files selected`,
       currentPercent: 0,
+      phase: "preparing",
     });
     try {
-      for (const [index, file] of selectedFiles.entries()) {
-        setUploadProgress((current) => ({
-          ...current,
-          currentName: file.name,
-          currentPercent: 0,
-        }));
-        const response = await uploadImages.mutateAsync({
-          files: [file],
-          setId: activeSetId,
-          watermarkId: uploadWatermarkId,
-          onProgress: (percent) =>
-            setUploadProgress((current) => ({
-              ...current,
-              currentPercent: percent,
-            })),
+      const response = await uploadImages.mutateAsync({
+        files: selectedFiles,
+        setId: activeSetId,
+        watermarkId: uploadWatermarkId,
+        replaceImageId: replaceImageId || undefined,
+        onProgress: (percent) =>
+          setUploadProgress((current) => ({
+            ...current,
+            currentPercent: percent,
+            ...(current.phase === "retrying" && percent > current.currentPercent
+              ? {
+                  phase: "uploading" as const,
+                  currentName:
+                    "Connection resumed. Upload is moving again.",
+                }
+              : {}),
+          })),
+        onNetworkActivity: () => {
+          uploadNetworkActivityRef.current = Date.now();
+        },
+        onActivity: (activity) =>
+          setUploadProgress((current) => ({
+            ...current,
+            phase: activity.stage,
+            currentName: activity.message,
+          })),
+      });
+      const uploadedImages = Array.isArray(response?.data)
+        ? response.data
+        : [];
+      if (uploadedImages.length) {
+        setLoadedImages((current) => {
+          const seen = new Set(current.map((image) => image._id));
+          return [
+            ...current,
+            ...uploadedImages.filter((image) => !seen.has(image._id)),
+          ];
         });
-        const uploadedImages = Array.isArray(response?.data)
-          ? response.data
-          : [];
-        if (uploadedImages.length) {
-          if (replaceImageId && index === 0) {
-            await deleteImage.mutateAsync(replaceImageId);
-            setLoadedImages((current) =>
-              current.filter((image) => image._id !== replaceImageId),
-            );
-          }
-          setLoadedImages((current) => {
-            const seen = new Set(current.map((image) => image._id));
-            return [
-              ...current,
-              ...uploadedImages.filter((image) => !seen.has(image._id)),
-            ];
-          });
-        }
-        setUploadProgress((current) => ({
-          ...current,
-          uploaded: index + 1,
-          currentPercent: 100,
-        }));
       }
+      setUploadProgress((current) => ({
+        ...current,
+        uploaded: selectedFiles.length,
+        currentPercent: 100,
+        phase: "queued",
+        currentName:
+          "Raw upload complete. Any image optimization now runs in the background.",
+      }));
+      const queued = Math.max(0, Number(response?.queued ?? 0));
       toast.success(
-        replaceImageId
-          ? "Photo replaced"
-          : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
+        queued > 0
+          ? `Upload complete. ${queued} photo${queued === 1 ? "" : "s"} will optimize in the background.`
+          : replaceImageId
+            ? "Photo replaced"
+            : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
+      setSlowUploadNetwork(false);
       setUploadProgress({
         active: false,
         total: 0,
         uploaded: 0,
         currentName: "",
         currentPercent: 0,
+        phase: "preparing",
       });
       setReplaceImageId("");
     }
@@ -14826,17 +14868,7 @@ function CollectionDetailView({
     void handleImageUpload(mediaFiles);
   };
   const uploading = uploadProgress.active || uploadImages.isPending;
-  const uploadsLeft = Math.max(
-    0,
-    uploadProgress.total - uploadProgress.uploaded,
-  );
-  const uploadPercent = uploadProgress.total
-    ? Math.round(
-        ((uploadProgress.uploaded + uploadProgress.currentPercent / 100) /
-          uploadProgress.total) *
-          100,
-      )
-    : 0;
+  const uploadPercent = uploadProgress.currentPercent;
   const deletingImages = deleteImage.isPending || bulkDeleting;
   const toggleImageSelection = (imageId: string) => {
     if (deletingImages) return;
@@ -15496,7 +15528,17 @@ function CollectionDetailView({
               )}
               <p className="mt-6 text-lg font-bold">
                 {uploading
-                  ? `${uploadProgress.currentPercent}% uploaded`
+                  ? uploadProgress.phase === "retrying"
+                    ? "Retrying automatically — upload will continue"
+                    : uploadProgress.phase === "authorizing"
+                      ? "Getting secure upload permission"
+                      : uploadProgress.phase === "finalizing"
+                        ? "Confirming uploaded files with R2"
+                        : uploadProgress.phase === "queued"
+                          ? "Raw upload complete"
+                          : uploadProgress.phase === "preparing"
+                            ? "Preparing files"
+                            : `Uploading ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} directly to R2 / ${uploadProgress.currentPercent}%`
                   : replaceImageId
                     ? "Drag one replacement photo here"
                     : "Drag photos and videos here to upload"}
@@ -15740,20 +15782,39 @@ function CollectionDetailView({
       />
 
       {uploading && (
-        <div className="mt-4 flex items-center gap-4 border border-[#bdeee8] bg-[#f2fffd] px-4 py-3 text-sm text-[#096f64]">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#d9fbf6]">
+        <div className="mt-4 flex items-start gap-4 border border-[#bdeee8] bg-[#f2fffd] px-4 py-3 text-sm text-[#096f64]">
+          <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full bg-[#d9fbf6]">
             <Loader2 className="size-5 animate-spin" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-bold">
-              Image{" "}
-              {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)}{" "}
-              of {uploadProgress.total || "selected"} /{" "}
-              {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-bold">
+                {uploadProgress.phase === "preparing"
+                  ? "Preparing files"
+                  : uploadProgress.phase === "authorizing"
+                    ? "Getting secure R2 upload permission"
+                    : uploadProgress.phase === "retrying"
+                      ? "Retrying automatically"
+                      : uploadProgress.phase === "finalizing"
+                        ? "Confirming uploaded files with R2"
+                        : uploadProgress.phase === "queued"
+                          ? "Raw upload complete"
+                          : `Uploading ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} directly to R2 / ${uploadProgress.currentPercent}%`}
+              </p>
+              <span className="text-xs font-bold tabular-nums text-[#096f64]">
+                {uploadProgress.currentPercent}%
+              </span>
+            </div>
+            <p className="mt-1 break-words text-xs font-semibold text-[#3f8179]">
+              {slowUploadNetwork && uploadProgress.phase === "uploading"
+                ? "Connection is slow, but bytes are still moving. The uploader will retry automatically if a request truly stalls."
+                : uploadProgress.currentName || "Browser → Cloudflare R2"}
             </p>
-            <p className="mt-1 truncate text-xs font-semibold text-[#3f8179]">
-              {uploadProgress.currentName || "Processing files and watermark"}
-            </p>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold">
+              <span className="rounded-full bg-white/80 px-2 py-1">Browser → R2</span>
+              <span className="rounded-full bg-white/80 px-2 py-1">Auto retry on</span>
+              <span className="rounded-full bg-white/80 px-2 py-1">Raw original first</span>
+            </div>
             <div className="mt-3 h-2 overflow-hidden bg-[#d3f2ee]">
               <div
                 className="h-full bg-[#6337d8] transition-all duration-300"
@@ -15761,6 +15822,41 @@ function CollectionDetailView({
               />
             </div>
           </div>
+        </div>
+      )}
+      {!uploading && (backgroundProcessing?.pending ?? 0) > 0 && (
+        <div className="mt-4 flex items-start gap-3 border border-[#e2dcfb] bg-[#f8f6ff] px-4 py-3 text-sm text-[#5f35c8]">
+          <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin" />
+          <div className="min-w-0">
+            <p className="font-semibold">
+              Background optimization: {backgroundProcessing?.processing ?? 0} processing, {backgroundProcessing?.queued ?? 0} queued. You can keep working and start more uploads.
+            </p>
+            {backgroundProcessing?.current && (
+              <p className="mt-1 break-words text-xs font-medium text-[#7661b8]">
+                {backgroundProcessing.current.name}: {backgroundProcessing.current.message}
+              </p>
+            )}
+            <p className="mt-1 text-xs font-medium text-[#7661b8]">
+              Raw originals are already safe in R2. Slow Sharp work never blocks the client upload.
+            </p>
+          </div>
+        </div>
+      )}
+      {!uploading && (backgroundProcessing?.rawFallback ?? 0) > 0 && (
+        <div className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">
+            {backgroundProcessing?.rawFallback} recent photo
+            {backgroundProcessing?.rawFallback === 1 ? "" : "s"} skipped slow optimization and published the raw original instead.
+          </p>
+          <p className="mt-1 text-xs font-medium">
+            The upload was not blocked waiting for Sharp.
+          </p>
+        </div>
+      )}
+      {!uploading && (backgroundProcessing?.failed ?? 0) > 0 && (
+        <div className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {backgroundProcessing?.failed} photo
+          {backgroundProcessing?.failed === 1 ? "" : "s"} could not finish background processing or raw fallback after automatic retries.
         </div>
       )}
       {uploadImages.error && (
@@ -16248,11 +16344,23 @@ function CollectionDetailView({
                 )}
                 <p className="mt-5 font-bold">
                   {uploading
-                    ? `Image ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} / ${uploadProgress.currentPercent}%`
+                    ?   uploadProgress.phase === "retrying"
+                      ? "Retrying automatically — upload will continue"
+                      : uploadProgress.phase === "authorizing"
+                        ? "Getting secure upload permission"
+                        : uploadProgress.phase === "finalizing"
+                          ? "Confirming uploaded files with R2"
+                          : uploadProgress.phase === "queued"
+                            ? "Raw upload complete"
+                            : uploadProgress.phase === "preparing"
+                              ? "Preparing files"
+                              : `Uploading ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} directly to R2 / ${uploadProgress.currentPercent}%`
                     : "Drag photos and videos here to upload"}
                 </p>
                 <p className="mt-3 text-sm text-[#6337d8]">
-                  {uploading ? `${uploadsLeft} left` : "or Browse files"}
+                  {uploading
+                    ? uploadProgress.currentName
+                    : "or Browse files"}
                 </p>
                 {uploading && (
                   <div className="mt-5 h-2 w-full max-w-sm overflow-hidden bg-[#d3f2ee]">
@@ -16345,7 +16453,7 @@ function CollectionDetailView({
                 )}
                 {uploading && (
                   <div className="mb-2 grid grid-cols-3 gap-2 md:grid-cols-5 xl:grid-cols-6">
-                    {Array.from({ length: Math.min(uploadsLeft || 1, 6) }).map(
+                    {Array.from({ length: Math.min(uploadProgress.total || 1, 6) }).map(
                       (_, index) => (
                         <div
                           key={`uploading-${index}`}

@@ -21,7 +21,7 @@ function parseAxiosError(error: AxiosError): { message: string, statusCode: numb
   const res = error?.response?.data as { statusCode?: number; message?: unknown } | undefined;
   const statusCode = res?.statusCode ?? error?.response?.status ?? 500;
 
-  let message = 'Something went wrong';
+  let message = error.message || 'Something went wrong';
 
   const responseMessage = res?.message;
   if (typeof responseMessage === 'string') {
@@ -35,15 +35,18 @@ function parseAxiosError(error: AxiosError): { message: string, statusCode: numb
   return { message, statusCode };
 }
 
-export const PostRequestAxios = async <T>(url: string, payload: any) : Promise<[T | null, { message: string; statusCode: number } | null]> => {
+export const PostRequestAxios = async <T>(
+  url: string,
+  payload: any,
+  options?: { timeoutMs?: number },
+) : Promise<[T | null, { message: string; statusCode: number } | null]> => {
     const {access_token} = await getToken()
     try{
-        const {data} = await axios.post<T>(`${baseUrl}${url}`, payload,{
+        const {data} = await axios.post<T>(baseUrl + url, payload,{
             headers:{
                 access_token:access_token,
-            
-            }
-            
+            },
+            timeout: Math.max(0, Number(options?.timeoutMs ?? 0)),
         })
         return [data,null];
 

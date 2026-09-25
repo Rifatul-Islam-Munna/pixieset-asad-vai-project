@@ -22,6 +22,16 @@ export type CompletedDirectUpload = DirectUploadMetadata & {
   parts?: Array<{ partNumber: number; etag: string }>;
 };
 
+export type DirectUploadEvent = {
+  type: "uploading" | "retrying" | "uploaded";
+  fileName: string;
+  message: string;
+  attempt?: number;
+  maxAttempts?: number;
+  partNumber?: number;
+  totalParts?: number;
+};
+
 type UploadParallelism = {
   fileConcurrency: number;
   multipartConcurrency: number;
@@ -35,12 +45,16 @@ const DEFAULT_MULTIPART_CONCURRENCY = 6;
 const DEFAULT_REQUEST_CONCURRENCY = 10;
 const METADATA_CONCURRENCY = 2;
 const PROGRESS_INTERVAL_MS = 100;
+const UPLOAD_MAX_ATTEMPTS = 4;
+const UPLOAD_STALL_TIMEOUT_MS = 45_000;
 
 export async function uploadFilesDirectlyToS3(
   files: File[],
   tickets: DirectUploadTicket[],
   onProgress?: (percent: number) => void,
   concurrency?: number,
+  onNetworkActivity?: () => void,
+  onEvent?: (event: DirectUploadEvent) => void,
 ) {
   if (files.length !== tickets.length) throw new Error("Upload authorization mismatch");
 
@@ -72,6 +86,15 @@ export async function uploadFilesDirectlyToS3(
       const file = files[index];
       const ticket = tickets[index];
 
+      onEvent?.({
+        type: "uploading",
+        fileName: file.name,
+        message:
+          ticket.strategy === "multipart"
+            ? `Uploading ${file.name} in ${ticket.parts?.length ?? 0} parts`
+            : `Uploading ${file.name} directly to R2`,
+      });
+
       if (ticket.strategy === "multipart") {
         const multipart = await putMultipartFile(
           file,
@@ -80,8 +103,11 @@ export async function uploadFilesDirectlyToS3(
           runWithNetworkSlot,
           (bytes) => {
             loaded[index] = bytes;
+            onNetworkActivity?.();
             report();
           },
+          file.name,
+          onEvent,
         );
         completed[index] = {
           objectKey: ticket.objectKey,
@@ -92,10 +118,26 @@ export async function uploadFilesDirectlyToS3(
       } else {
         if (!ticket.uploadUrl) throw new Error("Missing direct upload URL");
         await runWithNetworkSlot(() =>
-          putBlob(file, ticket.uploadUrl!, file.type, (bytes) => {
-            loaded[index] = bytes;
-            report();
-          }),
+          putBlobWithRetry(
+            file,
+            ticket.uploadUrl!,
+            file.type,
+            (bytes) => {
+              loaded[index] = bytes;
+              onNetworkActivity?.();
+              report();
+            },
+            false,
+            (attempt, maxAttempts, error) => {
+              onEvent?.({
+                type: "retrying",
+                fileName: file.name,
+                attempt,
+                maxAttempts,
+                message: `Retrying ${file.name} automatically (${attempt}/${maxAttempts}): ${error.message}`,
+              });
+            },
+          ),
         );
         completed[index] = {
           objectKey: ticket.objectKey,
@@ -105,6 +147,11 @@ export async function uploadFilesDirectlyToS3(
 
       loaded[index] = file.size;
       report();
+      onEvent?.({
+        type: "uploaded",
+        fileName: file.name,
+        message: `${file.name} reached R2 successfully`,
+      });
     }
   };
 
@@ -124,12 +171,24 @@ export async function uploadFilesDirectlyToS3(
   return completed;
 }
 function getUploadParallelism(
-  _tickets: DirectUploadTicket[],
+  tickets: DirectUploadTicket[],
   requestedFileConcurrency?: number,
 ): UploadParallelism {
+  const activeFiles = Math.max(1, tickets.length);
+  const hasMultipart = tickets.some(
+    (ticket) => ticket.strategy === "multipart",
+  );
+  const multipartConcurrency =
+    activeFiles >= 3
+      ? 3
+      : activeFiles === 2
+        ? 4
+        : DEFAULT_MULTIPART_CONCURRENCY;
+
   return {
-    fileConcurrency: requestedFileConcurrency ?? DEFAULT_FILE_CONCURRENCY,
-    multipartConcurrency: DEFAULT_MULTIPART_CONCURRENCY,
+    fileConcurrency:
+      requestedFileConcurrency ?? (hasMultipart ? DEFAULT_FILE_CONCURRENCY : 8),
+    multipartConcurrency,
     requestConcurrency: DEFAULT_REQUEST_CONCURRENCY,
   };
 }
@@ -201,6 +260,8 @@ async function putMultipartFile(
   multipartConcurrency: number,
   runWithNetworkSlot: NetworkRunner,
   onProgress: (bytes: number) => void,
+  fileName: string,
+  onEvent?: (event: DirectUploadEvent) => void,
 ) {
   if (!ticket.uploadId || !ticket.partSize || !ticket.parts?.length) {
     throw new Error("Invalid multipart upload authorization");
@@ -229,10 +290,27 @@ async function putMultipartFile(
       const blob = file.slice(start, end);
 
       const etag = await runWithNetworkSlot(() =>
-        putBlob(blob, part.url, undefined, (bytes) => {
-          partLoaded[index] = bytes;
-          report();
-        }),
+        putBlobWithRetry(
+          blob,
+          part.url,
+          undefined,
+          (bytes) => {
+            partLoaded[index] = bytes;
+            report();
+          },
+          true,
+          (attempt, maxAttempts, error) => {
+            onEvent?.({
+              type: "retrying",
+              fileName,
+              attempt,
+              maxAttempts,
+              partNumber: part.partNumber,
+              totalParts: ticket.parts?.length ?? 0,
+              message: `Retrying part ${part.partNumber}/${ticket.parts?.length ?? 0} of ${fileName} (${attempt}/${maxAttempts}): ${error.message}`,
+            });
+          },
+        ),
       );
 
       partLoaded[index] = blob.size;
@@ -256,21 +334,76 @@ async function putMultipartFile(
   return completed;
 }
 
+async function putBlobWithRetry(
+  blob: Blob,
+  uploadUrl: string,
+  contentType: string | undefined,
+  onProgress: (bytes: number) => void,
+  requireEtag = false,
+  onRetry?: (attempt: number, maxAttempts: number, error: Error) => void,
+) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await putBlob(
+        blob,
+        uploadUrl,
+        contentType,
+        onProgress,
+        requireEtag,
+      );
+    } catch (error) {
+      lastError = error;
+      if (attempt >= UPLOAD_MAX_ATTEMPTS) break;
+      onProgress(0);
+      onRetry?.(
+        attempt + 1,
+        UPLOAD_MAX_ATTEMPTS,
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, 350 * 2 ** (attempt - 1)),
+      );
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Upload failed");
+}
+
 function putBlob(
   blob: Blob,
   uploadUrl: string,
   contentType: string | undefined,
   onProgress: (bytes: number) => void,
+  requireEtag = false,
 ) {
   return new Promise<string>((resolve, reject) => {
     const request = new XMLHttpRequest();
+    let stalled = false;
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const clearStallTimer = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = undefined;
+    };
+    const armStallTimer = () => {
+      clearStallTimer();
+      stallTimer = setTimeout(() => {
+        stalled = true;
+        request.abort();
+      }, UPLOAD_STALL_TIMEOUT_MS);
+    };
+
     request.open("PUT", uploadUrl);
     if (contentType) request.setRequestHeader("Content-Type", contentType);
-    request.upload.onprogress = (event) => onProgress(event.loaded);
+    request.upload.onprogress = (event) => {
+      armStallTimer();
+      onProgress(event.loaded);
+    };
     request.onload = () => {
+      clearStallTimer();
       if (request.status >= 200 && request.status < 300) {
         const etag = request.getResponseHeader("ETag");
-        if (!etag && blob.size > 0) {
+        if (requireEtag && !etag && blob.size > 0) {
           reject(new Error("Storage did not expose the multipart ETag"));
           return;
         }
@@ -279,8 +412,21 @@ function putBlob(
       }
       reject(new Error(`S3 upload failed (${request.status})`));
     };
-    request.onerror = () => reject(new Error("Could not connect to S3"));
-    request.onabort = () => reject(new Error("S3 upload cancelled"));
+    request.onerror = () => {
+      clearStallTimer();
+      reject(new Error("Could not connect to S3"));
+    };
+    request.onabort = () => {
+      clearStallTimer();
+      reject(
+        new Error(
+          stalled
+            ? "Upload stalled with no network progress"
+            : "S3 upload cancelled",
+        ),
+      );
+    };
+    armStallTimer();
     request.send(blob);
   });
 }
