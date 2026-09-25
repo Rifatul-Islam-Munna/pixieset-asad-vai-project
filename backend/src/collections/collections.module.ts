@@ -22,6 +22,10 @@ import {
   CollectionImageProcessingJobSchema,
 } from './entities/collection-image-processing-job.entity';
 import {
+  CollectionImageDeleteJob,
+  CollectionImageDeleteJobSchema,
+} from './entities/collection-image-delete-job.entity';
+import {
   CollectionFavorite,
   CollectionFavoriteSchema,
 } from './entities/collection-favorite.entity';
@@ -71,6 +75,10 @@ import {
       {
         name: CollectionImageProcessingJob.name,
         schema: CollectionImageProcessingJobSchema,
+      },
+      {
+        name: CollectionImageDeleteJob.name,
+        schema: CollectionImageDeleteJobSchema,
       },
       { name: CollectionFavorite.name, schema: CollectionFavoriteSchema },
       {

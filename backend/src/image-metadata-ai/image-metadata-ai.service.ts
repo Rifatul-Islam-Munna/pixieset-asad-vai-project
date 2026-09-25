@@ -5,11 +5,12 @@ import { Interval } from '@nestjs/schedule';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateText, Output } from 'ai';
 import { randomUUID } from 'crypto';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { MinioService } from 'src/lib/minio.service';
 import { User, UserDocument } from 'src/user/entities/user.entity';
+import { Plan, PlanDocument } from 'src/admin/entities/plan.entity';
 import {
   CollectionImage,
   CollectionImageDocument,
@@ -62,6 +63,8 @@ export class ImageMetadataAiService implements OnModuleInit {
     private readonly imageModel: Model<CollectionImageDocument>,
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
+    @InjectModel(Plan.name)
+    private readonly planModel: Model<PlanDocument>,
     private readonly minioService: MinioService,
     private readonly configService: ConfigService,
   ) {}
@@ -105,6 +108,45 @@ export class ImageMetadataAiService implements OnModuleInit {
     }
   }
 
+  private async effectiveAiEntitlement(user: any) {
+    if (!user) return { enabled: false, limit: 0 };
+
+    let enabled = Boolean(user?.planFeatures?.aiImageMetadata);
+    let limit = Math.max(0, Number(user?.aiImageMetadataLimit ?? 0));
+    const planId = String(user?.planId ?? '').trim();
+
+    if (planId && Types.ObjectId.isValid(planId)) {
+      const plan = await this.planModel
+        .findById(planId)
+        .select('features aiImageMetadataLimit')
+        .lean()
+        .catch(() => null);
+      if (plan) {
+        enabled = Boolean((plan.features as any)?.aiImageMetadata);
+        limit = Math.max(0, Number(plan.aiImageMetadataLimit ?? 0));
+
+        const cachedEnabled = Boolean(user?.planFeatures?.aiImageMetadata);
+        const cachedLimit = Math.max(
+          0,
+          Number(user?.aiImageMetadataLimit ?? 0),
+        );
+        if (cachedEnabled !== enabled || cachedLimit !== limit) {
+          await this.userModel.updateOne(
+            { _id: user._id },
+            {
+              $set: {
+                'planFeatures.aiImageMetadata': enabled,
+                aiImageMetadataLimit: limit,
+              },
+            },
+          );
+        }
+      }
+    }
+
+    return { enabled, limit };
+  }
+
   async enqueueMany(images: QueueableImage[]) {
     const rows = images
       .filter((image) => image?.mediaType !== 'video')
@@ -125,7 +167,7 @@ export class ImageMetadataAiService implements OnModuleInit {
     const [users, pendingCounts] = await Promise.all([
       this.userModel
         .find({ _id: { $in: userIds } })
-        .select('planFeatures aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey')
+        .select('planId planFeatures aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey')
         .lean(),
       this.jobModel.aggregate([
         { $match: { userId: { $in: userIds }, status: { $in: ['queued', 'processing'] } } },
@@ -145,14 +187,17 @@ export class ImageMetadataAiService implements OnModuleInit {
     const skippedRows: Array<(typeof rows)[number] & { reason: string }> = [];
     for (const [userId, userRows] of groupedRows) {
       const user = userMap.get(userId) as any;
-      const enabled = Boolean(user?.planFeatures?.aiImageMetadata);
-      const limit = Math.max(0, Number(user?.aiImageMetadataLimit ?? 0));
+      const entitlement = await this.effectiveAiEntitlement(user);
+      const enabled = entitlement.enabled;
+      const limit = entitlement.limit;
       const used = user?.aiImageMetadataUsageKey === usageKey
         ? Math.max(0, Number(user?.aiImageMetadataUsed ?? 0))
         : 0;
       const pending = Math.max(0, pendingMap.get(userId) ?? 0);
       let available = enabled
-        ? limit === 0 ? Number.POSITIVE_INFINITY : Math.max(0, limit - used - pending)
+        ? limit === 0
+          ? Number.POSITIVE_INFINITY
+          : Math.max(0, limit - used - pending)
         : 0;
       for (const row of userRows) {
         if (available > 0) {
@@ -225,6 +270,38 @@ export class ImageMetadataAiService implements OnModuleInit {
         { ordered: false },
       );
     }
+  }
+
+  async ensureQueued(
+    image: QueueableImage & { metadata?: Record<string, any> },
+  ) {
+    if (!image || image.mediaType === 'video') return;
+
+    const imageId = String(image._id ?? '');
+    const userId = String(image.userId ?? '');
+    const collectionId = String(image.collectionId ?? '');
+    if (!imageId || !userId || !collectionId) return;
+
+    const aiStatus = String(image.metadata?.ai?.status ?? '');
+    if (['queued', 'processing', 'completed'].includes(aiStatus)) return;
+
+    const existingJob = await this.jobModel
+      .findOne({ imageId, userId })
+      .select('_id status')
+      .lean();
+
+    if (
+      existingJob?.status === 'queued' ||
+      existingJob?.status === 'processing'
+    ) {
+      return;
+    }
+
+    if (existingJob?._id) {
+      await this.jobModel.deleteOne({ _id: existingJob._id });
+    }
+
+    await this.enqueueMany([image]);
   }
 
   @Interval(3_000)
@@ -365,9 +442,14 @@ export class ImageMetadataAiService implements OnModuleInit {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const user = await this.userModel
         .findById(userId)
-        .select('planFeatures aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey')
+        .select('planId planFeatures aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey')
         .lean();
-      if (!user || !Boolean(user.planFeatures?.aiImageMetadata)) {
+      if (!user) {
+        return { allowed: false, usageKey, reason: 'not_in_plan' };
+      }
+
+      const entitlement = await this.effectiveAiEntitlement(user);
+      if (!entitlement.enabled) {
         return { allowed: false, usageKey, reason: 'not_in_plan' };
       }
 
@@ -379,7 +461,7 @@ export class ImageMetadataAiService implements OnModuleInit {
         continue;
       }
 
-      const limit = Math.max(0, Number(user.aiImageMetadataLimit ?? 0));
+      const limit = entitlement.limit;
       const used = Math.max(0, Number(user.aiImageMetadataUsed ?? 0));
       if (limit > 0 && used >= limit) {
         return { allowed: false, usageKey, reason: 'limit_reached' };

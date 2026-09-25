@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MinioService } from 'src/lib/minio.service';
 import { User, UserSchema } from 'src/user/entities/user.entity';
+import { Plan, PlanSchema } from 'src/admin/entities/plan.entity';
 import {
   CollectionImage,
   CollectionImageSchema,
@@ -21,6 +22,7 @@ import { ImageMetadataAiService } from './image-metadata-ai.service';
     MongooseModule.forFeature([
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: User.name, schema: UserSchema },
+      { name: Plan.name, schema: PlanSchema },
       { name: ImageMetadataJob.name, schema: ImageMetadataJobSchema },
       {
         name: ImageMetadataWorkerLock.name,

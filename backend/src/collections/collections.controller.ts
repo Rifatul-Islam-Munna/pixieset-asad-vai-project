@@ -654,6 +654,26 @@ export class CollectionsController {
     return { message: 'Images reordered', data };
   }
 
+  @Post(':id/images/delete')
+  async removeImages(
+    @Param('id') id: string,
+    @Body('imageIds') imageIds: string[],
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.removeImages(
+      req.user.id,
+      id,
+      imageIds,
+    );
+    return {
+      message:
+        data.deleted === 1
+          ? 'Image removed. Storage cleanup continues in background.'
+          : `${data.deleted} images removed. Storage cleanup continues in background.`,
+      data,
+    };
+  }
+
   @Delete(':id/images/:imageId')
   async removeImage(
     @Param('id') id: string,

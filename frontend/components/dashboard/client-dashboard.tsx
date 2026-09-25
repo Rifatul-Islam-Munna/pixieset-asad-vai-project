@@ -13954,6 +13954,7 @@ function CollectionDetailView({
     addSet,
     uploadImages,
     deleteImage,
+    deleteImages,
     reorderImages,
     updateImage,
     copyMoveImage,
@@ -14869,7 +14870,8 @@ function CollectionDetailView({
   };
   const uploading = uploadProgress.active || uploadImages.isPending;
   const uploadPercent = uploadProgress.currentPercent;
-  const deletingImages = deleteImage.isPending || bulkDeleting;
+  const deletingImages =
+    deleteImage.isPending || deleteImages.isPending || bulkDeleting;
   const toggleImageSelection = (imageId: string) => {
     if (deletingImages) return;
     setSelectedImageIds((ids) =>
@@ -14886,35 +14888,49 @@ function CollectionDetailView({
     if (form.coverImage === image.url) {
       setForm((value) => ({ ...value, coverImage: "" }));
     }
+
+    setLoadedImages((current) =>
+      current.filter((item) => item._id !== image._id),
+    );
+    setSelectedImageIds((ids) => ids.filter((id) => id !== image._id));
+
     deleteImage.mutate(image._id, {
-      onSuccess: () =>
-        setSelectedImageIds((ids) => ids.filter((id) => id !== image._id)),
+      onSuccess: () => {
+        toast.success("Image removed. Storage cleanup is running in background.");
+      },
+      onError: () => {
+        toast.error("Delete could not be confirmed. Refreshing the gallery.");
+        void collectionQuery.refetch();
+      },
     });
   };
   const deleteSelectedImages = async () => {
     if (!selectedImageIds.length || deletingImages) return;
+
+    const idsToDelete = [...selectedImageIds];
+    const selectedIdSet = new Set(idsToDelete);
+    const selectedImages = images.filter((image) =>
+      selectedIdSet.has(image._id),
+    );
+
+    if (selectedImages.some((image) => image.url === form.coverImage)) {
+      setForm((value) => ({ ...value, coverImage: "" }));
+    }
+
+    setLoadedImages((current) =>
+      current.filter((image) => !selectedIdSet.has(image._id)),
+    );
+    setSelectedImageIds([]);
     setBulkDeleting(true);
+
     try {
-      const selectedImages = images.filter((image) =>
-        selectedImageIds.includes(image._id),
+      const response = await deleteImages.mutateAsync(idsToDelete);
+      const deleted = Math.max(0, Number(response?.data?.deleted ?? 0));
+      toast.success(
+        `${deleted || idsToDelete.length} image${(deleted || idsToDelete.length) === 1 ? "" : "s"} removed. R2 cleanup continues in background.`,
       );
-      if (selectedImages.some((image) => image.url === form.coverImage)) {
-        setForm((value) => ({ ...value, coverImage: "" }));
-      }
-      setLoadedImages((current) =>
-        current.filter((image) => !selectedImageIds.includes(image._id)),
-      );
-      const results = await Promise.allSettled(
-        selectedImages.map((image) => deleteImage.mutateAsync(image._id)),
-      );
-      const failed = results.filter(
-        (result) => result.status === "rejected",
-      ).length;
-      if (failed)
-        toast.error(
-          `${failed} image${failed === 1 ? "" : "s"} could not be deleted`,
-        );
-      setSelectedImageIds([]);
+    } catch {
+      toast.error("Bulk delete could not be confirmed. Refreshing the gallery.");
       await collectionQuery.refetch();
     } finally {
       setBulkDeleting(false);
@@ -19150,6 +19166,14 @@ function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
   const aiStatus = String(metadata.ai?.status ?? "");
   const aiPending = aiStatus === "queued" || aiStatus === "processing";
   const aiFailed = aiStatus === "failed";
+  const aiSkipped = aiStatus === "skipped";
+  const aiReason = String(metadata.ai?.reason ?? "");
+  const aiSkipMessage =
+    aiReason === "limit_reached"
+      ? "Monthly AI metadata allowance reached for the current plan."
+      : aiReason === "not_in_plan"
+        ? "AI image metadata is not enabled on the current plan."
+        : "AI metadata was skipped for this image.";
 
   return (
     <aside className="overflow-hidden border bg-white">
@@ -19168,7 +19192,9 @@ function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
                 ? "bg-[#f3efff] text-[#6337d8]"
                 : aiFailed
                   ? "bg-red-50 text-red-700"
-                  : "bg-emerald-50 text-emerald-700",
+                  : aiSkipped
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-emerald-50 text-emerald-700",
             )}
           >
             {aiPending && <Loader2 className="size-3.5 animate-spin" />}
@@ -19186,6 +19212,11 @@ function MetadataPanel({ image }: { image?: CollectionImageRecord }) {
       {aiFailed && (
         <div className="border-b border-red-100 bg-red-50 px-5 py-3 text-xs leading-5 text-red-700">
           AI enrichment could not finish, but all embedded and account metadata below is still available.
+        </div>
+      )}
+      {aiSkipped && (
+        <div className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-xs leading-5 text-amber-800">
+          {aiSkipMessage}
         </div>
       )}
 

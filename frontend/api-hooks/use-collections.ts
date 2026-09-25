@@ -565,6 +565,23 @@ export function useCollectionDetail(collectionId?: string) {
     },
   });
 
+  const deleteImages = useMutation({
+    mutationFn: async (imageIds: string[]) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PostRequestAxios<{
+        data: { deleted: number; imageIds: string[] };
+        message: string;
+      }>(`/collections/${collectionId}/images/delete`, { imageIds });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+      notifyStorageChanged();
+    },
+  });
+
   const reorderImages = useMutation({
     mutationFn: async (imageIds: string[]) => {
       if (!collectionId) throw new Error("Collection is required");
@@ -639,6 +656,7 @@ export function useCollectionDetail(collectionId?: string) {
     addSet,
     uploadImages,
     deleteImage,
+    deleteImages,
     reorderImages,
     updateImage,
     copyMoveImage,

@@ -67,6 +67,9 @@ export class CollectionImageProcessingJob {
   @Prop({ default: '' })
   statusMessage?: string;
 
+  @Prop({ default: Date.now, index: true })
+  nextAttemptAt: Date;
+
   @Prop()
   processingStartedAt?: Date;
 
@@ -77,5 +80,9 @@ export class CollectionImageProcessingJob {
 export const CollectionImageProcessingJobSchema =
   SchemaFactory.createForClass(CollectionImageProcessingJob);
 
-CollectionImageProcessingJobSchema.index({ status: 1, createdAt: 1 });
+CollectionImageProcessingJobSchema.index({
+  status: 1,
+  nextAttemptAt: 1,
+  createdAt: 1,
+});
 CollectionImageProcessingJobSchema.index({ collectionId: 1, status: 1 });

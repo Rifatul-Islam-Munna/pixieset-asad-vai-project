@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -45,6 +46,10 @@ import {
   CollectionImageProcessingJob,
   CollectionImageProcessingJobDocument,
 } from './entities/collection-image-processing-job.entity';
+import {
+  CollectionImageDeleteJob,
+  CollectionImageDeleteJobDocument,
+} from './entities/collection-image-delete-job.entity';
 import {
   CollectionFavorite,
   CollectionFavoriteDocument,
@@ -113,7 +118,7 @@ type FaceIndexQueueImage = Pick<
 > & { _id?: unknown };
 
 @Injectable()
-export class CollectionsService {
+export class CollectionsService implements OnModuleInit {
   constructor(
     @InjectModel(Collection.name)
     private readonly collectionModel: Model<CollectionDocument>,
@@ -121,6 +126,8 @@ export class CollectionsService {
     private readonly imageModel: Model<CollectionImageDocument>,
     @InjectModel(CollectionImageProcessingJob.name)
     private readonly imageProcessingJobModel: Model<CollectionImageProcessingJobDocument>,
+    @InjectModel(CollectionImageDeleteJob.name)
+    private readonly imageDeleteJobModel: Model<CollectionImageDeleteJobDocument>,
     @InjectModel(CollectionFavorite.name)
     private readonly favoriteModel: Model<CollectionFavoriteDocument>,
     @InjectModel(CollectionImageFavorite.name)
@@ -153,6 +160,38 @@ export class CollectionsService {
 
   private directImageWorkerRunning = false;
   private lastDirectImageRecoveryAt = 0;
+  private imageDeleteWorkerRunning = false;
+  private lastImageDeleteRecoveryAt = 0;
+
+  onModuleInit() {
+    const sharpThreads = Number(
+      this.configService.get<string>('SHARP_BACKGROUND_CONCURRENCY') ?? 1,
+    );
+    sharp.concurrency(
+      Math.max(
+        1,
+        Math.min(
+          2,
+          Number.isFinite(sharpThreads) ? Math.floor(sharpThreads) : 1,
+        ),
+      ),
+    );
+
+    const cacheMemoryMb = Number(
+      this.configService.get<string>('SHARP_CACHE_MEMORY_MB') ?? 32,
+    );
+    sharp.cache({
+      memory: Math.max(
+        0,
+        Math.min(
+          128,
+          Number.isFinite(cacheMemoryMb) ? Math.floor(cacheMemoryMb) : 32,
+        ),
+      ),
+      files: 20,
+      items: 50,
+    });
+  }
 
   async create(userId: string, dto: CreateCollectionDto) {
     const owner = await this.userModel.findById(userId).select('galleryLimit').lean();
@@ -695,13 +734,35 @@ export class CollectionsService {
   async findImageMetadata(userId: string, collectionId: string, imageId: string) {
     if (!Types.ObjectId.isValid(imageId))
       throw new BadRequestException('Image is required');
+    const select =
+      '_id userId collectionId setId originalName filename mimetype mediaType sizeBytes width height metadata updatedAt';
     const image = await this.imageModel
       .findOne({ _id: imageId, collectionId, userId })
-      .select(
-        '_id collectionId setId originalName filename mimetype mediaType sizeBytes width height metadata updatedAt',
-      )
+      .select(select)
       .lean();
     if (!image) throw new NotFoundException('Image not found');
+
+    const aiStatus = String((image.metadata as any)?.ai?.status ?? '');
+    if (
+      image.mediaType !== 'video' &&
+      (!aiStatus || aiStatus === 'skipped' || aiStatus === 'failed')
+    ) {
+      await this.imageMetadataAiService.ensureQueued(image as any).catch(
+        (error) => {
+          console.warn(
+            'Could not re-check AI metadata eligibility:',
+            error?.message ?? error,
+          );
+        },
+      );
+      return (
+        (await this.imageModel
+          .findOne({ _id: imageId, collectionId, userId })
+          .select(select)
+          .lean()) ?? image
+      );
+    }
+
     return image;
   }
 
@@ -2368,6 +2429,7 @@ export class CollectionsService {
                 attempts: 0,
                 lastError: '',
                 resultMode: '',
+                nextAttemptAt: new Date(),
                 statusMessage:
                   'Raw upload is safe in R2. Waiting for background optimization.',
               },
@@ -2454,7 +2516,7 @@ export class CollectionsService {
     };
   }
 
-  @Interval(1000)
+  @Interval(2000)
   async processDirectImageQueueTick() {
     if (this.directImageWorkerRunning) return;
     this.directImageWorkerRunning = true;
@@ -2471,6 +2533,7 @@ export class CollectionsService {
           {
             $set: {
               status: 'queued',
+              nextAttemptAt: new Date(now),
               lastError: 'Recovered after an interrupted image-processing worker',
               statusMessage:
                 'Recovered after a restart. Background optimization will retry automatically.',
@@ -2499,22 +2562,27 @@ export class CollectionsService {
     const configured = Number(
       this.configService.get<string>(
         'IMAGE_BACKGROUND_PROCESSING_CONCURRENCY',
-      ) ?? 2,
+      ) ?? 1,
     );
     return Math.max(
       1,
       Math.min(
-        4,
-        Number.isFinite(configured) ? Math.floor(configured) : 2,
+        2,
+        Number.isFinite(configured) ? Math.floor(configured) : 1,
       ),
     );
   }
 
   private async processNextDirectImageJob() {
+    const now = new Date();
     const job = await this.imageProcessingJobModel.findOneAndUpdate(
       {
         status: 'queued',
         attempts: { $lt: 4 },
+        $or: [
+          { nextAttemptAt: { $lte: now } },
+          { nextAttemptAt: { $exists: false } },
+        ],
       },
       {
         $set: {
@@ -2524,6 +2592,7 @@ export class CollectionsService {
           statusMessage:
             'Optimizing in background. Raw original is already safe in R2.',
         },
+        $unset: { nextAttemptAt: 1 },
         $inc: { attempts: 1 },
       },
       {
@@ -2597,7 +2666,7 @@ export class CollectionsService {
             completedAt: new Date(),
             lastError: '',
           },
-          $unset: { processingStartedAt: 1 },
+          $unset: { processingStartedAt: 1, nextAttemptAt: 1 },
         },
       );
     } catch (error) {
@@ -2624,7 +2693,7 @@ export class CollectionsService {
                 completedAt: new Date(),
                 lastError: '',
               },
-              $unset: { processingStartedAt: 1 },
+              $unset: { processingStartedAt: 1, nextAttemptAt: 1 },
             },
           );
           return;
@@ -2637,6 +2706,10 @@ export class CollectionsService {
         }
       }
 
+      const retryDelayMs = Math.min(
+        60_000,
+        5_000 * 2 ** Math.max(0, attempts - 1),
+      );
       await this.imageProcessingJobModel.updateOne(
         { _id: job._id },
         attempts >= 4
@@ -2647,12 +2720,13 @@ export class CollectionsService {
                   'Background processing failed after automatic retries.',
                 lastError: message.slice(0, 1600),
               },
-              $unset: { processingStartedAt: 1 },
+              $unset: { processingStartedAt: 1, nextAttemptAt: 1 },
             }
           : {
               $set: {
                 status: 'queued',
-                statusMessage: `Retrying background processing automatically (attempt ${attempts + 1} of 4).`,
+                nextAttemptAt: new Date(Date.now() + retryDelayMs),
+                statusMessage: `Retrying background processing automatically (attempt ${attempts + 1} of 4) after a short cooldown.`,
                 lastError: message.slice(0, 1600),
               },
               $unset: { processingStartedAt: 1 },
@@ -2787,7 +2861,14 @@ export class CollectionsService {
           },
         ),
       ]);
-      return image.toObject();
+      const savedImage = image.toObject();
+      await this.imageMetadataAiService.enqueueMany([savedImage]).catch((error) => {
+        console.warn(
+          'Could not queue AI metadata for raw fallback image:',
+          error?.message ?? error,
+        );
+      });
+      return savedImage;
     } catch (error) {
       if (promotedUrl) {
         await this.minioService.deleteService(promotedUrl).catch(() => null);
@@ -2816,36 +2897,314 @@ export class CollectionsService {
     );
   }
 
+  @Interval(2000)
+  async processImageDeleteQueueTick() {
+    if (this.imageDeleteWorkerRunning) return;
+    this.imageDeleteWorkerRunning = true;
+    try {
+      const now = Date.now();
+      if (now - this.lastImageDeleteRecoveryAt >= 60_000) {
+        this.lastImageDeleteRecoveryAt = now;
+        await this.imageDeleteJobModel.updateMany(
+          {
+            status: 'processing',
+            processingStartedAt: { $lte: new Date(now - 5 * 60 * 1000) },
+          },
+          {
+            $set: {
+              status: 'queued',
+              nextAttemptAt: new Date(now),
+              lastError: 'Recovered after an interrupted delete worker',
+            },
+            $unset: { processingStartedAt: 1 },
+          },
+        );
+        await this.imageDeleteJobModel.deleteMany({
+          status: 'completed',
+          completedAt: { $lte: new Date(now - 7 * 24 * 60 * 60 * 1000) },
+        });
+      }
+
+      await Promise.all(
+        Array.from(
+          { length: this.imageDeleteWorkerConcurrency() },
+          () => this.processNextImageDeleteJob(),
+        ),
+      );
+    } finally {
+      this.imageDeleteWorkerRunning = false;
+    }
+  }
+
+  private imageDeleteWorkerConcurrency() {
+    const configured = Number(
+      this.configService.get<string>('IMAGE_DELETE_BACKGROUND_CONCURRENCY') ?? 2,
+    );
+    return Math.max(
+      1,
+      Math.min(
+        4,
+        Number.isFinite(configured) ? Math.floor(configured) : 2,
+      ),
+    );
+  }
+
+  private async processNextImageDeleteJob() {
+    const now = new Date();
+    const job = await this.imageDeleteJobModel.findOneAndUpdate(
+      {
+        status: 'queued',
+        $or: [
+          { nextAttemptAt: { $lte: now } },
+          { nextAttemptAt: { $exists: false } },
+        ],
+      },
+      {
+        $set: {
+          status: 'processing',
+          processingStartedAt: now,
+          lastError: '',
+        },
+        $unset: { nextAttemptAt: 1 },
+        $inc: { attempts: 1 },
+      },
+      {
+        new: true,
+        sort: { createdAt: 1 },
+      },
+    );
+    if (!job) return;
+
+    const heartbeat = setInterval(() => {
+      void this.imageDeleteJobModel
+        .updateOne(
+          { _id: job._id, status: 'processing' },
+          { $set: { processingStartedAt: new Date() } },
+        )
+        .catch(() => undefined);
+    }, 30_000);
+
+    try {
+      const imageStillExists = await this.imageModel.exists({
+        _id: job.imageId,
+        userId: job.userId,
+        collectionId: job.collectionId,
+      });
+      if (imageStillExists) {
+        await this.imageDeleteJobModel.updateOne(
+          { _id: job._id },
+          {
+            $set: {
+              status: 'queued',
+              nextAttemptAt: new Date(Date.now() + 2_000),
+              lastError: '',
+            },
+            $unset: { processingStartedAt: 1 },
+          },
+        );
+        return;
+      }
+
+      const publicReferences = [
+        ...new Set(
+          (job.publicReferences ?? [])
+            .map((value) => String(value || '').trim())
+            .filter(Boolean),
+        ),
+      ];
+      const privateObjectKeys = [
+        ...new Set(
+          (job.privateObjectKeys ?? [])
+            .map((value) => String(value || '').trim())
+            .filter(Boolean),
+        ),
+      ];
+
+      await Promise.all([
+        ...publicReferences.map((reference) =>
+          this.minioService.deleteService(reference),
+        ),
+        ...privateObjectKeys.map((objectKey) =>
+          this.minioService.deletePrivateFile(objectKey),
+        ),
+      ]);
+
+      await this.faceSearchService
+        .deleteImageFaces(job.collectionId, job.imageId)
+        .catch(() => undefined);
+
+      await this.imageDeleteJobModel.updateOne(
+        { _id: job._id },
+        {
+          $set: {
+            status: 'completed',
+            completedAt: new Date(),
+            lastError: '',
+          },
+          $unset: { processingStartedAt: 1, nextAttemptAt: 1 },
+        },
+      );
+    } catch (error) {
+      const attempts = Math.max(1, Number(job.attempts ?? 1));
+      const retryDelayMs = Math.min(
+        15 * 60_000,
+        5_000 * 2 ** Math.min(8, Math.max(0, attempts - 1)),
+      );
+      const message =
+        error instanceof Error ? error.message : String(error ?? 'Delete failed');
+      await this.imageDeleteJobModel.updateOne(
+        { _id: job._id },
+        {
+          $set: {
+            status: 'queued',
+            nextAttemptAt: new Date(Date.now() + retryDelayMs),
+            lastError: message.slice(0, 1600),
+          },
+          $unset: { processingStartedAt: 1 },
+        },
+      );
+    } finally {
+      clearInterval(heartbeat);
+    }
+  }
+
   async removeImage(userId: string, collectionId: string, imageId: string) {
-    const image = await this.imageModel
-      .findOne({
-        _id: imageId,
-        userId,
-        collectionId,
-      })
-      .select('+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes');
-    if (!image) throw new NotFoundException('Image not found');
+    const result = await this.removeImages(userId, collectionId, [imageId]);
+    if (!result.deleted) throw new NotFoundException('Image not found');
+    return result.items[0];
+  }
+
+  async removeImages(
+    userId: string,
+    collectionId: string,
+    imageIds: string[],
+  ) {
+    const ids = [
+      ...new Set(
+        (Array.isArray(imageIds) ? imageIds : [])
+          .map((id) => String(id || '').trim())
+          .filter((id) => Types.ObjectId.isValid(id)),
+      ),
+    ];
+    if (!ids.length) throw new BadRequestException('Images are required');
+    if (ids.length > 2000)
+      throw new BadRequestException('Up to 2000 images can be deleted at once');
+
     const collection = await this.collectionModel
       .findOne({ _id: collectionId, userId })
       .lean();
+    if (!collection) throw new NotFoundException('Collection not found');
 
-    await this.deleteStoredImageFiles(image);
-    await this.imageModel.deleteOne({ _id: imageId, userId, collectionId });
-    await this.imageFavoriteModel.deleteMany({ imageId });
-    await this.faceSearchService.deleteImageFaces(collectionId, imageId);
-    await this.decrementStorageUsedBytes(userId, image.sizeBytes ?? 0);
+    const images = await this.imageModel
+      .find({ _id: { $in: ids }, userId, collectionId })
+      .select(
+        '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+      )
+      .lean();
+    if (!images.length) {
+      return { deleted: 0, imageIds: [], items: [] };
+    }
+
+    const now = new Date();
+    await this.imageDeleteJobModel.bulkWrite(
+      images.map((image) => {
+        const directObjectKey = String(
+          (image.metadata as Record<string, any> | undefined)
+            ?.directUploadObjectKey ?? '',
+        ).trim();
+        const publicReferences = [
+          image.url,
+          image.thumbnailUrl,
+          image.filename,
+        ].filter(Boolean) as string[];
+        const privateObjectKeys = [
+          image.originalObjectKey,
+          directObjectKey,
+        ].filter(Boolean) as string[];
+
+        return {
+          updateOne: {
+            filter: { imageId: image._id.toString() },
+            update: {
+              $setOnInsert: {
+                userId,
+                collectionId,
+                imageId: image._id.toString(),
+                publicReferences: [...new Set(publicReferences)],
+                privateObjectKeys: [...new Set(privateObjectKeys)],
+                status: 'queued',
+                attempts: 0,
+                nextAttemptAt: now,
+                lastError: '',
+              },
+            },
+            upsert: true,
+          },
+        };
+      }),
+      { ordered: false },
+    );
+
+    const deletedIds = images.map((image) => image._id.toString());
+    const directObjectKeys = [
+      ...new Set(
+        images
+          .flatMap((image) => [
+            String(image.originalObjectKey ?? '').trim(),
+            String(
+              (image.metadata as Record<string, any> | undefined)
+                ?.directUploadObjectKey ?? '',
+            ).trim(),
+          ])
+          .filter(Boolean),
+      ),
+    ];
+
+    await Promise.all([
+      this.imageModel.deleteMany({
+        _id: { $in: deletedIds },
+        userId,
+        collectionId,
+      }),
+      this.imageFavoriteModel.deleteMany({
+        imageId: { $in: deletedIds },
+      }),
+      directObjectKeys.length
+        ? this.imageProcessingJobModel.deleteMany({
+            userId,
+            collectionId,
+            objectKey: { $in: directObjectKeys },
+          })
+        : Promise.resolve(),
+    ]);
+
+    const reclaimedBytes = images.reduce(
+      (sum, image) => sum + Math.max(0, Number(image.sizeBytes ?? 0)),
+      0,
+    );
     const nextImage = await this.imageModel
       .findOne({ userId, collectionId })
       .sort({ createdAt: -1 })
       .lean();
-    const update: Record<string, unknown> = { $inc: { imageCount: -1 } };
-    if (collection?.coverImage === image.url) {
+    const deletedUrls = new Set(images.map((image) => image.url).filter(Boolean));
+    const update: Record<string, any> = {
+      $inc: { imageCount: -images.length },
+    };
+    if (collection.coverImage && deletedUrls.has(collection.coverImage)) {
       if (nextImage?.url) update.$set = { coverImage: nextImage.url };
       else update.$unset = { coverImage: '' };
     }
-    await this.collectionModel.updateOne({ _id: collectionId, userId }, update);
 
-    return this.publicImageRecord(image.toObject());
+    await Promise.all([
+      this.collectionModel.updateOne({ _id: collectionId, userId }, update),
+      this.decrementStorageUsedBytes(userId, reclaimedBytes),
+    ]);
+
+    return {
+      deleted: images.length,
+      imageIds: deletedIds,
+      items: images.map((image) => this.publicImageRecord(image as any)),
+    };
   }
 
   async updateImage(
