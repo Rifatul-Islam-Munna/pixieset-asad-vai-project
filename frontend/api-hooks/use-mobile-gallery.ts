@@ -2,7 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
-import { batches, directUploadMetadata, uploadFilesDirectlyToS3, type DirectUploadTicket } from "@/lib/direct-s3-upload";
+import {
+  batches,
+  directUploadMetadata,
+  uploadFilesDirectlyToS3,
+  type DirectUploadStats,
+  type DirectUploadTicket,
+} from "@/lib/direct-s3-upload";
 
 function notifyStorageChanged() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("storage-usage-changed"));
@@ -177,14 +183,31 @@ export function useMobileGalleryApp(appId?: string) {
     onSuccess: refreshStorage,
   });
   const uploadImages = useMutation({
-    mutationFn: async (input: FileList | File[] | { files: FileList | File[]; onProgress?: (percent: number) => void }) => {
+    mutationFn: async (
+      input:
+        | FileList
+        | File[]
+        | {
+            files: FileList | File[];
+            onProgress?: (percent: number) => void;
+            onStats?: (stats: DirectUploadStats) => void;
+          },
+    ) => {
       if (!appId) throw new Error("App is required");
       const files = "files" in input ? input.files : input;
       const selected = Array.from(files);
       const metadata = await directUploadMetadata(selected);
       const [authorization, authorizationError] = await PostRequestAxios<Data<DirectUploadTicket[]>>(`/mobile-gallery/apps/${appId}/images/direct-upload`, { files: metadata });
       if (authorizationError || !authorization) throw new Error(authorizationError?.message || "Could not authorize upload");
-      const completed = await uploadFilesDirectlyToS3(selected, authorization.data, "files" in input ? input.onProgress : undefined);
+      const completed = await uploadFilesDirectlyToS3(
+        selected,
+        authorization.data,
+        "files" in input ? input.onProgress : undefined,
+        undefined,
+        undefined,
+        undefined,
+        "files" in input ? input.onStats : undefined,
+      );
       const uploaded: MobileGalleryImage[] = [];
       for (const batch of batches(completed, 10)) {
         const [result, error] = await PostRequestAxios<Data<MobileGalleryImage[]>>(`/mobile-gallery/apps/${appId}/images/direct-upload/complete`, { files: batch });

@@ -281,7 +281,8 @@ export class CollectionsService implements OnModuleInit {
         .lean(),
     ]);
     const ids = collections.map((item) => item._id.toString());
-    const [allDownloads, viewGroups, salesGroups] = await Promise.all([
+    const [allDownloads, viewGroups, salesGroups, imageCountGroups] =
+      await Promise.all([
       this.downloadActivityModel
         .find({ collectionId: { $in: ids } })
         .sort({ createdAt: -1 })
@@ -307,6 +308,20 @@ export class CollectionsService implements OnModuleInit {
             sales: { $sum: '$items.total' },
           },
         },
+      ]),
+      this.imageModel.aggregate([
+        { $match: { collectionId: { $in: ids } } },
+        {
+          $group: {
+            _id: {
+              collectionId: '$collectionId',
+              logicalId: {
+                $ifNull: ['$metadata.directUploadObjectKey', { $toString: '$_id' }],
+              },
+            },
+          },
+        },
+        { $group: { _id: '$_id.collectionId', count: { $sum: 1 } } },
       ]),
     ]);
     const paid = orders.filter(
@@ -338,6 +353,9 @@ export class CollectionsService implements OnModuleInit {
     const salesMap = new Map(
       salesGroups.map((x: any) => [String(x._id), Number(x.sales || 0)]),
     );
+    const imageCountMap = new Map(
+      imageCountGroups.map((x: any) => [String(x._id), Number(x.count || 0)]),
+    );
     const dayKeys = Array.from({ length: 14 }, (_, i) => {
       const d = new Date(now.getTime() - (13 - i) * 86400000);
       return d.toISOString().slice(0, 10);
@@ -361,7 +379,7 @@ export class CollectionsService implements OnModuleInit {
       name: c.name,
       slug: c.slug,
       coverImage: c.coverImage,
-      imageCount: c.imageCount || 0,
+      imageCount: imageCountMap.get(c._id.toString()) || 0,
       status: c.status || 'draft',
       views: viewMap.get(c._id.toString()) || 0,
       sales: salesMap.get(c._id.toString()) || 0,
@@ -426,14 +444,41 @@ export class CollectionsService implements OnModuleInit {
     const ids = collections.map((collection) => collection._id.toString());
     const imageCounts = await this.imageModel.aggregate([
       { $match: { collectionId: { $in: ids } } },
-      { $group: { _id: '$collectionId', count: { $sum: 1 } } },
+      {
+        $group: {
+          _id: {
+            collectionId: '$collectionId',
+            logicalId: {
+              $ifNull: ['$metadata.directUploadObjectKey', { $toString: '$_id' }],
+            },
+          },
+        },
+      },
+      { $group: { _id: '$_id.collectionId', count: { $sum: 1 } } },
     ]);
     const countMap = new Map(imageCounts.map((item) => [item._id, item.count]));
+    if (collections.length) {
+      void this.collectionModel
+        .bulkWrite(
+          collections.map((collection) => ({
+            updateOne: {
+              filter: { _id: collection._id, userId },
+              update: {
+                $set: {
+                  imageCount:
+                    countMap.get(collection._id.toString()) ?? 0,
+                },
+              },
+            },
+          })),
+          { ordered: false },
+        )
+        .catch(() => undefined);
+    }
 
     return collections.map((collection) => ({
       ...collection,
-      imageCount:
-        countMap.get(collection._id.toString()) ?? collection.imageCount ?? 0,
+      imageCount: countMap.get(collection._id.toString()) ?? 0,
     }));
   }
 
@@ -443,10 +488,42 @@ export class CollectionsService implements OnModuleInit {
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
 
-    const imagesPage = await this.findImages(userId, id, limit, offset);
+    const [imagesPage, setCountRows] = await Promise.all([
+      this.findImages(userId, id, limit, offset),
+      this.imageModel.aggregate<{ _id: string; count: number }>([
+        { $match: { collectionId: id, userId } },
+        {
+          $group: {
+            _id: {
+              setId: { $ifNull: ['$setId', 'highlights'] },
+              logicalId: {
+                $ifNull: ['$metadata.directUploadObjectKey', { $toString: '$_id' }],
+              },
+            },
+          },
+        },
+        { $group: { _id: '$_id.setId', count: { $sum: 1 } } },
+      ]),
+    ]);
+    const setImageCounts = Object.fromEntries(
+      setCountRows.map((row) => [String(row._id || 'highlights'), Number(row.count || 0)]),
+    );
+    const imageCount = Object.values(setImageCounts).reduce(
+      (sum, count) => sum + Number(count || 0),
+      0,
+    );
+    void this.collectionModel
+      .updateOne({ _id: id, userId }, { $set: { imageCount } })
+      .catch(() => undefined);
     void this.ensureCollectionPreviews(id);
 
-    return { ...collection, images: imagesPage.items, imagesPage };
+    return {
+      ...collection,
+      imageCount,
+      setImageCounts,
+      images: imagesPage.items,
+      imagesPage,
+    };
   }
 
   async findPublic(
@@ -2328,15 +2405,17 @@ export class CollectionsService implements OnModuleInit {
           | Awaited<ReturnType<MinioService['verifyDirectUpload']>>
           | undefined;
         if (file.uploadId && file.parts?.length) {
-          verified = await this.minioService
-            .verifyDirectUpload(userId, file)
-            .catch(() => undefined);
-          if (!verified) {
+          try {
             await this.minioService.completeDirectMultipartUpload(userId, {
               objectKey: file.objectKey,
               uploadId: file.uploadId,
               parts: file.parts,
             });
+          } catch (error) {
+            verified = await this.minioService
+              .verifyDirectUpload(userId, file)
+              .catch(() => undefined);
+            if (!verified) throw error;
           }
         }
         return {
@@ -2365,8 +2444,20 @@ export class CollectionsService implements OnModuleInit {
         .lean();
       const startOrder = Math.max(0, Number(lastImage?.order ?? 0));
       let videoOrder = 0;
+      let newVideoCount = 0;
       for (const file of verified) {
         if (this.mediaType(file.type) === 'image') continue;
+        const existingVideo = await this.imageModel
+          .findOne({
+            userId,
+            collectionId,
+            'metadata.directUploadObjectKey': file.objectKey,
+          })
+          .lean();
+        if (existingVideo) {
+          savedVideos.push(this.publicImageRecord(existingVideo));
+          continue;
+        }
         const image = await this.imageModel.create({
           userId,
           collectionId,
@@ -2386,18 +2477,20 @@ export class CollectionsService implements OnModuleInit {
           order: startOrder + ++videoOrder,
           metadata: {
             videoQuality: this.videoQuality(file.width, file.height),
+            directUploadObjectKey: file.objectKey,
           },
         });
         await this.userModel.updateOne(
           { _id: userId },
           { $inc: { storageUsedBytes: file.size } },
         );
-        savedVideos.push(image.toObject());
+        savedVideos.push(this.publicImageRecord(image.toObject()));
+        newVideoCount += 1;
       }
-      if (savedVideos.length) {
+      if (newVideoCount) {
         await this.collectionModel.updateOne(
           { _id: collectionId, userId },
-          { $inc: { imageCount: savedVideos.length } },
+          { $inc: { imageCount: newVideoCount } },
         );
       }
     }
@@ -2449,7 +2542,14 @@ export class CollectionsService implements OnModuleInit {
 
   async getDirectUploadProcessingStatus(userId: string, collectionId: string) {
     const recentSince = new Date(Date.now() - 10 * 60 * 1000);
-    const [rows, recentRows, processingJob, queuedJob] = await Promise.all([
+    const [
+      rows,
+      recentRows,
+      processingJob,
+      queuedJob,
+      recentCompletedJobs,
+      setCountRows,
+    ] = await Promise.all([
       this.imageProcessingJobModel.aggregate<{
         _id: string;
         count: number;
@@ -2487,7 +2587,56 @@ export class CollectionsService implements OnModuleInit {
         .sort({ createdAt: 1 })
         .select('name status attempts statusMessage')
         .lean(),
+      this.imageProcessingJobModel
+        .find({
+          userId,
+          collectionId,
+          status: 'completed',
+          completedAt: { $gte: recentSince },
+        })
+        .sort({ completedAt: -1 })
+        .limit(120)
+        .select('objectKey completedAt')
+        .lean(),
+      this.imageModel.aggregate<{ _id: string; count: number }>([
+        { $match: { userId, collectionId } },
+        {
+          $group: {
+            _id: {
+              setId: { $ifNull: ['$setId', 'highlights'] },
+              logicalId: {
+                $ifNull: ['$metadata.directUploadObjectKey', { $toString: '$_id' }],
+              },
+            },
+          },
+        },
+        { $group: { _id: '$_id.setId', count: { $sum: 1 } } },
+      ]),
     ]);
+
+    const completedObjectKeys = recentCompletedJobs
+      .map((job) => String(job.objectKey || '').trim())
+      .filter(Boolean);
+    const completedImages = completedObjectKeys.length
+      ? await this.imageModel
+          .find({
+            userId,
+            collectionId,
+            'metadata.directUploadObjectKey': { $in: completedObjectKeys },
+          })
+          .sort({ createdAt: -1 })
+          .lean()
+      : [];
+    const setImageCounts = Object.fromEntries(
+      setCountRows.map((row) => [
+        String(row._id || 'highlights'),
+        Number(row.count || 0),
+      ]),
+    );
+    const imageCount = Object.values(setImageCounts).reduce(
+      (sum, count) => sum + Number(count || 0),
+      0,
+    );
 
     const counts = new Map(rows.map((row) => [row._id, row.count]));
     const recentCounts = new Map(
@@ -2505,6 +2654,11 @@ export class CollectionsService implements OnModuleInit {
       pending: queued + processing,
       optimized: recentCounts.get('optimized') ?? 0,
       rawFallback: recentCounts.get('raw-fallback') ?? 0,
+      imageCount,
+      setImageCounts,
+      completedImages: completedImages.map((image) =>
+        this.publicImageRecord(image),
+      ),
       current: current
         ? {
             name: current.name,
@@ -3366,6 +3520,16 @@ export class CollectionsService implements OnModuleInit {
     const directOriginalObjectKey = String(
       metadataDefaults.directUploadObjectKey ?? '',
     ).trim();
+    if (directOriginalObjectKey) {
+      const existing = await this.imageModel
+        .findOne({
+          userId,
+          collectionId,
+          'metadata.directUploadObjectKey': directOriginalObjectKey,
+        })
+        .lean();
+      if (existing) return this.publicImageRecord(existing);
+    }
     const extractedMetadata = directOriginalObjectKey
       ? {}
       : await this.extractMetadata(file);

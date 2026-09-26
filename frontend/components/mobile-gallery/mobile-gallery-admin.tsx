@@ -37,6 +37,7 @@ import {
   useMobileGalleryApps,
   useMobileGalleryProfile,
 } from "@/api-hooks/use-mobile-gallery";
+import type { DirectUploadStats } from "@/lib/direct-s3-upload";
 import { MobileGalleryDesignEditor } from "./mobile-gallery-design-editor";
 import { MobileGalleryShareScreen } from "./mobile-gallery-share-screen";
 import { MobileGalleryPreviewScreen } from "./mobile-gallery-preview-screen";
@@ -293,41 +294,78 @@ function AppWorkspace({ view, appId }: { view: View; appId?: string }) {
 
 function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore, imagesLoadingMore, setImagesLoadingMore, uploadImages, reorderImages, deleteImage, updateApp }: any) {
   const [draggingUpload, setDraggingUpload] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({ active: false, total: 0, uploaded: 0, currentName: "", currentPercent: 0 });
+  const [uploadProgress, setUploadProgress] = useState({
+    active: false,
+    total: 0,
+    uploaded: 0,
+    currentName: "",
+    currentPercent: 0,
+    transferredBytes: 0,
+    totalBytes: 0,
+    bytesPerSecond: 0,
+    megabitsPerSecond: 0,
+  });
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const uploading = uploadProgress.active || Boolean(uploadImages.isPending);
-  const uploadsLeft = Math.max(0, uploadProgress.total - uploadProgress.uploaded);
-  const uploadPercent = uploadProgress.total
-    ? Math.round(((uploadProgress.uploaded + uploadProgress.currentPercent / 100) / uploadProgress.total) * 100)
-    : 0;
+  const uploadPercent = uploadProgress.currentPercent;
+  const uploadTransferredMb = uploadProgress.transferredBytes / (1024 * 1024);
+  const uploadTotalMb = uploadProgress.totalBytes / (1024 * 1024);
+  const uploadSpeedMb = uploadProgress.bytesPerSecond / (1024 * 1024);
   const dropClass = draggingUpload ? " border-[#18bfa6] bg-[#f2fffd]" : "";
   function isFileDrag(event: DragEvent<HTMLElement>) { return Array.from(event.dataTransfer.types).includes("Files"); }
   function mediaFiles(files: FileList) { return Array.from(files).filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/")); }
   async function upload(files?: FileList | File[] | null) {
     if (!files?.length || uploading) return;
     const selectedFiles = Array.from(files);
-    setUploadProgress({ active: true, total: selectedFiles.length, uploaded: 0, currentName: selectedFiles[0]?.name ?? "", currentPercent: 0 });
+    setUploadProgress({
+      active: true,
+      total: selectedFiles.length,
+      uploaded: 0,
+      currentName: selectedFiles.length === 1 ? selectedFiles[0]?.name ?? "" : `${selectedFiles.length} files uploading in parallel`,
+      currentPercent: 0,
+      transferredBytes: 0,
+      totalBytes: selectedFiles.reduce((sum, file) => sum + file.size, 0),
+      bytesPerSecond: 0,
+      megabitsPerSecond: 0,
+    });
     try {
-      for (const [index, file] of selectedFiles.entries()) {
-        setUploadProgress((current) => ({ ...current, currentName: file.name, currentPercent: 0 }));
-        const response = await uploadImages.mutateAsync({
-          files: [file],
-          onProgress: (percent: number) => setUploadProgress((current) => ({ ...current, currentPercent: percent })),
+      const response = await uploadImages.mutateAsync({
+        files: selectedFiles,
+        onProgress: (percent: number) =>
+          setUploadProgress((current) => ({ ...current, currentPercent: percent })),
+        onStats: (stats: DirectUploadStats) =>
+          setUploadProgress((current) => ({
+            ...current,
+            currentPercent: stats.percent,
+            transferredBytes: stats.transferredBytes,
+            totalBytes: stats.totalBytes,
+            bytesPerSecond: stats.bytesPerSecond,
+            megabitsPerSecond: stats.megabitsPerSecond,
+          })),
+      });
+      const uploadedImages = Array.isArray(response?.data) ? response.data : [];
+      if (uploadedImages.length) {
+        setImages((current: MobileGalleryImage[]) => {
+          const seen = new Set(current.map((image) => image._id));
+          return [...current, ...uploadedImages.filter((image: MobileGalleryImage) => !seen.has(image._id))];
         });
-        const uploadedImages = Array.isArray(response?.data) ? response.data : [];
-        if (uploadedImages.length) {
-          setImages((current: MobileGalleryImage[]) => {
-            const seen = new Set(current.map((image) => image._id));
-            return [...current, ...uploadedImages.filter((image: MobileGalleryImage) => !seen.has(image._id))];
-          });
-        }
-        setUploadProgress((current) => ({ ...current, uploaded: index + 1, currentPercent: 100 }));
       }
+      setUploadProgress((current) => ({ ...current, uploaded: selectedFiles.length, currentPercent: 100 }));
       toast.success(`Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
-      setUploadProgress({ active: false, total: 0, uploaded: 0, currentName: "", currentPercent: 0 });
+      setUploadProgress({
+        active: false,
+        total: 0,
+        uploaded: 0,
+        currentName: "",
+        currentPercent: 0,
+        transferredBytes: 0,
+        totalBytes: 0,
+        bytesPerSecond: 0,
+        megabitsPerSecond: 0,
+      });
     }
   }
   function onDragOver(event: DragEvent<HTMLElement>) { if (!isFileDrag(event) || uploading) return; event.preventDefault(); setDraggingUpload(true); }
@@ -375,8 +413,11 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
           <div className="flex items-center gap-3">
             <Loader2 className="size-5 shrink-0 animate-spin" />
             <div className="min-w-0 flex-1">
-              <p className="font-semibold">Image {Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of {uploadProgress.total || "selected"} · {uploadProgress.currentPercent}% uploaded. {uploadsLeft} left.</p>
-              <p className="mt-1 truncate text-xs text-[#3f8179]">{uploadProgress.currentName || "Processing photo"}</p>
+              <p className="font-semibold">Uploading {uploadProgress.total || "selected"} file{uploadProgress.total === 1 ? "" : "s"} in parallel · {uploadProgress.currentPercent}%</p>
+              <p className="mt-1 truncate text-xs text-[#3f8179]">{uploadProgress.currentName || "Uploading media"}</p>
+              <p className="mt-1 text-xs font-bold tabular-nums text-[#3f8179]">
+                {uploadTransferredMb.toFixed(1)} / {uploadTotalMb.toFixed(1)} MB · {uploadSpeedMb.toFixed(2)} MB/s · {uploadProgress.megabitsPerSecond.toFixed(1)} Mbps
+              </p>
             </div>
           </div>
           <div className="mt-3 h-2 overflow-hidden bg-[#d3f2ee]">
@@ -388,7 +429,7 @@ function PhotosEditor({ app, images, setImages, imagesHasMore, setImagesHasMore,
         {images.map((image: MobileGalleryImage) => <article key={image._id} className="group relative cursor-grab border bg-white p-1 shadow-sm active:cursor-grabbing">{image.mediaType === "video" ? <video src={image.url} className="aspect-square w-full object-cover" preload="metadata" muted /> : <img src={image.thumbnailUrl || image.url} alt="" className="aspect-square w-full object-cover" />}<div className="absolute inset-x-2 bottom-2 flex justify-between opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">{image.mediaType !== "video" && <button onClick={() => updateApp.mutate({ coverImage: image.url })} className="bg-white/95 px-2 py-1 text-[10px] font-semibold">Set Cover</button>}<button onClick={() => deleteImage.mutate(image._id)} className="ml-auto bg-white/95 p-1 text-red-500"><Trash2 className="size-4" /></button></div>{image.mediaType === "video" && <span className="absolute right-2 top-2 bg-black/75 px-2 py-1 text-[9px] font-semibold uppercase text-white">Video</span>}{app.coverImage === image.url && <span className="absolute left-2 top-2 bg-[#18bfa6] px-2 py-1 text-[9px] font-semibold uppercase text-white">Cover</span>}</article>)}
       </ReactSortable>
       {imagesHasMore && <div ref={loaderRef} className="flex h-20 items-center justify-center text-sm text-[#777]">{imagesLoadingMore ? "Loading photos..." : ""}</div>}
-      {!images.length && <label className={`mt-8 flex min-h-72 cursor-pointer flex-col items-center justify-center border border-dashed px-5 text-center text-[#888]${dropClass}`}><Upload className="size-8" /><span className="mt-3 text-sm">{uploading ? `File ${Math.min(uploadProgress.uploaded + 1, uploadProgress.total || 1)} of ${uploadProgress.total || "selected"} · ${uploadProgress.currentPercent}%` : "Drop photos or videos here or browse"}</span><input type="file" accept="image/*,video/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label>}
+      {!images.length && <label className={`mt-8 flex min-h-72 cursor-pointer flex-col items-center justify-center border border-dashed px-5 text-center text-[#888]${dropClass}`}><Upload className="size-8" /><span className="mt-3 text-sm">{uploading ? `Uploading ${uploadProgress.total || "selected"} files · ${uploadProgress.currentPercent}% · ${uploadSpeedMb.toFixed(2)} MB/s` : "Drop photos or videos here or browse"}</span><input type="file" accept="image/*,video/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void upload(event.target.files); event.currentTarget.value = ""; }} /></label>}
     </section>
   );
 }

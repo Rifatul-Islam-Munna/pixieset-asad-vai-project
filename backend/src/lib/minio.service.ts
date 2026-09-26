@@ -327,7 +327,7 @@ export class MinioService implements OnModuleInit {
     const privateImage = isImage && options.privateImage === true;
     const objectKey = `${privateImage ? 'private-direct' : 'direct'}/${userId}/${randomUUID()}${extension}`;
     const bucket = privateImage ? this.privateBucketName : this.bucketName;
-    const multipart = isVideo || size > 5 * 1024 * 1024;
+    const multipart = isVideo || size > 32 * 1024 * 1024;
     if (!multipart) {
       const uploadUrl = await getSignedUrl(this.s3, new PutObjectCommand({
         Bucket: bucket,
@@ -337,11 +337,11 @@ export class MinioService implements OnModuleInit {
       return { objectKey, strategy: 'single' as const, uploadUrl, expiresInSeconds: 60 * 60 };
     }
     const partSize =
-      size < 40 * 1024 * 1024
-        ? 5 * 1024 * 1024
-        : size >= 500 * 1024 * 1024
-          ? 20 * 1024 * 1024
-          : 10 * 1024 * 1024;
+      size < 256 * 1024 * 1024
+        ? 8 * 1024 * 1024
+        : size >= 1024 * 1024 * 1024
+          ? 32 * 1024 * 1024
+          : 16 * 1024 * 1024;
     const created = await this.s3.send(new CreateMultipartUploadCommand({
       Bucket: bucket,
       Key: objectKey,

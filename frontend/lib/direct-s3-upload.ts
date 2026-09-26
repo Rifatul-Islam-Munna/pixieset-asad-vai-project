@@ -32,6 +32,14 @@ export type DirectUploadEvent = {
   totalParts?: number;
 };
 
+export type DirectUploadStats = {
+  transferredBytes: number;
+  totalBytes: number;
+  bytesPerSecond: number;
+  megabitsPerSecond: number;
+  percent: number;
+};
+
 type UploadParallelism = {
   fileConcurrency: number;
   multipartConcurrency: number;
@@ -40,11 +48,12 @@ type UploadParallelism = {
 
 type NetworkRunner = <T>(task: () => Promise<T>) => Promise<T>;
 
-const DEFAULT_FILE_CONCURRENCY = 4;
-const DEFAULT_MULTIPART_CONCURRENCY = 6;
-const DEFAULT_REQUEST_CONCURRENCY = 10;
-const METADATA_CONCURRENCY = 2;
+const DEFAULT_FILE_CONCURRENCY = 8;
+const DEFAULT_MULTIPART_CONCURRENCY = 8;
+const DEFAULT_REQUEST_CONCURRENCY = 12;
+const METADATA_CONCURRENCY = 4;
 const PROGRESS_INTERVAL_MS = 100;
+const STATS_INTERVAL_MS = 250;
 const UPLOAD_MAX_ATTEMPTS = 4;
 const UPLOAD_STALL_TIMEOUT_MS = 45_000;
 
@@ -55,6 +64,7 @@ export async function uploadFilesDirectlyToS3(
   concurrency?: number,
   onNetworkActivity?: () => void,
   onEvent?: (event: DirectUploadEvent) => void,
+  onStats?: (stats: DirectUploadStats) => void,
 ) {
   if (files.length !== tickets.length) throw new Error("Upload authorization mismatch");
 
@@ -67,6 +77,7 @@ export async function uploadFilesDirectlyToS3(
   const completed = new Array<CompletedDirectUpload>(files.length);
   let nextIndex = 0;
   const progress = createThrottledProgressReporter(onProgress);
+  const stats = createUploadStatsReporter(total, onStats);
 
   const report = () => {
     const percent = total
@@ -78,6 +89,7 @@ export async function uploadFilesDirectlyToS3(
         )
       : 100;
     progress.update(percent);
+    stats.update(loaded.reduce((sum, value) => sum + value, 0), percent);
   };
 
   const worker = async () => {
@@ -168,6 +180,7 @@ export async function uploadFilesDirectlyToS3(
   );
 
   progress.finish();
+  stats.finish(total);
   return completed;
 }
 function getUploadParallelism(
@@ -218,6 +231,52 @@ function createThrottledProgressReporter(
       if (timer) clearTimeout(timer);
       timer = undefined;
       emit();
+    },
+  };
+}
+
+function createUploadStatsReporter(
+  totalBytes: number,
+  onStats?: (stats: DirectUploadStats) => void,
+) {
+  let lastAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  let lastBytes = 0;
+  let smoothedBytesPerSecond = 0;
+
+  const emit = (transferredBytes: number, percent: number, force = false) => {
+    if (!onStats) return;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const elapsedMs = Math.max(1, now - lastAt);
+    if (!force && elapsedMs < STATS_INTERVAL_MS) return;
+
+    const deltaBytes = transferredBytes - lastBytes;
+    if (deltaBytes >= 0) {
+      const instantBytesPerSecond = (deltaBytes * 1000) / elapsedMs;
+      smoothedBytesPerSecond =
+        smoothedBytesPerSecond > 0
+          ? smoothedBytesPerSecond * 0.65 + instantBytesPerSecond * 0.35
+          : instantBytesPerSecond;
+    } else {
+      smoothedBytesPerSecond = 0;
+    }
+
+    lastAt = now;
+    lastBytes = transferredBytes;
+    onStats({
+      transferredBytes: Math.max(0, Math.min(totalBytes, transferredBytes)),
+      totalBytes,
+      bytesPerSecond: Math.max(0, smoothedBytesPerSecond),
+      megabitsPerSecond: Math.max(0, (smoothedBytesPerSecond * 8) / 1_000_000),
+      percent: Math.max(0, Math.min(100, percent)),
+    });
+  };
+
+  return {
+    update(transferredBytes: number, percent: number) {
+      emit(transferredBytes, percent);
+    },
+    finish(transferredBytes: number) {
+      emit(transferredBytes, 100, true);
     },
   };
 }

@@ -13911,6 +13911,28 @@ function uniqueCollectionSets(
   return unique.length ? unique : [{ id: "highlights", name: "Featured" }];
 }
 
+function collectionImageDirectKey(image?: CollectionImageRecord) {
+  return String(image?.metadata?.directUploadObjectKey ?? "").trim();
+}
+
+function isLocalUploadImage(image?: CollectionImageRecord) {
+  return image?.metadata?.localUploadPreview === true;
+}
+
+function dedupeCollectionImages(items: CollectionImageRecord[]) {
+  const seenIds = new Set<string>();
+  const seenDirectKeys = new Set<string>();
+  return items.filter((image) => {
+    const id = String(image?._id ?? "");
+    const directKey = collectionImageDirectKey(image);
+    if (directKey && seenDirectKeys.has(directKey)) return false;
+    if (id && seenIds.has(id)) return false;
+    if (directKey) seenDirectKeys.add(directKey);
+    if (id) seenIds.add(id);
+    return true;
+  });
+}
+
 function collectionFormWithUniqueSets(
   collection?: CollectionRecord,
   globalPreferences?: Partial<PreferenceSettings>,
@@ -13976,11 +13998,79 @@ function CollectionDetailView({
   const [imagesHasMore, setImagesHasMore] = useState(false);
   const [imagesLoadingMore, setImagesLoadingMore] = useState(false);
   const imagesLoaderRef = useRef<HTMLDivElement | null>(null);
+  const serverImageOffsetRef = useRef(0);
+  const collectionIdRef = useRef(collectionId);
+  const localObjectUrlsRef = useRef(new Map<string, string>());
+  collectionIdRef.current = collectionId;
   useEffect(() => {
-    setLoadedImages(detail?.images ?? []);
+    setLoadedImages((current) => {
+      const serverImages = detail?.images ?? [];
+      const serverDirectKeys = new Set(
+        serverImages.map(collectionImageDirectKey).filter(Boolean),
+      );
+      const uploadSessionImages = current.filter(
+        (image) =>
+          (isLocalUploadImage(image) ||
+            image.metadata?.recentUploadPreview === true) &&
+          !serverDirectKeys.has(collectionImageDirectKey(image)),
+      );
+      return dedupeCollectionImages([...uploadSessionImages, ...serverImages]);
+    });
+    serverImageOffsetRef.current = Math.max(
+      serverImageOffsetRef.current,
+      detail?.images?.length ?? 0,
+    );
     setImagesHasMore(Boolean(detail?.imagesPage?.hasMore));
   }, [detail?.images, detail?.imagesPage?.hasMore]);
-  const images = useMemo(() => loadedImages, [loadedImages]);
+  useEffect(() => {
+    serverImageOffsetRef.current = detail?.images?.length ?? 0;
+    setLoadedImages(detail?.images ?? []);
+    setImagesHasMore(Boolean(detail?.imagesPage?.hasMore));
+    setActiveSetId("highlights");
+    setActiveImageId("");
+    setImagePage(1);
+    setSelectedImageIds([]);
+    return () => {
+      for (const url of localObjectUrlsRef.current.values()) URL.revokeObjectURL(url);
+      localObjectUrlsRef.current.clear();
+    };
+  }, [collectionId]);
+  const images = useMemo(
+    () => dedupeCollectionImages(loadedImages),
+    [loadedImages],
+  );
+  useEffect(() => {
+    const completed = backgroundProcessing?.completedImages ?? [];
+    if (!completed.length) return;
+    const completedByKey = new Map(
+      completed
+        .map((image) => [collectionImageDirectKey(image), image] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+    if (!completedByKey.size) return;
+
+    setLoadedImages((current) =>
+      dedupeCollectionImages(
+        current.map((image) => {
+          const key = collectionImageDirectKey(image);
+          const processed = key ? completedByKey.get(key) : undefined;
+          if (!processed) return image;
+          if (isLocalUploadImage(image)) {
+            const localUrl = localObjectUrlsRef.current.get(image._id);
+            if (localUrl) URL.revokeObjectURL(localUrl);
+            localObjectUrlsRef.current.delete(image._id);
+          }
+          return {
+            ...processed,
+            metadata: {
+              ...(processed.metadata ?? {}),
+              recentUploadPreview: true,
+            },
+          };
+        }),
+      ),
+    );
+  }, [backgroundProcessing?.completedImages, processingStatusQuery.dataUpdatedAt]);
   const sets = useMemo(
     () => uniqueCollectionSets(detail?.sets),
     [detail?.sets],
@@ -14049,6 +14139,10 @@ function CollectionDetailView({
     uploaded: 0,
     currentName: "",
     currentPercent: 0,
+    transferredBytes: 0,
+    totalBytes: 0,
+    bytesPerSecond: 0,
+    megabitsPerSecond: 0,
     phase: "preparing" as
       | "preparing"
       | "authorizing"
@@ -14189,6 +14283,11 @@ function CollectionDetailView({
   );
   const activeSet =
     form.sets.find((set) => set.id === activeSetId) ?? form.sets[0];
+  useEffect(() => {
+    if (form.sets.some((set) => set.id === activeSetId)) return;
+    setActiveSetId(form.sets[0]?.id ?? "highlights");
+    setImagePage(1);
+  }, [activeSetId, collectionId, form.sets]);
   const filteredShareTemplates = emailTemplates.filter((template) =>
     [template.name, template.subject, template.previewText]
       .join(" ")
@@ -14361,8 +14460,13 @@ function CollectionDetailView({
     setImagesLoadingMore(true);
     try {
       const page = (
-        await fetchCollectionImagesPage(collectionId, loadedImages.length, 60)
+        await fetchCollectionImagesPage(
+          collectionId,
+          serverImageOffsetRef.current,
+          60,
+        )
       ).data;
+      serverImageOffsetRef.current += page.items.length;
       setLoadedImages((current) => {
         const seen = new Set(current.map((image) => image._id));
         return [
@@ -14764,6 +14868,39 @@ function CollectionDetailView({
     const selectedFiles = replaceImageId
       ? Array.from(files).slice(0, 1)
       : Array.from(files);
+    const targetCollectionId = collectionId;
+    const targetSetId = activeSetId;
+    const targetReplaceImageId = replaceImageId || undefined;
+    const uploadSessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const localPreviewIds = selectedFiles.map(
+      (_, index) => `${uploadSessionId}-${index}`,
+    );
+    const localPreviews: CollectionImageRecord[] = selectedFiles.map(
+      (file, index) => {
+        const id = localPreviewIds[index];
+        const localUrl = URL.createObjectURL(file);
+        localObjectUrlsRef.current.set(id, localUrl);
+        return {
+          _id: id,
+          collectionId: targetCollectionId,
+          setId: targetSetId,
+          url: localUrl,
+          thumbnailUrl: localUrl,
+          originalName: file.name,
+          mimetype: file.type,
+          mediaType: file.type.startsWith("video/") ? "video" : "image",
+          createdAt: new Date(Date.now() + index).toISOString(),
+          metadata: {
+            filename: file.name,
+            localUploadPreview: true,
+            uploadSessionId,
+          },
+        };
+      },
+    );
+    setLoadedImages((current) =>
+      dedupeCollectionImages([...localPreviews, ...current]),
+    );
     uploadNetworkActivityRef.current = Date.now();
     setSlowUploadNetwork(false);
     setUploadProgress({
@@ -14775,15 +14912,39 @@ function CollectionDetailView({
           ? selectedFiles[0]?.name ?? ""
           : `${selectedFiles.length} files selected`,
       currentPercent: 0,
+      transferredBytes: 0,
+      totalBytes: selectedFiles.reduce((sum, file) => sum + file.size, 0),
+      bytesPerSecond: 0,
+      megabitsPerSecond: 0,
       phase: "preparing",
     });
     try {
       const response = await uploadImages.mutateAsync({
         files: selectedFiles,
-        setId: activeSetId,
+        targetCollectionId,
+        setId: targetSetId,
         watermarkId: uploadWatermarkId,
-        replaceImageId: replaceImageId || undefined,
-        onProgress: (percent) =>
+        replaceImageId: targetReplaceImageId,
+        onRawUploaded: (uploads) => {
+          if (collectionIdRef.current !== targetCollectionId) return;
+          setLoadedImages((current) =>
+            current.map((image) => {
+              const localIndex = localPreviewIds.indexOf(image._id);
+              if (localIndex < 0) return image;
+              const objectKey = uploads[localIndex]?.objectKey;
+              if (!objectKey) return image;
+              return {
+                ...image,
+                metadata: {
+                  ...(image.metadata ?? {}),
+                  directUploadObjectKey: objectKey,
+                },
+              };
+            }),
+          );
+        },
+        onProgress: (percent) => {
+          if (collectionIdRef.current !== targetCollectionId) return;
           setUploadProgress((current) => ({
             ...current,
             currentPercent: percent,
@@ -14794,58 +14955,114 @@ function CollectionDetailView({
                     "Connection resumed. Upload is moving again.",
                 }
               : {}),
-          })),
+          }));
+        },
         onNetworkActivity: () => {
           uploadNetworkActivityRef.current = Date.now();
         },
-        onActivity: (activity) =>
+        onStats: (stats) => {
+          if (collectionIdRef.current !== targetCollectionId) return;
+          setUploadProgress((current) => ({
+            ...current,
+            currentPercent: stats.percent,
+            transferredBytes: stats.transferredBytes,
+            totalBytes: stats.totalBytes,
+            bytesPerSecond: stats.bytesPerSecond,
+            megabitsPerSecond: stats.megabitsPerSecond,
+          }));
+        },
+        onActivity: (activity) => {
+          if (collectionIdRef.current !== targetCollectionId) return;
           setUploadProgress((current) => ({
             ...current,
             phase: activity.stage,
             currentName: activity.message,
-          })),
+            ...(!["uploading", "retrying"].includes(activity.stage)
+              ? { bytesPerSecond: 0, megabitsPerSecond: 0 }
+              : {}),
+          }));
+        },
       });
       const uploadedImages = Array.isArray(response?.data)
         ? response.data
         : [];
-      if (uploadedImages.length) {
-        setLoadedImages((current) => {
-          const seen = new Set(current.map((image) => image._id));
-          return [
-            ...current,
-            ...uploadedImages.filter((image) => !seen.has(image._id)),
-          ];
-        });
+      if (
+        uploadedImages.length &&
+        collectionIdRef.current === targetCollectionId
+      ) {
+        const uploadedByKey = new Map(
+          uploadedImages
+            .map((image) => [collectionImageDirectKey(image), image] as const)
+            .filter(([key]) => Boolean(key)),
+        );
+        setLoadedImages((current) =>
+          dedupeCollectionImages(
+            current.map((image) => {
+              const key = collectionImageDirectKey(image);
+              const serverImage = key ? uploadedByKey.get(key) : undefined;
+              if (!serverImage) return image;
+              if (isLocalUploadImage(image)) {
+                const localUrl = localObjectUrlsRef.current.get(image._id);
+                if (localUrl) URL.revokeObjectURL(localUrl);
+                localObjectUrlsRef.current.delete(image._id);
+              }
+              return {
+                ...serverImage,
+                metadata: {
+                  ...(serverImage.metadata ?? {}),
+                  recentUploadPreview: true,
+                },
+              };
+            }),
+          ),
+        );
       }
-      setUploadProgress((current) => ({
-        ...current,
-        uploaded: selectedFiles.length,
-        currentPercent: 100,
-        phase: "queued",
-        currentName:
-          "Raw upload complete. Any image optimization now runs in the background.",
-      }));
-      const queued = Math.max(0, Number(response?.queued ?? 0));
-      toast.success(
-        queued > 0
-          ? `Upload complete. ${queued} photo${queued === 1 ? "" : "s"} will optimize in the background.`
-          : replaceImageId
-            ? "Photo replaced"
-            : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
-      );
+      if (collectionIdRef.current === targetCollectionId) {
+        setUploadProgress((current) => ({
+          ...current,
+          uploaded: selectedFiles.length,
+          currentPercent: 100,
+          phase: "queued",
+          currentName: "Upload complete. Finishing photos quietly in the background.",
+        }));
+        const queued = Math.max(0, Number(response?.queued ?? 0));
+        toast.success(
+          queued > 0
+            ? "Upload complete. Your photos are already visible while finishing continues in the background."
+            : targetReplaceImageId
+              ? "Photo replaced"
+              : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
+        );
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed");
+      for (const id of localPreviewIds) {
+        const localUrl = localObjectUrlsRef.current.get(id);
+        if (localUrl) URL.revokeObjectURL(localUrl);
+        localObjectUrlsRef.current.delete(id);
+      }
+      if (collectionIdRef.current === targetCollectionId) {
+        setLoadedImages((current) =>
+          current.filter((image) => !localPreviewIds.includes(image._id)),
+        );
+        toast.error(error instanceof Error ? error.message : "Upload failed");
+      }
     } finally {
-      setSlowUploadNetwork(false);
-      setUploadProgress({
-        active: false,
-        total: 0,
-        uploaded: 0,
-        currentName: "",
-        currentPercent: 0,
-        phase: "preparing",
-      });
-      setReplaceImageId("");
+      if (collectionIdRef.current === targetCollectionId) {
+        setSlowUploadNetwork(false);
+        setUploadProgress({
+          active: false,
+          total: 0,
+          uploaded: 0,
+          currentName: "",
+          currentPercent: 0,
+          transferredBytes: 0,
+          totalBytes: 0,
+          bytesPerSecond: 0,
+          megabitsPerSecond: 0,
+          phase: "preparing",
+        });
+        setReplaceImageId("");
+      }
     }
   };
   const handleUploadDragOver = (event: DragEvent<HTMLElement>) => {
@@ -14870,6 +15087,10 @@ function CollectionDetailView({
   };
   const uploading = uploadProgress.active || uploadImages.isPending;
   const uploadPercent = uploadProgress.currentPercent;
+  const uploadTransferredMb = uploadProgress.transferredBytes / (1024 * 1024);
+  const uploadTotalMb = uploadProgress.totalBytes / (1024 * 1024);
+  const uploadSpeedMb = uploadProgress.bytesPerSecond / (1024 * 1024);
+  const uploadSpeedMbps = uploadProgress.megabitsPerSecond;
   const deletingImages =
     deleteImage.isPending || deleteImages.isPending || bulkDeleting;
   const toggleImageSelection = (imageId: string) => {
@@ -15828,8 +16049,17 @@ function CollectionDetailView({
             </p>
             <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold">
               <span className="rounded-full bg-white/80 px-2 py-1">Browser → R2</span>
+              <span className="rounded-full bg-white/80 px-2 py-1">
+                {uploadTransferredMb.toFixed(1)} / {uploadTotalMb.toFixed(1)} MB
+              </span>
+              <span className="rounded-full bg-white/80 px-2 py-1">
+                Upload speed: {uploadSpeedMb.toFixed(2)} MB/s
+              </span>
+              <span className="rounded-full bg-white/80 px-2 py-1">
+                {uploadSpeedMbps.toFixed(1)} Mbps
+              </span>
               <span className="rounded-full bg-white/80 px-2 py-1">Auto retry on</span>
-              <span className="rounded-full bg-white/80 px-2 py-1">Raw original first</span>
+              <span className="rounded-full bg-white/80 px-2 py-1">Original quality</span>
             </div>
             <div className="mt-3 h-2 overflow-hidden bg-[#d3f2ee]">
               <div
@@ -15841,38 +16071,11 @@ function CollectionDetailView({
         </div>
       )}
       {!uploading && (backgroundProcessing?.pending ?? 0) > 0 && (
-        <div className="mt-4 flex items-start gap-3 border border-[#e2dcfb] bg-[#f8f6ff] px-4 py-3 text-sm text-[#5f35c8]">
-          <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin" />
-          <div className="min-w-0">
-            <p className="font-semibold">
-              Background optimization: {backgroundProcessing?.processing ?? 0} processing, {backgroundProcessing?.queued ?? 0} queued. You can keep working and start more uploads.
-            </p>
-            {backgroundProcessing?.current && (
-              <p className="mt-1 break-words text-xs font-medium text-[#7661b8]">
-                {backgroundProcessing.current.name}: {backgroundProcessing.current.message}
-              </p>
-            )}
-            <p className="mt-1 text-xs font-medium text-[#7661b8]">
-              Raw originals are already safe in R2. Slow Sharp work never blocks the client upload.
-            </p>
-          </div>
-        </div>
-      )}
-      {!uploading && (backgroundProcessing?.rawFallback ?? 0) > 0 && (
-        <div className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mt-4 flex items-center gap-3 border border-[#e2dcfb] bg-[#f8f6ff] px-4 py-3 text-sm text-[#5f35c8]">
+          <Loader2 className="size-4 shrink-0 animate-spin" />
           <p className="font-semibold">
-            {backgroundProcessing?.rawFallback} recent photo
-            {backgroundProcessing?.rawFallback === 1 ? "" : "s"} skipped slow optimization and published the raw original instead.
+            Finishing your photos in the background. You can keep working normally.
           </p>
-          <p className="mt-1 text-xs font-medium">
-            The upload was not blocked waiting for Sharp.
-          </p>
-        </div>
-      )}
-      {!uploading && (backgroundProcessing?.failed ?? 0) > 0 && (
-        <div className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {backgroundProcessing?.failed} photo
-          {backgroundProcessing?.failed === 1 ? "" : "s"} could not finish background processing or raw fallback after automatic retries.
         </div>
       )}
       {uploadImages.error && (
@@ -15965,9 +16168,20 @@ function CollectionDetailView({
                 className="flex flex-col gap-1"
               >
                 {form.sets.map((set) => {
-                  const count = images.filter(
+                  const setImages = images.filter(
                     (image) => (image.setId || "highlights") === set.id,
-                  ).length;
+                  );
+                  const localCount = setImages.filter(isLocalUploadImage).length;
+                  const serverLoadedCount = setImages.length - localCount;
+                  const authoritativeCounts =
+                    backgroundProcessing?.setImageCounts ??
+                    collection?.setImageCounts;
+                  const count = authoritativeCounts
+                    ? Math.max(
+                        0,
+                        Number(authoritativeCounts[set.id] ?? 0),
+                      ) + localCount
+                    : serverLoadedCount + localCount;
                   return (
                     <div
                       key={set.id}
@@ -16378,6 +16592,11 @@ function CollectionDetailView({
                     ? uploadProgress.currentName
                     : "or Browse files"}
                 </p>
+                {uploading && uploadProgress.totalBytes > 0 && (
+                  <p className="mt-2 text-xs font-bold tabular-nums text-[#3f8179]">
+                    {uploadTransferredMb.toFixed(1)} / {uploadTotalMb.toFixed(1)} MB · Upload speed: {uploadSpeedMb.toFixed(2)} MB/s · {uploadSpeedMbps.toFixed(1)} Mbps
+                  </p>
+                )}
                 {uploading && (
                   <div className="mt-5 h-2 w-full max-w-sm overflow-hidden bg-[#d3f2ee]">
                     <div
@@ -16467,31 +16686,17 @@ function CollectionDetailView({
                     Deleting images...
                   </div>
                 )}
-                {uploading && (
-                  <div className="mb-2 grid grid-cols-3 gap-2 md:grid-cols-5 xl:grid-cols-6">
-                    {Array.from({ length: Math.min(uploadProgress.total || 1, 6) }).map(
-                      (_, index) => (
-                        <div
-                          key={`uploading-${index}`}
-                          className="relative flex aspect-square animate-in fade-in zoom-in-95 items-center justify-center overflow-hidden bg-[#eef9f7] duration-300"
-                        >
-                          <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-[#d3f2ee]">
-                            <div className="h-full w-1/2 animate-pulse bg-[#6337d8]" />
-                          </div>
-                          <Loader2 className="size-6 animate-spin text-[#6337d8]" />
-                        </div>
-                      ),
-                    )}
-                  </div>
-                )}
                 <ReactSortable
                   list={displayedSetImages.map((image) => ({
                     ...image,
                     id: image._id,
                   }))}
-                  setList={(nextImages) =>
-                    reorderSetImages(nextImages as CollectionImageRecord[])
-                  }
+                  setList={(nextImages) => {
+                    const normalized = nextImages as CollectionImageRecord[];
+                    if (normalized.some(isLocalUploadImage)) return;
+                    reorderSetImages(normalized);
+                  }}
+                  disabled={displayedSetImages.some(isLocalUploadImage)}
                   animation={180}
                   delayOnTouchOnly
                   ghostClass="sortable-image-ghost"
@@ -16553,7 +16758,7 @@ function CollectionDetailView({
                             ? "border-red-500 text-red-600"
                             : "border-white text-[#777]",
                         )}
-                        disabled={deletingImages}
+                        disabled={deletingImages || isLocalUploadImage(image)}
                         onClick={() => toggleImageSelection(image._id)}
                         aria-label="Select image"
                       >
@@ -16567,7 +16772,7 @@ function CollectionDetailView({
                       </button>
                       <button
                         className="absolute right-2 top-12 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-red-600 group-hover:flex"
-                        disabled={deletingImages}
+                        disabled={deletingImages || isLocalUploadImage(image)}
                         onClick={() => deleteSingleImage(image)}
                         aria-label="Delete image"
                       >
@@ -16579,7 +16784,7 @@ function CollectionDetailView({
                       </button>
                       <button
                         className="absolute right-12 top-2 hidden size-9 items-center justify-center bg-white/90 text-[#333] shadow-sm transition-all duration-200 hover:scale-105 hover:text-[#6337d8] group-hover:flex"
-                        disabled={deletingImages}
+                        disabled={deletingImages || isLocalUploadImage(image)}
                         onClick={() =>
                           starImage.mutate({
                             collectionId: image.collectionId,
@@ -16604,7 +16809,7 @@ function CollectionDetailView({
                             ? "flex"
                             : "hidden group-hover:flex",
                         )}
-                        disabled={deletingImages}
+                        disabled={deletingImages || isLocalUploadImage(image)}
                         aria-label="Photo options"
                         type="button"
                         onClick={() =>

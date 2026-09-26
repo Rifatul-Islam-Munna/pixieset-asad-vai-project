@@ -7,7 +7,9 @@ import {
   batches,
   directUploadMetadata,
   uploadFilesDirectlyToS3,
+  type CompletedDirectUpload,
   type DirectUploadEvent,
+  type DirectUploadStats,
   type DirectUploadTicket,
 } from "@/lib/direct-s3-upload";
 
@@ -23,6 +25,7 @@ export type CollectionRecord = {
   presetId?: string;
   coverImage?: string;
   imageCount?: number;
+  setImageCounts?: Record<string, number>;
   sets?: CollectionSetRecord[];
   tags?: string[];
   clientEmails?: string[];
@@ -122,6 +125,9 @@ export type DirectUploadProcessingStatus = {
     attempts: number;
     message: string;
   } | null;
+  imageCount?: number;
+  setImageCounts?: Record<string, number>;
+  completedImages?: CollectionImageRecord[];
 };
 
 export type CollectionUploadActivity = {
@@ -315,18 +321,13 @@ export function useCollectionDetail(collectionId?: string) {
   useEffect(() => {
     const status = processingStatusQuery.data?.data;
     if (!status) return;
-    if (
-      status.pending > 0 ||
-      status.failed > 0 ||
-      status.optimized > 0 ||
-      status.rawFallback > 0
-    ) {
+    if (status.pending === 0) {
       void queryClient.invalidateQueries({
         queryKey: ["collections", collectionId],
       });
       void queryClient.invalidateQueries({ queryKey: ["collections"] });
+      notifyStorageChanged();
     }
-    if (status.pending === 0) notifyStorageChanged();
   }, [
     collectionId,
     processingStatusQuery.dataUpdatedAt,
@@ -374,31 +375,34 @@ export function useCollectionDetail(collectionId?: string) {
       setId,
       watermarkId,
       replaceImageId,
+      targetCollectionId,
       onProgress,
       onNetworkActivity,
       onActivity,
+      onStats,
+      onRawUploaded,
     }: {
       files: FileList | File[];
       setId?: string;
       watermarkId?: string;
       replaceImageId?: string;
+      targetCollectionId?: string;
       onProgress?: (percent: number) => void;
       onNetworkActivity?: () => void;
       onActivity?: (activity: CollectionUploadActivity) => void;
+      onStats?: (stats: DirectUploadStats) => void;
+      onRawUploaded?: (uploads: CompletedDirectUpload[]) => void;
     }) => {
-      if (!collectionId) throw new Error("Collection is required");
+      const uploadCollectionId = targetCollectionId || collectionId;
+      if (!uploadCollectionId) throw new Error("Collection is required");
       const selected = Array.from(files);
       const totalBytes = selected.reduce((sum, file) => sum + file.size, 0);
       const uploaded: CollectionImageRecord[] = [];
       let transferredBytes = 0;
       let queued = 0;
-      const uploadBatchSize = selected.every(
-        (file) =>
-          !file.type.startsWith("video/") &&
-          file.size <= 5 * 1024 * 1024,
-      )
-        ? 8
-        : 4;
+      // Authorize and saturate the connection with the whole selection instead of
+      // pausing after tiny groups. Request concurrency is bounded in direct-s3-upload.ts.
+      const uploadBatchSize = Math.max(1, selected.length);
 
       for (const uploadBatch of batches(selected, uploadBatchSize)) {
         onActivity?.({
@@ -413,7 +417,7 @@ export function useCollectionDetail(collectionId?: string) {
         const [authorization, authorizationError] = await PostRequestAxios<{
           data: DirectUploadTicket[];
         }>(
-          `/collections/${collectionId}/images/direct-upload`,
+          `/collections/${uploadCollectionId}/images/direct-upload`,
           { files: metadata },
           { timeoutMs: 20_000 },
         );
@@ -453,10 +457,12 @@ export function useCollectionDetail(collectionId?: string) {
               fileName: event.fileName,
             });
           },
+          onStats,
         );
         transferredBytes += batchBytes;
+        onRawUploaded?.(completed);
 
-        for (const completionBatch of batches(completed, 4)) {
+        for (const completionBatch of batches(completed, 10)) {
           onActivity?.({
             stage: "finalizing",
             message:
@@ -479,7 +485,7 @@ export function useCollectionDetail(collectionId?: string) {
                 queued?: number;
               }
             >(
-              `/collections/${collectionId}/images/direct-upload/complete`,
+              `/collections/${uploadCollectionId}/images/direct-upload/complete`,
               {
                 files: completionBatch,
                 setId,
@@ -538,11 +544,15 @@ export function useCollectionDetail(collectionId?: string) {
         queued: number;
       };
     },
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
+      const uploadedCollectionId =
+        variables.targetCollectionId || collectionId;
       queryClient.invalidateQueries({ queryKey: ["collections"] });
-      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
       queryClient.invalidateQueries({
-        queryKey: ["collections", collectionId, "upload-processing"],
+        queryKey: ["collections", uploadedCollectionId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["collections", uploadedCollectionId, "upload-processing"],
       });
       notifyStorageChanged();
     },
