@@ -19,6 +19,10 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Next.js reads this value during `next build`.
+ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
+
 # Build the application
 RUN npm run build
 
