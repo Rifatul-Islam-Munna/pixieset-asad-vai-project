@@ -369,6 +369,55 @@ export function useCollectionDetail(collectionId?: string) {
     },
   });
 
+  const renameCollectionSet = useMutation({
+    mutationFn: async ({ setId, name }: { setId: string; name: string }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<CollectionRecord> & { message: string }
+      >(`/collections/${collectionId}/sets/${encodeURIComponent(setId)}`, { name });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (response) => {
+      if (response?.data) upsertCollectionInCaches(response.data);
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+    },
+  });
+
+  const reorderCollectionSets = useMutation({
+    mutationFn: async (setIds: string[]) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PatchRequestAxios<
+        ListResponse<CollectionRecord> & { message: string }
+      >(`/collections/${collectionId}/sets/reorder`, { setIds });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (response) => {
+      if (response?.data) upsertCollectionInCaches(response.data);
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+    },
+  });
+
+  const deleteCollectionSet = useMutation({
+    mutationFn: async (setId: string) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await DeleteRequestAxios<
+        ListResponse<CollectionRecord> & { message: string }
+      >(`/collections/${collectionId}/sets/${encodeURIComponent(setId)}`);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (response) => {
+      if (response?.data) upsertCollectionInCaches(response.data);
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+      notifyStorageChanged();
+    },
+  });
+
   const uploadImages = useMutation({
     mutationFn: async ({
       files,
@@ -398,11 +447,14 @@ export function useCollectionDetail(collectionId?: string) {
       const selected = Array.from(files);
       const totalBytes = selected.reduce((sum, file) => sum + file.size, 0);
       const uploaded: CollectionImageRecord[] = [];
+      const completedDirectUploads: CompletedDirectUpload[] = [];
       let transferredBytes = 0;
       let queued = 0;
-      // Authorize and saturate the connection with the whole selection instead of
-      // pausing after tiny groups. Request concurrency is bounded in direct-s3-upload.ts.
-      const uploadBatchSize = Math.max(1, selected.length);
+      // The backend intentionally caps a single authorization request at 500 files.
+      // Keep each request comfortably below that guard while allowing the user to
+      // select any number of files in one action. Network concurrency remains bounded
+      // inside direct-s3-upload.ts, so a huge selection does not create huge parallelism.
+      const uploadBatchSize = 200;
 
       for (const uploadBatch of batches(selected, uploadBatchSize)) {
         onActivity?.({
@@ -460,7 +512,8 @@ export function useCollectionDetail(collectionId?: string) {
           onStats,
         );
         transferredBytes += batchBytes;
-        onRawUploaded?.(completed);
+        completedDirectUploads.push(...completed);
+        onRawUploaded?.([...completedDirectUploads]);
 
         for (const completionBatch of batches(completed, 10)) {
           onActivity?.({
@@ -664,6 +717,9 @@ export function useCollectionDetail(collectionId?: string) {
     processingStatusQuery,
     updateCollection,
     addSet,
+    renameCollectionSet,
+    reorderCollectionSets,
+    deleteCollectionSet,
     uploadImages,
     deleteImage,
     deleteImages,

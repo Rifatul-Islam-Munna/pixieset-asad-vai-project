@@ -552,6 +552,37 @@ export class CollectionsController {
     return { message: 'Set saved', data };
   }
 
+  @Patch(':id/sets/reorder')
+  async reorderSets(
+    @Param('id') id: string,
+    @Body('setIds') setIds: string[],
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.reorderSets(req.user.id, id, setIds);
+    return { message: 'Set order saved', data };
+  }
+
+  @Patch(':id/sets/:setId')
+  async renameSet(
+    @Param('id') id: string,
+    @Param('setId') setId: string,
+    @Body('name') name: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.renameSet(req.user.id, id, setId, name);
+    return { message: 'Set renamed', data };
+  }
+
+  @Delete(':id/sets/:setId')
+  async deleteSet(
+    @Param('id') id: string,
+    @Param('setId') setId: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.deleteSet(req.user.id, id, setId);
+    return { message: 'Set deleted', data };
+  }
+
   @Post(':id/images')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FilesInterceptor('files', 100, uploadOptions))

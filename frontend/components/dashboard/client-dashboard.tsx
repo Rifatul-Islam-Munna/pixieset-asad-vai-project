@@ -13903,11 +13903,7 @@ function uniqueCollectionSets(
     if (!id || seen.has(id)) return false;
     seen.add(id);
     return true;
-  }).map((set) =>
-    set.id === "highlights" && set.name === "Highlights"
-      ? { ...set, name: "Featured" }
-      : set,
-  );
+  });
   return unique.length ? unique : [{ id: "highlights", name: "Featured" }];
 }
 
@@ -13974,6 +13970,9 @@ function CollectionDetailView({
     processingStatusQuery,
     updateCollection,
     addSet,
+    renameCollectionSet,
+    reorderCollectionSets,
+    deleteCollectionSet,
     uploadImages,
     deleteImage,
     deleteImages,
@@ -14131,6 +14130,11 @@ function CollectionDetailView({
   const [newSetName, setNewSetName] = useState("");
   const [editingSetId, setEditingSetId] = useState("");
   const [editingSetName, setEditingSetName] = useState("");
+  const setSortDragActiveRef = useRef(false);
+  const pendingSetOrderRef =
+    useRef<NonNullable<CollectionRecord["sets"]> | null>(null);
+  const imageSortDragActiveRef = useRef(false);
+  const pendingImageOrderRef = useRef<CollectionImageRecord[] | null>(null);
   const [pageOrigin, setPageOrigin] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({
@@ -14318,14 +14322,9 @@ function CollectionDetailView({
   const selectedTargetCollection = collections.find(
     (item) => item._id === imageTargetCollectionId,
   );
-  const selectedTargetSets = (selectedTargetCollection?.sets?.length
+  const selectedTargetSets = selectedTargetCollection?.sets?.length
     ? selectedTargetCollection.sets
-    : [{ id: "highlights", name: "Featured" }]
-  ).map((set) =>
-    set.id === "highlights" && set.name === "Highlights"
-      ? { ...set, name: "Featured" }
-      : set,
-  );
+    : [{ id: "highlights", name: "Featured" }];
   const imageQuickShareLink = activeImage
     ? `${publicLink}?photo=${encodeURIComponent(activeImage._id)}&download=${imageShareAllowDownload ? "1" : "0"}`
     : publicLink;
@@ -14542,39 +14541,78 @@ function CollectionDetailView({
   const presetName = (id?: string) =>
     presetItems.find((preset) => preset.id === id)?.name ?? "No preset";
   const saveCollection = () => {
-    const payload = {
-      name: form.name.trim() || collection?.name,
-      slug: form.slug.trim() || undefined,
-      presetId: form.presetId || undefined,
-      coverImage: form.coverImage || undefined,
-      sets: syncSetsFromPhotoSets(
-        uniqueCollectionSets(form.sets),
-        form.general.photoSets,
-      ),
-      tags: form.general.collectionTags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-      clientEmails: [...new Set(form.clientEmails
+    if (!collection) return;
+
+    const tags = form.general.collectionTags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    const clientEmails = [...new Set(
+      form.clientEmails
         .split(/[\s,;]+/)
         .map((email) => email.trim().toLowerCase())
-        .filter((email) => email.includes("@")))],
-      watermarkId:
-        form.general.defaultWatermark === "No watermark"
-          ? undefined
-          : form.general.defaultWatermark,
-      expiresAt: form.expiresAt || undefined,
-      status: collectionStatus,
-      design: form.design,
-      settings: {
-        general: form.general,
-        download: form.download,
-        favorite: form.favorite,
-        store: form.store,
-        preferences: form.preferences,
-        access: collection?.settings?.access,
+        .filter((email) => email.includes("@")),
+    )];
+    const watermarkId =
+      form.general.defaultWatermark === "No watermark"
+        ? ""
+        : form.general.defaultWatermark;
+    const nextSettings = {
+      ...(collection.settings ?? {}),
+      general: {
+        ...((collection.settings?.general as Record<string, unknown> | undefined) ?? {}),
+        ...form.general,
+        // Set names/order are managed only by explicit set actions.
+        photoSets: form.sets.map((set) => set.name).join(", "),
       },
+      download: form.download,
+      favorite: form.favorite,
+      store: form.store,
+      preferences: form.preferences,
+      access: collection.settings?.access,
     };
+
+    // Patch only fields the user actually changed in this editor. Sending the
+    // whole stale form could overwrite a newer collection name/set state from
+    // another tab or a recent server refresh.
+    const payload: Partial<CollectionRecord> = {};
+    const nextName = form.name.trim() || collection.name;
+    if (nextName !== collection.name) payload.name = nextName;
+    const nextSlug = form.slug.trim();
+    if (nextSlug && nextSlug !== (collection.slug ?? ""))
+      payload.slug = nextSlug;
+    if (form.presetId !== (collection.presetId ?? ""))
+      payload.presetId = form.presetId;
+    if (form.coverImage !== (collection.coverImage ?? ""))
+      payload.coverImage = form.coverImage;
+    if (JSON.stringify(tags) !== JSON.stringify(collection.tags ?? []))
+      payload.tags = tags;
+    if (
+      JSON.stringify(clientEmails) !==
+      JSON.stringify(collection.clientEmails ?? [])
+    )
+      payload.clientEmails = clientEmails;
+    if (watermarkId !== (collection.watermarkId ?? ""))
+      payload.watermarkId = watermarkId;
+    const currentExpiry = collection.expiresAt?.slice(0, 10) ?? "";
+    if (form.expiresAt && form.expiresAt !== currentExpiry)
+      payload.expiresAt = form.expiresAt;
+    if (collectionStatus !== collection.status)
+      payload.status = collectionStatus;
+    if (JSON.stringify(form.design) !== JSON.stringify(collection.design ?? {}))
+      payload.design = form.design;
+    if (
+      JSON.stringify(nextSettings) !==
+      JSON.stringify(collection.settings ?? {})
+    )
+      payload.settings = nextSettings;
+
+    if (!Object.keys(payload).length) {
+      syncedCollectionFormKeyRef.current = collectionFormKey(form);
+      toast.success("Gallery is already up to date");
+      return;
+    }
+
     updateCollection.mutate(payload, {
       onSuccess: (response) => {
         if (response?.data) {
@@ -14601,17 +14639,19 @@ function CollectionDetailView({
       onSuccess: (response) => {
         const nextSet = response?.data;
         if (nextSet) {
-          setForm((value) => ({
-            ...value,
-            sets: uniqueCollectionSets([...value.sets, nextSet]),
-            general: {
-              ...value.general,
-              photoSets: [
-                ...value.sets.map((set) => set.name),
-                nextSet.name,
-              ].join(", "),
-            },
-          }));
+          setForm((value) => {
+            const nextSets = uniqueCollectionSets([...value.sets, nextSet]);
+            const nextForm = {
+              ...value,
+              sets: nextSets,
+              general: {
+                ...value.general,
+                photoSets: nextSets.map((set) => set.name).join(", "),
+              },
+            };
+            syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
+            return nextForm;
+          });
           setActiveSetId(nextSet.id);
         }
         setNewSetName("");
@@ -14623,54 +14663,37 @@ function CollectionDetailView({
     });
   };
   const deleteSet = (setId: string) => {
-    if (form.sets.length <= 1) return;
-    const nextSets = form.sets.filter((set) => set.id !== setId);
-    setForm((value) => ({
-      ...value,
-      sets: nextSets,
-      general: {
-        ...value.general,
-        photoSets: nextSets.map((set) => set.name).join(", "),
+    if (form.sets.length <= 1 || deleteCollectionSet.isPending) return;
+    deleteCollectionSet.mutate(setId, {
+      onSuccess: (response) => {
+        if (!response?.data) return;
+        const nextForm = collectionFormWithUniqueSets(
+          response.data,
+          savedPreferences,
+        );
+        syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
+        setForm(nextForm);
+        if (activeSetId === setId)
+          setActiveSetId(nextForm.sets[0]?.id ?? "highlights");
       },
-    }));
-    if (activeSetId === setId) setActiveSetId(nextSets[0]?.id ?? "highlights");
-    updateCollection.mutate({ sets: nextSets });
+      onError: (error) =>
+        toast.error(
+          error instanceof Error ? error.message : "Set delete failed",
+        ),
+    });
   };
   const renameSet = () => {
     const name = editingSetName.trim();
-    if (!editingSetId || !name) return;
-    const nextSets = form.sets.map((set) =>
-      set.id === editingSetId ? { ...set, name } : set,
-    );
-    setForm((value) => ({
-      ...value,
-      sets: nextSets,
-      general: {
-        ...value.general,
-        photoSets: nextSets.map((set) => set.name).join(", "),
-      },
-    }));
-    updateCollection.mutate({ sets: nextSets });
-    setEditingSetId("");
-    setEditingSetName("");
-  };
-  const reorderSets = (nextSets: typeof form.sets) => {
-    if (
-      nextSets.length === form.sets.length &&
-      nextSets.every((set, index) => set.id === form.sets[index]?.id)
-    ) {
+    const setId = editingSetId;
+    if (!setId || !name || renameCollectionSet.isPending) return;
+    const currentSet = form.sets.find((set) => set.id === setId);
+    if (!currentSet || currentSet.name === name) {
+      setEditingSetId("");
+      setEditingSetName("");
       return;
     }
-    setForm((value) => ({
-      ...value,
-      sets: nextSets,
-      general: {
-        ...value.general,
-        photoSets: nextSets.map((set) => set.name).join(", "),
-      },
-    }));
-    updateCollection.mutate(
-      { sets: nextSets },
+    renameCollectionSet.mutate(
+      { setId, name },
       {
         onSuccess: (response) => {
           if (response?.data) {
@@ -14679,14 +14702,73 @@ function CollectionDetailView({
               savedPreferences,
             );
             syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
+            setForm(nextForm);
           }
+          setEditingSetId("");
+          setEditingSetName("");
         },
         onError: (error) =>
           toast.error(
-            error instanceof Error ? error.message : "Set reorder failed",
+            error instanceof Error ? error.message : "Set rename failed",
           ),
       },
     );
+  };
+  const reorderSets = (nextSets: typeof form.sets) => {
+    const currentServerSets = collection?.sets ?? [];
+    if (
+      nextSets.length === currentServerSets.length &&
+      nextSets.every((set, index) => set.id === currentServerSets[index]?.id)
+    ) {
+      return;
+    }
+    reorderCollectionSets.mutate(
+      nextSets.map((set) => set.id),
+      {
+        onSuccess: (response) => {
+          if (response?.data) {
+            const nextForm = collectionFormWithUniqueSets(
+              response.data,
+              savedPreferences,
+            );
+            syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
+            setForm(nextForm);
+          }
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error ? error.message : "Set reorder failed",
+          );
+          void collectionQuery.refetch();
+        },
+      },
+    );
+  };
+  const beginSetSort = () => {
+    setSortDragActiveRef.current = true;
+    pendingSetOrderRef.current = null;
+  };
+  const stageSetSort = (nextSets: typeof form.sets) => {
+    if (!setSortDragActiveRef.current) return;
+    pendingSetOrderRef.current = nextSets;
+    setForm((value) => ({
+      ...value,
+      sets: nextSets,
+      general: {
+        ...value.general,
+        photoSets: nextSets.map((set) => set.name).join(", "),
+      },
+    }));
+  };
+  const finishSetSort = () => {
+    // react-sortablejs may deliver its final setList callback immediately after
+    // Sortable's onEnd callback. Defer one tick so we persist the final user order.
+    window.setTimeout(() => {
+      const nextSets = pendingSetOrderRef.current;
+      setSortDragActiveRef.current = false;
+      pendingSetOrderRef.current = null;
+      if (nextSets) reorderSets(nextSets);
+    }, 0);
   };
   const copyPublicLink = async () => {
     await navigator.clipboard.writeText(publicLink);
@@ -15191,18 +15273,38 @@ function CollectionDetailView({
       return;
     }
     const activeSetIdSet = new Set(activeSetImages.map((image) => image._id));
+    const queuedSetIds = [...nextSetIds];
     const nextAllIds = orderedImages.map((image) =>
       activeSetIdSet.has(image._id)
-        ? (nextSetIds.shift() ?? image._id)
+        ? (queuedSetIds.shift() ?? image._id)
         : image._id,
     );
     setOrderedImageIds(nextAllIds);
     reorderImages.mutate(nextAllIds, {
-      onError: (error) =>
+      onError: (error) => {
         toast.error(
           error instanceof Error ? error.message : "Image reorder failed",
-        ),
+        );
+        void collectionQuery.refetch();
+      },
     });
+  };
+  const beginImageSort = () => {
+    imageSortDragActiveRef.current = true;
+    pendingImageOrderRef.current = null;
+  };
+  const stageImageSort = (nextImages: CollectionImageRecord[]) => {
+    if (!imageSortDragActiveRef.current) return;
+    if (nextImages.some(isLocalUploadImage)) return;
+    pendingImageOrderRef.current = nextImages;
+  };
+  const finishImageSort = () => {
+    window.setTimeout(() => {
+      const nextImages = pendingImageOrderRef.current;
+      imageSortDragActiveRef.current = false;
+      pendingImageOrderRef.current = null;
+      if (nextImages) reorderSetImages(nextImages);
+    }, 0);
   };
   const changeCollectionStatus = (nextStatus: "draft" | "published") => {
     if (
@@ -16157,9 +16259,9 @@ function CollectionDetailView({
               </div>
               <ReactSortable
                 list={form.sets.map((set) => ({ ...set, id: set.id }))}
-                setList={(nextSets) =>
-                  reorderSets(nextSets as typeof form.sets)
-                }
+                setList={stageSetSort}
+                onStart={beginSetSort}
+                onEnd={finishSetSort}
                 animation={180}
                 delayOnTouchOnly
                 ghostClass="sortable-image-ghost"
@@ -16691,12 +16793,13 @@ function CollectionDetailView({
                     ...image,
                     id: image._id,
                   }))}
-                  setList={(nextImages) => {
-                    const normalized = nextImages as CollectionImageRecord[];
-                    if (normalized.some(isLocalUploadImage)) return;
-                    reorderSetImages(normalized);
-                  }}
-                  disabled={displayedSetImages.some(isLocalUploadImage)}
+                  setList={stageImageSort}
+                  onStart={beginImageSort}
+                  onEnd={finishImageSort}
+                  disabled={
+                    displayedSetImages.some(isLocalUploadImage) ||
+                    photoSort !== "uploaded-new-old"
+                  }
                   animation={180}
                   delayOnTouchOnly
                   ghostClass="sortable-image-ghost"
@@ -19181,6 +19284,14 @@ function collectionForm(
         collection?.watermarkId ?? collectionDefaultGeneral.defaultWatermark,
       ...((collection?.settings?.general as
         Partial<PresetGeneralSettings> | undefined) ?? {}),
+      // Sets are authoritative. Never let an old duplicated photoSets string
+      // silently rename or reorder them when unrelated gallery settings are saved.
+      photoSets: (collection?.sets?.length
+        ? collection.sets
+        : [{ id: "highlights", name: "Featured" }]
+      )
+        .map((set) => set.name)
+        .join(", "),
       language: normalizeGalleryLanguage(
         collection?.settings?.general?.language ??
           preferenceDefaults.defaultLanguage,
@@ -19211,31 +19322,6 @@ function collectionForm(
 
 function collectionFormKey(form: CollectionFormState) {
   return JSON.stringify(form);
-}
-
-function syncSetsFromPhotoSets(
-  currentSets: NonNullable<CollectionRecord["sets"]>,
-  photoSets: string,
-) {
-  const names = photoSets
-    .split(",")
-    .map((name) => name.trim())
-    .filter(Boolean);
-  const safeNames = names.length ? names : ["Featured"];
-
-  return safeNames.map((name, index) => {
-    const existing =
-      currentSets.find(
-        (set) => set.name.toLowerCase() === name.toLowerCase(),
-      ) ?? currentSets[index];
-
-    return {
-      id: existing?.id ?? `set-${Date.now()}-${index}`,
-      name,
-      watermarkId: existing?.watermarkId,
-      createdAt: existing?.createdAt,
-    };
-  });
 }
 
 function WatermarkOverlay({

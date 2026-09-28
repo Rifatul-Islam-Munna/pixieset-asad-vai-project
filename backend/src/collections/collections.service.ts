@@ -2078,18 +2078,43 @@ export class CollectionsService implements OnModuleInit {
     if (dto.coverImage !== undefined)
       collection.coverImage = dto.coverImage || undefined;
     if (dto.sets !== undefined) {
-      const nextSets = dto.sets.map((set) => ({
-        id: set.id,
-        name: set.name,
-        watermarkId: set.watermarkId || undefined,
-        createdAt: set.createdAt ? new Date(set.createdAt) : new Date(),
-      }));
+      const currentSets = collection.sets ?? [];
+      const currentById = new Map(currentSets.map((set) => [String(set.id), set]));
+      const seenSetIds = new Set<string>();
+      const nextSets = dto.sets.map((set) => {
+        const setId = String(set.id ?? '').trim();
+        const setName = String(set.name ?? '').trim();
+        if (!setId || !setName)
+          throw new BadRequestException('Every set requires an id and name');
+        if (seenSetIds.has(setId))
+          throw new BadRequestException('Duplicate set ids are not allowed');
+        seenSetIds.add(setId);
+        const currentSet = currentById.get(setId);
+        return {
+          id: setId,
+          name: setName,
+          watermarkId: set.watermarkId || currentSet?.watermarkId || undefined,
+          createdAt: set.createdAt
+            ? new Date(set.createdAt)
+            : currentSet?.createdAt ?? new Date(),
+        };
+      });
       const nextSetIds = nextSets.map((set) => set.id);
+      const removedSetIds = currentSets
+        .map((set) => String(set.id))
+        .filter((setId) => !seenSetIds.has(setId));
+      if (removedSetIds.length && dto.allowSetRemoval !== true) {
+        throw new BadRequestException(
+          'Removing a set requires an explicit delete action',
+        );
+      }
       const fallbackSetId = nextSetIds[0] ?? 'highlights';
-      await this.imageModel.updateMany(
-        { userId, collectionId: id, setId: { $nin: nextSetIds } },
-        { $set: { setId: fallbackSetId } },
-      );
+      if (removedSetIds.length) {
+        await this.imageModel.updateMany(
+          { userId, collectionId: id, setId: { $in: removedSetIds } },
+          { $set: { setId: fallbackSetId } },
+        );
+      }
       collection.sets = nextSets.length
         ? nextSets
         : [{ id: 'highlights', name: 'Featured', createdAt: new Date() }];
@@ -2104,6 +2129,9 @@ export class CollectionsService implements OnModuleInit {
     if (dto.design !== undefined) collection.design = dto.design;
     if (dto.settings !== undefined || dto.clientEmails !== undefined)
       collection.settings = syncedSettings;
+    // Keep the legacy duplicated photoSets setting derived from the authoritative
+    // set records so unrelated updates can never write stale set names back.
+    this.syncCollectionSetNamesInSettings(collection);
 
     await collection.save();
     if (!wasPublished && collection.status === 'published') {
@@ -2227,8 +2255,110 @@ export class CollectionsService implements OnModuleInit {
       createdAt: new Date(),
     };
     collection.sets = [...(collection.sets ?? []), set];
+    this.syncCollectionSetNamesInSettings(collection);
     await collection.save();
     return set;
+  }
+
+  async renameSet(
+    userId: string,
+    collectionId: string,
+    setId: string,
+    name: string,
+  ) {
+    const trimmed = String(name ?? '').trim();
+    if (!trimmed) throw new BadRequestException('Set name is required');
+
+    const collection = await this.collectionModel.findOne({
+      _id: collectionId,
+      userId,
+    });
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const target = collection.sets?.find((set) => String(set.id) === setId);
+    if (!target) throw new NotFoundException('Set not found');
+    if (target.name === trimmed) return collection.toObject();
+
+    target.name = trimmed;
+    this.syncCollectionSetNamesInSettings(collection);
+    await collection.save();
+    return collection.toObject();
+  }
+
+  async reorderSets(
+    userId: string,
+    collectionId: string,
+    setIds: string[],
+  ) {
+    if (!Array.isArray(setIds) || !setIds.length)
+      throw new BadRequestException('Set order is required');
+
+    const collection = await this.collectionModel.findOne({
+      _id: collectionId,
+      userId,
+    });
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const currentSets = collection.sets ?? [];
+    const normalizedIds = setIds.map((id) => String(id ?? '').trim());
+    if (
+      normalizedIds.length !== currentSets.length ||
+      new Set(normalizedIds).size !== currentSets.length
+    ) {
+      throw new BadRequestException('Set order must contain every set exactly once');
+    }
+
+    const currentById = new Map(currentSets.map((set) => [String(set.id), set]));
+    if (normalizedIds.some((id) => !currentById.has(id)))
+      throw new BadRequestException('Set order contains an unknown set');
+
+    const currentIds = currentSets.map((set) => String(set.id));
+    if (normalizedIds.every((id, index) => id === currentIds[index]))
+      return collection.toObject();
+
+    collection.sets = normalizedIds.map((id) => currentById.get(id)!);
+    this.syncCollectionSetNamesInSettings(collection);
+    await collection.save();
+    return collection.toObject();
+  }
+
+  async deleteSet(userId: string, collectionId: string, setId: string) {
+    const collection = await this.collectionModel.findOne({
+      _id: collectionId,
+      userId,
+    });
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const currentSets = collection.sets ?? [];
+    if (currentSets.length <= 1)
+      throw new BadRequestException('A collection must keep at least one set');
+
+    const target = currentSets.find((set) => String(set.id) === setId);
+    if (!target) throw new NotFoundException('Set not found');
+
+    const nextSets = currentSets.filter((set) => String(set.id) !== setId);
+    const fallbackSetId = String(nextSets[0].id);
+    await this.imageModel.updateMany(
+      { userId, collectionId, setId },
+      { $set: { setId: fallbackSetId } },
+    );
+
+    collection.sets = nextSets;
+    this.syncCollectionSetNamesInSettings(collection);
+    await collection.save();
+    return collection.toObject();
+  }
+
+  private syncCollectionSetNamesInSettings(collection: CollectionDocument) {
+    const settings = (collection.settings ?? {}) as Record<string, unknown>;
+    const general = (settings.general ?? {}) as Record<string, unknown>;
+    collection.settings = {
+      ...settings,
+      general: {
+        ...general,
+        photoSets: (collection.sets ?? []).map((set) => set.name).join(', '),
+      },
+    };
   }
 
   async reorderImages(
