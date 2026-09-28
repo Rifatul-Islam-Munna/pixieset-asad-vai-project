@@ -14130,6 +14130,10 @@ function CollectionDetailView({
   const [newSetName, setNewSetName] = useState("");
   const [editingSetId, setEditingSetId] = useState("");
   const [editingSetName, setEditingSetName] = useState("");
+  const [deleteSetTarget, setDeleteSetTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const setSortDragActiveRef = useRef(false);
   const pendingSetOrderRef =
     useRef<NonNullable<CollectionRecord["sets"]> | null>(null);
@@ -14634,7 +14638,7 @@ function CollectionDetailView({
   };
   const createSet = () => {
     const name = newSetName.trim();
-    if (!name) return;
+    if (!name || addSet.isPending) return;
     addSet.mutate(name, {
       onSuccess: (response) => {
         const nextSet = response?.data;
@@ -14675,6 +14679,8 @@ function CollectionDetailView({
         setForm(nextForm);
         if (activeSetId === setId)
           setActiveSetId(nextForm.sets[0]?.id ?? "highlights");
+        setDeleteSetTarget(null);
+        toast.success("Collection deleted");
       },
       onError: (error) =>
         toast.error(
@@ -16333,7 +16339,7 @@ function CollectionDetailView({
                       </span>
                       <button
                         type="button"
-                        className="inline-flex size-8 items-center justify-center text-[#777] transition-colors hover:bg-[#f3efff] hover:text-[#6337d8] disabled:text-[#bbb]"
+                        className="pointer-events-none inline-flex size-8 items-center justify-center text-[#777] opacity-0 transition-all hover:bg-[#f3efff] hover:text-[#6337d8] focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 disabled:text-[#bbb]"
                         disabled={renameCollectionSet.isPending}
                         onClick={() => {
                           setEditingSetId(set.id);
@@ -16346,9 +16352,11 @@ function CollectionDetailView({
                       </button>
                       <button
                         type="button"
-                        className="inline-flex size-8 items-center justify-center text-[#888] transition-colors hover:bg-red-50 hover:text-red-600 disabled:text-[#ccc]"
+                        className="pointer-events-none inline-flex size-8 items-center justify-center text-[#888] opacity-0 transition-all hover:bg-red-50 hover:text-red-600 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 disabled:text-[#ccc]"
                         disabled={form.sets.length <= 1 || deleteCollectionSet.isPending}
-                        onClick={() => deleteSet(set.id)}
+                        onClick={() =>
+                          setDeleteSetTarget({ id: set.id, name: set.name })
+                        }
                         aria-label={`Delete ${set.name}`}
                         title="Delete collection"
                       >
@@ -16358,7 +16366,63 @@ function CollectionDetailView({
                   );
                 })}
               </ReactSortable>
-              <Dialog open={addSetOpen} onOpenChange={setAddSetOpen}>
+
+              <AlertDialog
+                open={Boolean(deleteSetTarget)}
+                onOpenChange={(open) => {
+                  if (!open && !deleteCollectionSet.isPending)
+                    setDeleteSetTarget(null);
+                }}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete collection?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete{" "}
+                      <span className="font-semibold text-[#222]">
+                        {deleteSetTarget?.name}
+                      </span>
+                      ? This action cannot be undone. Photos in this collection
+                      will be moved to the first remaining collection.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel
+                      disabled={deleteCollectionSet.isPending}
+                    >
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-red-600 text-white hover:bg-red-700"
+                      disabled={
+                        !deleteSetTarget || deleteCollectionSet.isPending
+                      }
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (deleteSetTarget)
+                          deleteSet(deleteSetTarget.id);
+                      }}
+                    >
+                      {deleteCollectionSet.isPending ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        "Yes, delete"
+                      )}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              <Dialog
+                open={addSetOpen}
+                onOpenChange={(open) => {
+                  if (addSet.isPending) return;
+                  setAddSetOpen(open);
+                }}
+              >
                 <DialogContent className="rounded-none sm:max-w-[420px]">
                   <DialogHeader>
                     <DialogTitle>Add Collection</DialogTitle>
@@ -16374,6 +16438,7 @@ function CollectionDetailView({
                         onChange={(event) => setNewSetName(event.target.value)}
                         placeholder="e.g. Reception"
                         className="h-11 rounded-none"
+                        disabled={addSet.isPending}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") createSet();
                         }}
@@ -16384,16 +16449,24 @@ function CollectionDetailView({
                     <Button
                       variant="outline"
                       className="rounded-none"
+                      disabled={addSet.isPending}
                       onClick={() => setAddSetOpen(false)}
                     >
                       Cancel
                     </Button>
                     <Button
                       className="rounded-none bg-[#6337d8] text-white"
-                      disabled={!newSetName.trim()}
+                      disabled={!newSetName.trim() || addSet.isPending}
                       onClick={createSet}
                     >
-                      Create
+                      {addSet.isPending ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        "Create"
+                      )}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
