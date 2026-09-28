@@ -16,6 +16,10 @@ import { resolveGalleryFontFamily } from "@/lib/gallery-fonts";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 import { imageDisplayName } from "@/lib/image-display-name";
+import {
+  ImageWatermarkOverlay,
+  type ImageWatermark,
+} from "@/components/ui/image-watermark-overlay";
 import { usePublicGalleryFavorites } from "./public-gallery-favorites";
 
 type PublicImage = {
@@ -33,6 +37,7 @@ type PublicImage = {
   mimetype?: string;
   mediaType?: "image" | "video";
   faceScore?: number;
+  watermark?: ImageWatermark;
   metadata?: {
     filename?: string;
     fileTitle?: string;
@@ -1329,7 +1334,7 @@ export function PublicGallery({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                 {favoriteGalleryImages.map((photo) => (
                   <button key={photo._id} className="group relative aspect-[4/3] overflow-hidden bg-white" onClick={() => setActiveImage(photo)} type="button">
-                    <GalleryImage src={imageSrc(photo.thumbnailUrl || photo.url)} fallbackSrc={imageSrc(photo.url)} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+                    <GalleryImage src={imageSrc(photo.thumbnailUrl || photo.url)} fallbackSrc={imageSrc(photo.url)} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" watermark={photo.watermark} />
                     <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white text-red-500 shadow">
                       <Star className="size-4 fill-current" />
                     </span>
@@ -1683,6 +1688,7 @@ export function PublicGallery({
               sizes="100vw"
               alt={displayCaption(activeImage)}
               className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full object-contain"
+              watermark={activeImage.watermark}
               priority
             />
           )}
@@ -1746,6 +1752,7 @@ export function PublicGallery({
               sizes="100vw"
               alt={displayCaption(slideshowImage)}
               className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
+              watermark={slideshowImage.watermark}
               priority
             />
           )}
@@ -1955,6 +1962,7 @@ function GalleryTile({
             priority={priority}
             parallax={parallax}
             parallaxStrength={parallaxStrength}
+            watermark={photo.watermark}
           />
         )}
       </button>
@@ -2011,6 +2019,7 @@ function GalleryImage({
   priority = false,
   parallax = false,
   parallaxStrength = 36,
+  watermark,
 }: {
   src: string;
   fallbackSrc?: string;
@@ -2023,6 +2032,7 @@ function GalleryImage({
   priority?: boolean;
   parallax?: boolean;
   parallaxStrength?: number;
+  watermark?: ImageWatermark;
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
   const [useSrcSet, setUseSrcSet] = useState(Boolean(srcSet));
@@ -2112,6 +2122,7 @@ function GalleryImage({
         className={className}
         style={style}
       />
+      <ImageWatermarkOverlay watermark={watermark} />
     </span>
   );
 }

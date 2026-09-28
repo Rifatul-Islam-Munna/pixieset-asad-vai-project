@@ -30,30 +30,31 @@ export class ImgproxyService {
     return this.watermarkRenderService.hasWatermark(watermark);
   }
 
-  imageUrls(objectKey: string, watermark?: ImgproxyWatermark) {
+  imageUrls(objectKey: string, _watermark?: ImgproxyWatermark) {
     if (!this.isEnabled()) return null;
-    const wrap = (variant: VariantOptions) =>
-      this.watermarkRenderService.wrap(
-        this.buildUrl(objectKey, variant),
-        watermark,
-      );
+    const direct = (variant: VariantOptions) =>
+      this.buildUrl(objectKey, variant);
     return {
-      thumbnailUrl: wrap({
+      thumbnailUrl: direct({
         width: this.numberSetting('IMGPROXY_GRID_WIDTH', 720, 240, 1600),
         height: this.numberSetting('IMGPROXY_GRID_HEIGHT', 720, 240, 1600),
         quality: this.numberSetting('IMGPROXY_GRID_QUALITY', 76, 40, 95),
       }),
-      url: wrap({
+      url: direct({
         width: this.numberSetting('IMGPROXY_VIEW_WIDTH', 2560, 1280, 5000),
         height: this.numberSetting('IMGPROXY_VIEW_HEIGHT', 2560, 1280, 5000),
         quality: this.numberSetting('IMGPROXY_VIEW_QUALITY', 84, 50, 100),
       }),
       responsive: {
-        small: wrap({ width: 480, height: 480, quality: 72 }),
-        medium: wrap({ width: 960, height: 960, quality: 76 }),
-        large: wrap({ width: 1600, height: 1600, quality: 80 }),
+        small: direct({ width: 480, height: 480, quality: 72 }),
+        medium: direct({ width: 960, height: 960, quality: 76 }),
+        large: direct({ width: 1600, height: 1600, quality: 80 }),
       },
     };
+  }
+
+  watermarkUrl(sourceUrl: string, watermark?: ImgproxyWatermark) {
+    return this.watermarkRenderService.wrap(sourceUrl, watermark);
   }
 
   prewarmWatermark(url: string) {

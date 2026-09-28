@@ -66,6 +66,16 @@ export type CollectionImageRecord = {
   width?: number;
   height?: number;
   watermarked?: boolean;
+  watermark?: {
+    type: "text" | "image";
+    text?: string;
+    font?: string;
+    color?: string;
+    scale?: number;
+    opacity?: number;
+    position?: { x?: number; y?: number };
+    image?: string;
+  };
   metadata?: Record<string, any>;
   order?: number;
   createdAt?: string;

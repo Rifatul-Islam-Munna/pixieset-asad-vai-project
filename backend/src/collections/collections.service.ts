@@ -3677,7 +3677,10 @@ export class CollectionsService implements OnModuleInit {
     }
     if (this.imgproxyService.hasWatermark(proxyWatermark)) {
       this.imgproxyService.prewarmWatermark(
-        urls.responsive?.small || urls.thumbnailUrl,
+        this.imgproxyService.watermarkUrl(
+          urls.responsive?.small || urls.thumbnailUrl,
+          proxyWatermark,
+        ),
       );
     }
     if (
@@ -5224,7 +5227,10 @@ export class CollectionsService implements OnModuleInit {
           url: urls.url,
           thumbnailUrl: urls.thumbnailUrl,
           responsive: urls.responsive,
-          watermarked: this.imgproxyService.hasWatermark(proxyWatermark),
+          watermarked: false,
+          watermark: this.imgproxyService.hasWatermark(proxyWatermark)
+            ? proxyWatermark
+            : undefined,
         };
       }
     }
