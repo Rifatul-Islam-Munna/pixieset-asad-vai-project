@@ -346,10 +346,8 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function imageSrc(url?: string) {
   if (!url) return "";
-  if (url.startsWith("/uploads/")) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-    return `${baseUrl}${url}`;
-  }
-  return url;
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  return url.startsWith("/") ? `${baseUrl}${url}` : url;
 }
 

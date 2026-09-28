@@ -15291,6 +15291,9 @@ function CollectionDetailView({
             }),
           );
         },
+        onRawTransferComplete: () => {
+          finishUploadSession(targetSessionKey);
+        },
         onProgress: (percent) => {
           updateUploadProgressForSession(targetSessionKey, (current) => ({
             ...current,
@@ -15371,15 +15374,12 @@ function CollectionDetailView({
         currentPercent: 100,
         phase: "queued",
         currentName:
-          "Upload complete. Finishing photos quietly in the background.",
+          "Upload complete. Original is in R2 and ready for imgproxy.",
       }));
-      const queued = Math.max(0, Number(response?.queued ?? 0));
       toast.success(
-        queued > 0
-          ? "Upload complete. Your photos are already visible while finishing continues in the background."
-          : targetReplaceImageId
-            ? "Photo replaced"
-            : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
+        targetReplaceImageId
+          ? "Photo replaced"
+          : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
       );
     } catch (error) {
       for (const id of localPreviewIds) {
@@ -16775,9 +16775,9 @@ function CollectionDetailView({
               />
             </div>
             <p className="mt-2 text-[11px] font-semibold text-[#3f8179]">
-              Keep this tab open only while Browser → R2 is still sending bytes.
-              Once the raw upload reaches R2, the backend owns the job and keeps
-              finishing it even if you navigate away or close the tab.
+              Keep this tab open only while Browser → R2 is sending the original.
+              As soon as R2 receives it, the upload is done and imgproxy serves
+              the optimized size on demand. No server image-processing wait.
             </p>
           </div>
         </div>
@@ -16790,14 +16790,6 @@ function CollectionDetailView({
             {activeUploadSessionKeys.length === 1 ? "" : "s"} still sending to
             R2 in the background. Keep working normally; the upload continues
             while you move around the app.
-          </p>
-        </div>
-      )}
-      {!uploading && (backgroundProcessing?.pending ?? 0) > 0 && (
-        <div className="mt-4 flex items-center gap-3 border border-[#e2dcfb] bg-[#f8f6ff] px-4 py-3 text-sm text-[#5f35c8]">
-          <Loader2 className="size-4 shrink-0 animate-spin" />
-          <p className="font-semibold">
-            Finishing your photos on the server. You can keep working, navigate away, or close this tab.
           </p>
         </div>
       )}
@@ -17646,6 +17638,12 @@ function CollectionDetailView({
                         ) : (
                           <DashboardImageWithSkeleton
                             src={imageSrc(image.thumbnailUrl || image.url)}
+                            srcSet={collectionImageSrcSet(image)}
+                            sizes={
+                              collectionGridSize === "small"
+                                ? "(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 12vw"
+                                : "(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                            }
                             alt={collectionImageCaption(image)}
                             placeholder={image.blurDataUrl}
                             className={cn(
@@ -20028,11 +20026,15 @@ function CollectionImagesSkeleton() {
 
 function DashboardImageWithSkeleton({
   src,
+  srcSet,
+  sizes,
   alt,
   className,
   placeholder,
 }: {
   src: string;
+  srcSet?: string;
+  sizes?: string;
   alt: string;
   className?: string;
   placeholder?: string;
@@ -20054,6 +20056,8 @@ function DashboardImageWithSkeleton({
       )}
       <img
         src={src}
+        srcSet={srcSet}
+        sizes={sizes}
         alt={alt}
         loading="lazy"
         decoding="async"
@@ -20703,11 +20707,27 @@ function collectionImageCaption(image?: CollectionImageRecord | null) {
 
 function imageSrc(url?: string) {
   if (!url) return "";
-  if (url.startsWith("/uploads/")) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-    return `${baseUrl}${url}`;
-  }
-  return url;
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  return url.startsWith("/") ? `${baseUrl}${url}` : url;
+}
+
+function collectionImageSrcSet(image?: CollectionImageRecord | null) {
+  if (!image?.responsive) return undefined;
+  return [
+    image.responsive.small
+      ? `${imageSrc(image.responsive.small)} 480w`
+      : "",
+    image.responsive.medium
+      ? `${imageSrc(image.responsive.medium)} 960w`
+      : "",
+    image.responsive.large
+      ? `${imageSrc(image.responsive.large)} 1600w`
+      : "",
+    image.url ? `${imageSrc(image.url)} 2560w` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function GetStartedPanel({

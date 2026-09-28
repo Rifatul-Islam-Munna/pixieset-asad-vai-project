@@ -50,8 +50,8 @@ async function getOwnerPreview(collectionId?: string) {
 
 function imageSrc(url?: string) {
   if (!url) return undefined;
-  if (url.startsWith("/uploads/")) return `${baseUrl}${url}`;
-  return url;
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  return url.startsWith("/") ? `${baseUrl}${url}` : url;
 }
 
 async function visitorWatermarkCode() {

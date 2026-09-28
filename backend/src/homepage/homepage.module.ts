@@ -8,6 +8,9 @@ import { BookingSetting, BookingSettingSchema } from 'src/bookings/entities/book
 import { Homepage, HomepageSchema } from './entities/homepage.entity';
 import { HomepageController, PublicHomepageController } from './homepage.controller';
 import { HomepageService } from './homepage.service';
+import { MinioService } from 'src/lib/minio.service';
+import { ImgproxyService } from 'src/lib/imgproxy.service';
+import { WatermarkRenderService } from 'src/lib/watermark-render.service';
 
 @Module({
   imports: [
@@ -21,7 +24,12 @@ import { HomepageService } from './homepage.service';
     ]),
   ],
   controllers: [HomepageController, PublicHomepageController],
-  providers: [HomepageService],
+  providers: [
+    HomepageService,
+    MinioService,
+    ImgproxyService,
+    WatermarkRenderService,
+  ],
   exports: [HomepageService],
 })
 export class HomepageModule {}

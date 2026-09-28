@@ -16,6 +16,10 @@ import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
 import { setTimeout as delay } from 'timers/promises';
 import { MinioService } from 'src/lib/minio.service';
+import {
+  ImgproxyService,
+  type ImgproxyWatermark,
+} from 'src/lib/imgproxy.service';
 import { MailService, type GlobalMailAttachment } from 'src/mail/mail.service';
 import { BrandingEmailService } from 'src/mail/branding-email.service';
 import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
@@ -150,6 +154,7 @@ export class CollectionsService implements OnModuleInit {
     @InjectModel(Homepage.name)
     private readonly homepageModel: Model<HomepageDocument>,
     private readonly minioService: MinioService,
+    private readonly imgproxyService: ImgproxyService,
     private readonly faceSearchService: FaceSearchService,
     private readonly imageMetadataAiService: ImageMetadataAiService,
     private readonly mailService: MailService,
@@ -159,6 +164,7 @@ export class CollectionsService implements OnModuleInit {
   ) {}
 
   private directImageWorkerRunning = false;
+  private readonly directImgproxySaveLocks = new Map<string, Promise<any>>();
   private lastDirectImageRecoveryAt = 0;
   private lastDirectUploadDiscoveryAt = 0;
   private imageDeleteWorkerRunning = false;
@@ -458,6 +464,9 @@ export class CollectionsService implements OnModuleInit {
       { $group: { _id: '$_id.collectionId', count: { $sum: 1 } } },
     ]);
     const countMap = new Map(imageCounts.map((item) => [item._id, item.count]));
+    const currentCovers = await Promise.all(
+      collections.map((collection) => this.currentCollectionCover(collection)),
+    );
     if (collections.length) {
       void this.collectionModel
         .bulkWrite(
@@ -477,8 +486,9 @@ export class CollectionsService implements OnModuleInit {
         .catch(() => undefined);
     }
 
-    return collections.map((collection) => ({
+    return collections.map((collection, index) => ({
       ...collection,
+      coverImage: currentCovers[index] || collection.coverImage,
       imageCount: countMap.get(collection._id.toString()) ?? 0,
     }));
   }
@@ -517,9 +527,11 @@ export class CollectionsService implements OnModuleInit {
       .updateOne({ _id: id, userId }, { $set: { imageCount } })
       .catch(() => undefined);
     void this.ensureCollectionPreviews(id);
+    const coverImage = await this.currentCollectionCover(collection);
 
     return {
       ...collection,
+      coverImage: coverImage || collection.coverImage,
       imageCount,
       setImageCounts,
       images: imagesPage.items,
@@ -692,8 +704,10 @@ export class CollectionsService implements OnModuleInit {
     }
 
     const { clientEmails: _hiddenClientEmails, ...publicCollection } = collection as any;
+    const coverImage = await this.currentCollectionCover(collection);
     return {
       ...publicCollection,
+      coverImage: coverImage || publicCollection.coverImage,
       planCapabilities: {
         aiFaceSearch: Boolean(ownerFeatures.aiFaceSearch),
         advancedFaceSearch: Boolean(ownerFeatures.advancedFaceSearch),
@@ -2215,16 +2229,8 @@ export class CollectionsService implements OnModuleInit {
           order: image.order,
         })),
       );
-      const duplicatedBytes = images.reduce(
-        (sum, img) => sum + Math.max(0, Number(img.sizeBytes ?? 0)),
-        0,
-      );
-      if (duplicatedBytes > 0) {
-        await this.userModel.updateOne(
-          { _id: userId },
-          { $inc: { storageUsedBytes: duplicatedBytes } },
-        );
-      }
+      // A duplicated gallery reuses the same stored objects. Do not charge
+      // storage twice when no physical R2 bytes were copied.
     }
 
     return { collection: collection.toObject(), copied: images.length };
@@ -2237,9 +2243,55 @@ export class CollectionsService implements OnModuleInit {
     const images = await this.imageModel
       .find({ collectionId: id, userId })
       .select('+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes');
-    let reclaimedBytes = 0;
-    for (const image of images)
-      reclaimedBytes += Math.max(0, Number(image.sizeBytes ?? 0));
+    const candidatePrivateKeys = [
+      ...new Set(
+        images
+          .flatMap((image) => [
+            String(image.originalObjectKey ?? '').trim(),
+            String(
+              (image.metadata as Record<string, any> | undefined)
+                ?.directUploadObjectKey ?? '',
+            ).trim(),
+          ])
+          .filter(Boolean),
+      ),
+    ];
+    const sharedRows = candidatePrivateKeys.length
+      ? await this.imageModel
+          .find({
+            userId,
+            collectionId: { $ne: id },
+            $or: [
+              { originalObjectKey: { $in: candidatePrivateKeys } },
+              {
+                'metadata.directUploadObjectKey': {
+                  $in: candidatePrivateKeys,
+                },
+              },
+            ],
+          })
+          .select('+originalObjectKey metadata')
+          .lean()
+      : [];
+    const sharedPrivateKeys = new Set(
+      sharedRows
+        .flatMap((image) => [
+          String(image.originalObjectKey ?? '').trim(),
+          String(
+            (image.metadata as Record<string, any> | undefined)
+              ?.directUploadObjectKey ?? '',
+          ).trim(),
+        ])
+        .filter(Boolean),
+    );
+    const reclaimedBytes = images.reduce((sum, image) => {
+      const metadata = (image.metadata ?? {}) as Record<string, any>;
+      const storageKey =
+        String(image.originalObjectKey ?? '').trim() ||
+        String(metadata.directUploadObjectKey ?? '').trim();
+      if (storageKey && sharedPrivateKeys.has(storageKey)) return sum;
+      return sum + Math.max(0, Number(image.sizeBytes ?? 0));
+    }, 0);
 
     await Promise.all([
       this.imageModel.deleteMany({ collectionId: id, userId }),
@@ -2371,6 +2423,46 @@ export class CollectionsService implements OnModuleInit {
     ]);
 
     const deletedIds = images.map((image) => image._id.toString());
+    const candidatePrivateKeys = [
+      ...new Set(
+        images
+          .flatMap((image) => [
+            String(image.originalObjectKey ?? '').trim(),
+            String(
+              (image.metadata as Record<string, any> | undefined)
+                ?.directUploadObjectKey ?? '',
+            ).trim(),
+          ])
+          .filter(Boolean),
+      ),
+    ];
+    const sharedRows = candidatePrivateKeys.length
+      ? await this.imageModel
+          .find({
+            _id: { $nin: deletedIds },
+            $or: [
+              { originalObjectKey: { $in: candidatePrivateKeys } },
+              {
+                'metadata.directUploadObjectKey': {
+                  $in: candidatePrivateKeys,
+                },
+              },
+            ],
+          })
+          .select('+originalObjectKey metadata')
+          .lean()
+      : [];
+    const sharedPrivateKeys = new Set(
+      sharedRows
+        .flatMap((image) => [
+          String(image.originalObjectKey ?? '').trim(),
+          String(
+            (image.metadata as Record<string, any> | undefined)
+              ?.directUploadObjectKey ?? '',
+          ).trim(),
+        ])
+        .filter(Boolean),
+    );
     const now = new Date();
 
     // Queue the physical R2/public-file cleanup before removing DB records.
@@ -2379,19 +2471,23 @@ export class CollectionsService implements OnModuleInit {
       const batch = images.slice(offset, offset + 500);
       await this.imageDeleteJobModel.bulkWrite(
         batch.map((image) => {
+          const metadata = (image.metadata ?? {}) as Record<string, any>;
           const directObjectKey = String(
-            (image.metadata as Record<string, any> | undefined)
-              ?.directUploadObjectKey ?? '',
+            metadata.directUploadObjectKey ?? '',
           ).trim();
-          const publicReferences = [
-            image.url,
-            image.thumbnailUrl,
-            image.filename,
-          ].filter(Boolean) as string[];
+          const storageMode = String(metadata.storageMode ?? '');
+          const publicReferences =
+            storageMode === 'original-imgproxy'
+              ? []
+              : [image.url, image.thumbnailUrl, image.filename].filter(
+                  Boolean,
+                ) as string[];
           const privateObjectKeys = [
-            image.originalObjectKey,
+            String(image.originalObjectKey ?? '').trim(),
             directObjectKey,
-          ].filter(Boolean) as string[];
+          ].filter(
+            (key) => Boolean(key) && !sharedPrivateKeys.has(key),
+          ) as string[];
 
           return {
             updateOne: {
@@ -2434,7 +2530,10 @@ export class CollectionsService implements OnModuleInit {
       ...new Set(
         processingJobs
           .map((job) => String(job.objectKey ?? '').trim())
-          .filter(Boolean),
+          .filter(
+            (objectKey) =>
+              Boolean(objectKey) && !sharedPrivateKeys.has(objectKey),
+          ),
       ),
     ];
 
@@ -2456,10 +2555,14 @@ export class CollectionsService implements OnModuleInit {
         : Promise.resolve(),
     ]);
 
-    const reclaimedBytes = images.reduce(
-      (sum, image) => sum + Math.max(0, Number(image.sizeBytes ?? 0)),
-      0,
-    );
+    const reclaimedBytes = images.reduce((sum, image) => {
+      const metadata = (image.metadata ?? {}) as Record<string, any>;
+      const storageKey =
+        String(image.originalObjectKey ?? '').trim() ||
+        String(metadata.directUploadObjectKey ?? '').trim();
+      if (storageKey && sharedPrivateKeys.has(storageKey)) return sum;
+      return sum + Math.max(0, Number(image.sizeBytes ?? 0));
+    }, 0);
     if (reclaimedBytes > 0)
       await this.decrementStorageUsedBytes(userId, reclaimedBytes);
 
@@ -2740,12 +2843,12 @@ export class CollectionsService implements OnModuleInit {
     watermarkId?: string,
     replaceImageId?: string,
   ) {
-    if (!Array.isArray(files) || !files.length || files.length > 10)
-      throw new BadRequestException('1 to 10 completed files are required');
+    if (!Array.isArray(files) || !files.length || files.length > 100)
+      throw new BadRequestException('1 to 100 completed files are required');
 
     const collection = await this.collectionModel
       .findOne({ _id: collectionId, userId })
-      .select('sets')
+      .select('sets watermarkId presetId coverImage')
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
     const activeSet = setId
@@ -2757,7 +2860,7 @@ export class CollectionsService implements OnModuleInit {
 
     const verified = await this.mapWithConcurrency(
       files,
-      6,
+      24,
       async (file) => {
         let verified:
           | Awaited<ReturnType<MinioService['verifyDirectUpload']>>
@@ -2860,7 +2963,56 @@ export class CollectionsService implements OnModuleInit {
       (item) => this.mediaType(item.type) === 'image',
     );
 
-    if (imageDirectFiles.length) {
+    let savedImages: any[] = [];
+    if (imageDirectFiles.length && this.imgproxyService.isEnabled()) {
+      const batchWatermark = await this.resolveEffectiveWatermark(
+        userId,
+        collection,
+        resolvedSetId,
+        watermarkId,
+      );
+      const lastImage = await this.imageModel
+        .findOne({ collectionId, userId })
+        .sort({ order: -1, createdAt: -1 })
+        .select('order')
+        .lean();
+      const startOrder = Math.max(0, Number(lastImage?.order ?? 0));
+
+      savedImages = await this.mapWithConcurrency(
+        imageDirectFiles,
+        16,
+        async (file, index) => {
+          const jobLike = {
+            userId,
+            collectionId,
+            setId: resolvedSetId,
+            watermarkId,
+            replaceImageId,
+            objectKey: file.objectKey,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            durationSeconds: file.durationSeconds,
+            width: file.width,
+            height: file.height,
+            order: startOrder + index + 1,
+          };
+          const image = await this.saveDirectImageForImgproxy(jobLike, {
+            collection,
+            resolvedSetId,
+            watermarkData: batchWatermark,
+          });
+          if (replaceImageId) {
+            await this.replaceImageAfterDirectProcessing(jobLike as any);
+          }
+          return this.publicImageRecord(image);
+        },
+      );
+
+      await this.imageProcessingJobModel.deleteMany({
+        objectKey: { $in: imageDirectFiles.map((file) => file.objectKey) },
+      });
+    } else if (imageDirectFiles.length) {
       await this.imageProcessingJobModel.bulkWrite(
         imageDirectFiles.map((file) => ({
           updateOne: {
@@ -2911,8 +3063,8 @@ export class CollectionsService implements OnModuleInit {
     }
 
     return {
-      items: savedVideos,
-      queued: imageDirectFiles.length,
+      items: [...savedVideos, ...savedImages],
+      queued: this.imgproxyService.isEnabled() ? 0 : imageDirectFiles.length,
     };
   }
 
@@ -3000,9 +3152,14 @@ export class CollectionsService implements OnModuleInit {
             collectionId,
             'metadata.directUploadObjectKey': { $in: completedObjectKeys },
           })
+          .select(
+            '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+          )
           .sort({ createdAt: -1 })
           .lean()
       : [];
+    const publicCompletedImages =
+      await this.publicImageRecordsForCollection(completedImages as any[]);
     const setImageCounts = Object.fromEntries(
       setCountRows.map((row) => [
         String(row._id || 'highlights'),
@@ -3018,23 +3175,24 @@ export class CollectionsService implements OnModuleInit {
     const recentCounts = new Map(
       recentRows.map((row) => [row._id || '', row.count]),
     );
-    const queued = counts.get('queued') ?? 0;
-    const processing = counts.get('processing') ?? 0;
-    const failed = counts.get('failed') ?? 0;
-    const current = processingJob ?? queuedJob;
+    const imgproxyActive = this.imgproxyService.isEnabled();
+    const queued = imgproxyActive ? 0 : (counts.get('queued') ?? 0);
+    const processing = imgproxyActive ? 0 : (counts.get('processing') ?? 0);
+    const failed = imgproxyActive ? 0 : (counts.get('failed') ?? 0);
+    const current = imgproxyActive ? null : (processingJob ?? queuedJob);
 
     return {
       queued,
       processing,
       failed,
       pending: queued + processing,
-      optimized: recentCounts.get('optimized') ?? 0,
-      rawFallback: recentCounts.get('raw-fallback') ?? 0,
+      optimized: imgproxyActive ? 0 : (recentCounts.get('optimized') ?? 0),
+      rawFallback: imgproxyActive
+        ? 0
+        : (recentCounts.get('raw-fallback') ?? 0),
       imageCount,
       setImageCounts,
-      completedImages: completedImages.map((image) =>
-        this.publicImageRecord(image),
-      ),
+      completedImages: imgproxyActive ? [] : publicCompletedImages,
       current: current
         ? {
             name: current.name,
@@ -3052,6 +3210,21 @@ export class CollectionsService implements OnModuleInit {
     this.directImageWorkerRunning = true;
     try {
       const now = Date.now();
+      if (this.imgproxyService.isEnabled()) {
+        if (now - this.lastDirectUploadDiscoveryAt >= 5_000) {
+          this.lastDirectUploadDiscoveryAt = now;
+          await this.discoverCompletedDirectUploads();
+        }
+        await this.reconcileLegacyImgproxyJobsOnce();
+        if (now - this.lastDirectImageRecoveryAt >= 60_000) {
+          this.lastDirectImageRecoveryAt = now;
+          await this.imageProcessingJobModel.deleteMany({
+            status: 'completed',
+          });
+        }
+        return;
+      }
+
       if (now - this.lastDirectUploadDiscoveryAt >= 5_000) {
         this.lastDirectUploadDiscoveryAt = now;
         await this.discoverCompletedDirectUploads();
@@ -3146,6 +3319,17 @@ export class CollectionsService implements OnModuleInit {
       }
 
       if (verified) {
+        if (this.imgproxyService.isEnabled()) {
+          if (this.mediaType(job.type) === 'image') {
+            await this.saveDirectImageForImgproxy(job as any);
+          } else {
+            await this.saveDirectVideoFromProcessingJob(job as any);
+          }
+          await this.replaceImageAfterDirectProcessing(job as any);
+          await this.imageProcessingJobModel.deleteOne({ _id: job._id });
+          return;
+        }
+
         await this.imageProcessingJobModel.updateOne(
           { _id: job._id, status: 'awaiting-upload' },
           {
@@ -3190,6 +3374,43 @@ export class CollectionsService implements OnModuleInit {
     });
   }
 
+  private async reconcileLegacyImgproxyJobsOnce() {
+    const jobs = await this.imageProcessingJobModel
+      .find({
+        status: { $in: ['queued', 'processing', 'failed'] },
+      })
+      .sort({ createdAt: 1 })
+      .limit(120)
+      .lean();
+    if (!jobs.length) return;
+
+    await this.mapWithConcurrency(jobs, 20, async (job) => {
+      try {
+        const verified = await this.minioService
+          .verifyDirectUpload(job.userId, {
+            objectKey: job.objectKey,
+            name: job.name,
+            type: job.type,
+            size: job.size,
+          })
+          .catch(() => undefined);
+
+        if (verified) {
+          if (this.mediaType(job.type) === 'image') {
+            await this.saveDirectImageForImgproxy(job as any);
+          } else {
+            await this.saveDirectVideoFromProcessingJob(job as any);
+          }
+          await this.replaceImageAfterDirectProcessing(job as any);
+        }
+      } finally {
+        await this.imageProcessingJobModel
+          .deleteOne({ _id: job._id })
+          .catch(() => undefined);
+      }
+    });
+  }
+
   private directImageWorkerConcurrency() {
     const configured = Number(
       this.configService.get<string>(
@@ -3230,6 +3451,208 @@ export class CollectionsService implements OnModuleInit {
       ageMs >=
         Math.max(5_000, Number.isFinite(maxQueueAgeMs) ? maxQueueAgeMs : 30_000)
     );
+  }
+
+  private toImgproxyWatermark(
+    watermark: WatermarkData | null | undefined,
+  ): ImgproxyWatermark | undefined {
+    if (!watermark) return undefined;
+    return {
+      type: watermark.type,
+      text: watermark.text,
+      font: watermark.font,
+      color: watermark.color,
+      scale: watermark.scale,
+      opacity: watermark.opacity,
+      position: watermark.position,
+      image: watermark.image,
+    };
+  }
+
+  private async resolveEffectiveWatermark(
+    userId: string,
+    collection: any,
+    setId?: string,
+    explicitWatermarkId?: string,
+  ) {
+    const explicit = String(explicitWatermarkId ?? '').trim();
+    if (explicit) {
+      if (explicit === 'No watermark') return null;
+      return this.resolveWatermarkById(userId, explicit);
+    }
+    const set = Array.isArray(collection?.sets)
+      ? collection.sets.find((item: any) => item?.id === setId)
+      : undefined;
+    if (set?.watermarkId) {
+      return this.resolveWatermarkById(userId, String(set.watermarkId));
+    }
+    if (collection?.watermarkId) {
+      return this.resolveWatermarkById(userId, String(collection.watermarkId));
+    }
+    if (collection?.presetId) {
+      return this.resolveWatermark(userId, String(collection.presetId));
+    }
+    return null;
+  }
+
+  private async queueImagePostUpload(image: any) {
+    await this.imageMetadataAiService.enqueueMany([image]).catch((error) => {
+      console.warn('Could not queue AI image metadata:', error?.message ?? error);
+    });
+    const faceQueue: FaceIndexQueueImage[] = [{
+      _id: image._id,
+      userId: image.userId,
+      collectionId: image.collectionId,
+      url: image.url,
+      thumbnailUrl: image.thumbnailUrl,
+    }];
+    setTimeout(() => {
+      void this.indexFacesInBackground(faceQueue);
+    }, this.backgroundFaceStartDelayMs());
+  }
+
+  private async saveDirectImageForImgproxy(
+    job: any,
+    options: {
+      manageCollection?: boolean;
+      queuePostUpload?: boolean;
+      collection?: any;
+      resolvedSetId?: string;
+      watermarkData?: WatermarkData | null;
+    } = {},
+  ) {
+    const lockKey = [
+      String(job.userId ?? ''),
+      String(job.collectionId ?? ''),
+      String(job.objectKey ?? ''),
+    ].join(':');
+    const existingLock = this.directImgproxySaveLocks.get(lockKey);
+    if (existingLock) return existingLock;
+
+    const savePromise = this.saveDirectImageForImgproxyUnlocked(job, options);
+    this.directImgproxySaveLocks.set(lockKey, savePromise);
+    try {
+      return await savePromise;
+    } finally {
+      if (this.directImgproxySaveLocks.get(lockKey) === savePromise) {
+        this.directImgproxySaveLocks.delete(lockKey);
+      }
+    }
+  }
+
+  private async saveDirectImageForImgproxyUnlocked(
+    job: any,
+    options: {
+      manageCollection?: boolean;
+      queuePostUpload?: boolean;
+      collection?: any;
+      resolvedSetId?: string;
+      watermarkData?: WatermarkData | null;
+    } = {},
+  ) {
+    const existing = await this.imageModel
+      .findOne({
+        userId: job.userId,
+        collectionId: job.collectionId,
+        'metadata.directUploadObjectKey': job.objectKey,
+      })
+      .select('+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes')
+      .lean();
+    if (existing) return existing;
+
+    const collection =
+      options.collection ??
+      (await this.collectionModel
+        .findOne({ _id: job.collectionId, userId: job.userId })
+        .lean());
+    if (!collection) throw new NotFoundException('Collection not found');
+    const activeSet = job.setId
+      ? collection.sets?.find((set: any) => set.id === job.setId)
+      : collection.sets?.[0];
+    if (job.setId && !activeSet) throw new NotFoundException('Set not found');
+    const resolvedSetId =
+      options.resolvedSetId || activeSet?.id || 'highlights';
+    const watermark =
+      options.watermarkData !== undefined
+        ? options.watermarkData
+        : ((job.watermarkData as WatermarkData | undefined) ??
+          (await this.resolveEffectiveWatermark(
+            job.userId,
+            collection,
+            resolvedSetId,
+            job.watermarkId,
+          )));
+    const proxyWatermark = this.toImgproxyWatermark(watermark);
+    const urls = this.imgproxyService.imageUrls(job.objectKey, proxyWatermark);
+    if (!urls) throw new Error('imgproxy is not configured');
+
+    const requestedOrder = Math.max(0, Number(job.order ?? 0));
+    const lastImage = requestedOrder
+      ? null
+      : await this.imageModel
+          .findOne({ collectionId: job.collectionId, userId: job.userId })
+          .sort({ order: -1, createdAt: -1 })
+          .select('order')
+          .lean();
+    const size = Math.max(0, Number(job.size ?? 0));
+    const image = await this.imageModel.create({
+      userId: job.userId,
+      collectionId: job.collectionId,
+      setId: resolvedSetId,
+      url: urls.url,
+      thumbnailUrl: urls.thumbnailUrl,
+      blurDataUrl: '',
+      originalName: job.name,
+      filename: job.name,
+      originalObjectKey: job.objectKey,
+      originalFilename: job.name,
+      originalMimeType: job.type,
+      originalSizeBytes: size,
+      mimetype: job.type,
+      mediaType: 'image',
+      sizeBytes: size,
+      width: this.safeDimension(job.width),
+      height: this.safeDimension(job.height),
+      watermarked: this.imgproxyService.hasWatermark(proxyWatermark),
+      order:
+        Math.max(0, Number(job.order ?? 0)) ||
+        Math.max(0, Number(lastImage?.order ?? 0)) + 1,
+      metadata: {
+        filename: job.name,
+        directUploadObjectKey: job.objectKey,
+        storageMode: 'original-imgproxy',
+        watermarkId: watermark?.id || job.watermarkId || '',
+        imgproxyWatermark: proxyWatermark,
+      },
+    });
+
+    await this.userModel.updateOne(
+      { _id: job.userId },
+      { $inc: { storageUsedBytes: size } },
+    );
+    if (options.manageCollection !== false) {
+      await this.collectionModel.updateOne(
+        { _id: job.collectionId, userId: job.userId },
+        {
+          $inc: { imageCount: 1 },
+          ...(!collection.coverImage
+            ? { $set: { coverImage: urls.url } }
+            : {}),
+        },
+      );
+    }
+    if (this.imgproxyService.hasWatermark(proxyWatermark)) {
+      this.imgproxyService.prewarmWatermark(
+        urls.responsive?.small || urls.thumbnailUrl,
+      );
+    }
+    if (
+      options.queuePostUpload !== false &&
+      this.imgproxyService.hasWatermark(proxyWatermark)
+    ) {
+      void this.queueImagePostUpload(image.toObject());
+    }
+    return image.toObject();
   }
 
   private async saveDirectVideoFromProcessingJob(
@@ -3344,6 +3767,16 @@ export class CollectionsService implements OnModuleInit {
     let localFile: Express.Multer.File | undefined;
 
     try {
+      if (
+        this.imgproxyService.isEnabled() &&
+        this.mediaType(job.type) === 'image'
+      ) {
+        await this.saveDirectImageForImgproxy(job);
+        await this.replaceImageAfterDirectProcessing(job);
+        await this.imageProcessingJobModel.deleteOne({ _id: job._id });
+        return;
+      }
+
       if (this.mediaType(job.type) === 'video') {
         await this.saveDirectVideoFromProcessingJob(job);
         await this.replaceImageAfterDirectProcessing(job);
@@ -3880,22 +4313,68 @@ export class CollectionsService implements OnModuleInit {
       return { deleted: 0, imageIds: [], items: [] };
     }
 
+    const deletingIds = images.map((image) => image._id.toString());
+    const candidatePrivateKeys = [
+      ...new Set(
+        images
+          .flatMap((image) => [
+            String(image.originalObjectKey ?? '').trim(),
+            String(
+              (image.metadata as Record<string, any> | undefined)
+                ?.directUploadObjectKey ?? '',
+            ).trim(),
+          ])
+          .filter(Boolean),
+      ),
+    ];
+    const sharedRows = candidatePrivateKeys.length
+      ? await this.imageModel
+          .find({
+            _id: { $nin: deletingIds },
+            $or: [
+              { originalObjectKey: { $in: candidatePrivateKeys } },
+              {
+                'metadata.directUploadObjectKey': {
+                  $in: candidatePrivateKeys,
+                },
+              },
+            ],
+          })
+          .select('+originalObjectKey metadata')
+          .lean()
+      : [];
+    const sharedPrivateKeys = new Set(
+      sharedRows
+        .flatMap((image) => [
+          String(image.originalObjectKey ?? '').trim(),
+          String(
+            (image.metadata as Record<string, any> | undefined)
+              ?.directUploadObjectKey ?? '',
+          ).trim(),
+        ])
+        .filter(Boolean),
+    );
+
     const now = new Date();
     await this.imageDeleteJobModel.bulkWrite(
       images.map((image) => {
+        const metadata = (image.metadata ?? {}) as Record<string, any>;
         const directObjectKey = String(
-          (image.metadata as Record<string, any> | undefined)
-            ?.directUploadObjectKey ?? '',
+          metadata.directUploadObjectKey ?? '',
         ).trim();
-        const publicReferences = [
-          image.url,
-          image.thumbnailUrl,
-          image.filename,
-        ].filter(Boolean) as string[];
+        const storageMode = String(metadata.storageMode ?? '');
+        const publicReferences =
+          storageMode === 'original-imgproxy'
+            ? []
+            : [image.url, image.thumbnailUrl, image.filename].filter(
+                Boolean,
+              ) as string[];
         const privateObjectKeys = [
-          image.originalObjectKey,
+          String(image.originalObjectKey ?? '').trim(),
           directObjectKey,
-        ].filter(Boolean) as string[];
+        ].filter(
+          (key) => Boolean(key) && !sharedPrivateKeys.has(key),
+        ) as string[];
 
         return {
           updateOne: {
@@ -3953,10 +4432,14 @@ export class CollectionsService implements OnModuleInit {
         : Promise.resolve(),
     ]);
 
-    const reclaimedBytes = images.reduce(
-      (sum, image) => sum + Math.max(0, Number(image.sizeBytes ?? 0)),
-      0,
-    );
+    const reclaimedBytes = images.reduce((sum, image) => {
+      const metadata = (image.metadata ?? {}) as Record<string, any>;
+      const storageKey =
+        String(image.originalObjectKey ?? '').trim() ||
+        String(metadata.directUploadObjectKey ?? '').trim();
+      if (storageKey && sharedPrivateKeys.has(storageKey)) return sum;
+      return sum + Math.max(0, Number(image.sizeBytes ?? 0));
+    }, 0);
     const nextImage = await this.imageModel
       .findOne({ userId, collectionId })
       .sort({ createdAt: -1 })
@@ -4146,11 +4629,15 @@ export class CollectionsService implements OnModuleInit {
     imageId: string,
     dto: { originalName?: string; setId?: string; watermarkId?: string },
   ) {
-    const image = await this.imageModel.findOne({
-      _id: imageId,
-      userId,
-      collectionId,
-    });
+    const image = await this.imageModel
+      .findOne({
+        _id: imageId,
+        userId,
+        collectionId,
+      })
+      .select(
+        '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+      );
     if (!image) throw new NotFoundException('Image not found');
     const collection = await this.collectionModel
       .findOne({ _id: collectionId, userId })
@@ -4180,7 +4667,10 @@ export class CollectionsService implements OnModuleInit {
       image.watermarked = false;
     }
     await image.save();
-    return image.toObject();
+    const [publicImage] = await this.publicImageRecordsForCollection([
+      image.toObject() as any,
+    ]);
+    return publicImage;
   }
 
   async copyMoveImage(
@@ -4195,6 +4685,9 @@ export class CollectionsService implements OnModuleInit {
   ) {
     const image = await this.imageModel
       .findOne({ _id: imageId, userId, collectionId })
+      .select(
+        '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+      )
       .lean();
     if (!image) throw new NotFoundException('Image not found');
     const targetCollectionId = String(dto.targetCollectionId ?? '').trim();
@@ -4257,9 +4750,12 @@ export class CollectionsService implements OnModuleInit {
         $set: { coverImage: targetCollection.coverImage ?? image.url },
       },
     );
+    const [publicCopy] = await this.publicImageRecordsForCollection([
+      copy.toObject() as any,
+    ]);
     return {
       copied: true,
-      image: copy.toObject(),
+      image: publicCopy,
       targetCollectionId,
       targetSetId,
     };
@@ -4309,6 +4805,52 @@ export class CollectionsService implements OnModuleInit {
         .lean();
       if (existing) return this.publicImageRecord(existing);
     }
+    if (this.imgproxyService.isEnabled()) {
+      const extension =
+        extname(file.originalname)
+          .toLowerCase()
+          .replace(/[^.a-z0-9]/g, '')
+          .slice(0, 12) || '.img';
+      const originalObjectKey =
+        directOriginalObjectKey ||
+        `originals/${userId}/${collectionId}/${imageId.toString()}${extension}`;
+      let originalStored = false;
+      try {
+        if (!directOriginalObjectKey) {
+          await this.minioService.uploadPrivateFile(file, originalObjectKey);
+          originalStored = true;
+        }
+        const image = await this.saveDirectImageForImgproxy(
+          {
+            userId,
+            collectionId,
+            setId,
+            order,
+            watermarkId: watermark?.id,
+            watermarkData: watermark ?? undefined,
+            objectKey: originalObjectKey,
+            name: file.originalname,
+            type: file.mimetype,
+            size: Math.max(0, Number(file.size ?? 0)),
+          },
+          {
+            manageCollection: false,
+            queuePostUpload: false,
+          },
+        );
+        return this.publicImageRecord(image);
+      } catch (error) {
+        if (originalStored) {
+          await this.minioService
+            .deletePrivateFile(originalObjectKey)
+            .catch(() => undefined);
+        }
+        throw error;
+      } finally {
+        await this.safeUnlink(file.path);
+      }
+    }
+
     const extractedMetadata = directOriginalObjectKey
       ? {}
       : await this.extractMetadata(file);
@@ -4597,15 +5139,190 @@ export class CollectionsService implements OnModuleInit {
     };
   }
 
-  private publicImageRecord(image: Record<string, any>) {
+  private publicImageRecord(
+    image: Record<string, any>,
+    watermark?: WatermarkData | null,
+  ) {
     const {
-      originalObjectKey: _originalObjectKey,
+      originalObjectKey,
       originalFilename: _originalFilename,
       originalMimeType: _originalMimeType,
       originalSizeBytes: _originalSizeBytes,
       ...safe
     } = image ?? {};
+    const fallbackDirectObjectKey = String(
+      safe.metadata?.directUploadObjectKey ?? '',
+    ).trim();
+    const sourceObjectKey =
+      String(originalObjectKey ?? '').trim() ||
+      (fallbackDirectObjectKey.startsWith('private-direct/') ||
+      fallbackDirectObjectKey.startsWith('direct/') ||
+      fallbackDirectObjectKey.startsWith('originals/')
+        ? fallbackDirectObjectKey
+        : '');
+    const storedWatermark = safe.metadata?.imgproxyWatermark as
+      | ImgproxyWatermark
+      | undefined;
+    if (safe.metadata?.imgproxyWatermark !== undefined) {
+      const {
+        imgproxyWatermark: _imgproxyWatermark,
+        ...publicMetadata
+      } = safe.metadata;
+      safe.metadata = publicMetadata;
+    }
+
+    if (
+      this.imgproxyService.isEnabled() &&
+      sourceObjectKey &&
+      safe.mediaType !== 'video'
+    ) {
+      const proxyWatermark =
+        watermark === undefined
+          ? storedWatermark
+          : this.toImgproxyWatermark(watermark);
+      const urls = this.imgproxyService.imageUrls(
+        sourceObjectKey,
+        proxyWatermark,
+      );
+      if (urls) {
+        return {
+          ...safe,
+          url: urls.url,
+          thumbnailUrl: urls.thumbnailUrl,
+          responsive: urls.responsive,
+          watermarked: this.imgproxyService.hasWatermark(proxyWatermark),
+        };
+      }
+    }
+
     return safe;
+  }
+
+  private async currentCollectionCover(collection: any) {
+    const storedCover = String(collection?.coverImage ?? '').trim();
+    if (!storedCover || !this.imgproxyService.isEnabled()) {
+      return storedCover;
+    }
+
+    const image = await this.imageModel
+      .findOne({
+        userId: String(collection.userId),
+        collectionId: String(collection._id),
+        mediaType: { $ne: 'video' },
+        $or: [{ url: storedCover }, { thumbnailUrl: storedCover }],
+      })
+      .select(
+        '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+      )
+      .lean();
+    if (!image) return storedCover;
+    const originalObjectKey =
+      String(image?.originalObjectKey ?? '').trim() ||
+      String(
+        (image?.metadata as Record<string, any> | undefined)
+          ?.directUploadObjectKey ?? '',
+      ).trim();
+    if (
+      !originalObjectKey ||
+      (!originalObjectKey.startsWith('private-direct/') &&
+        !originalObjectKey.startsWith('direct/') &&
+        !originalObjectKey.startsWith('originals/'))
+    ) {
+      return storedCover;
+    }
+
+    const explicitWatermarkId = String(
+      (image.metadata as Record<string, any> | undefined)?.watermarkId ?? '',
+    ).trim();
+    const watermark = await this.resolveEffectiveWatermark(
+      String(collection.userId),
+      collection,
+      String(image.setId || 'highlights'),
+      explicitWatermarkId || undefined,
+    );
+    const urls = this.imgproxyService.imageUrls(
+      originalObjectKey,
+      this.toImgproxyWatermark(watermark),
+    );
+    return urls?.url || storedCover;
+  }
+
+  private async publicImageRecordsForCollection(
+    images: Record<string, any>[],
+  ) {
+    if (!images.length) return [];
+    if (!this.imgproxyService.isEnabled()) {
+      return images.map((image) => this.publicImageRecord(image));
+    }
+
+    const originalImages = images.filter((image) => {
+      const key =
+        String(image?.originalObjectKey ?? '').trim() ||
+        String(image?.metadata?.directUploadObjectKey ?? '').trim();
+      return (
+        image?.mediaType !== 'video' &&
+        (key.startsWith('private-direct/') ||
+          key.startsWith('direct/') ||
+          key.startsWith('originals/'))
+      );
+    });
+    if (!originalImages.length) {
+      return images.map((image) => this.publicImageRecord(image));
+    }
+
+    const first = originalImages[0];
+    const collection = await this.collectionModel
+      .findOne({
+        _id: first.collectionId,
+        userId: first.userId,
+      })
+      .select('userId presetId watermarkId sets')
+      .lean();
+
+    if (!collection) {
+      return images.map((image) => this.publicImageRecord(image));
+    }
+
+    const watermarkCache = new Map<string, Promise<WatermarkData | null>>();
+    const records: Record<string, any>[] = [];
+    for (const image of images) {
+      const sourceObjectKey =
+        String(image?.originalObjectKey ?? '').trim() ||
+        String(image?.metadata?.directUploadObjectKey ?? '').trim();
+      if (
+        image?.mediaType === 'video' ||
+        (!sourceObjectKey.startsWith('private-direct/') &&
+          !sourceObjectKey.startsWith('direct/') &&
+          !sourceObjectKey.startsWith('originals/'))
+      ) {
+        records.push(this.publicImageRecord(image));
+        continue;
+      }
+
+      const explicitWatermarkId = String(
+        image?.metadata?.watermarkId ?? '',
+      ).trim();
+      const setId = String(image?.setId || 'highlights');
+      const cacheKey = explicitWatermarkId
+        ? `watermark:${explicitWatermarkId}`
+        : `set:${setId}`;
+      if (!watermarkCache.has(cacheKey)) {
+        watermarkCache.set(
+          cacheKey,
+          explicitWatermarkId === 'No watermark'
+            ? Promise.resolve(null)
+            : this.resolveEffectiveWatermark(
+                String(first.userId),
+                collection,
+                setId,
+                explicitWatermarkId || undefined,
+              ),
+        );
+      }
+      const watermark = await watermarkCache.get(cacheKey)!;
+      records.push(this.publicImageRecord(image, watermark));
+    }
+    return records;
   }
 
   private imageProcessingConcurrency() {
@@ -4687,14 +5404,19 @@ export class CollectionsService implements OnModuleInit {
     const [items, total] = await Promise.all([
       this.imageModel
         .find(query)
+        .select(
+          '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+        )
         .sort({ order: 1, createdAt: -1 })
         .skip(offset)
         .limit(limit)
         .lean(),
       this.imageModel.countDocuments(query),
     ]);
+    const sorted = this.sortImagesForGallery(items);
+    const publicItems = await this.publicImageRecordsForCollection(sorted as any[]);
     return {
-      items: this.sortImagesForGallery(items),
+      items: publicItems,
       total,
       limit,
       offset,
@@ -4755,6 +5477,15 @@ export class CollectionsService implements OnModuleInit {
         collectionId,
         mediaType: { $ne: 'video' },
         thumbnailUrl: { $in: [null, ''] },
+        ...(this.imgproxyService.isEnabled()
+          ? {
+              $or: [
+                { originalObjectKey: { $exists: false } },
+                { originalObjectKey: null },
+                { originalObjectKey: '' },
+              ],
+            }
+          : {}),
       })
       .limit(30)
       .lean()
@@ -5107,19 +5838,32 @@ export class CollectionsService implements OnModuleInit {
   }
 
   private async deleteStoredImageFiles(image: CollectionImageDocument) {
-    const references = [image.url, image.thumbnailUrl, image.filename].filter(
-      Boolean,
-    ) as string[];
-
-    await Promise.all(
-      [...new Set(references)].map((reference) =>
-        this.minioService.deleteService(reference).catch(() => null),
-      ),
+    const storageMode = String(
+      (image.metadata as Record<string, any> | undefined)?.storageMode ?? '',
     );
-    if (image.originalObjectKey) {
-      await this.minioService
-        .deletePrivateFile(image.originalObjectKey)
-        .catch(() => null);
+    const originalObjectKey = String(image.originalObjectKey ?? '').trim();
+
+    if (storageMode !== 'original-imgproxy') {
+      const references = [image.url, image.thumbnailUrl, image.filename].filter(
+        Boolean,
+      ) as string[];
+      await Promise.all(
+        [...new Set(references)].map((reference) =>
+          this.minioService.deleteService(reference).catch(() => null),
+        ),
+      );
+    }
+
+    if (originalObjectKey) {
+      const sharedReference = await this.imageModel.exists({
+        _id: { $ne: image._id },
+        originalObjectKey,
+      });
+      if (!sharedReference) {
+        await this.minioService
+          .deletePrivateFile(originalObjectKey)
+          .catch(() => null);
+      }
     }
   }
 

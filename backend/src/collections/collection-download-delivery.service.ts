@@ -143,10 +143,18 @@ export class CollectionDownloadDeliveryService {
     const zipPath = join(tempDir, job.fileName);
     try {
       await mkdir(sourceDir, { recursive: true });
-      const rawImages = await this.imageModel.find({
-        collectionId: job.collectionId,
-        _id: { $in: job.imageIds.filter((id) => Types.ObjectId.isValid(id)) },
-      }).lean();      const byId = new Map(rawImages.map((image) => [String(image._id), image]));
+      const rawImages = await this.imageModel
+        .find({
+          collectionId: job.collectionId,
+          _id: { $in: job.imageIds.filter((id) => Types.ObjectId.isValid(id)) },
+        })
+        .select(
+          '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+        )
+        .lean();
+      const byId = new Map(
+        rawImages.map((image) => [String(image._id), image]),
+      );
       const images = job.imageIds.map((id) => byId.get(id)).filter(Boolean) as any[];
       if (!images.length) throw new Error('Requested photos are no longer available');
 
@@ -157,9 +165,21 @@ export class CollectionDownloadDeliveryService {
         const name = this.uniqueArchiveName(rawName, index, usedNames);
         const extension = extname(name) || extname(String(image.url || '')) || '.jpg';
         const localPath = join(sourceDir, `${String(index + 1).padStart(5, '0')}${extension}`);
-        const source = job.preferThumbnails && image.thumbnailUrl ? String(image.thumbnailUrl) : String(image.url || '');
-        if (!source) continue;
-        await this.downloadToDisk(source, localPath);
+        const originalObjectKey = String(
+          image.originalObjectKey ?? '',
+        ).trim();
+        if (!job.preferThumbnails && originalObjectKey) {
+          const original =
+            await this.minioService.openPrivateReadStream(originalObjectKey);
+          await pipeline(original.body, createWriteStream(localPath));
+        } else {
+          const source =
+            job.preferThumbnails && image.thumbnailUrl
+              ? String(image.thumbnailUrl)
+              : String(image.url || '');
+          if (!source) continue;
+          await this.downloadToDisk(source, localPath);
+        }
         localFiles.push({ path: localPath, name });
       }
       if (!localFiles.length) throw new Error('Requested files could not be read from storage');

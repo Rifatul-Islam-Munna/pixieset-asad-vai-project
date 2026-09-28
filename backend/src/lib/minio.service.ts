@@ -104,12 +104,26 @@ export class MinioService implements OnModuleInit {
     }
 
     this.endpointUrl = connection.endpoint;
-    this.bucketName = connection.bucket;
-    this.privateBucketName =
-      this.configService.get<string>('STORAGE_PRIVATE_BUCKET')?.trim() ||
-      `${this.bucketName}-private`;
+    const connectionBucket = connection.bucket;
+    const configuredPublicBucket =
+      this.configService.get<string>('STORAGE_PUBLIC_BUCKET')?.trim() || '';
+    const configuredPrivateBucket =
+      this.configService.get<string>('STORAGE_PRIVATE_BUCKET')?.trim() || '';
+    if (connectionBucket.toLowerCase().endsWith('-private')) {
+      this.privateBucketName = configuredPrivateBucket || connectionBucket;
+      this.bucketName =
+        configuredPublicBucket ||
+        connectionBucket.replace(/-private$/i, '') ||
+        connectionBucket;
+    } else {
+      this.bucketName = configuredPublicBucket || connectionBucket;
+      this.privateBucketName =
+        configuredPrivateBucket || `${connectionBucket}-private`;
+    }
     this.isCloudflareR2 = connection.isCloudflareR2;
-    this.publicBaseUrl = explicitPublicUrl.replace(/\/+$/, '') || connection.apiBaseUrl;
+    this.publicBaseUrl =
+      explicitPublicUrl.replace(/\/+$/, '') ||
+      `${connection.endpoint}/${encodeURIComponent(this.bucketName)}`;
 
     this.s3 = new S3Client({
       region,
@@ -677,6 +691,30 @@ export class MinioService implements OnModuleInit {
     return objectKey.startsWith('private-direct/')
       ? this.privateBucketName
       : this.bucketName;
+  }
+
+  getPrivateBucketName() {
+    return this.privateBucketName;
+  }
+
+  imgproxySourceUrl(objectKey: string) {
+    const key = String(objectKey || '').trim().replace(/^\/+/, '');
+    if (!key || key.includes('..')) {
+      throw new HttpException('Invalid image source key', HttpStatus.BAD_REQUEST);
+    }
+    const encodedKey = key
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/');
+    const bucket =
+      key.startsWith('private-direct/') || key.startsWith('originals/')
+        ? this.privateBucketName
+        : this.bucketName;
+    return `s3://${bucket}/${encodedKey}`;
+  }
+
+  privateSourceUrl(objectKey: string) {
+    return this.imgproxySourceUrl(objectKey);
   }
 
   private publicUrl(objectKey: string) {

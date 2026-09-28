@@ -53,6 +53,11 @@ export type CollectionImageRecord = {
   setId?: string;
   url: string;
   thumbnailUrl?: string;
+  responsive?: {
+    small?: string;
+    medium?: string;
+    large?: string;
+  };
   blurDataUrl?: string;
   originalName?: string;
   mimetype?: string;
@@ -433,6 +438,7 @@ export function useCollectionDetail(collectionId?: string) {
       onActivity,
       onStats,
       onRawUploaded,
+      onRawTransferComplete,
     }: {
       files: FileList | File[];
       setId?: string;
@@ -444,6 +450,7 @@ export function useCollectionDetail(collectionId?: string) {
       onActivity?: (activity: CollectionUploadActivity) => void;
       onStats?: (stats: DirectUploadStats) => void;
       onRawUploaded?: (uploads: CompletedDirectUpload[]) => void;
+      onRawTransferComplete?: () => void;
     }) => {
       const uploadCollectionId = targetCollectionId || collectionId;
       if (!uploadCollectionId) throw new Error("Collection is required");
@@ -452,7 +459,7 @@ export function useCollectionDetail(collectionId?: string) {
       const uploaded: CollectionImageRecord[] = [];
       const completedDirectUploads: CompletedDirectUpload[] = [];
       let transferredBytes = 0;
-      let queued = 0;
+      let uploadGuardActive = false;
       // The backend intentionally caps a single authorization request at 500 files.
       // Keep each request comfortably below that guard while allowing the user to
       // select any number of files in one action. Network concurrency remains bounded
@@ -460,8 +467,9 @@ export function useCollectionDetail(collectionId?: string) {
       const uploadBatchSize = 200;
 
       beginDirectUploadSessionGuard();
+      uploadGuardActive = true;
       try {
-      for (const uploadBatch of batches(selected, uploadBatchSize)) {
+        for (const uploadBatch of batches(selected, uploadBatchSize)) {
         onActivity?.({
           stage: "preparing",
           message: `Preparing ${uploadBatch.length} file${uploadBatch.length === 1 ? "" : "s"} without changing the originals`,
@@ -525,24 +533,19 @@ export function useCollectionDetail(collectionId?: string) {
         completedDirectUploads.push(...completed);
         onRawUploaded?.([...completedDirectUploads]);
 
-        for (const completionBatch of batches(completed, 10)) {
-          onActivity?.({
-            stage: "finalizing",
-            message:
-              "Raw upload reached R2. Confirming storage and queueing background optimization.",
-          });
-          let result:
-            | (ListResponse<CollectionImageRecord[]> & {
-                message: string;
-                queued?: number;
-              })
-            | null = null;
-          let completionError:
-            | { message: string; statusCode: number }
-            | null = null;
 
-          for (let attempt = 1; attempt <= 3; attempt += 1) {
-            [result, completionError] = await PostRequestAxios<
+      }
+
+      onProgress?.(100);
+      onRawTransferComplete?.();
+      endDirectUploadSessionGuard();
+      uploadGuardActive = false;
+
+      const completionBatches = batches(completedDirectUploads, 100);
+      for (const completionWave of batches(completionBatches, 4)) {
+        const results = await Promise.all(
+          completionWave.map(async (completionBatch) => {
+            const [result] = await PostRequestAxios<
               ListResponse<CollectionImageRecord[]> & {
                 message: string;
                 queued?: number;
@@ -555,59 +558,27 @@ export function useCollectionDetail(collectionId?: string) {
                 watermarkId,
                 replaceImageId,
               },
-              { timeoutMs: 30_000 },
+              { timeoutMs: 12_000 },
             );
-            if (result) break;
-            if (
-              completionError &&
-              completionError.statusCode >= 400 &&
-              completionError.statusCode < 500
-            ) {
-              break;
-            }
-            if (attempt < 3) {
-              onActivity?.({
-                stage: "retrying",
-                message: `Storage confirmation did not return cleanly. Retrying automatically (${attempt + 1}/3).`,
-              });
-              await new Promise((resolve) =>
-                setTimeout(resolve, 500 * 2 ** (attempt - 1)),
-              );
-            }
-          }
+            return result;
+          }),
+        );
 
-          if (completionError || !result) {
-            throw new Error(
-              completionError?.message || "Could not finalize direct upload",
-            );
-          }
-          uploaded.push(...(result.data ?? []));
-          const newlyQueued = Math.max(0, Number(result.queued ?? 0));
-          queued += newlyQueued;
-          onActivity?.({
-            stage: "queued",
-            message:
-              newlyQueued > 0
-                ? `Raw upload is safe in R2. ${newlyQueued} photo${newlyQueued === 1 ? "" : "s"} moved to non-blocking background optimization.`
-                : "Upload confirmed and ready.",
-          });
+        for (const result of results) {
+          if (result) uploaded.push(...(result.data ?? []));
         }
       }
 
-      onProgress?.(100);
       return {
         data: uploaded,
-        message:
-          queued > 0
-            ? "Upload complete. Image processing continues in background."
-            : "Upload complete.",
-        queued,
+        message: "Upload complete. Originals are ready for imgproxy.",
+        queued: 0,
       } as ListResponse<CollectionImageRecord[]> & {
         message: string;
         queued: number;
       };
       } finally {
-        endDirectUploadSessionGuard();
+        if (uploadGuardActive) endDirectUploadSessionGuard();
       }
     },
     onSuccess: (_response, variables) => {

@@ -23,6 +23,11 @@ type PublicImage = {
   setId?: string;
   url: string;
   thumbnailUrl?: string;
+  responsive?: {
+    small?: string;
+    medium?: string;
+    large?: string;
+  };
   blurDataUrl?: string;
   originalName?: string;
   mimetype?: string;
@@ -1672,8 +1677,10 @@ export function PublicGallery({
             <video src={imageSrc(activeImage.url)} className="max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
             <GalleryImage
-              src={imageSrc(activeImage.thumbnailUrl || activeImage.url)}
-              fallbackSrc={imageSrc(activeImage.url)}
+              src={imageSrc(activeImage.url)}
+              fallbackSrc={imageSrc(activeImage.thumbnailUrl || activeImage.url)}
+              srcSet={responsiveImageSrcSet(activeImage)}
+              sizes="100vw"
               alt={displayCaption(activeImage)}
               className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full object-contain"
               priority
@@ -1733,8 +1740,10 @@ export function PublicGallery({
           ) : (
             <GalleryImage
               key={slideshowImage._id}
-              src={imageSrc(slideshowImage.thumbnailUrl || slideshowImage.url)}
-              fallbackSrc={imageSrc(slideshowImage.url)}
+              src={imageSrc(slideshowImage.url)}
+              fallbackSrc={imageSrc(slideshowImage.thumbnailUrl || slideshowImage.url)}
+              srcSet={responsiveImageSrcSet(slideshowImage)}
+              sizes="100vw"
               alt={displayCaption(slideshowImage)}
               className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
               priority
@@ -1803,11 +1812,9 @@ export function PublicGallery({
 
 function imageSrc(url?: string) {
   if (!url) return "";
-  if (url.startsWith("/uploads/")) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-    return `${baseUrl}${url}`;
-  }
-  return url;
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  return url.startsWith("/") ? `${baseUrl}${url}` : url;
 }
 
 function isPersistedImageId(value: string) {
@@ -1818,7 +1825,23 @@ function displayImageUrl(image: PublicImage) {
   return image.thumbnailUrl || image.url;
 }
 
-
+function responsiveImageSrcSet(image: PublicImage) {
+  if (!image.responsive) return undefined;
+  return [
+    image.responsive.small
+      ? `${imageSrc(image.responsive.small)} 480w`
+      : "",
+    image.responsive.medium
+      ? `${imageSrc(image.responsive.medium)} 960w`
+      : "",
+    image.responsive.large
+      ? `${imageSrc(image.responsive.large)} 1600w`
+      : "",
+    image.url ? `${imageSrc(image.url)} 2560w` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
 
 function displayFilename(image: PublicImage) {
   return imageDisplayName(image, "");
@@ -1924,6 +1947,8 @@ function GalleryTile({
           <GalleryImage
             src={imageSrc(displayImageUrl(photo))}
             fallbackSrc={imageSrc(photo.url)}
+            srcSet={responsiveImageSrcSet(photo)}
+            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
             alt={displayCaption(photo)}
             className={crop ? "block h-full w-full object-cover" : "block h-auto w-full"}
             style={sharpenStyle(sharpeningLevel)}
@@ -1977,6 +2002,8 @@ function GalleryTile({
 function GalleryImage({
   src,
   fallbackSrc,
+  srcSet,
+  sizes,
   alt,
   className,
   style,
@@ -1987,6 +2014,8 @@ function GalleryImage({
 }: {
   src: string;
   fallbackSrc?: string;
+  srcSet?: string;
+  sizes?: string;
   alt: string;
   className?: string;
   style?: CSSProperties;
@@ -2056,6 +2085,8 @@ function GalleryImage({
       <img
         ref={imageRef}
         src={currentSrc}
+        srcSet={currentSrc === src ? srcSet : undefined}
+        sizes={currentSrc === src ? sizes : undefined}
         alt={alt}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}

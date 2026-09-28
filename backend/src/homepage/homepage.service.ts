@@ -9,6 +9,10 @@ import { User, UserDocument } from 'src/user/entities/user.entity';
 import { BookingSetting, BookingSettingDocument } from 'src/bookings/entities/booking-setting.entity';
 import { UpdateHomepageDto } from './dto/update-homepage.dto';
 import { Homepage, HomepageDocument } from './entities/homepage.entity';
+import {
+  ImgproxyService,
+  type ImgproxyWatermark,
+} from 'src/lib/imgproxy.service';
 
 @Injectable()
 export class HomepageService {
@@ -25,6 +29,7 @@ export class HomepageService {
     private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(BookingSetting.name)
     private readonly bookingSettingModel: Model<BookingSettingDocument>,
+    private readonly imgproxyService: ImgproxyService,
   ) {}
 
   async getMine(userId: string) {
@@ -180,14 +185,59 @@ export class HomepageService {
       ? await this.imageModel
           .find({ collectionId: { $in: collectionIds } })
           .sort({ order: 1, createdAt: -1 })
-          .select('collectionId url thumbnailUrl')
+          .select(
+            'collectionId setId url thumbnailUrl mediaType metadata +originalObjectKey',
+          )
           .lean()
       : [];
 
     const firstImage = new Map<string, any>();
+    const imageByStoredUrl = new Map<string, any>();
     for (const image of images) {
-      if (!firstImage.has(image.collectionId)) firstImage.set(image.collectionId, image);
+      const collectionId = String(image.collectionId);
+      if (!firstImage.has(collectionId)) firstImage.set(collectionId, image);
+      for (const storedUrl of [image.url, image.thumbnailUrl]) {
+        if (storedUrl) {
+          imageByStoredUrl.set(
+            `${collectionId}:${String(storedUrl)}`,
+            image,
+          );
+        }
+      }
     }
+
+    const publicCollections = await Promise.all(
+      collections.map(async (collection) => {
+        const id = collection._id.toString();
+        const fallback = firstImage.get(id);
+        const storedCover = String(collection.coverImage ?? '').trim();
+        const coverImage =
+          (storedCover
+            ? imageByStoredUrl.get(`${id}:${storedCover}`)
+            : undefined) ?? fallback;
+        const resolvedCover = await this.homepageImageUrl(
+          homepage.userId,
+          collection,
+          coverImage,
+        );
+        return {
+          _id: id,
+          name: collection.name,
+          slug: collection.slug ?? id,
+          eventDate: collection.eventDate,
+          coverImage:
+            resolvedCover ||
+            storedCover ||
+            fallback?.thumbnailUrl ||
+            fallback?.url ||
+            '',
+          imageCount: collection.imageCount ?? 0,
+          tags: Array.isArray(collection.tags) ? collection.tags : [],
+          featured: (homepage.featuredCollectionIds ?? []).includes(id),
+          url: `/${encodeURIComponent(collection.slug ?? id)}`,
+        };
+      }),
+    );
 
     return {
       ...base,
@@ -195,21 +245,103 @@ export class HomepageService {
       booking: publicBooking,
       locked: false,
       blogPosts,
-      collections: collections.map((collection) => {
-        const id = collection._id.toString();
-        const fallback = firstImage.get(id);
-        return {
-          _id: id,
-          name: collection.name,
-          slug: collection.slug ?? id,
-          eventDate: collection.eventDate,
-          coverImage: collection.coverImage || fallback?.thumbnailUrl || fallback?.url || '',
-          imageCount: collection.imageCount ?? 0,
-          tags: Array.isArray(collection.tags) ? collection.tags : [],
-          featured: (homepage.featuredCollectionIds ?? []).includes(id),
-          url: `/${encodeURIComponent(collection.slug ?? id)}`,
-        };
-      }),
+      collections: publicCollections,
+    };
+  }
+
+  private async homepageImageUrl(
+    userId: string,
+    collection: any,
+    image?: any,
+  ) {
+    const sourceObjectKey =
+      String(image?.originalObjectKey ?? '').trim() ||
+      String(image?.metadata?.directUploadObjectKey ?? '').trim();
+    if (
+      !this.imgproxyService.isEnabled() ||
+      image?.mediaType === 'video' ||
+      (!sourceObjectKey.startsWith('private-direct/') &&
+        !sourceObjectKey.startsWith('direct/') &&
+        !sourceObjectKey.startsWith('originals/'))
+    ) {
+      return '';
+    }
+
+    const watermark = await this.homepageWatermark(
+      userId,
+      collection,
+      image,
+    );
+    const urls = this.imgproxyService.imageUrls(
+      sourceObjectKey,
+      watermark,
+    );
+    return urls?.thumbnailUrl || urls?.url || '';
+  }
+
+  private async homepageWatermark(
+    userId: string,
+    collection: any,
+    image: any,
+  ): Promise<ImgproxyWatermark | undefined> {
+    const explicit = String(image?.metadata?.watermarkId ?? '').trim();
+    if (explicit === 'No watermark') return undefined;
+
+    let watermarkId = explicit;
+    if (!watermarkId) {
+      const setId = String(image?.setId || 'highlights');
+      const set = Array.isArray(collection?.sets)
+        ? collection.sets.find((item: any) => String(item?.id) === setId)
+        : undefined;
+      watermarkId =
+        String(set?.watermarkId ?? '').trim() ||
+        String(collection?.watermarkId ?? '').trim();
+    }
+
+    if (!watermarkId && collection?.presetId) {
+      const preset = await this.settingModel
+        .findOne({
+          userId,
+          type: DashboardSettingType.PRESET,
+          localId: String(collection.presetId),
+        })
+        .lean();
+      const presetData = preset?.data as any;
+      watermarkId = String(
+        presetData?.general?.defaultWatermark ??
+          presetData?.presetGeneral?.defaultWatermark ??
+          '',
+      ).trim();
+    }
+
+    if (!watermarkId || watermarkId === 'No watermark') return undefined;
+
+    const setting = await this.settingModel
+      .findOne({
+        userId,
+        type: DashboardSettingType.WATERMARK,
+        $or: [
+          { localId: watermarkId },
+          { name: watermarkId },
+          { 'data.id': watermarkId },
+          { 'data.name': watermarkId },
+        ],
+      })
+      .lean();
+    const data = setting?.data as any;
+    if (!data || !['text', 'image'].includes(String(data.type))) {
+      return undefined;
+    }
+
+    return {
+      type: data.type,
+      text: data.text,
+      font: data.font,
+      color: data.color,
+      scale: data.scale,
+      opacity: data.opacity,
+      position: data.position,
+      image: data.image,
     };
   }
 
