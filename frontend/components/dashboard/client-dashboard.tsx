@@ -14035,8 +14035,11 @@ function CollectionDetailView({
   const [loadedImages, setLoadedImages] = useState<CollectionImageRecord[]>([]);
   const [imagesHasMore, setImagesHasMore] = useState(false);
   const [imagesLoadingMore, setImagesLoadingMore] = useState(false);
+  const [setHasMoreById, setSetHasMoreById] = useState<Record<string, boolean>>({});
+  const [loadingImageSetIds, setLoadingImageSetIds] = useState<string[]>([]);
   const imagesLoaderRef = useRef<HTMLDivElement | null>(null);
   const serverImageOffsetRef = useRef(0);
+  const imageSetLoadInFlightRef = useRef(new Set<string>());
   const collectionIdRef = useRef(collectionId);
   const localObjectUrlsRef = useRef(new Map<string, string>());
   collectionIdRef.current = collectionId;
@@ -14062,8 +14065,11 @@ function CollectionDetailView({
   }, [detail?.images, detail?.imagesPage?.hasMore]);
   useEffect(() => {
     serverImageOffsetRef.current = detail?.images?.length ?? 0;
+    imageSetLoadInFlightRef.current.clear();
     setLoadedImages(detail?.images ?? []);
     setImagesHasMore(Boolean(detail?.imagesPage?.hasMore));
+    setSetHasMoreById({});
+    setLoadingImageSetIds([]);
     setActiveSetId("highlights");
     setActiveImageId("");
     setImagePage(1);
@@ -14341,6 +14347,28 @@ function CollectionDetailView({
       ),
     [activeSetId, orderedImages],
   );
+  const activeSetServerLoadedCount = activeSetImages.filter(
+    (image) => !isLocalUploadImage(image),
+  ).length;
+  const activeSetAuthoritativeCounts =
+    backgroundProcessing?.setImageCounts ?? collection?.setImageCounts;
+  const activeSetExpectedCount =
+    activeSetAuthoritativeCounts &&
+    Object.prototype.hasOwnProperty.call(
+      activeSetAuthoritativeCounts,
+      activeSetId,
+    )
+      ? Math.max(
+          0,
+          Number(activeSetAuthoritativeCounts[activeSetId] ?? 0),
+        )
+      : undefined;
+  const activeSetImagesHasMore =
+    activeSetExpectedCount !== undefined
+      ? activeSetServerLoadedCount < activeSetExpectedCount
+      : (setHasMoreById[activeSetId] ?? imagesHasMore);
+  const activeSetImagesLoadingMore =
+    loadingImageSetIds.includes(activeSetId);
   const displayedSetImages = useMemo(() => {
     const next = [...activeSetImages];
     const uploadedTime = (image: CollectionImageRecord) => {
@@ -14588,20 +14616,98 @@ function CollectionDetailView({
       setImagesLoadingMore(false);
     }
   };
+  const loadMoreActiveSetImages = async (setId = activeSetId) => {
+    if (!collectionId || !setId) return;
+    const requestKey = `${collectionId}:${setId}`;
+    if (imageSetLoadInFlightRef.current.has(requestKey)) return;
+
+    const loadedForSet = loadedImages.filter(
+      (image) =>
+        !isLocalUploadImage(image) &&
+        (image.setId || "highlights") === setId,
+    ).length;
+    const authoritativeCounts =
+      backgroundProcessing?.setImageCounts ?? collection?.setImageCounts;
+    const expectedCount =
+      authoritativeCounts &&
+      Object.prototype.hasOwnProperty.call(authoritativeCounts, setId)
+        ? Math.max(0, Number(authoritativeCounts[setId] ?? 0))
+        : undefined;
+    if (expectedCount !== undefined && loadedForSet >= expectedCount) {
+      setSetHasMoreById((current) => ({ ...current, [setId]: false }));
+      return;
+    }
+
+    imageSetLoadInFlightRef.current.add(requestKey);
+    setLoadingImageSetIds((current) =>
+      current.includes(setId) ? current : [...current, setId],
+    );
+    try {
+      const page = (
+        await fetchCollectionImagesPage(
+          collectionId,
+          loadedForSet,
+          60,
+          setId,
+        )
+      ).data;
+      if (collectionIdRef.current !== collectionId) return;
+
+      setLoadedImages((current) =>
+        dedupeCollectionImages([...current, ...page.items]),
+      );
+      setSetHasMoreById((current) => ({
+        ...current,
+        [setId]: page.hasMore,
+      }));
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not load this collection",
+      );
+    } finally {
+      imageSetLoadInFlightRef.current.delete(requestKey);
+      setLoadingImageSetIds((current) =>
+        current.filter((id) => id !== setId),
+      );
+    }
+  };
   useEffect(() => {
-    if (!imagesHasMore) return;
+    if (!activeSetImagesHasMore) return;
     const target = imagesLoaderRef.current;
     if (!target) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting))
-          void loadMoreCollectionImages();
+          void loadMoreActiveSetImages(activeSetId);
       },
       { rootMargin: "800px 0px" },
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [imagesHasMore, imagesLoadingMore, loadedImages.length]);
+  }, [
+    activeSetId,
+    activeSetImagesHasMore,
+    activeSetImagesLoadingMore,
+    activeSetServerLoadedCount,
+    loadedImages.length,
+  ]);
+  useEffect(() => {
+    if (
+      imagesLoading ||
+      !activeSetId ||
+      !activeSetImagesHasMore ||
+      activeSetServerLoadedCount > 0
+    )
+      return;
+    void loadMoreActiveSetImages(activeSetId);
+  }, [
+    activeSetId,
+    activeSetImagesHasMore,
+    activeSetImagesLoadingMore,
+    activeSetServerLoadedCount,
+    collectionId,
+    imagesLoading,
+  ]);
   useEffect(() => {
     setPageOrigin(window.location.origin);
   }, []);
@@ -16668,14 +16774,30 @@ function CollectionDetailView({
                 style={{ width: `${uploadPercent}%` }}
               />
             </div>
+            <p className="mt-2 text-[11px] font-semibold text-[#3f8179]">
+              Keep this tab open only while Browser → R2 is still sending bytes.
+              Once the raw upload reaches R2, the backend owns the job and keeps
+              finishing it even if you navigate away or close the tab.
+            </p>
           </div>
+        </div>
+      )}
+      {!uploading && activeUploadSessionKeys.length > 0 && (
+        <div className="mt-4 flex items-center gap-3 border border-[#bdeee8] bg-[#f2fffd] px-4 py-3 text-sm text-[#096f64]">
+          <Loader2 className="size-4 shrink-0 animate-spin" />
+          <p className="font-semibold">
+            {activeUploadSessionKeys.length} upload
+            {activeUploadSessionKeys.length === 1 ? "" : "s"} still sending to
+            R2 in the background. Keep working normally; the upload continues
+            while you move around the app.
+          </p>
         </div>
       )}
       {!uploading && (backgroundProcessing?.pending ?? 0) > 0 && (
         <div className="mt-4 flex items-center gap-3 border border-[#e2dcfb] bg-[#f8f6ff] px-4 py-3 text-sm text-[#5f35c8]">
           <Loader2 className="size-4 shrink-0 animate-spin" />
           <p className="font-semibold">
-            Finishing your photos in the background. You can keep working normally.
+            Finishing your photos on the server. You can keep working, navigate away, or close this tab.
           </p>
         </div>
       )}
@@ -17276,9 +17398,12 @@ function CollectionDetailView({
             </div>
           )}
           {activeTab === "photos" &&
-            (imagesLoading ? (
+            (imagesLoading ||
+            (activeSetImagesLoadingMore && !activeSetImages.length) ? (
               <CollectionImagesSkeleton />
-            ) : !activeSetImages.length && !imagesHasMore ? (
+            ) : !activeSetImages.length &&
+              !activeSetImagesHasMore &&
+              !activeSetImagesLoadingMore ? (
               <label
                 className={cn(
                   "flex min-h-[420px] cursor-pointer flex-col items-center justify-center border border-dashed bg-white p-8 text-center transition",
@@ -17743,12 +17868,12 @@ function CollectionDetailView({
                     </div>
                   ))}
                 </ReactSortable>
-                {imagesHasMore && (
+                {(activeSetImagesHasMore || activeSetImagesLoadingMore) && (
                   <div
                     ref={imagesLoaderRef}
                     className="flex h-20 items-center justify-center text-sm text-[#777]"
                   >
-                    {imagesLoadingMore && (
+                    {activeSetImagesLoadingMore && (
                       <Loader2 className="size-5 animate-spin" />
                     )}
                   </div>

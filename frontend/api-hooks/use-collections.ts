@@ -5,7 +5,9 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
 import {
   batches,
+  beginDirectUploadSessionGuard,
   directUploadMetadata,
+  endDirectUploadSessionGuard,
   uploadFilesDirectlyToS3,
   type CompletedDirectUpload,
   type DirectUploadEvent,
@@ -457,6 +459,8 @@ export function useCollectionDetail(collectionId?: string) {
       // inside direct-s3-upload.ts, so a huge selection does not create huge parallelism.
       const uploadBatchSize = 200;
 
+      beginDirectUploadSessionGuard();
+      try {
       for (const uploadBatch of batches(selected, uploadBatchSize)) {
         onActivity?.({
           stage: "preparing",
@@ -471,7 +475,12 @@ export function useCollectionDetail(collectionId?: string) {
           data: DirectUploadTicket[];
         }>(
           `/collections/${uploadCollectionId}/images/direct-upload`,
-          { files: metadata, setId },
+          {
+            files: metadata,
+            setId,
+            watermarkId,
+            replaceImageId,
+          },
           { timeoutMs: 20_000 },
         );
         if (authorizationError || !authorization) {
@@ -597,6 +606,9 @@ export function useCollectionDetail(collectionId?: string) {
         message: string;
         queued: number;
       };
+      } finally {
+        endDirectUploadSessionGuard();
+      }
     },
     onSuccess: (_response, variables) => {
       const uploadedCollectionId =
@@ -768,9 +780,17 @@ export function useCollectionDetail(collectionId?: string) {
   };
 }
 
-export function fetchCollectionImagesPage(collectionId: string, offset: number, limit = 60) {
+export function fetchCollectionImagesPage(
+  collectionId: string,
+  offset: number,
+  limit = 60,
+  setId?: string,
+) {
+  const setQuery = setId
+    ? `&setId=${encodeURIComponent(setId)}`
+    : "";
   return GetRequestNormal<ListResponse<ImagesPage<CollectionImageRecord>>>(
-    `/collections/${collectionId}/images?limit=${limit}&offset=${offset}`,
+    `/collections/${collectionId}/images?limit=${limit}&offset=${offset}${setQuery}`,
   );
 }
 

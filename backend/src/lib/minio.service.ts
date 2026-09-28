@@ -6,6 +6,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListPartsCommand,
   PutBucketCorsCommand,
   PutBucketPolicyCommand,
   PutObjectCommand,
@@ -384,6 +385,76 @@ export class MinioService implements OnModuleInit {
       },
     }));
     return { objectKey };
+  }
+
+  async recoverDirectMultipartUpload(
+    userId: string,
+    input: {
+      objectKey: string;
+      uploadId: string;
+      expectedPartCount: number;
+      expectedSize: number;
+    },
+    scope?: string,
+  ) {
+    if (!this.s3)
+      throw new HttpException(
+        'Object storage is not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    const objectKey = this.assertDirectObjectKey(
+      userId,
+      input.objectKey,
+      scope,
+    );
+    if (!input.uploadId || input.expectedPartCount <= 0) return false;
+
+    const listed = await this.s3.send(
+      new ListPartsCommand({
+        Bucket: this.directBucket(objectKey),
+        Key: objectKey,
+        UploadId: input.uploadId,
+      }),
+    );
+    const parts = (listed.Parts ?? [])
+      .filter(
+        (part) =>
+          Number(part.PartNumber) > 0 &&
+          Boolean(part.ETag) &&
+          Number(part.Size ?? 0) > 0,
+      )
+      .map((part) => ({
+        PartNumber: Number(part.PartNumber),
+        ETag: String(part.ETag),
+        Size: Math.max(0, Number(part.Size ?? 0)),
+      }))
+      .sort((a, b) => a.PartNumber - b.PartNumber);
+
+    if (parts.length !== Math.max(1, Number(input.expectedPartCount))) {
+      return false;
+    }
+    const uploadedBytes = parts.reduce((sum, part) => sum + part.Size, 0);
+    if (
+      Math.max(0, Number(input.expectedSize)) > 0 &&
+      uploadedBytes !== Math.max(0, Number(input.expectedSize))
+    ) {
+      return false;
+    }
+
+    await this.s3.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.directBucket(objectKey),
+        Key: objectKey,
+        UploadId: input.uploadId,
+        MultipartUpload: {
+          Parts: parts.map(({ PartNumber, ETag }) => ({
+            PartNumber,
+            ETag,
+          })),
+        },
+      }),
+    );
+    return true;
   }
 
   async verifyDirectUpload(

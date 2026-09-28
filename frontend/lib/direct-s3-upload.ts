@@ -57,6 +57,40 @@ const STATS_INTERVAL_MS = 250;
 const UPLOAD_MAX_ATTEMPTS = 4;
 const UPLOAD_STALL_TIMEOUT_MS = 45_000;
 
+let activeDirectUploadOperations = 0;
+let uploadBeforeUnloadGuardInstalled = false;
+
+function beginDirectUploadOperation() {
+  activeDirectUploadOperations += 1;
+  if (
+    uploadBeforeUnloadGuardInstalled ||
+    typeof window === "undefined"
+  )
+    return;
+
+  window.addEventListener("beforeunload", (event) => {
+    if (activeDirectUploadOperations <= 0) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+  uploadBeforeUnloadGuardInstalled = true;
+}
+
+function endDirectUploadOperation() {
+  activeDirectUploadOperations = Math.max(
+    0,
+    activeDirectUploadOperations - 1,
+  );
+}
+
+export function beginDirectUploadSessionGuard() {
+  beginDirectUploadOperation();
+}
+
+export function endDirectUploadSessionGuard() {
+  endDirectUploadOperation();
+}
+
 export async function uploadFilesDirectlyToS3(
   files: File[],
   tickets: DirectUploadTicket[],
@@ -66,8 +100,11 @@ export async function uploadFilesDirectlyToS3(
   onEvent?: (event: DirectUploadEvent) => void,
   onStats?: (stats: DirectUploadStats) => void,
 ) {
-  if (files.length !== tickets.length) throw new Error("Upload authorization mismatch");
+  if (files.length !== tickets.length)
+    throw new Error("Upload authorization mismatch");
 
+  beginDirectUploadOperation();
+  try {
   const parallelism = getUploadParallelism(tickets, concurrency);
   const runWithNetworkSlot = createConcurrencyLimiter(
     parallelism.requestConcurrency,
@@ -182,6 +219,9 @@ export async function uploadFilesDirectlyToS3(
   progress.finish();
   stats.finish(total);
   return completed;
+  } finally {
+    endDirectUploadOperation();
+  }
 }
 function getUploadParallelism(
   tickets: DirectUploadTicket[],

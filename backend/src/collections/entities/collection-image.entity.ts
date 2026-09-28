@@ -81,3 +81,9 @@ export class CollectionImage {
 export const CollectionImageSchema =
   SchemaFactory.createForClass(CollectionImage);
 CollectionImageSchema.index({ collectionId: 1, order: 1, createdAt: -1 });
+CollectionImageSchema.index({
+  collectionId: 1,
+  setId: 1,
+  order: 1,
+  createdAt: -1,
+});

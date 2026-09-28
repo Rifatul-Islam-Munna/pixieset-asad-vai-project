@@ -4,6 +4,7 @@ import { HydratedDocument } from 'mongoose';
 export type CollectionImageProcessingJobDocument =
   HydratedDocument<CollectionImageProcessingJob>;
 export type CollectionImageProcessingJobStatus =
+  | 'awaiting-upload'
   | 'queued'
   | 'processing'
   | 'completed'
@@ -29,6 +30,12 @@ export class CollectionImageProcessingJob {
   @Prop({ required: true, unique: true, index: true })
   objectKey: string;
 
+  @Prop()
+  uploadId?: string;
+
+  @Prop({ default: 0 })
+  multipartPartCount?: number;
+
   @Prop({ required: true })
   name: string;
 
@@ -49,7 +56,7 @@ export class CollectionImageProcessingJob {
 
   @Prop({
     required: true,
-    enum: ['queued', 'processing', 'completed', 'failed'],
+    enum: ['awaiting-upload', 'queued', 'processing', 'completed', 'failed'],
     default: 'queued',
     index: true,
   })

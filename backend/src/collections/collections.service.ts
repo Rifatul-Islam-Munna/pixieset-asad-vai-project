@@ -160,6 +160,7 @@ export class CollectionsService implements OnModuleInit {
 
   private directImageWorkerRunning = false;
   private lastDirectImageRecoveryAt = 0;
+  private lastDirectUploadDiscoveryAt = 0;
   private imageDeleteWorkerRunning = false;
   private lastImageDeleteRecoveryAt = 0;
 
@@ -799,13 +800,30 @@ export class CollectionsService implements OnModuleInit {
     id: string,
     limit?: string,
     offset?: string,
+    setId?: string,
   ) {
     const collection = await this.collectionModel
       .findOne({ _id: id, userId })
       .select('_id')
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
-    return this.findImagesPage({ collectionId: id, userId }, limit, offset);
+
+    const query: Record<string, unknown> = { collectionId: id, userId };
+    const normalizedSetId = String(setId ?? '').trim();
+    if (normalizedSetId) {
+      if (normalizedSetId === 'highlights') {
+        query.$or = [
+          { setId: 'highlights' },
+          { setId: { $exists: false } },
+          { setId: null },
+          { setId: '' },
+        ];
+      } else {
+        query.setId = normalizedSetId;
+      }
+    }
+
+    return this.findImagesPage(query, limit, offset);
   }
 
   async findImageMetadata(userId: string, collectionId: string, imageId: string) {
@@ -2633,6 +2651,8 @@ export class CollectionsService implements OnModuleInit {
       height?: number;
     }>,
     setId?: string,
+    watermarkId?: string,
+    replaceImageId?: string,
   ) {
     if (!Array.isArray(files) || !files.length || files.length > 500)
       throw new BadRequestException('1 to 500 files are required');
@@ -2653,7 +2673,8 @@ export class CollectionsService implements OnModuleInit {
       files.reduce((sum, file) => sum + Math.max(0, Number(file.size)), 0),
     );
     await this.ensureVideoPlanAvailable(userId, files);
-    return Promise.all(
+
+    const tickets = await Promise.all(
       files.map((file) =>
         this.minioService.createDirectUpload(userId, file, {
           privateImage: true,
@@ -2661,6 +2682,54 @@ export class CollectionsService implements OnModuleInit {
         }),
       ),
     );
+
+    const durableUploadJobs = files.map((input, index) => ({
+      input,
+      ticket: tickets[index],
+    }));
+    if (durableUploadJobs.length) {
+      await this.imageProcessingJobModel.bulkWrite(
+        durableUploadJobs.map(({ input, ticket }) => ({
+          updateOne: {
+            filter: { objectKey: ticket.objectKey },
+            update: {
+              $setOnInsert: {
+                userId,
+                collectionId,
+                setId: resolvedSetId,
+                watermarkId,
+                replaceImageId,
+                objectKey: ticket.objectKey,
+                uploadId:
+                  (ticket as { uploadId?: string }).uploadId || undefined,
+                multipartPartCount: Array.isArray(
+                  (ticket as { parts?: unknown[] }).parts,
+                )
+                  ? (ticket as { parts?: unknown[] }).parts!.length
+                  : 0,
+                name: input.name,
+                type: input.type,
+                size: input.size,
+                durationSeconds: this.safeSeconds(input.durationSeconds),
+                width: this.safeDimension(input.width),
+                height: this.safeDimension(input.height),
+                status: 'awaiting-upload',
+                attempts: 0,
+                lastError: '',
+                resultMode: '',
+                nextAttemptAt: new Date(Date.now() + 10_000),
+                statusMessage:
+                  'Upload authorized. Backend will automatically take over as soon as the raw file reaches R2.',
+              },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
+      );
+    }
+
+    return tickets;
   }
 
   async completeDirectUploads(
@@ -2824,6 +2893,21 @@ export class CollectionsService implements OnModuleInit {
         })),
         { ordered: false },
       );
+      await this.imageProcessingJobModel.updateMany(
+        {
+          objectKey: { $in: imageDirectFiles.map((file) => file.objectKey) },
+          status: 'awaiting-upload',
+        },
+        {
+          $set: {
+            status: 'queued',
+            nextAttemptAt: new Date(),
+            lastError: '',
+            statusMessage:
+              'Raw upload is safe in R2. Waiting for background optimization.',
+          },
+        },
+      );
     }
 
     return {
@@ -2968,6 +3052,10 @@ export class CollectionsService implements OnModuleInit {
     this.directImageWorkerRunning = true;
     try {
       const now = Date.now();
+      if (now - this.lastDirectUploadDiscoveryAt >= 5_000) {
+        this.lastDirectUploadDiscoveryAt = now;
+        await this.discoverCompletedDirectUploads();
+      }
       if (now - this.lastDirectImageRecoveryAt >= 60_000) {
         this.lastDirectImageRecoveryAt = now;
         const staleBefore = new Date(now - 3 * 60 * 1000);
@@ -3004,19 +3092,216 @@ export class CollectionsService implements OnModuleInit {
     }
   }
 
+  private async discoverCompletedDirectUploads() {
+    const now = new Date();
+    const jobs = await this.imageProcessingJobModel
+      .find({
+        status: 'awaiting-upload',
+        $or: [
+          { nextAttemptAt: { $lte: now } },
+          { nextAttemptAt: { $exists: false } },
+        ],
+      })
+      .sort({ createdAt: 1 })
+      .limit(80)
+      .lean();
+    if (!jobs.length) return;
+
+    await this.mapWithConcurrency(jobs, 12, async (job) => {
+      const directFile: DirectUploadFile = {
+        objectKey: job.objectKey,
+        name: job.name,
+        type: job.type,
+        size: job.size,
+        durationSeconds: job.durationSeconds,
+        width: job.width,
+        height: job.height,
+      };
+
+      let verified = await this.minioService
+        .verifyDirectUpload(job.userId, directFile)
+        .catch(() => undefined);
+
+      if (
+        !verified &&
+        job.uploadId &&
+        Math.max(0, Number(job.multipartPartCount ?? 0)) > 0
+      ) {
+        const recovered = await this.minioService
+          .recoverDirectMultipartUpload(job.userId, {
+            objectKey: job.objectKey,
+            uploadId: job.uploadId,
+            expectedPartCount: Math.max(
+              1,
+              Number(job.multipartPartCount ?? 0),
+            ),
+            expectedSize: Math.max(0, Number(job.size ?? 0)),
+          })
+          .catch(() => false);
+        if (recovered) {
+          verified = await this.minioService
+            .verifyDirectUpload(job.userId, directFile)
+            .catch(() => undefined);
+        }
+      }
+
+      if (verified) {
+        await this.imageProcessingJobModel.updateOne(
+          { _id: job._id, status: 'awaiting-upload' },
+          {
+            $set: {
+              status: 'queued',
+              nextAttemptAt: new Date(),
+              lastError: '',
+              statusMessage:
+                'Raw upload reached R2. Backend recovered the upload and will finish it automatically.',
+            },
+          },
+        );
+        return;
+      }
+
+      const createdAt = new Date(
+        (job as typeof job & { createdAt?: Date }).createdAt ?? Date.now(),
+      ).getTime();
+      if (Date.now() - createdAt > 24 * 60 * 60 * 1000) {
+        await this.imageProcessingJobModel.updateOne(
+          { _id: job._id, status: 'awaiting-upload' },
+          {
+            $set: {
+              status: 'failed',
+              lastError:
+                'Browser upload never reached a complete R2 object within 24 hours.',
+              statusMessage:
+                'The browser upload did not finish. Upload this file again.',
+            },
+          },
+        );
+      } else {
+        await this.imageProcessingJobModel.updateOne(
+          { _id: job._id, status: 'awaiting-upload' },
+          {
+            $set: {
+              nextAttemptAt: new Date(Date.now() + 10_000),
+            },
+          },
+        );
+      }
+    });
+  }
+
   private directImageWorkerConcurrency() {
     const configured = Number(
       this.configService.get<string>(
         'IMAGE_BACKGROUND_PROCESSING_CONCURRENCY',
-      ) ?? 1,
+      ) ?? 6,
     );
     return Math.max(
       1,
       Math.min(
-        2,
-        Number.isFinite(configured) ? Math.floor(configured) : 1,
+        8,
+        Number.isFinite(configured) ? Math.floor(configured) : 6,
       ),
     );
+  }
+
+  private shouldPublishDirectRawFallback(
+    job: CollectionImageProcessingJobDocument,
+  ) {
+    const sizeThreshold = Number(
+      this.configService.get<string>(
+        'IMAGE_BACKGROUND_RAW_FALLBACK_MIN_BYTES',
+      ) ?? 20 * 1024 * 1024,
+    );
+    const maxQueueAgeMs = Number(
+      this.configService.get<string>(
+        'IMAGE_BACKGROUND_RAW_FALLBACK_AFTER_MS',
+      ) ?? 30_000,
+    );
+    const createdAt = new Date(
+      (job as CollectionImageProcessingJobDocument & { createdAt?: Date })
+        .createdAt ?? Date.now(),
+    ).getTime();
+    const ageMs = Math.max(0, Date.now() - createdAt);
+
+    return (
+      Math.max(0, Number(job.size ?? 0)) >=
+        Math.max(1, Number.isFinite(sizeThreshold) ? sizeThreshold : 20 * 1024 * 1024) ||
+      ageMs >=
+        Math.max(5_000, Number.isFinite(maxQueueAgeMs) ? maxQueueAgeMs : 30_000)
+    );
+  }
+
+  private async saveDirectVideoFromProcessingJob(
+    job: CollectionImageProcessingJobDocument,
+  ) {
+    const existing = await this.imageModel
+      .findOne({
+        userId: job.userId,
+        collectionId: job.collectionId,
+        'metadata.directUploadObjectKey': job.objectKey,
+      })
+      .lean();
+    if (existing) return existing;
+
+    const collection = await this.collectionModel
+      .findOne({ _id: job.collectionId, userId: job.userId })
+      .lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    const activeSet = job.setId
+      ? collection.sets?.find((set) => set.id === job.setId)
+      : collection.sets?.[0];
+    if (job.setId && !activeSet) throw new NotFoundException('Set not found');
+    const resolvedSetId = activeSet?.id || 'highlights';
+
+    const verified = await this.minioService.verifyDirectUpload(job.userId, {
+      objectKey: job.objectKey,
+      name: job.name,
+      type: job.type,
+      size: job.size,
+    });
+    const lastImage = await this.imageModel
+      .findOne({ collectionId: job.collectionId, userId: job.userId })
+      .sort({ order: -1, createdAt: -1 })
+      .select('order')
+      .lean();
+
+    const image = await this.imageModel.create({
+      userId: job.userId,
+      collectionId: job.collectionId,
+      setId: resolvedSetId,
+      url: verified.url,
+      thumbnailUrl: '',
+      blurDataUrl: '',
+      originalName: job.name,
+      filename: job.objectKey,
+      mimetype: verified.type,
+      mediaType: 'video',
+      sizeBytes: verified.size,
+      durationSeconds: this.safeSeconds(job.durationSeconds),
+      width: this.safeDimension(job.width),
+      height: this.safeDimension(job.height),
+      watermarked: false,
+      order: Math.max(0, Number(lastImage?.order ?? 0)) + 1,
+      metadata: {
+        videoQuality: this.videoQuality(job.width, job.height),
+        directUploadObjectKey: job.objectKey,
+      },
+    });
+
+    await Promise.all([
+      this.userModel.updateOne(
+        { _id: job.userId },
+        { $inc: { storageUsedBytes: verified.size } },
+      ),
+      this.collectionModel.updateOne(
+        { _id: job.collectionId, userId: job.userId },
+        { $inc: { imageCount: 1 } },
+      ),
+    ]);
+
+    return image.toObject();
   }
 
   private async processNextDirectImageJob() {
@@ -3036,7 +3321,7 @@ export class CollectionsService implements OnModuleInit {
           processingStartedAt: new Date(),
           lastError: '',
           statusMessage:
-            'Optimizing in background. Raw original is already safe in R2.',
+            'Finalizing upload on the server. Raw file is already safe in R2.',
         },
         $unset: { nextAttemptAt: 1 },
         $inc: { attempts: 1 },
@@ -3059,6 +3344,26 @@ export class CollectionsService implements OnModuleInit {
     let localFile: Express.Multer.File | undefined;
 
     try {
+      if (this.mediaType(job.type) === 'video') {
+        await this.saveDirectVideoFromProcessingJob(job);
+        await this.replaceImageAfterDirectProcessing(job);
+        await this.imageProcessingJobModel.updateOne(
+          { _id: job._id },
+          {
+            $set: {
+              status: 'completed',
+              resultMode: '',
+              statusMessage:
+                'Video is live in the gallery. Server-side upload recovery is complete.',
+              completedAt: new Date(),
+              lastError: '',
+            },
+            $unset: { processingStartedAt: 1, nextAttemptAt: 1 },
+          },
+        );
+        return;
+      }
+
       const alreadyProcessed = await this.imageModel
         .findOne({
           userId: job.userId,
@@ -3073,7 +3378,15 @@ export class CollectionsService implements OnModuleInit {
           ? 'raw-fallback'
           : 'optimized';
 
-      if (!alreadyProcessed) {
+      if (!alreadyProcessed && this.shouldPublishDirectRawFallback(job)) {
+        await this.saveDirectRawFallback(
+          job,
+          'Published the raw original immediately so gallery availability never waits on Sharp.',
+        );
+        resultMode = 'raw-fallback';
+      }
+
+      if (!alreadyProcessed && resultMode !== 'raw-fallback') {
         const directFile: DirectUploadFile = {
           objectKey: job.objectKey,
           name: job.name,
@@ -3122,7 +3435,7 @@ export class CollectionsService implements OnModuleInit {
       // running when the user confirmed deletion.
       if (/set not found/i.test(message)) {
         await Promise.allSettled([
-          this.minioService.deletePrivateFile(job.objectKey),
+          this.minioService.deleteDirectUpload(job.userId, job.objectKey),
           this.imageProcessingJobModel.deleteOne({ _id: job._id }),
         ]);
         return;
@@ -3130,7 +3443,8 @@ export class CollectionsService implements OnModuleInit {
 
       const attempts = Math.max(1, Number(job.attempts ?? 1));
       const timedOut = this.isBackgroundImageOptimizationTimeout(error);
-      const shouldUseRawFallback = timedOut || attempts >= 2;
+      const shouldUseRawFallback =
+        this.mediaType(job.type) === 'image' && (timedOut || attempts >= 2);
 
       if (shouldUseRawFallback) {
         try {

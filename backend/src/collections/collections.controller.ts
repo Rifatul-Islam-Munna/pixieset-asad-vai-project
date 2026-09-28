@@ -496,12 +496,14 @@ export class CollectionsController {
     @Req() req: ExpressRequest,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('setId') setId?: string,
   ) {
     const data = await this.collectionsService.findImages(
       req.user.id,
       id,
       limit,
       offset,
+      setId,
     );
     return { data };
   }
@@ -606,8 +608,18 @@ export class CollectionsController {
   @Post(':id/images/direct-upload')
   async createDirectUploads(
     @Param('id') id: string,
-    @Body('files') files: Array<{ name: string; type: string; size: number }>,
+    @Body('files')
+    files: Array<{
+      name: string;
+      type: string;
+      size: number;
+      durationSeconds?: number;
+      width?: number;
+      height?: number;
+    }>,
     @Body('setId') setId: string | undefined,
+    @Body('watermarkId') watermarkId: string | undefined,
+    @Body('replaceImageId') replaceImageId: string | undefined,
     @Req() req: ExpressRequest,
   ) {
     return {
@@ -616,6 +628,8 @@ export class CollectionsController {
         id,
         files,
         setId,
+        watermarkId,
+        replaceImageId,
       ),
     };
   }
