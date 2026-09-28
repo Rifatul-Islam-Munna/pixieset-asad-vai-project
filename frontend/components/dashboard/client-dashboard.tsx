@@ -16332,12 +16332,27 @@ function CollectionDetailView({
                         {count}
                       </span>
                       <button
-                        className="hidden text-[#888] hover:text-red-600 group-hover:inline-flex disabled:text-[#ccc]"
-                        disabled={form.sets.length <= 1}
-                        onClick={() => deleteSet(set.id)}
-                        aria-label="Delete set"
+                        type="button"
+                        className="inline-flex size-8 items-center justify-center text-[#777] transition-colors hover:bg-[#f3efff] hover:text-[#6337d8] disabled:text-[#bbb]"
+                        disabled={renameCollectionSet.isPending}
+                        onClick={() => {
+                          setEditingSetId(set.id);
+                          setEditingSetName(set.name);
+                        }}
+                        aria-label={`Rename ${set.name}`}
+                        title="Rename collection"
                       >
-                        <Trash2 className="size-4" />
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex size-8 items-center justify-center text-[#888] transition-colors hover:bg-red-50 hover:text-red-600 disabled:text-[#ccc]"
+                        disabled={form.sets.length <= 1 || deleteCollectionSet.isPending}
+                        onClick={() => deleteSet(set.id)}
+                        aria-label={`Delete ${set.name}`}
+                        title="Delete collection"
+                      >
+                        <Trash2 className="size-3.5" />
                       </button>
                     </div>
                   );
