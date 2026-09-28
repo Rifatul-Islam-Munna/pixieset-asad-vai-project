@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import type { MobileGalleryApp, MobileGalleryCoverText, MobileGalleryProfile } from "@/api-hooks/use-mobile-gallery";
 import { uploadMobileGalleryAsset } from "@/api-hooks/use-mobile-gallery";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { MobileGalleryPublic } from "./mobile-gallery-public";
 import { getMobileGalleryCoverDefaults, MobileGalleryThemePreview } from "./mobile-gallery-cover";
 
@@ -229,7 +230,7 @@ export function MobileGalleryDesignEditor({ app, profile, updateApp }: { app: Mo
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
           <div className="w-full max-w-3xl bg-white p-5 shadow-2xl sm:p-7">
             <div className="flex items-center justify-between gap-4"><div><h3 className="text-xl font-semibold">Change cover photo</h3><p className="mt-1 text-sm text-[#777]">Choose any uploaded photo.</p></div><button onClick={() => setCoverPickerOpen(false)}><X className="size-5" /></button></div>
-            <div className="mt-6 grid max-h-[65vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-4">{(draft.images || []).map((image) => <button key={image._id} onClick={() => { setDraft((current) => ({ ...current, coverImage: image.url })); setCoverPickerOpen(false); }} className={`relative border-2 ${draft.coverImage === image.url ? "border-[#18bfa6]" : "border-transparent"}`}><img src={image.thumbnailUrl || image.url} alt="" className="aspect-square w-full object-cover" />{draft.coverImage === image.url && <span className="absolute right-2 top-2 rounded-full bg-[#18bfa6] p-1 text-white"><Check className="size-4" /></span>}</button>)}</div>
+            <div className="mt-6 grid max-h-[65vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-4">{(draft.images || []).map((image) => <button key={image._id} onClick={() => { setDraft((current) => ({ ...current, coverImage: image.url })); setCoverPickerOpen(false); }} className={`relative border-2 ${draft.coverImage === image.url ? "border-[#18bfa6]" : "border-transparent"}`}><FallbackImage src={image.thumbnailUrl || image.url} fallbackSrc={image.url} alt="" className="aspect-square w-full object-cover" />{draft.coverImage === image.url && <span className="absolute right-2 top-2 rounded-full bg-[#18bfa6] p-1 text-white"><Check className="size-4" /></span>}</button>)}</div>
           </div>
         </div>
       )}

@@ -9,6 +9,7 @@ import {
   stripHtml,
   type PublicStoreProduct,
 } from "@/lib/public-store";
+import { FallbackImage } from "@/components/ui/fallback-image";
 
 export function PublicStoreCatalog({
   products,
@@ -118,7 +119,7 @@ function ProductCard({ product, currency, onOpen }: { product: PublicStoreProduc
     <button className="group text-left" onClick={onOpen}>
       <div className="aspect-[1.08] overflow-hidden bg-[#f2f2f0]">
         {preview ? (
-          <img src={publicImageSrc(preview)} alt={product.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]" />
+          <FallbackImage src={publicImageSrc(preview)} fallbackSources={[...(product.previewImages ?? []), ...(product.images ?? [])].map(publicImageSrc)} alt={product.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]" />
         ) : (
           <div className="flex h-full items-center justify-center text-[#aaa]"><ImageIcon className="size-8" /></div>
         )}

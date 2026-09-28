@@ -148,6 +148,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -4095,8 +4096,9 @@ function FavoriteCollectionsPanel() {
                 >
                   <span className="relative block overflow-hidden bg-[#f3f3f3]">
                     {favorite.url ? (
-                      <img
+                      <FallbackImage
                         src={imageSrc(favorite.thumbnailUrl || favorite.url)}
+                        fallbackSrc={imageSrc(favorite.url)}
                         alt={imageDisplayName(favorite)}
                         className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
                       />
@@ -6687,8 +6689,9 @@ function PresetDesignPanel({
                                 <span className="absolute inset-0 grid place-items-center bg-black/15 text-white"><Play className="size-8 fill-current" /></span>
                               </span>
                             ) : (
-                              <img
+                              <FallbackImage
                                 src={imageSrc(image.thumbnailUrl || image.url)}
+                                fallbackSrc={imageSrc(image.url)}
                                 alt=""
                                 className="aspect-square w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                               />
@@ -7232,12 +7235,14 @@ function PresetDesignPanel({
 
 function CollectionPreviewParallaxImage({
   src,
+  fallbackSrc,
   className,
   enabled,
   strength,
   scrollRoot,
 }: {
   src: string;
+  fallbackSrc?: string;
   className?: string;
   enabled: boolean;
   strength: number;
@@ -7290,7 +7295,7 @@ function CollectionPreviewParallaxImage({
 
   return (
     <span ref={frameRef} className={cn("relative block w-full", (enabled || className?.includes("h-full")) && "overflow-hidden", className?.includes("h-full") && "h-full")}>
-      <img ref={imageRef} src={src} alt="" loading="lazy" decoding="async" className={className} />
+      <FallbackImage ref={imageRef} src={src} fallbackSrc={fallbackSrc} alt="" loading="lazy" decoding="async" className={className} />
     </span>
   );
 }
@@ -7506,6 +7511,7 @@ function CollectionDesignLivePreview({
                       ) : (
                         <CollectionPreviewParallaxImage
                           src={imageSrc(image.thumbnailUrl || image.url)}
+                          fallbackSrc={imageSrc(image.url)}
                           enabled={Boolean(design.galleryParallaxEnabled)}
                           strength={design.galleryParallaxStrength ?? 36}
                           scrollRoot={previewScrollRef}
@@ -16812,15 +16818,20 @@ function CollectionDetailView({
             <div className="hidden h-[208px] shrink-0 bg-[#e8e8e8] md:block">
               {form.coverImage ||
               images.find((image) => image.mediaType !== "video")?.url ? (
-                <img
+                <FallbackImage
                   src={imageSrc(
                     form.coverImage ||
                       images.find((image) => image.mediaType !== "video")
                         ?.url ||
                       "",
                   )}
+                  fallbackSrc={imageSrc(
+                    images.find((image) => image.mediaType !== "video")
+                      ?.url || "",
+                  )}
                   alt=""
                   className="h-full w-full object-cover"
+                  decoding="async"
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-xs font-bold uppercase tracking-wide text-[#888]">
@@ -17638,6 +17649,7 @@ function CollectionDetailView({
                         ) : (
                           <DashboardImageWithSkeleton
                             src={imageSrc(image.thumbnailUrl || image.url)}
+                            fallbackSrc={imageSrc(image.url)}
                             srcSet={collectionImageSrcSet(image)}
                             sizes={
                               collectionGridSize === "small"
@@ -18101,10 +18113,12 @@ function CollectionDetailView({
                           </span>
                         </div>
                         <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
-                          <img
+                          <FallbackImage
                             src={imageSrc(activeImage.url)}
+                            fallbackSrc={imageSrc(activeImage.thumbnailUrl || "")}
                             alt={collectionImageCaption(activeImage)}
                             className="max-h-[76dvh] max-w-full object-contain"
+                            decoding="async"
                           />
                         </div>
                       </div>
@@ -20026,6 +20040,7 @@ function CollectionImagesSkeleton() {
 
 function DashboardImageWithSkeleton({
   src,
+  fallbackSrc,
   srcSet,
   sizes,
   alt,
@@ -20033,6 +20048,7 @@ function DashboardImageWithSkeleton({
   placeholder,
 }: {
   src: string;
+  fallbackSrc?: string;
   srcSet?: string;
   sizes?: string;
   alt: string;
@@ -20040,6 +20056,20 @@ function DashboardImageWithSkeleton({
   placeholder?: string;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [useSrcSet, setUseSrcSet] = useState(Boolean(srcSet));
+  const imageRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    setLoaded(false);
+    setCurrentSrc(src);
+    setUseSrcSet(Boolean(srcSet));
+  }, [src, srcSet]);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (image?.complete && image.naturalWidth > 0) setLoaded(true);
+  }, [currentSrc, useSrcSet]);
 
   return (
     <span className="relative block h-full w-full overflow-hidden bg-[#f3f3f1]">
@@ -20055,13 +20085,26 @@ function DashboardImageWithSkeleton({
         <Skeleton className="absolute inset-0 h-full w-full rounded-none bg-[#eeeeec]" />
       )}
       <img
-        src={src}
-        srcSet={srcSet}
-        sizes={sizes}
+        ref={imageRef}
+        key={`${currentSrc}|${useSrcSet ? "responsive" : "single"}`}
+        src={currentSrc}
+        srcSet={useSrcSet ? srcSet : undefined}
+        sizes={useSrcSet ? sizes : undefined}
         alt={alt}
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
+        onError={() => {
+          setLoaded(false);
+          if (useSrcSet && srcSet) {
+            setUseSrcSet(false);
+            return;
+          }
+          if (fallbackSrc && currentSrc !== fallbackSrc) {
+            setCurrentSrc(fallbackSrc);
+            setUseSrcSet(false);
+          }
+        }}
         className={cn(
           className,
           "transition-[opacity,transform] duration-500 ease-out",

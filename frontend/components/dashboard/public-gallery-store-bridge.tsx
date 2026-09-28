@@ -7,6 +7,7 @@ import { ChevronRight, ShoppingBag, Store, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { imageDisplayName } from "@/lib/image-display-name";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import {
   displayPrice,
   formatMoney,
@@ -408,8 +409,9 @@ function BuyPhotoDialog({
           {isVideo(image) ? (
             <video src={publicImageSrc(image.url)} className="relative z-10 max-h-[72%] w-full object-contain shadow-xl" preload="metadata" muted />
           ) : (
-            <img
+            <FallbackImage
               src={publicImageSrc(image.url)}
+              fallbackSrc={publicImageSrc(image.thumbnailUrl)}
               alt={imageDisplayName(image, "Selected photo")}
               className="relative z-10 max-h-[72%] w-full object-contain shadow-xl"
             />
@@ -505,8 +507,9 @@ function ProductChoiceGrid({
           >
             <div className="aspect-square overflow-hidden bg-[#f2f2f0]">
               {preview && (
-                <img
+                <FallbackImage
                   src={publicImageSrc(preview)}
+                  fallbackSources={[...(product.previewImages ?? []), ...(product.images ?? [])].map(publicImageSrc)}
                   alt={product.name}
                   className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.025]"
                 />

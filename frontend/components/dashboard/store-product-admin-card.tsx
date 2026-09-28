@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, EyeOff, Save } from "lucide-react";
 import { publicImageSrc, type PublicStoreProduct } from "@/lib/public-store";
+import { FallbackImage } from "@/components/ui/fallback-image";
 
 export function StoreProductAdminCard({
   product,
@@ -54,8 +55,9 @@ export function StoreProductAdminCard({
       <div className="grid gap-5 p-5 md:grid-cols-[112px_1fr_auto] md:items-center">
         <div className="aspect-square overflow-hidden bg-[#f1f1ef]">
           {preview && (
-            <img
+            <FallbackImage
               src={publicImageSrc(preview)}
+              fallbackSources={[...draft.previewImages, ...draft.images].map(publicImageSrc)}
               alt={draft.name}
               className="h-full w-full object-cover"
             />

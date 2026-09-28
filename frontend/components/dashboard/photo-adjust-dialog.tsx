@@ -3,6 +3,7 @@
 import { useRef, useState, type PointerEvent } from "react";
 import { RotateCcw, RotateCw, X } from "lucide-react";
 import { publicImageSrc, type PublicStoreCartItem, type StoreCrop } from "@/lib/public-store";
+import { FallbackImage } from "@/components/ui/fallback-image";
 
 export function PhotoAdjustDialog({
   item,
@@ -44,8 +45,9 @@ export function PhotoAdjustDialog({
             onPointerUp={() => { dragRef.current = null; }}
             onPointerCancel={() => { dragRef.current = null; }}
           >
-            <img
+            <FallbackImage
               src={publicImageSrc(item.image?.url)}
+              fallbackSrc={publicImageSrc(item.image?.thumbnailUrl)}
               alt="Crop preview"
               className="absolute left-1/2 top-1/2 h-full w-full max-w-none cursor-grab object-contain active:cursor-grabbing"
               draggable={false}

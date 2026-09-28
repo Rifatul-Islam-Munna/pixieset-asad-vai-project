@@ -6,6 +6,7 @@ import { ChevronDown, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { PublicStoreProductBuilder } from "./public-store-product-builder";
 import { StoreCartPanel } from "./store-cart-panel";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import {
   displayPrice,
   formatMoney,
@@ -148,8 +149,9 @@ export function PublicStoreProductPage({
           <div className="overflow-hidden border bg-[#f6f4f1]">
             <div className="flex min-h-[560px] items-center justify-center p-8">
               {previews[activePreview] && (
-                <img
+                <FallbackImage
                   src={publicImageSrc(previews[activePreview])}
+                  fallbackSources={previews.map(publicImageSrc)}
                   alt={product.name}
                   className="max-h-[620px] w-full object-contain"
                 />
@@ -165,7 +167,7 @@ export function PublicStoreProductPage({
                     }`}
                     onClick={() => setActivePreview(index)}
                   >
-                    <img src={publicImageSrc(preview)} alt="" className="h-full w-full object-cover" />
+                    <FallbackImage src={publicImageSrc(preview)} fallbackSources={previews.map(publicImageSrc)} alt="" className="h-full w-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -258,7 +260,7 @@ export function PublicStoreProductPage({
                   >
                     <div className="aspect-square overflow-hidden bg-[#f2f2f0]">
                       {preview && (
-                        <img src={publicImageSrc(preview)} alt={item.name} className="h-full w-full object-cover" />
+                        <FallbackImage src={publicImageSrc(preview)} fallbackSources={[...(item.previewImages ?? []), ...(item.images ?? [])].map(publicImageSrc)} alt={item.name} className="h-full w-full object-cover" />
                       )}
                     </div>
                     <p className="mt-3 text-sm font-medium">{item.name}</p>

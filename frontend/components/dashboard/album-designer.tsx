@@ -8,6 +8,7 @@ import { useCollections, useCollectionActivity, useCollectionDetail, type Collec
 import { useDashboardSettings } from "@/api-hooks/use-dashboard-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { cn } from "@/lib/utils";
 import { imageDisplayName } from "@/lib/image-display-name";
 
@@ -358,7 +359,7 @@ export function AlbumDesigner() {
                     const used = draft.spreads[activeSpread]?.images.some((item) => item.id === image.id) ?? false;
                     return (
                       <button key={image.id} type="button" disabled={!draft.spreads.length} onClick={() => addImageToSpread(image)} className={cn("group relative overflow-hidden border-2 bg-[#eee] disabled:cursor-not-allowed disabled:opacity-45", used ? "border-[#6337d8]" : "border-transparent hover:border-[#aaa]")}>
-                        <img src={imageSrc(image.thumbnailUrl || image.url)} alt={image.name || "Album source photo"} className="aspect-square w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+                        <FallbackImage src={imageSrc(image.thumbnailUrl || image.url)} fallbackSrc={imageSrc(image.url)} alt={image.name || "Album source photo"} className="aspect-square w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                         {used && <span className="absolute right-1.5 top-1.5 rounded-full bg-[#6337d8] px-2 py-1 text-[9px] font-bold uppercase text-white">Added</span>}
                       </button>
                     );
@@ -402,7 +403,7 @@ function SpreadPreview({ spread }: { spread: AlbumSpread }) {
 function AlbumPhoto({ image }: { image?: AlbumImage }) {
   return image ? (
     <div className="min-h-0 overflow-hidden bg-[#ddd]">
-      <img src={imageSrc(image.thumbnailUrl || image.url)} alt={image.name || "Album photo"} className="h-full w-full object-cover" />
+      <FallbackImage src={imageSrc(image.thumbnailUrl || image.url)} fallbackSrc={imageSrc(image.url)} alt={image.name || "Album photo"} className="h-full w-full object-cover" />
     </div>
   ) : (
     <div className="grid min-h-0 place-items-center bg-white text-[#bbb]"><ImageIcon className="size-6" /></div>

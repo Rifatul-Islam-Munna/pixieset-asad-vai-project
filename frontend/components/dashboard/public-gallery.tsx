@@ -1329,7 +1329,7 @@ export function PublicGallery({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                 {favoriteGalleryImages.map((photo) => (
                   <button key={photo._id} className="group relative aspect-[4/3] overflow-hidden bg-white" onClick={() => setActiveImage(photo)} type="button">
-                    <img src={imageSrc(photo.thumbnailUrl || photo.url)} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+                    <GalleryImage src={imageSrc(photo.thumbnailUrl || photo.url)} fallbackSrc={imageSrc(photo.url)} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                     <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white text-red-500 shadow">
                       <Star className="size-4 fill-current" />
                     </span>
@@ -2025,11 +2025,13 @@ function GalleryImage({
   parallaxStrength?: number;
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
+  const [useSrcSet, setUseSrcSet] = useState(Boolean(srcSet));
   const imageRef = useRef<HTMLImageElement | null>(null);
   const frameRef = useRef<HTMLSpanElement | null>(null);
   useEffect(() => {
     setCurrentSrc(src);
-  }, [src]);
+    setUseSrcSet(Boolean(srcSet));
+  }, [src, srcSet]);
   useEffect(() => {
     const image = imageRef.current;
     const frame = frameRef.current;
@@ -2079,14 +2081,15 @@ function GalleryImage({
       image.style.transform = "";
       image.style.willChange = "";
     };
-  }, [parallax, parallaxStrength]);
+  }, [currentSrc, parallax, parallaxStrength, useSrcSet]);
   return (
     <span ref={frameRef} className={cn("relative block w-full bg-transparent", (parallax || className?.includes("h-full")) && "overflow-hidden", className?.includes("h-full") && "h-full")}>
       <img
+        key={`${currentSrc}|${useSrcSet ? "responsive" : "single"}`}
         ref={imageRef}
         src={currentSrc}
-        srcSet={currentSrc === src ? srcSet : undefined}
-        sizes={currentSrc === src ? sizes : undefined}
+        srcSet={useSrcSet && currentSrc === src ? srcSet : undefined}
+        sizes={useSrcSet && currentSrc === src ? sizes : undefined}
         alt={alt}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
@@ -2097,8 +2100,13 @@ function GalleryImage({
           onShape?.(ratio > 1.12 ? "landscape" : ratio < 0.9 ? "portrait" : "square");
         }}
         onError={() => {
+          if (useSrcSet && srcSet && currentSrc === src) {
+            setUseSrcSet(false);
+            return;
+          }
           if (fallbackSrc && currentSrc !== fallbackSrc) {
             setCurrentSrc(fallbackSrc);
+            setUseSrcSet(false);
           }
         }}
         className={className}

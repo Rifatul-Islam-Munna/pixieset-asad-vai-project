@@ -11,6 +11,7 @@ import {
   type PublicStoreData,
 } from "@/lib/public-store";
 import { imageDisplayName } from "@/lib/image-display-name";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { PhotoAdjustDialog } from "./photo-adjust-dialog";
 import { StoreOrderPanel } from "./store-order-panel";
 
@@ -84,8 +85,9 @@ export function StoreCartPanel({
                 <article key={item.id} className="grid grid-cols-[76px_1fr] gap-3 border-b py-5 sm:grid-cols-[92px_1fr] sm:gap-4">
                   <div className="aspect-square overflow-hidden bg-[#f1f1ef]">
                     {(item.image?.url || item.product.images?.[0]) && (
-                      <img
+                      <FallbackImage
                         src={publicImageSrc(item.image?.thumbnailUrl || item.image?.url || item.product.images?.[0])}
+                        fallbackSources={[publicImageSrc(item.image?.url), publicImageSrc(item.product.images?.[0])]}
                         alt=""
                         className="h-full w-full"
                         style={item.crop ? { objectFit: item.crop.fit === "contain" ? "contain" : "cover", transform: `translate(${item.crop.x / 3}%, ${item.crop.y / 3}%) scale(${item.crop.zoom}) rotate(${item.crop.rotation}deg)` } : { objectFit: "cover" }}

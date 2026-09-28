@@ -17,6 +17,7 @@ import {
 } from "@/lib/public-store";
 import { cn } from "@/lib/utils";
 import { imageDisplayName } from "@/lib/image-display-name";
+import { FallbackImage } from "@/components/ui/fallback-image";
 
 type BuilderStep = "product" | "photos" | "crop";
 
@@ -312,7 +313,7 @@ export function PublicStoreProductBuilder({
                     className={cn("group relative aspect-square overflow-hidden bg-[#eee]", selected && "ring-2 ring-[#6337d8] ring-offset-2")}
                     onClick={() => choosePhoto(image._id)}
                   >
-                    <img src={publicImageSrc(image.thumbnailUrl || image.url)} alt={imageDisplayName(image, "Collection photo")} className="h-full w-full object-cover" />
+                    <FallbackImage src={publicImageSrc(image.thumbnailUrl || image.url)} fallbackSrc={publicImageSrc(image.url)} alt={imageDisplayName(image, "Collection photo")} className="h-full w-full object-cover" />
                     <span className={cn("absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border bg-white/95", selected ? "border-[#6337d8] bg-[#6337d8] text-white" : "border-white text-transparent") }>
                       <Check className="size-4" />
                     </span>
@@ -335,7 +336,7 @@ export function PublicStoreProductBuilder({
                       setActiveCropImageId(image._id);
                       setCrop(next[image._id] ?? defaultCrop(aspectLabel(selectedVariant?.label)));
                     }}>
-                      <img src={publicImageSrc(image.thumbnailUrl || image.url)} alt="" className="h-full w-full object-cover" />
+                      <FallbackImage src={publicImageSrc(image.thumbnailUrl || image.url)} fallbackSrc={publicImageSrc(image.url)} alt="" className="h-full w-full object-cover" />
                       <span className="sr-only">Photo {index + 1}</span>
                     </button>
                   ))}
@@ -390,7 +391,7 @@ function ProductPreview({
     <div className="flex min-h-[320px] flex-col bg-[#f3f3f2] p-5 sm:min-h-[420px] sm:p-6 md:p-10">
       <div className="flex min-h-[260px] flex-1 items-center justify-center sm:min-h-[380px]">
         {previews[active] ? (
-          <img src={publicImageSrc(previews[active])} alt={selectedImage ? imageDisplayName(selectedImage, product.name) : product.name} className="max-h-[680px] w-full object-contain" />
+          <FallbackImage src={publicImageSrc(previews[active])} fallbackSources={selectedImage ? [publicImageSrc(selectedImage.thumbnailUrl)] : previews.map(publicImageSrc)} alt={selectedImage ? imageDisplayName(selectedImage, product.name) : product.name} className="max-h-[680px] w-full object-contain" />
         ) : (
           <div className="flex flex-col items-center text-[#8b8b8b]"><ImageIcon className="size-10" /><span className="mt-3 text-sm">Product preview</span></div>
         )}
@@ -399,7 +400,7 @@ function ProductPreview({
         <div className="mt-5 flex justify-center gap-2 overflow-x-auto">
           {previews.map((image, index) => (
             <button key={`${image}-${index}`} className={cn("size-16 shrink-0 border bg-white p-1", active === index && "border-[#6337d8] ring-1 ring-[#6337d8]/20")} onClick={() => setActive(index)}>
-              <img src={publicImageSrc(image)} alt="" className="h-full w-full object-cover" />
+              <FallbackImage src={publicImageSrc(image)} fallbackSources={previews.map(publicImageSrc)} alt="" className="h-full w-full object-cover" />
             </button>
           ))}
         </div>

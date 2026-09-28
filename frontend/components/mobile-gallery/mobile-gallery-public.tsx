@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { MobileGalleryApp, MobileGalleryImage, MobileGalleryProfile } from "@/api-hooks/use-mobile-gallery";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { MobileGalleryCover, mobileGalleryThemes } from "./mobile-gallery-cover";
 
 type DeferredPrompt = Event & {
@@ -357,11 +358,13 @@ export function MobileGalleryPublic({
           </span>
         </span>
       ) : (
-        <img
+        <FallbackImage
           src={image.thumbnailUrl || image.url}
+          fallbackSrc={image.url}
           alt={image.originalName || "Gallery photo"}
           className={`w-full object-cover transition duration-500 group-hover:scale-[1.02] ${design.layout === "horizontal" ? "aspect-[4/3]" : design.gridStyle === "grid" ? "aspect-[3/4]" : "h-auto"}`}
           loading="lazy"
+          decoding="async"
         />
       )}
       {selecting ? (
@@ -495,7 +498,7 @@ export function MobileGalleryPublic({
           {isVideo(activeImage) ? (
             <video src={activeImage.url} className="max-h-[82vh] max-w-full object-contain" controls autoPlay />
           ) : (
-            <img src={activeImage.url} alt={activeImage.originalName || "Photo"} className="max-h-[82vh] max-w-full object-contain" />
+            <FallbackImage src={activeImage.url} fallbackSrc={activeImage.thumbnailUrl} alt={activeImage.originalName || "Photo"} className="max-h-[82vh] max-w-full object-contain" />
           )}
           <div className="absolute bottom-6 flex gap-3">
             <button type="button" onClick={() => toggleFavorite(activeImage._id)} className="rounded-full bg-white p-3 text-black"><Heart className={`size-5 ${favorites.includes(activeImage._id) ? "fill-red-500 text-red-500" : ""}`} /></button>

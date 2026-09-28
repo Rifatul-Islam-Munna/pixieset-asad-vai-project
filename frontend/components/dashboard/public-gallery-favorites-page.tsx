@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { imageDisplayName } from "@/lib/image-display-name";
 import { galleryLanguageCode } from "@/lib/gallery-language";
+import { FallbackImage } from "@/components/ui/fallback-image";
 
 type FavoritePageImage = {
   _id: string;
@@ -310,7 +311,7 @@ export function PublicGalleryFavoritesPage({
               return (
                 <article key={image._id} className={cn("group overflow-hidden border bg-white transition", selected && "border-[#16a894] ring-2 ring-[#16a894]/20")}>
                   <div className="relative aspect-[4/3] overflow-hidden bg-[#e9e9e6]">
-                    <img src={imageSrc(image.thumbnailUrl || image.url)} alt={imageDisplayName(image, `Favorite photo ${index + 1}`)} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                    <FallbackImage src={imageSrc(image.thumbnailUrl || image.url)} fallbackSrc={imageSrc(image.url)} alt={imageDisplayName(image, `Favorite photo ${index + 1}`)} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
                     <button onClick={() => toggleSelected(image._id)} className={cn("absolute left-3 top-3 flex size-9 items-center justify-center rounded-full border shadow", selected ? "border-[#16a894] bg-[#16a894] text-white" : "border-white/70 bg-white/95")} aria-label={selected ? "Deselect photo" : "Select photo"}>{selected ? <Check className="size-4" /> : <span className="size-3 rounded-full border" />}</button>
                   </div>
                   <div className="p-4">
