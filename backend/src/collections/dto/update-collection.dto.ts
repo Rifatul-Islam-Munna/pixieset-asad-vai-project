@@ -56,6 +56,10 @@ export class UpdateCollectionDto {
   status?: 'draft' | 'published';
 
   @IsOptional()
+  @IsBoolean()
+  showOnHomepage?: boolean;
+
+  @IsOptional()
   @IsObject()
   design?: Record<string, unknown>;
 

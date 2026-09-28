@@ -2126,6 +2126,8 @@ export class CollectionsService implements OnModuleInit {
     if (dto.expiresAt !== undefined)
       collection.expiresAt = this.expiryDate(dto.expiresAt);
     if (dto.status !== undefined) collection.status = dto.status;
+    if (dto.showOnHomepage !== undefined)
+      collection.showOnHomepage = dto.showOnHomepage;
     if (dto.design !== undefined) collection.design = dto.design;
     if (dto.settings !== undefined || dto.clientEmails !== undefined)
       collection.settings = syncedSettings;
@@ -2170,6 +2172,7 @@ export class CollectionsService implements OnModuleInit {
       settings: source.settings ?? {},
       imageCount: images.length,
       status: 'draft',
+      showOnHomepage: source.showOnHomepage !== false,
     });
 
     if (images.length) {

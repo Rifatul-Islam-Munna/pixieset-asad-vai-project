@@ -145,6 +145,9 @@ export class HomepageService {
     const query = this.collectionModel.find({
       userId: homepage.userId,
       status: 'published',
+      // Legacy collections do not have this field yet, so anything except an
+      // explicit false remains visible. This preserves existing homepages.
+      showOnHomepage: { $ne: false },
       $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: new Date() } }],
     });
     if (homepage.sortOrder === 'oldest') query.sort('createdAt');

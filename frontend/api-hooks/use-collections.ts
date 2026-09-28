@@ -34,6 +34,7 @@ export type CollectionRecord = {
   design?: Record<string, any>;
   settings?: Record<string, any>;
   status?: string;
+  showOnHomepage?: boolean;
   createdAt?: string;
 };
 

@@ -49,6 +49,9 @@ export class Collection {
 
   @Prop({ default: 'draft' })
   status: string;
+
+  @Prop({ default: true, index: true })
+  showOnHomepage: boolean;
 }
 
 export const CollectionSchema = SchemaFactory.createForClass(Collection);

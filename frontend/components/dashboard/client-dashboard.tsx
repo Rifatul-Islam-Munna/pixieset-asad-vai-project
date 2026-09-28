@@ -2,6 +2,7 @@
 
 import {
   createElement,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -21,7 +22,6 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { toast } from "sonner";
 import { ReactSortable } from "react-sortablejs";
-import hotkeys from "hotkeys-js";
 import {
   ArrowLeft,
   ArrowRight,
@@ -14198,7 +14198,9 @@ function CollectionDetailView({
   const selectionAnchorImageIdRef = useRef("");
   const [draggingGalleryImageId, setDraggingGalleryImageId] = useState("");
   const [imageDropTargetSetId, setImageDropTargetSetId] = useState("");
-  const [movingDraggedImage, setMovingDraggedImage] = useState(false);
+  const movingImageIdsRef = useRef(new Set<string>());
+  const [movingImageIds, setMovingImageIds] = useState<string[]>([]);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
@@ -14698,6 +14700,8 @@ function CollectionDetailView({
       payload.expiresAt = form.expiresAt;
     if (collectionStatus !== collection.status)
       payload.status = collectionStatus;
+    if (form.showOnHomepage !== (collection.showOnHomepage !== false))
+      payload.showOnHomepage = form.showOnHomepage;
     if (JSON.stringify(form.design) !== JSON.stringify(collection.design ?? {}))
       payload.design = form.design;
     if (
@@ -15064,10 +15068,7 @@ function CollectionDetailView({
   });
 
   useEffect(() => {
-    if (!uploadProgress.active || uploadProgress.phase !== "uploading") {
-      setSlowUploadNetwork(false);
-      return;
-    }
+    if (!uploadProgress.active || uploadProgress.phase !== "uploading") return;
     const sessionKey = currentUploadSessionKey;
     const timer = window.setInterval(() => {
       const lastActivity =
@@ -15325,7 +15326,12 @@ function CollectionDetailView({
   const uploadSpeedMbps = uploadProgress.megabitsPerSecond;
   const deletingImages =
     deleteImage.isPending || deleteImages.isPending || bulkDeleting;
-  const selectImage = (
+  const setImageMovePending = (imageId: string, pending: boolean) => {
+    if (pending) movingImageIdsRef.current.add(imageId);
+    else movingImageIdsRef.current.delete(imageId);
+    setMovingImageIds([...movingImageIdsRef.current]);
+  };
+  const selectImage = useCallback((
     imageId: string,
     modifiers: {
       shiftKey?: boolean;
@@ -15333,7 +15339,7 @@ function CollectionDetailView({
       metaKey?: boolean;
     } = {},
   ) => {
-    if (deletingImages || movingDraggedImage) return;
+    if (deletingImages || movingImageIdsRef.current.has(imageId)) return;
 
     const selectableIds = displayedSetImages
       .filter((image) => !isLocalUploadImage(image))
@@ -15361,12 +15367,12 @@ function CollectionDetailView({
         ? current.filter((id) => id !== imageId)
         : [...current, imageId],
     );
-  };
-  const clearSelection = () => {
+  }, [deletingImages, displayedSetImages]);
+  const clearSelection = useCallback(() => {
     if (deletingImages) return;
     selectionAnchorImageIdRef.current = "";
     setSelectedImageIds([]);
-  };
+  }, [deletingImages]);
   const beginGalleryImageDrag = (
     event: DragEvent<HTMLDivElement>,
     image: CollectionImageRecord,
@@ -15374,8 +15380,7 @@ function CollectionDetailView({
     if (
       isLocalUploadImage(image) ||
       deletingImages ||
-      movingDraggedImage ||
-      updateImage.isPending
+      movingImageIdsRef.current.has(image._id)
     ) {
       event.preventDefault();
       return;
@@ -15390,7 +15395,7 @@ function CollectionDetailView({
     setDraggingGalleryImageId("");
     setImageDropTargetSetId("");
   };
-  const dropImageIntoSet = async (
+  const dropImageIntoSet = (
     event: DragEvent<HTMLDivElement>,
     targetSetId: string,
   ) => {
@@ -15408,8 +15413,7 @@ function CollectionDetailView({
       isLocalUploadImage(image) ||
       !targetSetId ||
       targetSetId === currentSetId ||
-      movingDraggedImage ||
-      updateImage.isPending
+      movingImageIdsRef.current.has(imageId)
     ) {
       finishGalleryImageDrag();
       return;
@@ -15417,8 +15421,9 @@ function CollectionDetailView({
 
     const targetSet = form.sets.find((set) => set.id === targetSetId);
     imageCrossSetDropRef.current = true;
-    setMovingDraggedImage(true);
-    setImageDropTargetSetId(targetSetId);
+    setImageMovePending(imageId, true);
+
+    // Optimistic move: the photo changes collection immediately in the UI.
     setLoadedImages((current) =>
       current.map((item) =>
         item._id === imageId ? { ...item, setId: targetSetId } : item,
@@ -15428,29 +15433,41 @@ function CollectionDetailView({
       current.filter((selectedId) => selectedId !== imageId),
     );
     if (activeImageId === imageId) setActiveImageId("");
+    finishGalleryImageDrag();
 
-    try {
-      await updateImage.mutateAsync({
+    toast.success(
+      `Moved to ${targetSet?.name ?? "the selected collection"} · syncing in background`,
+    );
+
+    void updateImage
+      .mutateAsync({
         imageId,
         payload: { setId: targetSetId },
+      })
+      .then(async () => {
+        // Keep the optimistic state until the refreshed server counts arrive.
+        await collectionQuery.refetch().catch(() => undefined);
+      })
+      .catch((error) => {
+        // Only roll back this optimistic move. Other photo moves may still be
+        // syncing independently in the background.
+        setLoadedImages((current) =>
+          current.map((item) =>
+            item._id === imageId && (item.setId || "highlights") === targetSetId
+              ? { ...item, setId: currentSetId }
+              : item,
+          ),
+        );
+        toast.error(
+          error instanceof Error
+            ? `Move failed: ${error.message}`
+            : "Move failed. The photo was returned to its previous collection.",
+        );
+        void collectionQuery.refetch();
+      })
+      .finally(() => {
+        setImageMovePending(imageId, false);
       });
-      toast.success(
-        `Photo moved to ${targetSet?.name ?? "the selected collection"}`,
-      );
-    } catch (error) {
-      setLoadedImages((current) =>
-        current.map((item) =>
-          item._id === imageId ? { ...item, setId: currentSetId } : item,
-        ),
-      );
-      toast.error(
-        error instanceof Error ? error.message : "Could not move photo",
-      );
-      await collectionQuery.refetch();
-    } finally {
-      setMovingDraggedImage(false);
-      finishGalleryImageDrag();
-    }
   };
   const deleteSingleImage = (image: CollectionImageRecord) => {
     if (deletingImages) return;
@@ -15507,33 +15524,144 @@ function CollectionDetailView({
   };
   useEffect(() => {
     if (activeTab !== "photos") return;
-    const selectAll = (event: KeyboardEvent) => {
-      event.preventDefault();
-      const ids = displayedSetImages
-        .filter((image) => !isLocalUploadImage(image))
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        shortcutsOpen ||
+        previewOpen ||
+        metadataOpen ||
+        bulkDeleteConfirmOpen
+      )
+        return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        target?.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
+
+      const selectableIds = displayedSetImages
+        .filter(
+          (image) =>
+            !isLocalUploadImage(image) &&
+            !movingImageIdsRef.current.has(image._id),
+        )
         .map((image) => image._id);
-      selectionAnchorImageIdRef.current = ids[0] ?? "";
-      setSelectedImageIds(ids);
-      toast.success(`${ids.length} images selected`);
+      const modifier = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+
+      if (modifier && !event.shiftKey && key === "a") {
+        event.preventDefault();
+        selectionAnchorImageIdRef.current = selectableIds[0] ?? "";
+        setSelectedImageIds(selectableIds);
+        toast.success(`${selectableIds.length} images selected`);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (!selectedImageIds.length) return;
+        event.preventDefault();
+        clearSelection();
+        return;
+      }
+
+      const deleteShortcut =
+        event.key === "Delete" ||
+        (event.metaKey && event.key === "Backspace");
+      if (deleteShortcut && selectedImageIds.length && !deletingImages) {
+        event.preventDefault();
+        setBulkDeleteConfirmOpen(true);
+        return;
+      }
+
+      if (key === "?" || (event.shiftKey && event.key === "/")) {
+        event.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+
+      if (!selectableIds.length) return;
+      const fallbackId = selectableIds[0];
+      const currentId =
+        activeImageId && selectableIds.includes(activeImageId)
+          ? activeImageId
+          : fallbackId;
+      const currentIndex = Math.max(0, selectableIds.indexOf(currentId));
+
+      const focusImageAt = (nextIndex: number, extendSelection: boolean) => {
+        const clampedIndex = Math.min(
+          selectableIds.length - 1,
+          Math.max(0, nextIndex),
+        );
+        const nextId = selectableIds[clampedIndex];
+        if (!nextId) return;
+        if (extendSelection) {
+          if (!selectionAnchorImageIdRef.current)
+            selectionAnchorImageIdRef.current = currentId;
+          selectImage(nextId, {
+            shiftKey: true,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+          });
+        } else {
+          selectionAnchorImageIdRef.current = nextId;
+        }
+        setActiveImageId(nextId);
+      };
+
+      if (event.key === "ArrowRight" || key === "j") {
+        event.preventDefault();
+        focusImageAt(currentIndex + 1, event.shiftKey);
+        return;
+      }
+      if (event.key === "ArrowLeft" || key === "k") {
+        event.preventDefault();
+        focusImageAt(currentIndex - 1, event.shiftKey);
+        return;
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        focusImageAt(0, event.shiftKey);
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        focusImageAt(selectableIds.length - 1, event.shiftKey);
+        return;
+      }
+      if (event.key === " " || key === "x") {
+        event.preventDefault();
+        selectImage(currentId, {
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+        });
+        setActiveImageId(currentId);
+        return;
+      }
+      if (event.key === "Enter" || key === "o") {
+        event.preventDefault();
+        setActiveImageId(currentId);
+        setPreviewOpen(true);
+      }
     };
-    const removeSelected = (event: KeyboardEvent) => {
-      if (!selectedImageIds.length || deletingImages) return;
-      event.preventDefault();
-      setBulkDeleteConfirmOpen(true);
-    };
-    const clearSelected = (event: KeyboardEvent) => {
-      event.preventDefault();
-      clearSelection();
-    };
-    hotkeys("ctrl+a,command+a", selectAll);
-    hotkeys("delete,backspace", removeSelected);
-    hotkeys("esc", clearSelected);
-    return () => {
-      hotkeys.unbind("ctrl+a,command+a", selectAll);
-      hotkeys.unbind("delete,backspace", removeSelected);
-      hotkeys.unbind("esc", clearSelected);
-    };
-  }, [activeTab, deletingImages, displayedSetImages, selectedImageIds]);
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    activeImageId,
+    activeTab,
+    bulkDeleteConfirmOpen,
+    deletingImages,
+    displayedSetImages,
+    metadataOpen,
+    previewOpen,
+    selectedImageIds,
+    shortcutsOpen,
+    clearSelection,
+    selectImage,
+  ]);
   const reorderSetImages = (nextSetImages: CollectionImageRecord[]) => {
     const nextSetIds = nextSetImages.map((image) => image._id);
     if (
@@ -16535,7 +16663,7 @@ function CollectionDetailView({
                 setList={stageSetSort}
                 onStart={beginSetSort}
                 onEnd={finishSetSort}
-                disabled={Boolean(draggingGalleryImageId) || movingDraggedImage}
+                disabled={Boolean(draggingGalleryImageId)}
                 animation={180}
                 delayOnTouchOnly
                 ghostClass="sortable-image-ghost"
@@ -16577,8 +16705,7 @@ function CollectionDetailView({
                       onDragOver={(event) => {
                         if (
                           !draggingGalleryImageId ||
-                          set.id === activeSetId ||
-                          movingDraggedImage
+                          set.id === activeSetId
                         )
                           return;
                         event.preventDefault();
@@ -16588,8 +16715,7 @@ function CollectionDetailView({
                       onDragEnter={(event) => {
                         if (
                           !draggingGalleryImageId ||
-                          set.id === activeSetId ||
-                          movingDraggedImage
+                          set.id === activeSetId
                         )
                           return;
                         event.preventDefault();
@@ -17175,11 +17301,25 @@ function CollectionDetailView({
                     </Button>
                   </div>
                 </div>
-                <p className="mb-3 text-xs text-[#999]">
-                  Shift + click selects a range · Ctrl/Cmd + click toggles ·
-                  Drag a photo onto another collection to move it · Ctrl/Cmd +
-                  A selects all
-                </p>
+                <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-[#999]">
+                  <span>
+                    Windows: Shift + click range · Ctrl + click toggle · Ctrl +
+                    A all · Delete remove
+                  </span>
+                  <span className="hidden sm:inline">·</span>
+                  <span>
+                    macOS: Shift + click range · Cmd (⌘) + click toggle · Cmd (⌘) +
+                    A all · Cmd (⌘) + Backspace remove
+                  </span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 font-bold text-[#6337d8] hover:underline"
+                    onClick={() => setShortcutsOpen(true)}
+                  >
+                    <Info className="size-3.5" />
+                    All shortcuts (?)
+                  </button>
+                </div>
                 {deletingImages && (
                   <div className="mb-4 flex items-center gap-3 border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                     <Loader2 className="size-4 animate-spin" />
@@ -17196,6 +17336,9 @@ function CollectionDetailView({
                   onEnd={finishImageSort}
                   disabled={
                     displayedSetImages.some(isLocalUploadImage) ||
+                    displayedSetImages.some((image) =>
+                      movingImageIds.includes(image._id),
+                    ) ||
                     photoSort !== "uploaded-new-old"
                   }
                   animation={180}
@@ -17217,7 +17360,7 @@ function CollectionDetailView({
                       draggable={
                         !isLocalUploadImage(image) &&
                         !deletingImages &&
-                        !movingDraggedImage
+                        !movingImageIds.includes(image._id)
                       }
                       onDragStart={(event) =>
                         beginGalleryImageDrag(event, image)
@@ -17231,13 +17374,16 @@ function CollectionDetailView({
                           "outline outline-2 outline-red-500",
                         draggingGalleryImageId === image._id &&
                           "opacity-50 outline outline-2 outline-[#6337d8]",
-                        (deletingImages || movingDraggedImage) &&
-                          "pointer-events-none opacity-55",
+                        deletingImages && "pointer-events-none opacity-55",
+                        movingImageIds.includes(image._id) &&
+                          "opacity-80 outline outline-1 outline-[#6337d8]/50",
                       )}
                     >
                       <button
                         className="relative block w-full overflow-hidden bg-[#f2f2f2]"
-                        disabled={deletingImages || movingDraggedImage}
+                        disabled={
+                          deletingImages || movingImageIds.includes(image._id)
+                        }
                         onClick={(event) => {
                           if (
                             event.shiftKey ||
@@ -17248,6 +17394,7 @@ function CollectionDetailView({
                             selectImage(image._id, event);
                             return;
                           }
+                          selectionAnchorImageIdRef.current = image._id;
                           setActiveImageId(image._id);
                         }}
                       >
@@ -17276,6 +17423,12 @@ function CollectionDetailView({
                           />
                         )}
                       </button>
+                      {movingImageIds.includes(image._id) && (
+                        <span className="pointer-events-none absolute bottom-3 left-3 z-20 inline-flex items-center gap-1.5 bg-white/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#6337d8] shadow-sm">
+                          <Loader2 className="size-3 animate-spin" />
+                          Syncing
+                        </span>
+                      )}
                       <button
                         className={cn(
                           "absolute left-2 top-2 flex size-8 items-center justify-center border bg-white/95 shadow-sm transition-all duration-200 hover:scale-105",
@@ -17285,7 +17438,7 @@ function CollectionDetailView({
                         )}
                         disabled={
                           deletingImages ||
-                          movingDraggedImage ||
+                          movingImageIds.includes(image._id) ||
                           isLocalUploadImage(image)
                         }
                         onClick={(event) => {
@@ -17531,6 +17684,73 @@ function CollectionDetailView({
                     void deleteSelectedImages();
                   }}
                 />
+                <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+                  <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
+                    <DialogHeader>
+                      <DialogTitle>Photo keyboard shortcuts</DialogTitle>
+                      <DialogDescription>
+                        Windows and macOS use the same gallery workflow. Ctrl on
+                        Windows maps to Command on macOS.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-2 text-sm">
+                      {[
+                        ["Select a range", "Shift + click", "Shift + click"],
+                        ["Toggle one photo", "Ctrl + click", "Cmd (⌘) + click"],
+                        ["Select all", "Ctrl + A", "Cmd (⌘) + A"],
+                        ["Delete selected", "Delete", "Cmd (⌘) + Backspace"],
+                        ["Next photo", "Right Arrow or J", "Right Arrow or J"],
+                        [
+                          "Previous photo",
+                          "Left Arrow or K",
+                          "Left Arrow or K",
+                        ],
+                        [
+                          "Extend selection",
+                          "Shift + Left/Right",
+                          "Shift + Left/Right",
+                        ],
+                        ["First photo", "Home", "Home / Fn + Left"],
+                        ["Last photo", "End", "End / Fn + Right"],
+                        ["Toggle active photo", "Space or X", "Space or X"],
+                        ["Open preview", "Enter or O", "Enter or O"],
+                        ["Clear selection", "Esc", "Esc"],
+                        ["Show shortcuts", "?", "?"],
+                      ].map(([action, windows, mac]) => (
+                        <div
+                          key={action}
+                          className="grid gap-2 border-b border-[#eee] py-3 sm:grid-cols-[1.2fr_1fr_1fr] sm:items-center"
+                        >
+                          <span className="font-semibold text-[#222]">
+                            {action}
+                          </span>
+                          <span className="text-[#666]">
+                            <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-[#999]">
+                              Windows
+                            </span>
+                            <kbd className="border bg-[#fafafa] px-2 py-1 font-mono text-xs">
+                              {windows}
+                            </kbd>
+                          </span>
+                          <span className="text-[#666]">
+                            <span className="mr-2 text-[10px] font-bold uppercase tracking-wide text-[#999]">
+                              macOS
+                            </span>
+                            <kbd className="border bg-[#fafafa] px-2 py-1 font-mono text-xs">
+                              {mac}
+                            </kbd>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs leading-5 text-[#777]">
+                      Drag-and-drop moves are optimistic: the photo changes
+                      collection immediately while the server saves the move in
+                      the background. A small Syncing badge appears until that
+                      save finishes.
+                    </p>
+                  </DialogContent>
+                </Dialog>
                 <Dialog open={metadataOpen} onOpenChange={setMetadataOpen}>
                   <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
                     <DialogHeader>
@@ -17798,6 +18018,17 @@ function CollectionDetailView({
                         className="h-12 rounded-none bg-white"
                       />
                     </Field>
+                    <SettingSwitch
+                      label="Show on Homepage"
+                      checked={form.showOnHomepage}
+                      onCheckedChange={(showOnHomepage) =>
+                        setForm((current) => ({
+                          ...current,
+                          showOnHomepage,
+                        }))
+                      }
+                      text="Show this published gallery on your public subdomain homepage. Turn this off to hide it from the homepage while keeping its direct gallery link available."
+                    />
                     <SettingSwitch
                       label="Slideshow"
                       checked={form.general.slideshow}
@@ -19646,6 +19877,7 @@ type CollectionFormState = {
   coverImage: string;
   expiresAt: string;
   clientEmails: string;
+  showOnHomepage: boolean;
   sets: NonNullable<CollectionRecord["sets"]>;
   design: PresetDesignSettings;
   general: PresetGeneralSettings;
@@ -19701,6 +19933,7 @@ function collectionForm(
     coverImage: collection?.coverImage ?? "",
     expiresAt: collection?.expiresAt ? collection.expiresAt.slice(0, 10) : "",
     clientEmails: (collection?.clientEmails ?? []).join(", "),
+    showOnHomepage: collection?.showOnHomepage !== false,
     sets: collection?.sets?.length
       ? collection.sets
       : [{ id: "highlights", name: "Featured" }],
