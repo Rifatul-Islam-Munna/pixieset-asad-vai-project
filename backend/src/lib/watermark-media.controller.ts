@@ -13,6 +13,9 @@ export class WatermarkMediaController {
     @Param('token') token: string,
     @Res() response: Response,
   ) {
+    // Gallery frontend and API use different origins in production. Helmet's
+    // default `same-origin` policy blocks this public signed image in <img>.
+    response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     const result = await this.watermarkRenderService.render(token);
 
     if (result.redirect) {

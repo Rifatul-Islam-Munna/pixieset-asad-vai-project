@@ -33,7 +33,14 @@ async function bootstrap() {
     origin: (origin, callback) => callback(null, allowedOrigin(origin) ? origin || true : false),
     credentials: true,
   });
-  app.use('/uploads', serveStatic(join(cwd(), 'uploads')));
+  app.use(
+    '/uploads',
+    serveStatic(join(cwd(), 'uploads'), {
+      setHeaders: (response) => {
+        response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      },
+    }),
+  );
   app.use('/billing/stripe/webhook', raw({ type: 'application/json' }));
   app.use('/billing/paypal/webhook', raw({ type: 'application/json' }));
   app.use('/public/collections/store/paypal/webhook', raw({ type: 'application/json' }));
