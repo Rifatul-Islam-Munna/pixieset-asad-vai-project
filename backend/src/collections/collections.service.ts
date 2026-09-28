@@ -3281,6 +3281,23 @@ export class CollectionsService implements OnModuleInit {
     if (!jobs.length) return;
 
     await this.mapWithConcurrency(jobs, 12, async (job) => {
+      const collection = await this.collectionModel
+        .findOne({ _id: job.collectionId, userId: job.userId })
+        .select('sets')
+        .lean()
+        .catch(() => null);
+
+      if (
+        !collection ||
+        (job.setId &&
+          !collection.sets?.some((set: any) => set.id === job.setId))
+      ) {
+        await this.imageProcessingJobModel
+          .deleteOne({ _id: job._id })
+          .catch(() => undefined);
+        return;
+      }
+
       const directFile: DirectUploadFile = {
         objectKey: job.objectKey,
         name: job.name,
@@ -3386,6 +3403,20 @@ export class CollectionsService implements OnModuleInit {
 
     await this.mapWithConcurrency(jobs, 20, async (job) => {
       try {
+        const collection = await this.collectionModel
+          .findOne({ _id: job.collectionId, userId: job.userId })
+          .select('sets')
+          .lean()
+          .catch(() => null);
+
+        if (!collection) return;
+        if (
+          job.setId &&
+          !collection.sets?.some((set: any) => set.id === job.setId)
+        ) {
+          return;
+        }
+
         const verified = await this.minioService
           .verifyDirectUpload(job.userId, {
             objectKey: job.objectKey,
@@ -3395,14 +3426,17 @@ export class CollectionsService implements OnModuleInit {
           })
           .catch(() => undefined);
 
-        if (verified) {
-          if (this.mediaType(job.type) === 'image') {
-            await this.saveDirectImageForImgproxy(job as any);
-          } else {
-            await this.saveDirectVideoFromProcessingJob(job as any);
-          }
-          await this.replaceImageAfterDirectProcessing(job as any);
+        if (!verified) return;
+
+        if (this.mediaType(job.type) === 'image') {
+          await this.saveDirectImageForImgproxy(job as any);
+        } else {
+          await this.saveDirectVideoFromProcessingJob(job as any);
         }
+        await this.replaceImageAfterDirectProcessing(job as any);
+      } catch {
+        // Legacy recovery must never bubble into the scheduler. The job is
+        // obsolete or malformed; drop it and continue with the next item.
       } finally {
         await this.imageProcessingJobModel
           .deleteOne({ _id: job._id })
