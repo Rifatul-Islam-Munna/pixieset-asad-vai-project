@@ -3668,6 +3668,164 @@ export class CollectionsService implements OnModuleInit {
     };
   }
 
+  async moveImages(
+    userId: string,
+    collectionId: string,
+    imageIds: string[],
+    targetCollectionIdInput: string,
+    targetSetIdInput?: string,
+  ) {
+    const ids = [
+      ...new Set(
+        (Array.isArray(imageIds) ? imageIds : [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (!ids.length) throw new BadRequestException('Select at least one image');
+    if (ids.length > 5000)
+      throw new BadRequestException('Move up to 5000 images at a time');
+    if (ids.some((id) => !Types.ObjectId.isValid(id)))
+      throw new BadRequestException('Invalid image selection');
+
+    const targetCollectionId = String(targetCollectionIdInput ?? '').trim();
+    if (!Types.ObjectId.isValid(targetCollectionId))
+      throw new BadRequestException('Target collection is required');
+
+    const [sourceCollection, targetCollection, images] = await Promise.all([
+      this.collectionModel
+        .findOne({ _id: collectionId, userId })
+        .select('coverImage sets')
+        .lean(),
+      this.collectionModel
+        .findOne({ _id: targetCollectionId, userId })
+        .select('coverImage sets')
+        .lean(),
+      this.imageModel
+        .find({
+          _id: { $in: ids },
+          userId,
+          collectionId,
+        })
+        .select('_id url setId')
+        .lean(),
+    ]);
+    if (!sourceCollection)
+      throw new NotFoundException('Collection not found');
+    if (!targetCollection)
+      throw new NotFoundException('Target collection not found');
+    if (images.length !== ids.length)
+      throw new BadRequestException(
+        'Some selected images are no longer available. Refresh and try again.',
+      );
+
+    const targetSetId =
+      String(targetSetIdInput ?? '').trim() ||
+      targetCollection.sets?.[0]?.id ||
+      'highlights';
+    if (
+      targetSetId &&
+      !targetCollection.sets?.some((set) => set.id === targetSetId)
+    ) {
+      throw new BadRequestException('Target set not found');
+    }
+
+    const movedIds = images.map((image) => image._id.toString());
+    const movingWithinCollection = targetCollectionId === collectionId;
+
+    if (movingWithinCollection) {
+      await this.imageModel.updateMany(
+        {
+          _id: { $in: movedIds },
+          userId,
+          collectionId,
+        },
+        { $set: { setId: targetSetId } },
+      );
+    } else {
+      const lastTargetImage = await this.imageModel
+        .findOne({ userId, collectionId: targetCollectionId })
+        .sort({ order: -1, createdAt: -1 })
+        .select('order')
+        .lean();
+      const firstOrder = Math.max(0, Number(lastTargetImage?.order ?? 0)) + 1;
+      await this.imageModel.bulkWrite(
+        movedIds.map((imageId, index) => ({
+          updateOne: {
+            filter: { _id: imageId, userId, collectionId },
+            update: {
+              $set: {
+                collectionId: targetCollectionId,
+                setId: targetSetId,
+                order: firstOrder + index,
+              },
+            },
+          },
+        })),
+        { ordered: false },
+      );
+    }
+
+    if (!movingWithinCollection) {
+      const movedUrls = new Set(images.map((image) => image.url).filter(Boolean));
+      const sourceCoverMoved =
+        Boolean(sourceCollection.coverImage) &&
+        movedUrls.has(String(sourceCollection.coverImage));
+
+      const [sourceCount, targetCount] = await Promise.all([
+        this.imageModel.countDocuments({ userId, collectionId }),
+        this.imageModel.countDocuments({
+          userId,
+          collectionId: targetCollectionId,
+        }),
+      ]);
+
+      let nextSourceCover = sourceCollection.coverImage;
+      if (sourceCoverMoved) {
+        const nextCover = await this.imageModel
+          .findOne({ userId, collectionId })
+          .sort({ order: 1, createdAt: 1 })
+          .select('url')
+          .lean();
+        nextSourceCover = nextCover?.url || undefined;
+      }
+
+      await Promise.all([
+        this.collectionModel.updateOne(
+          { _id: collectionId, userId },
+          nextSourceCover
+            ? {
+                $set: {
+                  imageCount: sourceCount,
+                  coverImage: nextSourceCover,
+                },
+              }
+            : {
+                $set: { imageCount: sourceCount },
+                $unset: { coverImage: 1 },
+              },
+        ),
+        this.collectionModel.updateOne(
+          { _id: targetCollectionId, userId },
+          {
+            $set: {
+              imageCount: targetCount,
+              coverImage:
+                targetCollection.coverImage || images[0]?.url || undefined,
+            },
+          },
+        ),
+      ]);
+    }
+
+    return {
+      moved: movedIds.length,
+      imageIds: movedIds,
+      targetCollectionId,
+      targetSetId,
+    };
+  }
+
   async updateImage(
     userId: string,
     collectionId: string,

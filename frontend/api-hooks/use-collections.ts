@@ -683,6 +683,43 @@ export function useCollectionDetail(collectionId?: string) {
     },
   });
 
+  const moveImages = useMutation({
+    mutationFn: async ({
+      imageIds,
+      targetCollectionId,
+      targetSetId,
+    }: {
+      imageIds: string[];
+      targetCollectionId: string;
+      targetSetId?: string;
+    }) => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PostRequestAxios<{
+        data: {
+          moved: number;
+          imageIds: string[];
+          targetCollectionId: string;
+          targetSetId: string;
+        };
+        message: string;
+      }>(`/collections/${collectionId}/images/move`, {
+        imageIds,
+        targetCollectionId,
+        targetSetId,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      if (variables.targetCollectionId !== collectionId) {
+        queryClient.invalidateQueries({
+          queryKey: ["collections", variables.targetCollectionId],
+        });
+      }
+    },
+  });
+
   const copyMoveImage = useMutation({
     mutationFn: async ({
       imageId,
@@ -726,6 +763,7 @@ export function useCollectionDetail(collectionId?: string) {
     deleteImages,
     reorderImages,
     updateImage,
+    moveImages,
     copyMoveImage,
   };
 }

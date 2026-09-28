@@ -14016,6 +14016,7 @@ function CollectionDetailView({
     deleteImages,
     reorderImages,
     updateImage,
+    moveImages,
     copyMoveImage,
   } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
@@ -14203,6 +14204,7 @@ function CollectionDetailView({
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
   const [imageRenameOpen, setImageRenameOpen] = useState(false);
   const [imageMoveOpen, setImageMoveOpen] = useState(false);
@@ -14423,9 +14425,12 @@ function CollectionDetailView({
   const selectedTargetCollection = collections.find(
     (item) => item._id === imageTargetCollectionId,
   );
-  const selectedTargetSets = selectedTargetCollection?.sets?.length
-    ? selectedTargetCollection.sets
-    : [{ id: "highlights", name: "Featured" }];
+  const selectedTargetSets =
+    imageTargetCollectionId === collectionId
+      ? form.sets
+      : selectedTargetCollection?.sets?.length
+        ? selectedTargetCollection.sets
+        : [{ id: "highlights", name: "Featured" }];
   const imageQuickShareLink = activeImage
     ? `${publicLink}?photo=${encodeURIComponent(activeImage._id)}&download=${imageShareAllowDownload ? "1" : "0"}`
     : publicLink;
@@ -15326,9 +15331,11 @@ function CollectionDetailView({
   const uploadSpeedMbps = uploadProgress.megabitsPerSecond;
   const deletingImages =
     deleteImage.isPending || deleteImages.isPending || bulkDeleting;
-  const setImageMovePending = (imageId: string, pending: boolean) => {
-    if (pending) movingImageIdsRef.current.add(imageId);
-    else movingImageIdsRef.current.delete(imageId);
+  const setImagesMovePending = (imageIds: string[], pending: boolean) => {
+    for (const imageId of imageIds) {
+      if (pending) movingImageIdsRef.current.add(imageId);
+      else movingImageIdsRef.current.delete(imageId);
+    }
     setMovingImageIds([...movingImageIdsRef.current]);
   };
   const selectImage = useCallback((
@@ -15373,6 +15380,136 @@ function CollectionDetailView({
     selectionAnchorImageIdRef.current = "";
     setSelectedImageIds([]);
   }, [deletingImages]);
+  const moveImagesOptimistically = (
+    requestedImageIds: string[],
+    targetCollectionId: string,
+    targetSetId: string,
+  ) => {
+    const uniqueIds = [...new Set(requestedImageIds)].filter(
+      (imageId) =>
+        !movingImageIdsRef.current.has(imageId) &&
+        images.some(
+          (image) => image._id === imageId && !isLocalUploadImage(image),
+        ),
+    );
+    if (!uniqueIds.length || !targetCollectionId || !targetSetId) return false;
+
+    const selectedImagesForMove = images.filter((image) =>
+      uniqueIds.includes(image._id),
+    );
+    const movingWithinCurrentGallery = targetCollectionId === collectionId;
+    if (
+      movingWithinCurrentGallery &&
+      selectedImagesForMove.every(
+        (image) => (image.setId || "highlights") === targetSetId,
+      )
+    ) {
+      toast.error("Those selected photos are already in this collection.");
+      return false;
+    }
+
+    const previousSetById = new Map(
+      selectedImagesForMove.map((image) => [
+        image._id,
+        image.setId || "highlights",
+      ]),
+    );
+    const selectedIdSet = new Set(uniqueIds);
+    const targetGallery = collections.find(
+      (item) => item._id === targetCollectionId,
+    );
+    const targetSet = targetGallery?.sets?.find(
+      (set) => set.id === targetSetId,
+    );
+    const targetLabel = targetSet?.name ?? targetGallery?.name ?? "destination";
+
+    setImagesMovePending(uniqueIds, true);
+
+    // Optimistic bulk move: the UI updates first, then one backend operation
+    // persists every selected image together.
+    setLoadedImages((current) =>
+      movingWithinCurrentGallery
+        ? current.map((item) =>
+            selectedIdSet.has(item._id)
+              ? { ...item, setId: targetSetId }
+              : item,
+          )
+        : current.filter((item) => !selectedIdSet.has(item._id)),
+    );
+    setSelectedImageIds((current) =>
+      current.filter((imageId) => !selectedIdSet.has(imageId)),
+    );
+    selectionAnchorImageIdRef.current = "";
+    if (activeImageId && selectedIdSet.has(activeImageId))
+      setActiveImageId("");
+    setBulkMoveOpen(false);
+
+    toast.success(
+      `${uniqueIds.length} photo${uniqueIds.length === 1 ? "" : "s"} moved to ${targetLabel} · syncing in background`,
+    );
+
+    void moveImages
+      .mutateAsync({
+        imageIds: uniqueIds,
+        targetCollectionId,
+        targetSetId,
+      })
+      .catch((error) => {
+        if (movingWithinCurrentGallery) {
+          setLoadedImages((current) =>
+            current.map((item) =>
+              selectedIdSet.has(item._id)
+                ? {
+                    ...item,
+                    setId: previousSetById.get(item._id) || "highlights",
+                  }
+                : item,
+            ),
+          );
+        } else {
+          setLoadedImages((current) =>
+            dedupeCollectionImages([...current, ...selectedImagesForMove]),
+          );
+        }
+        toast.error(
+          error instanceof Error
+            ? `Move failed: ${error.message}`
+            : "Move failed. The selected photos were restored.",
+        );
+      })
+      .finally(() => {
+        setImagesMovePending(uniqueIds, false);
+        if (movingImageIdsRef.current.size === 0) {
+          void collectionQuery.refetch();
+        }
+      });
+
+    return true;
+  };
+
+  const openBulkMoveSelected = () => {
+    const movableIds = selectedImageIds.filter(
+      (imageId) => !movingImageIdsRef.current.has(imageId),
+    );
+    if (!movableIds.length) return;
+
+    const alternateSet = form.sets.find((set) => set.id !== activeSetId);
+    if (alternateSet) {
+      setImageTargetCollectionId(collectionId);
+      setImageTargetSetId(alternateSet.id);
+    } else {
+      const otherGallery = collections.find(
+        (item) => item._id !== collectionId,
+      );
+      const targetGallery = otherGallery ?? collection;
+      setImageTargetCollectionId(targetGallery?._id ?? collectionId);
+      setImageTargetSetId(
+        targetGallery?.sets?.[0]?.id ?? activeSetId ?? "highlights",
+      );
+    }
+    setBulkMoveOpen(true);
+  };
+
   const beginGalleryImageDrag = (
     event: DragEvent<HTMLDivElement>,
     image: CollectionImageRecord,
@@ -15407,67 +15544,24 @@ function CollectionDetailView({
       event.dataTransfer.getData("application/x-gallery-image-id") ||
       event.dataTransfer.getData("text/plain");
     const image = images.find((item) => item._id === imageId);
-    const currentSetId = image?.setId || "highlights";
-    if (
-      !image ||
-      isLocalUploadImage(image) ||
-      !targetSetId ||
-      targetSetId === currentSetId ||
-      movingImageIdsRef.current.has(imageId)
-    ) {
+    if (!image || isLocalUploadImage(image) || !targetSetId) {
       finishGalleryImageDrag();
       return;
     }
 
-    const targetSet = form.sets.find((set) => set.id === targetSetId);
+    const selectedDragIds =
+      selectedImageIds.includes(imageId) && selectedImageIds.length > 1
+        ? selectedImageIds
+        : [imageId];
+
     imageCrossSetDropRef.current = true;
-    setImageMovePending(imageId, true);
-
-    // Optimistic move: the photo changes collection immediately in the UI.
-    setLoadedImages((current) =>
-      current.map((item) =>
-        item._id === imageId ? { ...item, setId: targetSetId } : item,
-      ),
+    const moved = moveImagesOptimistically(
+      selectedDragIds,
+      collectionId,
+      targetSetId,
     );
-    setSelectedImageIds((current) =>
-      current.filter((selectedId) => selectedId !== imageId),
-    );
-    if (activeImageId === imageId) setActiveImageId("");
     finishGalleryImageDrag();
-
-    toast.success(
-      `Moved to ${targetSet?.name ?? "the selected collection"} · syncing in background`,
-    );
-
-    void updateImage
-      .mutateAsync({
-        imageId,
-        payload: { setId: targetSetId },
-      })
-      .then(async () => {
-        // Keep the optimistic state until the refreshed server counts arrive.
-        await collectionQuery.refetch().catch(() => undefined);
-      })
-      .catch((error) => {
-        // Only roll back this optimistic move. Other photo moves may still be
-        // syncing independently in the background.
-        setLoadedImages((current) =>
-          current.map((item) =>
-            item._id === imageId && (item.setId || "highlights") === targetSetId
-              ? { ...item, setId: currentSetId }
-              : item,
-          ),
-        );
-        toast.error(
-          error instanceof Error
-            ? `Move failed: ${error.message}`
-            : "Move failed. The photo was returned to its previous collection.",
-        );
-        void collectionQuery.refetch();
-      })
-      .finally(() => {
-        setImageMovePending(imageId, false);
-      });
+    if (!moved) imageCrossSetDropRef.current = false;
   };
   const deleteSingleImage = (image: CollectionImageRecord) => {
     if (deletingImages) return;
@@ -15531,7 +15625,9 @@ function CollectionDetailView({
         shortcutsOpen ||
         previewOpen ||
         metadataOpen ||
-        bulkDeleteConfirmOpen
+        bulkDeleteConfirmOpen ||
+        bulkMoveOpen ||
+        imageMoveOpen
       )
         return;
       const target = event.target as HTMLElement | null;
@@ -15653,8 +15749,10 @@ function CollectionDetailView({
     activeImageId,
     activeTab,
     bulkDeleteConfirmOpen,
+    bulkMoveOpen,
     deletingImages,
     displayedSetImages,
+    imageMoveOpen,
     metadataOpen,
     previewOpen,
     selectedImageIds,
@@ -17278,6 +17376,15 @@ function CollectionDetailView({
                           Clear
                         </Button>
                         <Button
+                          variant="outline"
+                          className="h-9 rounded-none border-[#6337d8] text-[#6337d8]"
+                          disabled={deletingImages}
+                          onClick={openBulkMoveSelected}
+                        >
+                          <ArrowRight className="size-4" />
+                          Move Selected
+                        </Button>
+                        <Button
                           className="h-9 rounded-none bg-red-600 text-white hover:bg-red-700"
                           disabled={deletingImages}
                           onClick={() => setBulkDeleteConfirmOpen(true)}
@@ -17310,6 +17417,10 @@ function CollectionDetailView({
                   <span>
                     macOS: Shift + click range · Cmd (⌘) + click toggle · Cmd (⌘) +
                     A all · Cmd (⌘) + Backspace remove
+                  </span>
+                  <span className="font-semibold text-[#6337d8]">
+                    Tip: drag any selected photo onto another collection to move
+                    the whole selection at once.
                   </span>
                   <button
                     type="button"
@@ -17684,6 +17795,91 @@ function CollectionDetailView({
                     void deleteSelectedImages();
                   }}
                 />
+                <Dialog open={bulkMoveOpen} onOpenChange={setBulkMoveOpen}>
+                  <DialogContent className="max-w-lg rounded-none">
+                    <DialogHeader>
+                      <DialogTitle>
+                        Move {selectedImageIds.length} Selected Photo
+                        {selectedImageIds.length === 1 ? "" : "s"}
+                      </DialogTitle>
+                      <DialogDescription>
+                        Choose the destination. The photos move instantly in the
+                        UI while the server saves the whole selection in one
+                        background operation.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <FieldGroup className="gap-5">
+                      <Field>
+                        <FieldLabel className="font-bold">Gallery</FieldLabel>
+                        <select
+                          value={imageTargetCollectionId}
+                          onChange={(event) => {
+                            const nextCollection = collections.find(
+                              (item) => item._id === event.target.value,
+                            );
+                            setImageTargetCollectionId(event.target.value);
+                            setImageTargetSetId(
+                              nextCollection?.sets?.[0]?.id ?? "highlights",
+                            );
+                          }}
+                          className="h-12 w-full rounded-none border bg-white px-4"
+                        >
+                          {collections.map((item) => (
+                            <option key={item._id} value={item._id}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field>
+                        <FieldLabel className="font-bold">
+                          Collection / Set
+                        </FieldLabel>
+                        <select
+                          value={imageTargetSetId}
+                          onChange={(event) =>
+                            setImageTargetSetId(event.target.value)
+                          }
+                          className="h-12 w-full rounded-none border bg-white px-4"
+                        >
+                          {selectedTargetSets.map((set) => (
+                            <option key={set.id} value={set.id}>
+                              {set.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </FieldGroup>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        className="rounded-none"
+                        onClick={() => setBulkMoveOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="rounded-none bg-[#6337d8] text-white"
+                        disabled={
+                          !selectedImageIds.length ||
+                          !imageTargetCollectionId ||
+                          !imageTargetSetId
+                        }
+                        onClick={() =>
+                          moveImagesOptimistically(
+                            selectedImageIds,
+                            imageTargetCollectionId,
+                            imageTargetSetId,
+                          )
+                        }
+                      >
+                        <ArrowRight className="size-4" />
+                        Move {selectedImageIds.length} Photo
+                        {selectedImageIds.length === 1 ? "" : "s"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
                 <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
                   <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-none sm:max-w-[760px]">
                     <DialogHeader>

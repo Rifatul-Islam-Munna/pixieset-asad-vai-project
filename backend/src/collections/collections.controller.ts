@@ -707,6 +707,33 @@ export class CollectionsController {
     };
   }
 
+  @Post(':id/images/move')
+  async moveImages(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      imageIds: string[];
+      targetCollectionId: string;
+      targetSetId?: string;
+    },
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.collectionsService.moveImages(
+      req.user.id,
+      id,
+      body.imageIds,
+      body.targetCollectionId,
+      body.targetSetId,
+    );
+    return {
+      message:
+        data.moved === 1
+          ? 'Image moved'
+          : `${data.moved} images moved`,
+      data,
+    };
+  }
+
   @Delete(':id/images/:imageId')
   async removeImage(
     @Param('id') id: string,
