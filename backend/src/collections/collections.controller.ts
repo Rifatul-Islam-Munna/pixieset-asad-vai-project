@@ -607,6 +607,7 @@ export class CollectionsController {
   async createDirectUploads(
     @Param('id') id: string,
     @Body('files') files: Array<{ name: string; type: string; size: number }>,
+    @Body('setId') setId: string | undefined,
     @Req() req: ExpressRequest,
   ) {
     return {
@@ -614,6 +615,7 @@ export class CollectionsController {
         req.user.id,
         id,
         files,
+        setId,
       ),
     };
   }

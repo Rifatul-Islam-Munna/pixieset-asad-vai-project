@@ -470,7 +470,7 @@ export function useCollectionDetail(collectionId?: string) {
           data: DirectUploadTicket[];
         }>(
           `/collections/${uploadCollectionId}/images/direct-upload`,
-          { files: metadata },
+          { files: metadata, setId },
           { timeoutMs: 20_000 },
         );
         if (authorizationError || !authorization) {

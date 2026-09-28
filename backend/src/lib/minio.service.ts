@@ -312,7 +312,7 @@ export class MinioService implements OnModuleInit {
   async createDirectUpload(
     userId: string,
     input: { name: string; type: string; size: number },
-    options: { privateImage?: boolean } = {},
+    options: { privateImage?: boolean; scope?: string } = {},
   ) {
     if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
     const size = Math.max(0, Number(input.size));
@@ -325,7 +325,10 @@ export class MinioService implements OnModuleInit {
     }
     const extension = extname(String(input.name || '')).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 12);
     const privateImage = isImage && options.privateImage === true;
-    const objectKey = `${privateImage ? 'private-direct' : 'direct'}/${userId}/${randomUUID()}${extension}`;
+    const scope = this.normalizeDirectScope(options.scope);
+    const objectKey =
+      `${privateImage ? 'private-direct' : 'direct'}/${userId}/` +
+      `${scope ? `${scope}/` : ''}${randomUUID()}${extension}`;
     const bucket = privateImage ? this.privateBucketName : this.bucketName;
     const multipart = isVideo || size > 32 * 1024 * 1024;
     if (!multipart) {
@@ -364,9 +367,10 @@ export class MinioService implements OnModuleInit {
   async completeDirectMultipartUpload(
     userId: string,
     input: { objectKey: string; uploadId: string; parts: Array<{ partNumber: number; etag: string }> },
+    scope?: string,
   ) {
     if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
-    const objectKey = this.assertDirectObjectKey(userId, input.objectKey);
+    const objectKey = this.assertDirectObjectKey(userId, input.objectKey, scope);
     if (!input.uploadId || !Array.isArray(input.parts) || !input.parts.length)
       throw new HttpException('Invalid multipart upload completion', HttpStatus.BAD_REQUEST);
     await this.s3.send(new CompleteMultipartUploadCommand({
@@ -382,9 +386,13 @@ export class MinioService implements OnModuleInit {
     return { objectKey };
   }
 
-  async verifyDirectUpload(userId: string, input: { objectKey: string; name: string; type: string; size: number }) {
+  async verifyDirectUpload(
+    userId: string,
+    input: { objectKey: string; name: string; type: string; size: number },
+    scope?: string,
+  ) {
     if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.INTERNAL_SERVER_ERROR);
-    const objectKey = this.assertDirectObjectKey(userId, input.objectKey);
+    const objectKey = this.assertDirectObjectKey(userId, input.objectKey, scope);
     const head = await this.s3.send(
       new HeadObjectCommand({ Bucket: this.directBucket(objectKey), Key: objectKey }),
     );
@@ -557,13 +565,39 @@ export class MinioService implements OnModuleInit {
     return this.deleteService(key);
   }
 
-  private assertDirectObjectKey(userId: string, objectKey: string) {
+  private normalizeDirectScope(scope?: string) {
+    const raw = String(scope ?? '').trim();
+    if (!raw) return '';
+    const parts = raw.split('/').filter(Boolean);
+    if (
+      !parts.length ||
+      parts.some((part) => !/^[a-zA-Z0-9_-]+$/.test(part))
+    ) {
+      throw new HttpException('Invalid direct upload scope', HttpStatus.BAD_REQUEST);
+    }
+    return parts.join('/');
+  }
+
+  private assertDirectObjectKey(
+    userId: string,
+    objectKey: string,
+    scope?: string,
+  ) {
     const value = String(objectKey || '').trim();
+    const normalizedScope = this.normalizeDirectScope(scope);
+    const publicPrefix = `direct/${userId}/`;
+    const privatePrefix = `private-direct/${userId}/`;
     const validPrefix =
-      value.startsWith(`direct/${userId}/`) ||
-      value.startsWith(`private-direct/${userId}/`);
-    if (!validPrefix || value.includes('..')) {
-      throw new HttpException('Invalid direct upload key', HttpStatus.BAD_REQUEST);
+      value.startsWith(publicPrefix) || value.startsWith(privatePrefix);
+    const validScope =
+      !normalizedScope ||
+      value.startsWith(`${publicPrefix}${normalizedScope}/`) ||
+      value.startsWith(`${privatePrefix}${normalizedScope}/`);
+    if (!validPrefix || !validScope || value.includes('..')) {
+      throw new HttpException(
+        'Direct upload does not belong to this collection',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     return value;
   }

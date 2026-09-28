@@ -13929,6 +13929,44 @@ function dedupeCollectionImages(items: CollectionImageRecord[]) {
   });
 }
 
+type CollectionUploadProgressState = {
+  active: boolean;
+  total: number;
+  uploaded: number;
+  currentName: string;
+  currentPercent: number;
+  transferredBytes: number;
+  totalBytes: number;
+  bytesPerSecond: number;
+  megabitsPerSecond: number;
+  phase:
+    | "preparing"
+    | "authorizing"
+    | "uploading"
+    | "retrying"
+    | "finalizing"
+    | "queued";
+};
+
+function emptyCollectionUploadProgress(): CollectionUploadProgressState {
+  return {
+    active: false,
+    total: 0,
+    uploaded: 0,
+    currentName: "",
+    currentPercent: 0,
+    transferredBytes: 0,
+    totalBytes: 0,
+    bytesPerSecond: 0,
+    megabitsPerSecond: 0,
+    phase: "preparing",
+  };
+}
+
+function collectionUploadSessionKey(collectionId: string, setId: string) {
+  return `${collectionId}::${setId || "highlights"}`;
+}
+
 function collectionFormWithUniqueSets(
   collection?: CollectionRecord,
   globalPreferences?: Partial<PreferenceSettings>,
@@ -14029,10 +14067,6 @@ function CollectionDetailView({
     setActiveImageId("");
     setImagePage(1);
     setSelectedImageIds([]);
-    return () => {
-      for (const url of localObjectUrlsRef.current.values()) URL.revokeObjectURL(url);
-      localObjectUrlsRef.current.clear();
-    };
   }, [collectionId]);
   const images = useMemo(
     () => dedupeCollectionImages(loadedImages),
@@ -14139,30 +14173,32 @@ function CollectionDetailView({
     useRef<NonNullable<CollectionRecord["sets"]> | null>(null);
   const imageSortDragActiveRef = useRef(false);
   const pendingImageOrderRef = useRef<CollectionImageRecord[] | null>(null);
+  const imageCrossSetDropRef = useRef(false);
   const [pageOrigin, setPageOrigin] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({
-    active: false,
-    total: 0,
-    uploaded: 0,
-    currentName: "",
-    currentPercent: 0,
-    transferredBytes: 0,
-    totalBytes: 0,
-    bytesPerSecond: 0,
-    megabitsPerSecond: 0,
-    phase: "preparing" as
-      | "preparing"
-      | "authorizing"
-      | "uploading"
-      | "retrying"
-      | "finalizing"
-      | "queued",
-  });
-  const uploadNetworkActivityRef = useRef(Date.now());
+  const [uploadProgress, setUploadProgress] =
+    useState<CollectionUploadProgressState>(() => emptyCollectionUploadProgress());
+  const uploadProgressBySessionRef = useRef(
+    new Map<string, CollectionUploadProgressState>(),
+  );
+  const uploadNetworkActivityBySessionRef = useRef(new Map<string, number>());
+  const activeUploadSessionKeysRef = useRef(new Set<string>());
+  const [activeUploadSessionKeys, setActiveUploadSessionKeys] = useState<
+    string[]
+  >([]);
+  const currentUploadSessionKey = collectionUploadSessionKey(
+    collectionId,
+    activeSetId,
+  );
+  const currentUploadSessionKeyRef = useRef(currentUploadSessionKey);
+  currentUploadSessionKeyRef.current = currentUploadSessionKey;
   const [slowUploadNetwork, setSlowUploadNetwork] = useState(false);
   const [draggingUpload, setDraggingUpload] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
+  const selectionAnchorImageIdRef = useRef("");
+  const [draggingGalleryImageId, setDraggingGalleryImageId] = useState("");
+  const [imageDropTargetSetId, setImageDropTargetSetId] = useState("");
+  const [movingDraggedImage, setMovingDraggedImage] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [orderedImageIds, setOrderedImageIds] = useState<string[]>([]);
@@ -14184,6 +14220,65 @@ function CollectionDetailView({
     "draft" | "published"
   >(collection?.status === "published" ? "published" : "draft");
   const syncedCollectionFormKeyRef = useRef(collectionFormKey(form));
+
+  const updateUploadProgressForSession = (
+    sessionKey: string,
+    updater: (
+      current: CollectionUploadProgressState,
+    ) => CollectionUploadProgressState,
+  ) => {
+    const current =
+      uploadProgressBySessionRef.current.get(sessionKey) ??
+      emptyCollectionUploadProgress();
+    const next = updater(current);
+    uploadProgressBySessionRef.current.set(sessionKey, next);
+    if (currentUploadSessionKeyRef.current === sessionKey) {
+      setUploadProgress(next);
+    }
+  };
+
+  const startUploadSession = (
+    sessionKey: string,
+    progress: CollectionUploadProgressState,
+  ) => {
+    activeUploadSessionKeysRef.current.add(sessionKey);
+    uploadProgressBySessionRef.current.set(sessionKey, progress);
+    uploadNetworkActivityBySessionRef.current.set(sessionKey, Date.now());
+    setActiveUploadSessionKeys([...activeUploadSessionKeysRef.current]);
+    if (currentUploadSessionKeyRef.current === sessionKey) {
+      setUploadProgress(progress);
+      setSlowUploadNetwork(false);
+    }
+  };
+
+  const finishUploadSession = (sessionKey: string) => {
+    activeUploadSessionKeysRef.current.delete(sessionKey);
+    uploadProgressBySessionRef.current.delete(sessionKey);
+    uploadNetworkActivityBySessionRef.current.delete(sessionKey);
+    setActiveUploadSessionKeys([...activeUploadSessionKeysRef.current]);
+    if (currentUploadSessionKeyRef.current === sessionKey) {
+      setUploadProgress(emptyCollectionUploadProgress());
+      setSlowUploadNetwork(false);
+    }
+  };
+
+  useEffect(() => {
+    setUploadProgress(
+      uploadProgressBySessionRef.current.get(currentUploadSessionKey) ??
+        emptyCollectionUploadProgress(),
+    );
+    setSlowUploadNetwork(false);
+  }, [currentUploadSessionKey]);
+
+  useEffect(
+    () => () => {
+      for (const url of localObjectUrlsRef.current.values())
+        URL.revokeObjectURL(url);
+      localObjectUrlsRef.current.clear();
+    },
+    [],
+  );
+
   const emailTemplates = useMemo(() => {
     const remote = Array.isArray(emailTemplateSettings.data?.data)
       ? emailTemplateSettings.data.data.map(
@@ -14668,24 +14763,62 @@ function CollectionDetailView({
   };
   const deleteSet = (setId: string) => {
     if (form.sets.length <= 1 || deleteCollectionSet.isPending) return;
+
+    const previousForm = form;
+    const previousImages = loadedImages;
+    const previousActiveSetId = activeSetId;
+    const nextSets = form.sets.filter((set) => set.id !== setId);
+    const optimisticForm = {
+      ...form,
+      sets: nextSets,
+      general: {
+        ...form.general,
+        photoSets: nextSets.map((set) => set.name).join(", "),
+      },
+    };
+    const fallbackSetId = nextSets[0]?.id ?? "highlights";
+
+    // Remove the collection and its media from the UI immediately. R2/object
+    // cleanup continues on the server in the background after confirmation.
+    syncedCollectionFormKeyRef.current = collectionFormKey(optimisticForm);
+    setForm(optimisticForm);
+    setLoadedImages((current) =>
+      current.filter((image) => (image.setId || "highlights") !== setId),
+    );
+    setSelectedImageIds((current) =>
+      current.filter((imageId) => {
+        const image = images.find((item) => item._id === imageId);
+        return (image?.setId || "highlights") !== setId;
+      }),
+    );
+    if (activeSetId === setId) {
+      setActiveSetId(fallbackSetId);
+      setImagePage(1);
+    }
+    setDeleteSetTarget(null);
+
     deleteCollectionSet.mutate(setId, {
       onSuccess: (response) => {
-        if (!response?.data) return;
-        const nextForm = collectionFormWithUniqueSets(
-          response.data,
-          savedPreferences,
-        );
-        syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
-        setForm(nextForm);
-        if (activeSetId === setId)
-          setActiveSetId(nextForm.sets[0]?.id ?? "highlights");
-        setDeleteSetTarget(null);
-        toast.success("Collection deleted");
+        if (response?.data) {
+          const nextForm = collectionFormWithUniqueSets(
+            response.data,
+            savedPreferences,
+          );
+          syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
+          setForm(nextForm);
+        }
+        toast.success("Collection and its images deleted");
       },
-      onError: (error) =>
+      onError: (error) => {
+        syncedCollectionFormKeyRef.current = collectionFormKey(previousForm);
+        setForm(previousForm);
+        setLoadedImages(previousImages);
+        setActiveSetId(previousActiveSetId);
         toast.error(
           error instanceof Error ? error.message : "Set delete failed",
-        ),
+        );
+        void collectionQuery.refetch();
+      },
     });
   };
   const renameSet = () => {
@@ -14935,13 +15068,18 @@ function CollectionDetailView({
       setSlowUploadNetwork(false);
       return;
     }
+    const sessionKey = currentUploadSessionKey;
     const timer = window.setInterval(() => {
-      setSlowUploadNetwork(
-        Date.now() - uploadNetworkActivityRef.current >= 12_000,
-      );
+      const lastActivity =
+        uploadNetworkActivityBySessionRef.current.get(sessionKey) ?? Date.now();
+      setSlowUploadNetwork(Date.now() - lastActivity >= 12_000);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [uploadProgress.active, uploadProgress.phase]);
+  }, [
+    currentUploadSessionKey,
+    uploadProgress.active,
+    uploadProgress.phase,
+  ]);
 
   const isFileDrag = (event: DragEvent<HTMLElement>) =>
     Array.from(event.dataTransfer.types).includes("Files");
@@ -14951,14 +15089,26 @@ function CollectionDetailView({
         file.type.startsWith("image/") || file.type.startsWith("video/"),
     );
   const handleImageUpload = async (files: FileList | File[] | null) => {
-    if (!files?.length || uploadImages.isPending || uploadProgress.active)
+    if (!files?.length) return;
+
+    const targetCollectionId = collectionId;
+    const targetSetId = activeSetId;
+    const targetSessionKey = collectionUploadSessionKey(
+      targetCollectionId,
+      targetSetId,
+    );
+    if (activeUploadSessionKeysRef.current.has(targetSessionKey)) {
+      toast.error(
+        "This collection already has an upload running. You can upload to another collection while it continues.",
+      );
       return;
+    }
+
     const selectedFiles = replaceImageId
       ? Array.from(files).slice(0, 1)
       : Array.from(files);
-    const targetCollectionId = collectionId;
-    const targetSetId = activeSetId;
     const targetReplaceImageId = replaceImageId || undefined;
+    const targetWatermarkId = uploadWatermarkId;
     const uploadSessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const localPreviewIds = selectedFiles.map(
       (_, index) => `${uploadSessionId}-${index}`,
@@ -14989,9 +15139,7 @@ function CollectionDetailView({
     setLoadedImages((current) =>
       dedupeCollectionImages([...localPreviews, ...current]),
     );
-    uploadNetworkActivityRef.current = Date.now();
-    setSlowUploadNetwork(false);
-    setUploadProgress({
+    startUploadSession(targetSessionKey, {
       active: true,
       total: selectedFiles.length,
       uploaded: 0,
@@ -15011,7 +15159,7 @@ function CollectionDetailView({
         files: selectedFiles,
         targetCollectionId,
         setId: targetSetId,
-        watermarkId: uploadWatermarkId,
+        watermarkId: targetWatermarkId,
         replaceImageId: targetReplaceImageId,
         onRawUploaded: (uploads) => {
           if (collectionIdRef.current !== targetCollectionId) return;
@@ -15032,8 +15180,7 @@ function CollectionDetailView({
           );
         },
         onProgress: (percent) => {
-          if (collectionIdRef.current !== targetCollectionId) return;
-          setUploadProgress((current) => ({
+          updateUploadProgressForSession(targetSessionKey, (current) => ({
             ...current,
             currentPercent: percent,
             ...(current.phase === "retrying" && percent > current.currentPercent
@@ -15046,11 +15193,13 @@ function CollectionDetailView({
           }));
         },
         onNetworkActivity: () => {
-          uploadNetworkActivityRef.current = Date.now();
+          uploadNetworkActivityBySessionRef.current.set(
+            targetSessionKey,
+            Date.now(),
+          );
         },
         onStats: (stats) => {
-          if (collectionIdRef.current !== targetCollectionId) return;
-          setUploadProgress((current) => ({
+          updateUploadProgressForSession(targetSessionKey, (current) => ({
             ...current,
             currentPercent: stats.percent,
             transferredBytes: stats.transferredBytes,
@@ -15060,8 +15209,7 @@ function CollectionDetailView({
           }));
         },
         onActivity: (activity) => {
-          if (collectionIdRef.current !== targetCollectionId) return;
-          setUploadProgress((current) => ({
+          updateUploadProgressForSession(targetSessionKey, (current) => ({
             ...current,
             phase: activity.stage,
             currentName: activity.message,
@@ -15105,23 +15253,22 @@ function CollectionDetailView({
           ),
         );
       }
-      if (collectionIdRef.current === targetCollectionId) {
-        setUploadProgress((current) => ({
-          ...current,
-          uploaded: selectedFiles.length,
-          currentPercent: 100,
-          phase: "queued",
-          currentName: "Upload complete. Finishing photos quietly in the background.",
-        }));
-        const queued = Math.max(0, Number(response?.queued ?? 0));
-        toast.success(
-          queued > 0
-            ? "Upload complete. Your photos are already visible while finishing continues in the background."
-            : targetReplaceImageId
-              ? "Photo replaced"
-              : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
-        );
-      }
+      updateUploadProgressForSession(targetSessionKey, (current) => ({
+        ...current,
+        uploaded: selectedFiles.length,
+        currentPercent: 100,
+        phase: "queued",
+        currentName:
+          "Upload complete. Finishing photos quietly in the background.",
+      }));
+      const queued = Math.max(0, Number(response?.queued ?? 0));
+      toast.success(
+        queued > 0
+          ? "Upload complete. Your photos are already visible while finishing continues in the background."
+          : targetReplaceImageId
+            ? "Photo replaced"
+            : `Upload finished: ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`,
+      );
     } catch (error) {
       for (const id of localPreviewIds) {
         const localUrl = localObjectUrlsRef.current.get(id);
@@ -15135,20 +15282,15 @@ function CollectionDetailView({
         toast.error(error instanceof Error ? error.message : "Upload failed");
       }
     } finally {
-      if (collectionIdRef.current === targetCollectionId) {
-        setSlowUploadNetwork(false);
-        setUploadProgress({
-          active: false,
-          total: 0,
-          uploaded: 0,
-          currentName: "",
-          currentPercent: 0,
-          transferredBytes: 0,
-          totalBytes: 0,
-          bytesPerSecond: 0,
-          megabitsPerSecond: 0,
-          phase: "preparing",
-        });
+      if (collectionIdRef.current !== targetCollectionId) {
+        for (const id of localPreviewIds) {
+          const localUrl = localObjectUrlsRef.current.get(id);
+          if (localUrl) URL.revokeObjectURL(localUrl);
+          localObjectUrlsRef.current.delete(id);
+        }
+      }
+      finishUploadSession(targetSessionKey);
+      if (currentUploadSessionKeyRef.current === targetSessionKey) {
         setReplaceImageId("");
       }
     }
@@ -15173,7 +15315,9 @@ function CollectionDetailView({
     }
     void handleImageUpload(mediaFiles);
   };
-  const uploading = uploadProgress.active || uploadImages.isPending;
+  const uploading = activeUploadSessionKeys.includes(
+    currentUploadSessionKey,
+  );
   const uploadPercent = uploadProgress.currentPercent;
   const uploadTransferredMb = uploadProgress.transferredBytes / (1024 * 1024);
   const uploadTotalMb = uploadProgress.totalBytes / (1024 * 1024);
@@ -15181,16 +15325,132 @@ function CollectionDetailView({
   const uploadSpeedMbps = uploadProgress.megabitsPerSecond;
   const deletingImages =
     deleteImage.isPending || deleteImages.isPending || bulkDeleting;
-  const toggleImageSelection = (imageId: string) => {
-    if (deletingImages) return;
-    setSelectedImageIds((ids) =>
-      ids.includes(imageId)
-        ? ids.filter((id) => id !== imageId)
-        : [...ids, imageId],
+  const selectImage = (
+    imageId: string,
+    modifiers: {
+      shiftKey?: boolean;
+      ctrlKey?: boolean;
+      metaKey?: boolean;
+    } = {},
+  ) => {
+    if (deletingImages || movingDraggedImage) return;
+
+    const selectableIds = displayedSetImages
+      .filter((image) => !isLocalUploadImage(image))
+      .map((image) => image._id);
+    if (!selectableIds.includes(imageId)) return;
+
+    const anchorId = selectionAnchorImageIdRef.current;
+    const anchorIndex = selectableIds.indexOf(anchorId);
+    const targetIndex = selectableIds.indexOf(imageId);
+    const additive = Boolean(modifiers.ctrlKey || modifiers.metaKey);
+
+    if (modifiers.shiftKey && anchorIndex >= 0 && targetIndex >= 0) {
+      const start = Math.min(anchorIndex, targetIndex);
+      const end = Math.max(anchorIndex, targetIndex);
+      const range = selectableIds.slice(start, end + 1);
+      setSelectedImageIds((current) =>
+        additive ? [...new Set([...current, ...range])] : range,
+      );
+      return;
+    }
+
+    selectionAnchorImageIdRef.current = imageId;
+    setSelectedImageIds((current) =>
+      current.includes(imageId)
+        ? current.filter((id) => id !== imageId)
+        : [...current, imageId],
     );
   };
   const clearSelection = () => {
-    if (!deletingImages) setSelectedImageIds([]);
+    if (deletingImages) return;
+    selectionAnchorImageIdRef.current = "";
+    setSelectedImageIds([]);
+  };
+  const beginGalleryImageDrag = (
+    event: DragEvent<HTMLDivElement>,
+    image: CollectionImageRecord,
+  ) => {
+    if (
+      isLocalUploadImage(image) ||
+      deletingImages ||
+      movingDraggedImage ||
+      updateImage.isPending
+    ) {
+      event.preventDefault();
+      return;
+    }
+    setDraggingGalleryImageId(image._id);
+    setImageDropTargetSetId("");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-gallery-image-id", image._id);
+    event.dataTransfer.setData("text/plain", image._id);
+  };
+  const finishGalleryImageDrag = () => {
+    setDraggingGalleryImageId("");
+    setImageDropTargetSetId("");
+  };
+  const dropImageIntoSet = async (
+    event: DragEvent<HTMLDivElement>,
+    targetSetId: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const imageId =
+      draggingGalleryImageId ||
+      event.dataTransfer.getData("application/x-gallery-image-id") ||
+      event.dataTransfer.getData("text/plain");
+    const image = images.find((item) => item._id === imageId);
+    const currentSetId = image?.setId || "highlights";
+    if (
+      !image ||
+      isLocalUploadImage(image) ||
+      !targetSetId ||
+      targetSetId === currentSetId ||
+      movingDraggedImage ||
+      updateImage.isPending
+    ) {
+      finishGalleryImageDrag();
+      return;
+    }
+
+    const targetSet = form.sets.find((set) => set.id === targetSetId);
+    imageCrossSetDropRef.current = true;
+    setMovingDraggedImage(true);
+    setImageDropTargetSetId(targetSetId);
+    setLoadedImages((current) =>
+      current.map((item) =>
+        item._id === imageId ? { ...item, setId: targetSetId } : item,
+      ),
+    );
+    setSelectedImageIds((current) =>
+      current.filter((selectedId) => selectedId !== imageId),
+    );
+    if (activeImageId === imageId) setActiveImageId("");
+
+    try {
+      await updateImage.mutateAsync({
+        imageId,
+        payload: { setId: targetSetId },
+      });
+      toast.success(
+        `Photo moved to ${targetSet?.name ?? "the selected collection"}`,
+      );
+    } catch (error) {
+      setLoadedImages((current) =>
+        current.map((item) =>
+          item._id === imageId ? { ...item, setId: currentSetId } : item,
+        ),
+      );
+      toast.error(
+        error instanceof Error ? error.message : "Could not move photo",
+      );
+      await collectionQuery.refetch();
+    } finally {
+      setMovingDraggedImage(false);
+      finishGalleryImageDrag();
+    }
   };
   const deleteSingleImage = (image: CollectionImageRecord) => {
     if (deletingImages) return;
@@ -15249,8 +15509,12 @@ function CollectionDetailView({
     if (activeTab !== "photos") return;
     const selectAll = (event: KeyboardEvent) => {
       event.preventDefault();
-      setSelectedImageIds(activeSetImages.map((image) => image._id));
-      toast.success(`${activeSetImages.length} images selected`);
+      const ids = displayedSetImages
+        .filter((image) => !isLocalUploadImage(image))
+        .map((image) => image._id);
+      selectionAnchorImageIdRef.current = ids[0] ?? "";
+      setSelectedImageIds(ids);
+      toast.success(`${ids.length} images selected`);
     };
     const removeSelected = (event: KeyboardEvent) => {
       if (!selectedImageIds.length || deletingImages) return;
@@ -15269,7 +15533,7 @@ function CollectionDetailView({
       hotkeys.unbind("delete,backspace", removeSelected);
       hotkeys.unbind("esc", clearSelected);
     };
-  }, [activeSetImages, activeTab, deletingImages, selectedImageIds]);
+  }, [activeTab, deletingImages, displayedSetImages, selectedImageIds]);
   const reorderSetImages = (nextSetImages: CollectionImageRecord[]) => {
     const nextSetIds = nextSetImages.map((image) => image._id);
     if (
@@ -15298,6 +15562,7 @@ function CollectionDetailView({
   const beginImageSort = () => {
     imageSortDragActiveRef.current = true;
     pendingImageOrderRef.current = null;
+    imageCrossSetDropRef.current = false;
   };
   const stageImageSort = (nextImages: CollectionImageRecord[]) => {
     if (!imageSortDragActiveRef.current) return;
@@ -15307,9 +15572,11 @@ function CollectionDetailView({
   const finishImageSort = () => {
     window.setTimeout(() => {
       const nextImages = pendingImageOrderRef.current;
+      const movedToAnotherSet = imageCrossSetDropRef.current;
       imageSortDragActiveRef.current = false;
       pendingImageOrderRef.current = null;
-      if (nextImages) reorderSetImages(nextImages);
+      imageCrossSetDropRef.current = false;
+      if (!movedToAnotherSet && nextImages) reorderSetImages(nextImages);
     }, 0);
   };
   const changeCollectionStatus = (nextStatus: "draft" | "published") => {
@@ -16268,6 +16535,7 @@ function CollectionDetailView({
                 setList={stageSetSort}
                 onStart={beginSetSort}
                 onEnd={finishSetSort}
+                disabled={Boolean(draggingGalleryImageId) || movingDraggedImage}
                 animation={180}
                 delayOnTouchOnly
                 ghostClass="sortable-image-ghost"
@@ -16290,13 +16558,48 @@ function CollectionDetailView({
                         Number(authoritativeCounts[set.id] ?? 0),
                       ) + localCount
                     : serverLoadedCount + localCount;
+                  const setUploading = activeUploadSessionKeys.includes(
+                    collectionUploadSessionKey(collectionId, set.id),
+                  );
                   return (
                     <div
                       key={set.id}
                       className={cn(
-                        "group flex h-12 cursor-grab items-center justify-between gap-2 px-3 text-left text-sm active:cursor-grabbing",
+                        "group flex h-12 cursor-grab items-center justify-between gap-2 px-3 text-left text-sm transition-colors active:cursor-grabbing",
                         activeSetId === set.id && "bg-white font-bold",
+                        draggingGalleryImageId &&
+                          set.id !== activeSetId &&
+                          "outline outline-1 outline-[#d7ccf7]",
+                        imageDropTargetSetId === set.id &&
+                          set.id !== activeSetId &&
+                          "bg-[#eee8ff] outline-2 outline-[#6337d8]",
                       )}
+                      onDragOver={(event) => {
+                        if (
+                          !draggingGalleryImageId ||
+                          set.id === activeSetId ||
+                          movingDraggedImage
+                        )
+                          return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        setImageDropTargetSetId(set.id);
+                      }}
+                      onDragEnter={(event) => {
+                        if (
+                          !draggingGalleryImageId ||
+                          set.id === activeSetId ||
+                          movingDraggedImage
+                        )
+                          return;
+                        event.preventDefault();
+                        setImageDropTargetSetId(set.id);
+                      }}
+                      onDragLeave={() => {
+                        if (imageDropTargetSetId === set.id)
+                          setImageDropTargetSetId("");
+                      }}
+                      onDrop={(event) => void dropImageIntoSet(event, set.id)}
                     >
                       <button
                         type="button"
@@ -16334,7 +16637,13 @@ function CollectionDetailView({
                           {set.name}
                         </button>
                       )}
-                      <span className="ml-auto text-xs text-[#777]">
+                      <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-[#777]">
+                        {setUploading && (
+                          <Loader2
+                            className="size-3 animate-spin text-[#6337d8]"
+                            aria-label="Uploading to this collection"
+                          />
+                        )}
                         {count}
                       </span>
                       <button
@@ -16382,8 +16691,8 @@ function CollectionDetailView({
                       <span className="font-semibold text-[#222]">
                         {deleteSetTarget?.name}
                       </span>
-                      ? This action cannot be undone. Photos in this collection
-                      will be moved to the first remaining collection.
+                      ? This action cannot be undone. Every photo and video
+                      inside this collection will also be permanently deleted.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -16867,8 +17176,9 @@ function CollectionDetailView({
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-[#999]">
-                  Cmd/Ctrl + A selects all - Delete removes selected - Esc
-                  clears
+                  Shift + click selects a range · Ctrl/Cmd + click toggles ·
+                  Drag a photo onto another collection to move it · Ctrl/Cmd +
+                  A selects all
                 </p>
                 {deletingImages && (
                   <div className="mb-4 flex items-center gap-3 border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -16903,19 +17213,43 @@ function CollectionDetailView({
                   {displayedSetImages.map((image) => (
                     <div
                       key={image._id}
+                      data-image-id={image._id}
+                      draggable={
+                        !isLocalUploadImage(image) &&
+                        !deletingImages &&
+                        !movingDraggedImage
+                      }
+                      onDragStart={(event) =>
+                        beginGalleryImageDrag(event, image)
+                      }
+                      onDragEnd={finishGalleryImageDrag}
                       className={cn(
                         "group relative animate-in fade-in zoom-in-95 bg-[#fafafa] p-2 text-left transition-all duration-300 ease-out",
                         activeImage?._id === image._id &&
                           "outline outline-2 outline-[#6337d8]",
                         selectedImageIds.includes(image._id) &&
                           "outline outline-2 outline-red-500",
-                        deletingImages && "pointer-events-none opacity-55",
+                        draggingGalleryImageId === image._id &&
+                          "opacity-50 outline outline-2 outline-[#6337d8]",
+                        (deletingImages || movingDraggedImage) &&
+                          "pointer-events-none opacity-55",
                       )}
                     >
                       <button
                         className="relative block w-full overflow-hidden bg-[#f2f2f2]"
-                        disabled={deletingImages}
-                        onClick={() => setActiveImageId(image._id)}
+                        disabled={deletingImages || movingDraggedImage}
+                        onClick={(event) => {
+                          if (
+                            event.shiftKey ||
+                            event.ctrlKey ||
+                            event.metaKey
+                          ) {
+                            event.preventDefault();
+                            selectImage(image._id, event);
+                            return;
+                          }
+                          setActiveImageId(image._id);
+                        }}
                       >
                         {image.mediaType === "video" ? (
                           <video
@@ -16949,8 +17283,15 @@ function CollectionDetailView({
                             ? "border-red-500 text-red-600"
                             : "border-white text-[#777]",
                         )}
-                        disabled={deletingImages || isLocalUploadImage(image)}
-                        onClick={() => toggleImageSelection(image._id)}
+                        disabled={
+                          deletingImages ||
+                          movingDraggedImage ||
+                          isLocalUploadImage(image)
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          selectImage(image._id, event);
+                        }}
                         aria-label="Select image"
                       >
                         <Check

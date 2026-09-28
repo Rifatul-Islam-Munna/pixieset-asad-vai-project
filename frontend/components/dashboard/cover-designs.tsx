@@ -6,6 +6,7 @@ import type { CoverAnimationDesign, CoverAnimationTarget } from "@/lib/cover-ani
 import { cn } from "@/lib/utils";
 import type { BrandSettings, CustomCoverTemplate } from "@/lib/home-cms";
 import { coverFocalStyle } from "@/lib/cover-focal";
+import { resolveGalleryFontFamily } from "@/lib/gallery-fonts";
 
 export const coverOptions = [
   ["Center", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80"],
@@ -62,9 +63,23 @@ export type CoverPreviewSettings = CoverAnimationDesign & {
   showCoverTitle?: boolean;
   showCoverDate?: boolean;
   showCoverButton?: boolean;
+  typography?: string;
+  customFontName?: string;
+  customFontDataUrl?: string;
   customCoverTemplate?: CustomCoverTemplate;
   branding?: Partial<BrandSettings>;
 };
+
+const coverTypographyFamilyMap = {
+  Sans: "Arial, sans-serif",
+  Serif: "Georgia, serif",
+  Modern: "Helvetica, sans-serif",
+  Timeless: "Times New Roman, serif",
+  Bold: "Arial Black, sans-serif",
+  Subtle: "Helvetica, sans-serif",
+  Classic: "Georgia, serif",
+  Custom: "Georgia, serif",
+} as const;
 
 export function coverImage(name: string) {
   return coverOptions.find(([item]) => item === name)?.[1] ?? coverOptions[0][1];
@@ -193,6 +208,14 @@ export function CoverPreview({
   const [focalX, focalY] = String(imageStyle.objectPosition)
     .split(" ")
     .map((value) => Number.parseFloat(value));
+  const fallbackFontFamily =
+    coverTypographyFamilyMap[
+      design.typography as keyof typeof coverTypographyFamilyMap
+    ] ?? coverTypographyFamilyMap.Classic;
+  const fontFamily = resolveGalleryFontFamily(
+    design.customFontName,
+    fallbackFontFamily,
+  );
   if (design.customCoverTemplate) {
     return (
       <CustomCoverPreview
@@ -210,6 +233,7 @@ export function CoverPreview({
         focalX={focalX}
         focalY={focalY}
         textColor={design.textColor}
+        fontFamily={fontFamily}
         textColors={{
           subtitle: design.coverSmallTitleColor,
           title: design.coverTitleColor,
@@ -248,16 +272,16 @@ export function CoverPreview({
   const text = (
     <div className={cn("flex flex-col gap-2", compact && "gap-1")}>
       {!compact && showSmall && (
-        <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }} />
+        <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined, fontFamily }} />
       )}
       {showTitle && (
-        <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }} />
+        <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined, fontFamily }} />
       )}
       {!compact && showDate && (
-        <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }} />
+        <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined, fontFamily }} />
       )}
       {!compact && showButton && (
-        <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }} />
+        <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="mt-4 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined, fontFamily }} />
       )}
     </div>
   );
@@ -267,12 +291,12 @@ export function CoverPreview({
         <CoverMedia design={design} disabled={compact} src={src} mediaType={resolvedMediaType} className="h-full w-full object-cover" style={imageStyle} />
         <div className="absolute inset-0 bg-gradient-to-r from-black/38 via-black/10 to-black/20" />
         <div className={cn("absolute left-5 top-[58%] max-w-[82%] -translate-y-1/2 sm:left-8 sm:max-w-[72%]", compact && "left-3 max-w-[68%]")}>
-          {!compact && showSmall && <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="mb-3 font-semibold uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }} />}
-          {showTitle && <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-medium uppercase leading-[0.96] tracking-[0.04em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }} />}
-          {!compact && showDate && <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="mt-5 font-semibold uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }} />}
+          {!compact && showSmall && <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="mb-3 font-semibold uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined, fontFamily }} />}
+          {showTitle && <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-medium uppercase leading-[0.96] tracking-[0.04em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined, fontFamily }} />}
+          {!compact && showDate && <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="mt-5 font-semibold uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined, fontFamily }} />}
         </div>
         {!compact && showButton && (
-          <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }} />
+          <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="absolute bottom-5 right-5 inline-flex max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-10 sm:right-8 sm:px-7 sm:tracking-[0.16em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined, fontFamily }} />
         )}
       </div>
     );
@@ -310,7 +334,7 @@ export function CoverPreview({
         <div className={cn("absolute inset-6 border border-white/75", compact && "inset-2")} />
         <div className={cn("absolute left-5 top-5 max-w-[82%] sm:left-8 sm:top-8 sm:max-w-[70%]", compact && "left-3 top-3 max-w-[74%]")}>{text}</div>
         {design.cover === "Side Button" && !compact && showButton && (
-          <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }} />
+          <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="absolute bottom-5 right-5 max-w-[calc(100%-2.5rem)] border border-white px-4 py-3 font-semibold uppercase tracking-[0.1em] sm:bottom-8 sm:right-8 sm:px-6 sm:tracking-[0.18em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined, fontFamily }} />
         )}
       </div>
     );
@@ -387,11 +411,11 @@ export function CoverPreview({
         <div className="absolute bottom-[22%] left-[12%] right-[12%] border-t border-white" />
         <div className={cn("absolute bottom-[22%] left-[12%] right-[12%] top-[22%] flex items-center justify-center p-6 text-center [text-shadow:0_2px_14px_rgba(0,0,0,0.55)]", compact && "p-3")}>
           <div className={cn("flex max-w-full flex-col items-center gap-3", compact && "gap-1")}>
-            {!compact && showSmall && <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined }} />}
-            {showTitle && <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined }} />}
-            {!compact && showDate && <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined }} />}
+            {!compact && showSmall && <AnimatedCoverText as="p" target="smallTitle" text={smallTitle} design={design} disabled={compact} className="uppercase tracking-[0.28em]" style={{ ...sized(design.coverSmallTitleFontSizePx, 12), color: smallTitleColor || undefined, fontFamily }} />}
+            {showTitle && <AnimatedCoverText as="h3" target="title" text={sampleTitle} design={design} disabled={compact} className="break-words font-semibold uppercase tracking-[0.18em]" style={{ ...sized(design.coverTitleFontSizePx, 60), color: titleColor || undefined, fontFamily }} />}
+            {!compact && showDate && <AnimatedCoverText as="p" target="date" text={date} design={design} disabled={compact} className="uppercase tracking-[0.22em]" style={{ ...sized(design.coverDateFontSizePx, 14), color: dateColor || undefined, fontFamily }} />}
             {!compact && showButton && (
-              <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined }} />
+              <AnimatedCoverText as="span" target="button" text={buttonText} design={design} disabled={compact} className="mt-3 inline-flex w-fit max-w-full border px-4 py-3 font-semibold uppercase tracking-[0.12em] sm:px-6 sm:tracking-[0.2em]" style={{ ...sized(design.coverButtonFontSizePx, 12), color: buttonColor || undefined, borderColor: buttonColor || undefined, fontFamily }} />
             )}
           </div>
         </div>
@@ -434,6 +458,7 @@ function CustomCoverPreview({
   className,
   compact,
   date,
+  fontFamily,
   fontSizes,
   focalX,
   focalY,
@@ -451,6 +476,7 @@ function CustomCoverPreview({
   className?: string;
   compact?: boolean;
   date?: string;
+  fontFamily?: string;
   fontSizes?: Partial<Record<"title" | "subtitle" | "date" | "button", number>>;
   focalX?: number;
   focalY?: number;
@@ -504,6 +530,7 @@ function CustomCoverPreview({
           height: `${element.height}%`,
           opacity: element.opacity / 100,
           color: elementTextColor || textColor || element.color,
+          fontFamily,
           transform: "translate(-50%, -50%)",
         };
         const animationTarget: CoverAnimationTarget =

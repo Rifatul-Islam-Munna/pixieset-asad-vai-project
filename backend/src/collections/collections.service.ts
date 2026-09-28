@@ -2336,17 +2336,147 @@ export class CollectionsService implements OnModuleInit {
     const target = currentSets.find((set) => String(set.id) === setId);
     if (!target) throw new NotFoundException('Set not found');
 
-    const nextSets = currentSets.filter((set) => String(set.id) !== setId);
-    const fallbackSetId = String(nextSets[0].id);
-    await this.imageModel.updateMany(
-      { userId, collectionId, setId },
-      { $set: { setId: fallbackSetId } },
-    );
+    const [images, processingJobs] = await Promise.all([
+      this.imageModel
+        .find({ userId, collectionId, setId })
+        .select(
+          '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+        )
+        .lean(),
+      this.imageProcessingJobModel
+        .find({ userId, collectionId, setId })
+        .select('objectKey status')
+        .lean(),
+    ]);
 
-    collection.sets = nextSets;
+    const deletedIds = images.map((image) => image._id.toString());
+    const now = new Date();
+
+    // Queue the physical R2/public-file cleanup before removing DB records.
+    // The delete worker retries failures in the background and also removes face data.
+    for (let offset = 0; offset < images.length; offset += 500) {
+      const batch = images.slice(offset, offset + 500);
+      await this.imageDeleteJobModel.bulkWrite(
+        batch.map((image) => {
+          const directObjectKey = String(
+            (image.metadata as Record<string, any> | undefined)
+              ?.directUploadObjectKey ?? '',
+          ).trim();
+          const publicReferences = [
+            image.url,
+            image.thumbnailUrl,
+            image.filename,
+          ].filter(Boolean) as string[];
+          const privateObjectKeys = [
+            image.originalObjectKey,
+            directObjectKey,
+          ].filter(Boolean) as string[];
+
+          return {
+            updateOne: {
+              filter: { imageId: image._id.toString() },
+              update: {
+                $setOnInsert: {
+                  userId,
+                  collectionId,
+                  imageId: image._id.toString(),
+                  publicReferences: [...new Set(publicReferences)],
+                  privateObjectKeys: [...new Set(privateObjectKeys)],
+                  status: 'queued',
+                  attempts: 0,
+                  nextAttemptAt: now,
+                  lastError: '',
+                },
+              },
+              upsert: true,
+            },
+          };
+        }),
+        { ordered: false },
+      );
+    }
+
+    const directObjectKeys = [
+      ...new Set(
+        images
+          .flatMap((image) => [
+            String(image.originalObjectKey ?? '').trim(),
+            String(
+              (image.metadata as Record<string, any> | undefined)
+                ?.directUploadObjectKey ?? '',
+            ).trim(),
+          ])
+          .filter(Boolean),
+      ),
+    ];
+    const unfinishedUploadObjectKeys = [
+      ...new Set(
+        processingJobs
+          .map((job) => String(job.objectKey ?? '').trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    await Promise.all([
+      this.imageModel.deleteMany({ userId, collectionId, setId }),
+      deletedIds.length
+        ? this.imageFavoriteModel.deleteMany({
+            collectionId,
+            imageId: { $in: deletedIds },
+          })
+        : Promise.resolve(),
+      this.imageProcessingJobModel.deleteMany({ userId, collectionId, setId }),
+      directObjectKeys.length
+        ? this.imageProcessingJobModel.deleteMany({
+            userId,
+            collectionId,
+            objectKey: { $in: directObjectKeys },
+          })
+        : Promise.resolve(),
+    ]);
+
+    const reclaimedBytes = images.reduce(
+      (sum, image) => sum + Math.max(0, Number(image.sizeBytes ?? 0)),
+      0,
+    );
+    if (reclaimedBytes > 0)
+      await this.decrementStorageUsedBytes(userId, reclaimedBytes);
+
+    const deletedUrls = new Set(
+      images.flatMap((image) => [image.url, image.thumbnailUrl]).filter(Boolean),
+    );
+    if (collection.coverImage && deletedUrls.has(collection.coverImage)) {
+      const nextCover = await this.imageModel
+        .findOne({ userId, collectionId })
+        .sort({ order: 1, createdAt: 1 })
+        .select('url')
+        .lean();
+      collection.coverImage = nextCover?.url || undefined;
+    }
+
+    collection.imageCount = Math.max(
+      0,
+      Number(collection.imageCount ?? 0) - images.length,
+    );
+    collection.sets = currentSets.filter((set) => String(set.id) !== setId);
     this.syncCollectionSetNamesInSettings(collection);
     await collection.save();
-    return collection.toObject();
+
+    // Jobs that had not produced a gallery image yet still own a raw private R2
+    // object. Remove those asynchronously so deleting a set also clears uploads
+    // that were pending in the background.
+    if (unfinishedUploadObjectKeys.length) {
+      void Promise.allSettled(
+        unfinishedUploadObjectKeys.map((objectKey) =>
+          this.minioService.deletePrivateFile(objectKey),
+        ),
+      );
+    }
+
+    return {
+      ...collection.toObject(),
+      deletedImageCount: images.length,
+    };
   }
 
   private syncCollectionSetNamesInSettings(collection: CollectionDocument) {
@@ -2426,9 +2556,11 @@ export class CollectionsService implements OnModuleInit {
       .findOne({ _id: collectionId, userId })
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
-    const resolvedSetId = setId || collection.sets?.[0]?.id || 'highlights';
-
-    const activeSet = collection.sets?.find((set) => set.id === resolvedSetId);
+    const activeSet = setId
+      ? collection.sets?.find((set) => set.id === setId)
+      : collection.sets?.[0];
+    if (setId && !activeSet) throw new NotFoundException('Set not found');
+    const resolvedSetId = activeSet?.id || 'highlights';
     const watermark = uploadWatermarkId
       ? await this.resolveWatermarkById(userId, uploadWatermarkId)
       : activeSet?.watermarkId
@@ -2497,14 +2629,22 @@ export class CollectionsService implements OnModuleInit {
       width?: number;
       height?: number;
     }>,
+    setId?: string,
   ) {
     if (!Array.isArray(files) || !files.length || files.length > 500)
       throw new BadRequestException('1 to 500 files are required');
-    const collection = await this.collectionModel.exists({
-      _id: collectionId,
-      userId,
-    });
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .select('sets')
+      .lean();
     if (!collection) throw new NotFoundException('Collection not found');
+    const activeSet = setId
+      ? collection.sets?.find((set) => set.id === setId)
+      : collection.sets?.[0];
+    if (setId && !activeSet) throw new NotFoundException('Set not found');
+    const resolvedSetId = activeSet?.id || 'highlights';
+    const uploadScope = `collections/${collectionId}/sets/${resolvedSetId}`;
+
     await this.ensureStorageAvailable(
       userId,
       files.reduce((sum, file) => sum + Math.max(0, Number(file.size)), 0),
@@ -2512,7 +2652,10 @@ export class CollectionsService implements OnModuleInit {
     await this.ensureVideoPlanAvailable(userId, files);
     return Promise.all(
       files.map((file) =>
-        this.minioService.createDirectUpload(userId, file, { privateImage: true }),
+        this.minioService.createDirectUpload(userId, file, {
+          privateImage: true,
+          scope: uploadScope,
+        }),
       ),
     );
   }
@@ -2527,6 +2670,19 @@ export class CollectionsService implements OnModuleInit {
   ) {
     if (!Array.isArray(files) || !files.length || files.length > 10)
       throw new BadRequestException('1 to 10 completed files are required');
+
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .select('sets')
+      .lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+    const activeSet = setId
+      ? collection.sets?.find((set) => set.id === setId)
+      : collection.sets?.[0];
+    if (setId && !activeSet) throw new NotFoundException('Set not found');
+    const resolvedSetId = activeSet?.id || 'highlights';
+    const uploadScope = `collections/${collectionId}/sets/${resolvedSetId}`;
+
     const verified = await this.mapWithConcurrency(
       files,
       6,
@@ -2536,14 +2692,18 @@ export class CollectionsService implements OnModuleInit {
           | undefined;
         if (file.uploadId && file.parts?.length) {
           try {
-            await this.minioService.completeDirectMultipartUpload(userId, {
-              objectKey: file.objectKey,
-              uploadId: file.uploadId,
-              parts: file.parts,
-            });
+            await this.minioService.completeDirectMultipartUpload(
+              userId,
+              {
+                objectKey: file.objectKey,
+                uploadId: file.uploadId,
+                parts: file.parts,
+              },
+              uploadScope,
+            );
           } catch (error) {
             verified = await this.minioService
-              .verifyDirectUpload(userId, file)
+              .verifyDirectUpload(userId, file, uploadScope)
               .catch(() => undefined);
             if (!verified) throw error;
           }
@@ -2551,7 +2711,11 @@ export class CollectionsService implements OnModuleInit {
         return {
           ...file,
           ...(verified ??
-            (await this.minioService.verifyDirectUpload(userId, file))),
+            (await this.minioService.verifyDirectUpload(
+              userId,
+              file,
+              uploadScope,
+            ))),
         };
       },
     );
@@ -2562,11 +2726,6 @@ export class CollectionsService implements OnModuleInit {
     await this.ensureVideoPlanAvailable(userId, verified);
     const savedVideos: any[] = [];
     if (verified.some((file) => this.mediaType(file.type) === 'video')) {
-      const collection = await this.collectionModel
-        .findOne({ _id: collectionId, userId })
-        .lean();
-      if (!collection) throw new NotFoundException('Collection not found');
-      const resolvedSetId = setId || collection.sets?.[0]?.id || 'highlights';
       const lastImage = await this.imageModel
         .findOne({ collectionId, userId })
         .sort({ order: -1, createdAt: -1 })
@@ -2638,7 +2797,7 @@ export class CollectionsService implements OnModuleInit {
               $setOnInsert: {
                 userId,
                 collectionId,
-                setId,
+                setId: resolvedSetId,
                 watermarkId,
                 replaceImageId,
                 objectKey: file.objectKey,
@@ -2955,6 +3114,17 @@ export class CollectionsService implements OnModuleInit {
       );
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error);
+
+      // A deleted set must not be recreated by an upload worker that was already
+      // running when the user confirmed deletion.
+      if (/set not found/i.test(message)) {
+        await Promise.allSettled([
+          this.minioService.deletePrivateFile(job.objectKey),
+          this.imageProcessingJobModel.deleteOne({ _id: job._id }),
+        ]);
+        return;
+      }
+
       const attempts = Math.max(1, Number(job.attempts ?? 1));
       const timedOut = this.isBackgroundImageOptimizationTimeout(error);
       const shouldUseRawFallback = timedOut || attempts >= 2;
@@ -3063,6 +3233,12 @@ export class CollectionsService implements OnModuleInit {
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
 
+    const activeSet = job.setId
+      ? collection.sets?.find((set) => set.id === job.setId)
+      : collection.sets?.[0];
+    if (job.setId && !activeSet) throw new NotFoundException('Set not found');
+    const resolvedSetId = activeSet?.id || 'highlights';
+
     const extension =
       extname(job.name)
         .toLowerCase()
@@ -3092,8 +3268,6 @@ export class CollectionsService implements OnModuleInit {
         .sort({ order: -1, createdAt: -1 })
         .select('order')
         .lean();
-      const resolvedSetId =
-        job.setId || collection.sets?.[0]?.id || 'highlights';
       const fallbackTitle = String(job.name || 'Image')
         .replace(extname(job.name), '')
         .replace(/[-_]+/g, ' ')
