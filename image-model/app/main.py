@@ -7,6 +7,8 @@ import os
 import secrets
 import time
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +22,7 @@ import cv2
 import numpy as np
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
 from PIL import Image, ImageOps
+from pydantic import BaseModel
 from insightface.app import FaceAnalysis
 
 
@@ -30,8 +33,8 @@ class Settings:
     detection_size: int = int(os.getenv("DETECTION_SIZE", "960"))
     detection_threshold: float = float(os.getenv("DETECTION_THRESHOLD", "0.20"))
     worker_count: int = int(os.getenv("WORKER_COUNT", "1"))
-    process_nice: int = int(os.getenv("PROCESS_NICE", "10"))
-    scan_yield_ms: float = float(os.getenv("SCAN_YIELD_MS", "15"))
+    process_nice: int = int(os.getenv("PROCESS_NICE", "7"))
+    scan_yield_ms: float = float(os.getenv("SCAN_YIELD_MS", "5"))
     group_scan: bool = os.getenv("GROUP_SCAN", "true").lower() in {"1", "true", "yes"}
     mirror_scan: bool = os.getenv("MIRROR_SCAN", "true").lower() in {"1", "true", "yes"}
     tile_size: int = int(os.getenv("TILE_SIZE", "896"))
@@ -40,6 +43,7 @@ class Settings:
     max_image_side: int = int(os.getenv("MAX_IMAGE_SIDE", "3200"))
     min_face_size: int = int(os.getenv("MIN_FACE_SIZE", "8"))
     max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "80"))
+    source_fetch_timeout_seconds: int = int(os.getenv("SOURCE_FETCH_TIMEOUT_SECONDS", "20"))
     api_key: str = os.getenv("API_KEY", "")
 
 
@@ -281,9 +285,90 @@ def candidate_response(
     return response
 
 
+class SourceUrlRequest(BaseModel):
+    url: str
+
+
 async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     if SETTINGS.api_key and not secrets.compare_digest(x_api_key or "", SETTINGS.api_key):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+
+def fetch_source_url(source_url: str) -> bytes:
+    parsed = urlparse(source_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="A valid http(s) image URL is required")
+    if parsed.username or parsed.password:
+        raise HTTPException(status_code=400, detail="URL credentials are not allowed")
+
+    max_bytes = SETTINGS.max_upload_mb * 1024 * 1024
+    request = Request(
+        source_url,
+        headers={
+            "User-Agent": "gallerista-face-index/1.0",
+            "Accept": "image/avif,image/webp,image/*,*/*;q=0.8",
+        },
+    )
+    try:
+        with urlopen(
+            request,
+            timeout=max(2, SETTINGS.source_fetch_timeout_seconds),
+        ) as response:
+            declared = int(response.headers.get("Content-Length") or 0)
+            if declared > max_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Source image exceeds {SETTINGS.max_upload_mb} MB limit",
+                )
+            content = response.read(max_bytes + 1)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not fetch source image: {exc}",
+        ) from exc
+
+    if not content:
+        raise HTTPException(status_code=400, detail="Source image is empty")
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Source image exceeds {SETTINGS.max_upload_mb} MB limit",
+        )
+    return content
+
+
+async def analyze_content(content: bytes) -> dict[str, Any]:
+    if not content:
+        raise HTTPException(status_code=400, detail="Image file is required")
+    if len(content) > SETTINGS.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Image exceeds {SETTINGS.max_upload_mb} MB limit",
+        )
+
+    image, original_width, original_height, scale_x, scale_y = decode_image(content)
+    if worker_queue is None:
+        raise HTTPException(status_code=503, detail="Face model is not ready")
+
+    worker = await worker_queue.get()
+    try:
+        candidates = await asyncio.to_thread(analyze_image, worker, image)
+    finally:
+        worker_queue.put_nowait(worker)
+
+    results = [
+        candidate_response(candidate, original_width, original_height, scale_x, scale_y)
+        for candidate in candidates
+    ]
+    embedding_dimension = len(results[0]["embedding"]) if results else None
+    return {
+        "faceCount": len(results),
+        "embeddingDimension": embedding_dimension,
+        "image": {"width": original_width, "height": original_height},
+        "faces": results,
+    }
 
 
 @asynccontextmanager
@@ -348,29 +433,13 @@ def health() -> dict[str, Any]:
 @app.post("/v1/faces", dependencies=[Depends(require_api_key)])
 async def faces(file: UploadFile = File(...)) -> dict[str, Any]:
     content = await file.read((SETTINGS.max_upload_mb * 1024 * 1024) + 1)
-    if not content:
-        raise HTTPException(status_code=400, detail="Image file is required")
-    if len(content) > SETTINGS.max_upload_mb * 1024 * 1024:
-        raise HTTPException(status_code=413, detail=f"Image exceeds {SETTINGS.max_upload_mb} MB limit")
+    return await analyze_content(content)
 
-    image, original_width, original_height, scale_x, scale_y = decode_image(content)
-    if worker_queue is None:
-        raise HTTPException(status_code=503, detail="Face model is not ready")
 
-    worker = await worker_queue.get()
-    try:
-        candidates = await asyncio.to_thread(analyze_image, worker, image)
-    finally:
-        worker_queue.put_nowait(worker)
-
-    results = [
-        candidate_response(candidate, original_width, original_height, scale_x, scale_y)
-        for candidate in candidates
-    ]
-    embedding_dimension = len(results[0]["embedding"]) if results else None
-    return {
-        "faceCount": len(results),
-        "embeddingDimension": embedding_dimension,
-        "image": {"width": original_width, "height": original_height},
-        "faces": results,
-    }
+@app.post("/v1/faces/url", dependencies=[Depends(require_api_key)])
+async def faces_from_url(payload: SourceUrlRequest) -> dict[str, Any]:
+    # Background indexing uses this path so Nest never downloads an image only
+    # to upload the same bytes to the model service. The model fetches the
+    # thumbnail directly, reducing backend RAM, bandwidth and event-loop work.
+    content = await asyncio.to_thread(fetch_source_url, payload.url)
+    return await analyze_content(content)

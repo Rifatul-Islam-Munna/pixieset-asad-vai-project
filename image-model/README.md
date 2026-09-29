@@ -2,13 +2,15 @@
 
 This container exposes one private HTTP endpoint that receives an image and returns a detected face bounding box plus a normalized recognition embedding for every detected face.
 
-- Endpoint: `POST /v1/faces`
+- Upload endpoint: `POST /v1/faces`
+- Background URL endpoint: `POST /v1/faces/url` (the model fetches the thumbnail directly; Nest never relays image bytes)
 - Health: `GET /health`
 - Default host URL: `http://127.0.0.1:8010`
 - Auth header: `x-api-key: <API_KEY>`
 - Default model: `buffalo_s` (better suited to a 2-core VPS than `buffalo_l`)
 - Default detector: `960x960`, tiled group scan, mirror scan for side-face recovery
-- Low-pressure defaults: one inference worker, OS nice priority, short CPU yields between scans
+- Low-pressure defaults: one inference worker (no duplicate model RAM), OS nice priority, short CPU yields between scans
+- Large queues use the direct URL endpoint plus a shorter Nest background gap; opening Face Filter prioritizes that gallery without increasing inference concurrency
 - Recommended collection: `album_faces_insightface`
 - Default upload cap: `80 MB` (`MAX_UPLOAD_MB`)
 

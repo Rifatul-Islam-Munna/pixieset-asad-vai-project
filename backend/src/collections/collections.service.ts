@@ -607,8 +607,12 @@ export class CollectionsService implements OnModuleInit {
         ? this.findImagesPage(
             this.withSetFilter(
               {
+                // Owner preview has already verified collection ownership before
+                // allowUnpublished=true is used. Legacy galleries can contain
+                // image rows created before userId was consistently persisted,
+                // so filtering those rows by userId made preview show only a
+                // handful of newer photos while the normal public gallery worked.
                 collectionId: collection._id.toString(),
-                userId: collection.userId.toString(),
               },
               requestedSetId,
             ),
@@ -768,6 +772,22 @@ export class CollectionsService implements OnModuleInit {
     setId?: string,
   ) {
     await this.findOne(userId, id, '1', '0');
+
+    // Self-heal old image rows in the background. The owner check above makes
+    // this safe, and future dashboard queries no longer lose legacy photos.
+    void this.imageModel
+      .updateMany(
+        {
+          collectionId: id,
+          $or: [
+            { userId: { $exists: false } },
+            { userId: { $ne: userId } },
+          ],
+        },
+        { $set: { userId } },
+      )
+      .catch(() => undefined);
+
     const publicCollection = await this.findPublic(
       id,
       undefined,
@@ -3898,7 +3918,7 @@ export class CollectionsService implements OnModuleInit {
         $inc: { attempts: 1 },
       },
       {
-        new: true,
+        returnDocument: 'after',
         sort: { createdAt: 1 },
       },
     );
@@ -4830,7 +4850,7 @@ export class CollectionsService implements OnModuleInit {
         $inc: { attempts: 1 },
       },
       {
-        new: true,
+        returnDocument: 'after',
         sort: { createdAt: 1 },
       },
     );

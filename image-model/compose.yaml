@@ -12,8 +12,11 @@ services:
       DETECTION_SIZE: "960"
       DETECTION_THRESHOLD: "0.20"
       WORKER_COUNT: "1"
-      PROCESS_NICE: "10"
-      SCAN_YIELD_MS: "15"
+      # Still below normal process priority, but no longer intentionally sleeps
+      # as much between detector passes. This speeds large queues without adding
+      # another model copy in RAM.
+      PROCESS_NICE: "7"
+      SCAN_YIELD_MS: "5"
       GROUP_SCAN: "true"
       MIRROR_SCAN: "true"
       TILE_SIZE: "896"
@@ -22,6 +25,7 @@ services:
       MAX_IMAGE_SIDE: "3200"
       MIN_FACE_SIZE: "6"
       MAX_UPLOAD_MB: "80"
+      SOURCE_FETCH_TIMEOUT_SECONDS: "20"
 
       # Set a long random value. NestJS must send this in the x-api-key header.
       API_KEY: change-this-to-a-long-random-secret
@@ -45,9 +49,10 @@ services:
       timeout: 8s
       retries: 3
       start_period: 90s
-    mem_limit: 2g
-    # Background face inference is intentionally capped below one full core.
-    cpus: 0.75
+    mem_limit: 3g
+    # One model worker keeps RAM predictable. Give that worker enough CPU to
+    # finish each photo quickly while remaining well below a 3-core budget.
+    cpus: 1.5
 
 volumes:
   insightface_models:

@@ -371,8 +371,21 @@ export function PublicGallery({
         ? { ...set, name: "Featured" }
         : set,
     );
+
+    // Legacy galleries can contain valid images whose setId is missing from the
+    // current collection.sets array. Never hide those photos in preview.
+    for (const image of images) {
+      const id = imageSetId(image);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      unique.push({
+        id,
+        name: id === "highlights" ? "Featured" : "Photos",
+      });
+    }
+
     return unique.length ? unique : [{ id: "highlights", name: "Featured" }];
-  }, [collection?.sets]);
+  }, [collection?.sets, images]);
   const showSetTabs = gallerySets.length > 0;
   const coverPhoto = imageSrc(collection?.coverImage || images.find((image) => !isVideo(image))?.url || "");
   const coverMediaType = coverMatch?.mediaType ?? design.coverMediaType;
@@ -408,6 +421,10 @@ export function PublicGallery({
   const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceReady, setFaceReady] = useState(true);
   const [faceMissingImages, setFaceMissingImages] = useState(0);
+  const [faceTotalImages, setFaceTotalImages] = useState(0);
+  const [faceIndexedImages, setFaceIndexedImages] = useState(0);
+  const [faceRetryingImages, setFaceRetryingImages] = useState(0);
+  const [faceFailedImages, setFaceFailedImages] = useState(0);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
   const [shareTarget, setShareTarget] = useState<{
@@ -1125,26 +1142,45 @@ export function PublicGallery({
   const loadFaces = async (force = false) => {
     setFaceSheetOpen(true);
     if (((!force && faces.length) || faceBusy)) return;
-    setFaceBusy(true);
-    setFaceError("");
-    const response = await fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces`).catch(() => null);
+    const silentRefresh = force;
+    if (!silentRefresh) setFaceBusy(true);
+    if (!silentRefresh) setFaceError("");
+
+    const response = await fetch(
+      `${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces`,
+      { cache: "no-store" },
+    ).catch(() => null);
     const payload = response ? await response.json().catch(() => null) : null;
-    setFaceBusy(false);
+
+    if (!silentRefresh) setFaceBusy(false);
     if (!response?.ok) {
       const message = payload?.message ?? "Face list failed.";
       if (/face search is not ready/i.test(message)) {
         setFaceReady(false);
         setFacesIndexing(true);
-        setFaceError("");
+        if (!silentRefresh) setFaceError("");
         return;
       }
-      setFaceError(message);
+      if (!silentRefresh) setFaceError(message);
       return;
     }
+
     const ready = payload?.data?.ready !== false;
     const missingImages = Math.max(0, Number(payload?.data?.missingImages ?? 0));
+    const totalImages = Math.max(0, Number(payload?.data?.totalImages ?? 0));
+    const indexedImages = Math.max(
+      0,
+      Number(payload?.data?.indexedImages ?? Math.max(0, totalImages - missingImages)),
+    );
+    const retryingImages = Math.max(0, Number(payload?.data?.retryingImages ?? 0));
+    const failedImages = Math.max(0, Number(payload?.data?.failedImages ?? 0));
+
     setFaceReady(ready);
     setFaceMissingImages(missingImages);
+    setFaceTotalImages(totalImages);
+    setFaceIndexedImages(indexedImages);
+    setFaceRetryingImages(retryingImages);
+    setFaceFailedImages(failedImages);
     setFaces(payload?.data?.faces ?? []);
     setFacesIndexing(Boolean(payload?.data?.indexing) || !ready);
   };
@@ -1989,9 +2025,44 @@ export function PublicGallery({
               </div>
             )}
             {faceReady && facesIndexing && !faceBusy && (
-              <p className="mt-6 rounded-lg bg-[#f6f6f4] px-4 py-3 text-sm font-semibold text-[#666]">
-                Detecting {faceMissingImages > 0 ? `${faceMissingImages} ` : ""}remaining photo{faceMissingImages === 1 ? "" : "s"} in the background...
-              </p>
+              <div className="mt-6 rounded-xl border border-black/5 bg-[#f6f6f4] px-4 py-4">
+                <div className="flex items-center justify-between gap-3 text-sm font-semibold text-[#555]">
+                  <span>
+                    {faceTotalImages > 0
+                      ? `${faceIndexedImages.toLocaleString()} / ${faceTotalImages.toLocaleString()} photos scanned`
+                      : "Scanning photos in the background"}
+                  </span>
+                  <span className="shrink-0 text-xs text-[#777]">
+                    {faceMissingImages.toLocaleString()} remaining
+                  </span>
+                </div>
+                {faceTotalImages > 0 && (
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/10">
+                    <div
+                      className="h-full rounded-full bg-[#6337d8] transition-[width] duration-500"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(2, (faceIndexedImages / faceTotalImages) * 100),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                )}
+                <p className="mt-3 text-xs leading-5 text-[#777]">
+                  {faces.length > 0
+                    ? `${faces.length} ${faces.length === 1 ? "person" : "people"} found so far. You can use ${faces.length === 1 ? "this face" : "these faces"} now while the rest continue indexing.`
+                    : "Detected people will appear here immediately as photos finish indexing."}
+                </p>
+                {faceRetryingImages > 0 && (
+                  <p className="mt-1 text-xs leading-5 text-amber-700">
+                    {faceRetryingImages.toLocaleString()} photo{faceRetryingImages === 1 ? "" : "s"} waiting for an automatic retry
+                    {faceFailedImages > faceRetryingImages
+                      ? ` · ${faceFailedImages.toLocaleString()} have had at least one temporary failure`
+                      : ""}.
+                  </p>
+                )}
+              </div>
             )}
             {faceReady && !faceBusy && !faces.length && !facesIndexing && !faceError && (
               <p className="mt-8 text-sm leading-6 text-[#666]">

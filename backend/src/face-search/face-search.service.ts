@@ -68,6 +68,7 @@ export class FaceSearchService implements OnModuleInit {
   private readinessRefresh?: Promise<boolean>;
   private nextReadinessRefreshAt = 0;
   private backgroundSweepRunning = false;
+  private nextBackgroundSweepAt = 0;
 
   constructor(
     private readonly configService: ConfigService,
@@ -85,37 +86,80 @@ export class FaceSearchService implements OnModuleInit {
     await this.refreshReadiness();
   }
 
-  @Interval(5_000)
+  @Interval(250)
   async processBackgroundFaceIndexTick() {
-    if (!backgroundWorkerEnabled() || this.backgroundSweepRunning) return;
+    if (
+      !backgroundWorkerEnabled() ||
+      this.backgroundSweepRunning ||
+      Date.now() < this.nextBackgroundSweepAt
+    )
+      return;
     this.backgroundSweepRunning = true;
     try {
-      if (!(await this.ensureReady())) return;
+      if (!(await this.ensureReady())) {
+        this.nextBackgroundSweepAt = Date.now() + 2_000;
+        return;
+      }
 
       const now = new Date();
-      const image = await this.imageModel
-        .findOne({
-          mediaType: { $ne: 'video' },
-          $and: [
-            {
-              $or: [
-                { faceIndexedAt: { $exists: false } },
-                { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
-              ],
-            },
-            {
-              $or: [
-                { faceIndexNextAttemptAt: { $exists: false } },
-                { faceIndexNextAttemptAt: { $lte: now } },
-              ],
-            },
-          ],
+      const pendingFilter = {
+        mediaType: { $ne: 'video' },
+        $and: [
+          {
+            $or: [
+              { faceIndexedAt: { $exists: false } },
+              { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
+            ],
+          },
+          {
+            $or: [
+              { faceIndexNextAttemptAt: { $exists: false } },
+              { faceIndexNextAttemptAt: { $lte: now } },
+            ],
+          },
+        ],
+      } as Record<string, unknown>;
+
+      // Give recently opened face panels priority without increasing
+      // concurrency. This is important for old galleries: they no longer sit
+      // behind months of unrelated global backlog while the visitor waits.
+      const recentCollections = await this.collectionModel
+        .find({
+          faceIndexPriorityAt: {
+            $gte: new Date(now.getTime() - 10 * 60 * 1000),
+          },
         })
-        .sort({ faceIndexNextAttemptAt: 1, createdAt: 1 })
+        .sort({ faceIndexPriorityAt: -1 })
+        .limit(12)
+        .select('_id')
         .lean();
+      const recentCollectionIds = recentCollections.map((item) =>
+        String(item._id),
+      );
+
+      let image = recentCollectionIds.length
+        ? await this.imageModel
+            .findOne({
+              ...pendingFilter,
+              collectionId: { $in: recentCollectionIds },
+            })
+            .sort({ faceIndexNextAttemptAt: 1, createdAt: 1 })
+            .lean()
+        : null;
+
+      if (!image) {
+        image = await this.imageModel
+          .findOne(pendingFilter)
+          .sort({ faceIndexNextAttemptAt: 1, createdAt: 1 })
+          .lean();
+      }
 
       if (!image) {
         await this.finishCompletedReindexCollections();
+        // Empty queues should stay very cheap. The 250 ms timer only makes the
+        // worker react quickly while work exists; it does not poll MongoDB four
+        // times per second forever.
+        this.nextBackgroundSweepAt = Date.now() + 5_000;
         return;
       }
 
@@ -142,9 +186,13 @@ export class FaceSearchService implements OnModuleInit {
         { _id: image.collectionId, faceReindexStatus: 'queued' },
         { $set: { faceReindexStatus: 'processing' } },
       );
-      await this.indexImage(image as IndexedImage);
+      await this.indexImage(
+        image as IndexedImage,
+        recentCollectionIds.includes(collectionId),
+      );
       await this.finishCompletedReindexCollections(String(image.collectionId));
     } catch (error) {
+      this.nextBackgroundSweepAt = Date.now() + 2_000;
       this.logger.warn(
         `Background face index tick failed: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -174,22 +222,23 @@ export class FaceSearchService implements OnModuleInit {
     return this.readinessRefresh;
   }
 
-  async indexImage(image: IndexedImage) {
+  async indexImage(image: IndexedImage, priority = false) {
     const run = this.faceIndexTail.then(
-      () => this.runQueuedFaceIndex(image),
-      () => this.runQueuedFaceIndex(image),
+      () => this.runQueuedFaceIndex(image, priority),
+      () => this.runQueuedFaceIndex(image, priority),
     );
     this.faceIndexTail = run.then(() => undefined, () => undefined);
     return run;
   }
 
-  private async runQueuedFaceIndex(image: IndexedImage) {
+  private async runQueuedFaceIndex(image: IndexedImage, priority = false) {
     const waitMs = Math.max(0, this.nextFaceIndexAt - Date.now());
     if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
     try {
       return await this.indexImageNow(image);
     } finally {
-      this.nextFaceIndexAt = Date.now() + this.faceIndexGapMs();
+      this.nextFaceIndexAt =
+        Date.now() + this.faceIndexGapMs(priority);
     }
   }
 
@@ -201,31 +250,45 @@ export class FaceSearchService implements OnModuleInit {
     if (!imageId || !image.url || !collectionId) return 0;
 
     const sourceUrl = this.faceIndexImageUrl(image);
-    let buffer: Buffer | null = null;
-    try {
-      buffer = await this.readImage(sourceUrl);
-    } catch (error) {
-      await this.markFaceIndexFailure(
-        imageId,
-        `image download failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 0;
-    }
-    if (!buffer) {
-      await this.markFaceIndexFailure(imageId, 'image download failed');
-      return 0;
-    }
 
     await this.deleteImageFaces(collectionId, imageId);
 
-    let faces: DetectedFace[];
+    let faces: DetectedFace[] | undefined;
     try {
-      faces = await this.extractFaces(buffer);
+      // Fast path: the image-model downloads the thumbnail itself. This avoids
+      // R2/Imagor -> Nest -> image-model byte relaying and keeps large batches
+      // out of the API process RAM.
+      faces = await this.extractFacesFromImageUrl(sourceUrl);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Face indexing failed for ${imageId}: ${message}`);
-      await this.markFaceIndexFailure(imageId, message);
-      return 0;
+      this.logger.warn(
+        `Direct face-model URL scan failed for ${imageId}; falling back to byte upload: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    if (faces === undefined) {
+      let buffer: Buffer | null = null;
+      try {
+        buffer = await this.readImage(sourceUrl);
+      } catch (error) {
+        await this.markFaceIndexFailure(
+          imageId,
+          `image download failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return 0;
+      }
+      if (!buffer) {
+        await this.markFaceIndexFailure(imageId, 'image download failed');
+        return 0;
+      }
+
+      try {
+        faces = await this.extractFaces(buffer);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Face indexing failed for ${imageId}: ${message}`);
+        await this.markFaceIndexFailure(imageId, message);
+        return 0;
+      }
     }
 
     if (!faces.length) {
@@ -786,7 +849,11 @@ export class FaceSearchService implements OnModuleInit {
     if (name.length > 80) throw new BadRequestException('Person name must be 80 characters or fewer.');
     const update = name ? { $set: { name } } : { $unset: { name: 1 } };
     const identity = await this.faceIdentityModel
-      .findOneAndUpdate({ userId, identityKey }, update, { new: true })
+      .findOneAndUpdate(
+        { userId, identityKey },
+        update,
+        { returnDocument: 'after' },
+      )
       .lean();
     if (!identity) throw new BadRequestException('Face identity not found.');
     this.identityCache.delete(userId);
@@ -890,28 +957,118 @@ export class FaceSearchService implements OnModuleInit {
     }
   }
 
+  private async collectionFaceIndexProgress(collectionId: string) {
+    const now = new Date();
+    const pending = {
+      collectionId,
+      mediaType: { $ne: 'video' },
+      $or: [
+        { faceIndexedAt: { $exists: false } },
+        { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
+      ],
+    } as Record<string, unknown>;
+
+    const [
+      totalImages,
+      missingImages,
+      retryingImages,
+      failedImages,
+      latestIndexed,
+    ] = await Promise.all([
+      this.imageModel.countDocuments({
+        collectionId,
+        mediaType: { $ne: 'video' },
+      }),
+      this.imageModel.countDocuments(pending),
+      this.imageModel.countDocuments({
+        ...pending,
+        faceIndexNextAttemptAt: { $gt: now },
+      }),
+      this.imageModel.countDocuments({
+        ...pending,
+        faceIndexAttempts: { $gt: 0 },
+      }),
+      this.imageModel
+        .findOne({
+          collectionId,
+          mediaType: { $ne: 'video' },
+          faceIndexedAt: { $exists: true },
+          faceIndexVersion: FACE_INDEX_VERSION,
+        })
+        .sort({ faceIndexedAt: -1 })
+        .select('faceIndexedAt')
+        .lean(),
+    ]);
+
+    return {
+      totalImages,
+      indexedImages: Math.max(0, totalImages - missingImages),
+      missingImages,
+      retryingImages,
+      failedImages,
+      lastIndexedAt: latestIndexed?.faceIndexedAt,
+    };
+  }
+
   async listCollectionFaces(collectionIdOrSlug: string) {
     await this.assertCollectionFeature(collectionIdOrSlug, 'advancedFaceSearch', 'Advanced Face Search');
     const collection = await this.findCollection(collectionIdOrSlug);
     const collectionId = collection._id.toString();
 
+    // Polling the face panel marks this gallery as recently active. Only the
+    // dedicated background worker reads this priority; the request itself never
+    // performs face inference.
+    void this.collectionModel
+      .updateOne(
+        { _id: collection._id },
+        { $set: { faceIndexPriorityAt: new Date() } },
+      )
+      .catch(() => undefined);
+
+    const progressPromise = this.collectionFaceIndexProgress(collectionId);
+
     if (!this.ready || !this.qdrant) {
       void this.ensureReady();
-      const missingImages = await this.imageModel.countDocuments({
-        collectionId,
-        mediaType: { $ne: 'video' },
-        $or: [
-          { faceIndexedAt: { $exists: false } },
-          { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
-        ],
-      });
+      const progress = await progressPromise;
       return {
         collectionId,
         count: 0,
         ready: false,
-        indexing: missingImages > 0,
-        missingImages,
+        indexing: progress.missingImages > 0,
+        ...progress,
         faces: [],
+      };
+    }
+
+    const progress = await progressPromise;
+
+    if (progress.missingImages > 0) {
+      // During a large reindex do NOT scroll thousands of 512-d vectors and
+      // re-cluster them every 3.5 seconds just to refresh the sidebar. The
+      // incremental person table is updated image-by-image and is dramatically
+      // cheaper in CPU/RAM. Once indexing reaches zero, the final request below
+      // performs the full Qdrant clustering once for final deduplication.
+      const livePeople = await this.facePersonModel
+        .find({ collectionId })
+        .sort({ imageCount: -1, faceCount: -1, updatedAt: -1 })
+        .limit(80)
+        .lean();
+
+      return {
+        collectionId,
+        count: livePeople.length,
+        ready: true,
+        indexing: true,
+        ...progress,
+        faces: livePeople.map((person, index) => ({
+          id: String(person.representativeFaceId),
+          personId: String(person.personKey),
+          label: `Face ${index + 1}`,
+          imageId: String(person.representativeImageId),
+          imageUrl: person.representativeUrl,
+          box: person.representativeBox,
+          photoCount: Math.max(1, Number(person.imageCount || 0)),
+        })),
       };
     }
 
@@ -925,22 +1082,9 @@ export class FaceSearchService implements OnModuleInit {
     });
 
     const points = (response.points ?? []) as FacePoint[];
-    const staleImages = await this.imageModel
-      .find({
-        collectionId,
-        mediaType: { $ne: 'video' },
-        $or: [
-          { faceIndexedAt: { $exists: false } },
-          { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
-        ],
-      })
-      .limit(200)
-      .lean();
 
-    // A dedicated low-pressure background sweep processes stale images.
-    // Public gallery requests only report progress and never start heavy work.
-
-    // Cluster all face points: same person → 1 group.
+    // Indexing is complete. Cluster all face points once for the final sidebar:
+    // same person → 1 group.
     // Works for all photo types:
     //   • Solo portrait (1 face) — creates or joins 1 cluster
     //   • Duo photo (2 faces) — each face creates/joins its own cluster
@@ -950,7 +1094,7 @@ export class FaceSearchService implements OnModuleInit {
 
     this.logger.log(
       `Face clustering: collection=${collectionId} points=${points.length} ` +
-      `rawGroups=${clusteredGroups.length} people=${sortedGroups.length} staleImages=${staleImages.length}`,
+      `rawGroups=${clusteredGroups.length} people=${sortedGroups.length} missingImages=${progress.missingImages}`,
     );
 
     // Sort by photo count descending so the most prominent people come first.
@@ -959,8 +1103,9 @@ export class FaceSearchService implements OnModuleInit {
       collectionId,
       count: sortedGroups.length,
       ready: true,
-      indexing: staleImages.length > 0,
-      missingImages: staleImages.length,
+      indexing: progress.missingImages > 0,
+      ...progress,
+      facePoints: points.length,
       faces: sortedGroups.map((group, index) => ({
         id: String(group.representative.id),
         personId: group.personId,
@@ -1284,8 +1429,16 @@ export class FaceSearchService implements OnModuleInit {
     return this.configNumber('FACE_GLOBAL_PERSON_SIMILARITY', 0.24, 0.1, 0.99);
   }
 
-  private faceIndexGapMs() {
-    return this.configNumber('FACE_BACKGROUND_GAP_MS', 2000, 0, 30000);
+  private faceIndexGapMs(priority = false) {
+    if (priority) {
+      return this.configNumber(
+        'FACE_ACTIVE_BACKGROUND_GAP_MS',
+        250,
+        0,
+        5000,
+      );
+    }
+    return this.configNumber('FACE_BACKGROUND_GAP_MS', 750, 0, 30000);
   }
 
   private faceIndexImageUrl(image: IndexedImage) {
@@ -1428,34 +1581,19 @@ export class FaceSearchService implements OnModuleInit {
     return this.extractFacesWithImageModel(buffer);
   }
 
-  private async extractFacesWithImageModel(buffer: Buffer): Promise<DetectedFace[]> {
-    const url = this.imageModelUrl();
-    if (!url) return [];
-    const startedAt = Date.now();
-
-    const form = new FormData();
-    form.append('file', new Blob([new Uint8Array(buffer)]), 'image.jpg');
+  private imageModelHeaders(contentType?: string) {
     const headers: Record<string, string> = {};
     const apiKey = (
       this.configService.get<string>('IMAGE_MODEL_API_KEY')?.trim()
       || this.configService.get<string>('INSIGHTFACE_API_KEY')?.trim()
     );
     if (apiKey) headers['x-api-key'] = apiKey;
+    if (contentType) headers['content-type'] = contentType;
+    return headers;
+  }
 
-    const response = await fetch(`${url.replace(/\/$/, '')}/v1/faces`, {
-      method: 'POST',
-      headers,
-      body: form,
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(payload?.detail ?? payload?.message ?? `Image model HTTP ${response.status}`);
-    }
-
+  private detectedFacesFromPayload(payload: any): DetectedFace[] {
     const faces = Array.isArray(payload?.faces) ? payload.faces : [];
-    this.logger.log(
-      `External image model scan ok: faces=${faces.length}; embeddingDim=${payload?.embeddingDimension ?? 'unknown'}; elapsedMs=${Date.now() - startedAt}`,
-    );
     return faces
       .map((face: any) => ({
         vector: Array.isArray(face.embedding) ? face.embedding.map(Number) : [],
@@ -1467,6 +1605,69 @@ export class FaceSearchService implements OnModuleInit {
         },
       }))
       .filter((face: DetectedFace) => face.vector.length === INSIGHT_VECTOR_SIZE);
+  }
+
+  private async extractFacesFromImageUrl(
+    sourceUrl: string,
+  ): Promise<DetectedFace[] | undefined> {
+    const url = this.imageModelUrl();
+    if (!url || !sourceUrl) return undefined;
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.configNumber('FACE_MODEL_SCAN_TIMEOUT_MS', 60000, 5000, 120000),
+    );
+
+    try {
+      const response = await fetch(`${url.replace(/\/$/, '')}/v1/faces/url`, {
+        method: 'POST',
+        headers: this.imageModelHeaders('application/json'),
+        body: JSON.stringify({ url: sourceUrl }),
+        signal: controller.signal,
+      });
+      if (response.status === 404 || response.status === 405) return undefined;
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          payload?.detail ??
+            payload?.message ??
+            `Image model URL scan HTTP ${response.status}`,
+        );
+      }
+      const faces = this.detectedFacesFromPayload(payload);
+      this.logger.log(
+        `External image model URL scan ok: faces=${faces.length}; embeddingDim=${payload?.embeddingDimension ?? 'unknown'}; elapsedMs=${Date.now() - startedAt}`,
+      );
+      return faces;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async extractFacesWithImageModel(buffer: Buffer): Promise<DetectedFace[]> {
+    const url = this.imageModelUrl();
+    if (!url) return [];
+    const startedAt = Date.now();
+
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(buffer)]), 'image.jpg');
+
+    const response = await fetch(`${url.replace(/\/$/, '')}/v1/faces`, {
+      method: 'POST',
+      headers: this.imageModelHeaders(),
+      body: form,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.detail ?? payload?.message ?? `Image model HTTP ${response.status}`);
+    }
+
+    const faces = this.detectedFacesFromPayload(payload);
+    this.logger.log(
+      `External image model scan ok: faces=${faces.length}; embeddingDim=${payload?.embeddingDimension ?? 'unknown'}; elapsedMs=${Date.now() - startedAt}`,
+    );
+    return faces;
   }
 
   private async readImage(url: string) {

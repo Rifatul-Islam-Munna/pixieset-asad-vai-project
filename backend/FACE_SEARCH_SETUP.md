@@ -23,11 +23,16 @@ FACE_CLUSTER_CONFLICT_SIMILARITY=0.35
 FACE_PERSON_SIMILARITY=0.28
 FACE_MATCH_SIMILARITY=0.32
 FACE_SEARCH_SCAN_LIMIT=100000
+FACE_BACKGROUND_GAP_MS=750
+FACE_ACTIVE_BACKGROUND_GAP_MS=250
+FACE_MODEL_SCAN_TIMEOUT_MS=60000
 IMAGE_UPLOAD_MAX_BYTES=921600
 IMAGE_UPLOAD_MAX_WIDTH=1920
 IMAGE_UPLOAD_MAX_HEIGHT=1920
 ```
 
 If `IMAGE_MODEL_URL` is missing or the health check fails, face indexing/search is disabled. There is no NestJS CPU fallback.
+
+For background indexing, Nest first calls the image-model URL endpoint so the image-model downloads the gallery thumbnail directly. This avoids routing every image through Nest RAM/network. The worker remains serialized by default; recently opened Face Filter galleries use the shorter active gap so big galleries progress faster without multiplying model memory.
 
 Unique-face grouping uses cosine similarity. Lower values merge people more; higher values split people more. Old `FACE_CLUSTER_DISTANCE` / `FACE_MATCH_DISTANCE` env vars are still accepted, but similarity vars are preferred.

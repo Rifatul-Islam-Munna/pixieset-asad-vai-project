@@ -81,11 +81,29 @@ async function getOwnerPreview(collectionId?: string) {
 
   if (!allSetsPreview || !allItems.length) return preview;
 
+  const firstPopulatedSetId = String(allItems[0]?.setId || "highlights");
+  const firstSetPreview = await fetchPreview(firstPopulatedSetId);
+  const firstSetItems = Array.isArray(firstSetPreview?.imagesPage?.items)
+    ? firstSetPreview.imagesPage.items
+    : [];
+
+  // Keep pagination scoped to a single real set. Returning the mixed __all__
+  // page here would make the client use a per-set offset against an all-set
+  // page and old galleries could stop after just a few photos.
+  if (firstSetPreview && firstSetItems.length) {
+    return {
+      ...firstSetPreview,
+      images: firstSetItems,
+      imagesPage: firstSetPreview.imagesPage,
+      previewInitialSetId: firstPopulatedSetId,
+    };
+  }
+
   return {
     ...allSetsPreview,
     images: allItems,
     imagesPage: allSetsPreview.imagesPage,
-    previewInitialSetId: String(allItems[0]?.setId || "highlights"),
+    previewInitialSetId: firstPopulatedSetId,
   };
 }
 

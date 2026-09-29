@@ -59,6 +59,9 @@ export class Collection {
   @Prop()
   faceReindexCompletedAt?: Date;
 
+  @Prop({ index: true })
+  faceIndexPriorityAt?: Date;
+
   @Prop({ type: String, enum: ['', 'queued', 'processing', 'completed'], default: '' })
   faceReindexStatus?: 'queued' | 'processing' | 'completed' | '';
 
