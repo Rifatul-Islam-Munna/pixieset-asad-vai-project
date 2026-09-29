@@ -7988,6 +7988,9 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
     setWatermarkType,
   } = useDashboardStore();
   const { saveSetting } = useDashboardSettings("watermark");
+  const [imagorPreviewUrl, setImagorPreviewUrl] = useState("");
+  const [imagorPreviewReady, setImagorPreviewReady] = useState(false);
+  const imagorPreviewRequestRef = useRef(0);
 
   const watermarkDraft = (position = watermarkPosition) => ({
     type: watermarkType,
@@ -8006,6 +8009,45 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
     return { x: layout.x, y: layout.y };
   };
   const previewWatermarkLayout = watermarkLayout(watermarkDraft());
+
+  useEffect(() => {
+    if (
+      watermarkType === "image" &&
+      (!watermarkImage || watermarkImage.startsWith("blob:"))
+    ) {
+      setImagorPreviewUrl("");
+      setImagorPreviewReady(false);
+      return;
+    }
+
+    const requestId = ++imagorPreviewRequestRef.current;
+    setImagorPreviewReady(false);
+    const timer = window.setTimeout(async () => {
+      const watermark = watermarkDraft({
+        x: previewWatermarkLayout.x,
+        y: previewWatermarkLayout.y,
+      });
+      const [response] = await PostRequestAxios<{
+        data: { url: string };
+      }>("/settings/watermark/preview", { watermark });
+
+      if (requestId !== imagorPreviewRequestRef.current) return;
+      setImagorPreviewUrl(String(response?.data?.url || ""));
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    watermarkType,
+    watermarkText,
+    watermarkFont,
+    watermarkColor,
+    watermarkScale,
+    watermarkOpacity,
+    watermarkPosition.x,
+    watermarkPosition.y,
+    watermarkImage,
+  ]);
+
   const moveWatermark = (clientX: number, clientY: number) => {
     const rect = previewRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -8013,6 +8055,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
       x: ((clientX - rect.left) / rect.width) * 100,
       y: ((clientY - rect.top) / rect.height) * 100,
     };
+    setImagorPreviewReady(false);
     setWatermarkPosition(safePosition(position));
   };
   const startDrag = (event: PointerEvent<HTMLElement>) => {
@@ -8282,50 +8325,49 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
           style={{ containerType: "inline-size" }}
         >
           <img
-            src="https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1400&q=80"
+            src="https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1400&h=933&q=80"
             alt="Watermark preview"
             className="h-full w-full object-cover"
           />
-          {watermarkType === "text" ? (
-            <button
-              className="absolute cursor-grab select-none leading-none active:cursor-grabbing"
-              style={{
-                left: `${previewWatermarkLayout.x}%`,
-                top: `${previewWatermarkLayout.y}%`,
-                width: `${previewWatermarkLayout.widthPct}%`,
-                transform: "translate(-50%, -50%)",
-                color: watermarkColor,
-                fontFamily: watermarkFont,
-                fontSize: `max(12px, ${previewWatermarkLayout.fontPct}cqw)`,
-                lineHeight: 1.1,
-                textAlign: "center",
-                whiteSpace: "nowrap",
-                opacity: watermarkOpacity / 100,
-              }}
-              onPointerDown={startDrag}
-            >
-              {watermarkText || "Watermark"}
-            </button>
-          ) : watermarkImage ? (
+          {imagorPreviewUrl && (
             <img
-              src={watermarkImage}
-              alt="Uploaded watermark"
-              className="absolute cursor-grab select-none object-contain active:cursor-grabbing"
+              key={imagorPreviewUrl}
+              src={imagorPreviewUrl}
+              alt="Imagor watermark preview"
+              className={cn(
+                "pointer-events-none absolute inset-0 h-full w-full object-fill",
+                imagorPreviewReady ? "opacity-100" : "opacity-0",
+              )}
+              onLoad={() => setImagorPreviewReady(true)}
+              onError={() => setImagorPreviewReady(false)}
+            />
+          )}
+          {!imagorPreviewReady &&
+            (watermarkType === "image" && !watermarkImage ? (
+              <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white">
+                Upload watermark image
+              </div>
+            ) : (
+              <ImageWatermarkOverlay
+                watermark={watermarkDraft({
+                  x: previewWatermarkLayout.x,
+                  y: previewWatermarkLayout.y,
+                })}
+              />
+            ))}
+          {(watermarkType === "text" || Boolean(watermarkImage)) && (
+            <button
+              type="button"
+              aria-label="Move watermark"
+              className="absolute z-30 touch-none cursor-grab -translate-x-1/2 -translate-y-1/2 bg-transparent active:cursor-grabbing"
               style={{
                 left: `${previewWatermarkLayout.x}%`,
                 top: `${previewWatermarkLayout.y}%`,
                 width: `${previewWatermarkLayout.widthPct}%`,
-                maxHeight: `${previewWatermarkLayout.heightPct}%`,
-                opacity: watermarkOpacity / 100,
-                transform: "translate(-50%, -50%)",
+                height: `${previewWatermarkLayout.heightPct}%`,
               }}
               onPointerDown={startDrag}
-              draggable={false}
             />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white">
-              Upload watermark image
-            </div>
           )}
         </div>
       </div>

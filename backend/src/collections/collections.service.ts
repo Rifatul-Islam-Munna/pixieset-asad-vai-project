@@ -3617,7 +3617,16 @@ export class CollectionsService implements OnModuleInit {
             job.watermarkId,
           )));
     const imagorWatermark = this.toImagorWatermark(watermark);
-    const urls = this.imagorService.imageUrls(job.objectKey, imagorWatermark);
+    const sourceDimensions =
+      await this.imagorService.resolveSourceDimensions(job.objectKey, {
+        width: job.width,
+        height: job.height,
+      });
+    const urls = this.imagorService.imageUrls(
+      job.objectKey,
+      imagorWatermark,
+      sourceDimensions,
+    );
     if (!urls) throw new Error('Imagor is not configured');
 
     const requestedOrder = Math.max(0, Number(job.order ?? 0));
@@ -3645,8 +3654,8 @@ export class CollectionsService implements OnModuleInit {
       mimetype: job.type,
       mediaType: 'image',
       sizeBytes: size,
-      width: this.safeDimension(job.width),
-      height: this.safeDimension(job.height),
+      width: this.safeDimension(sourceDimensions?.width ?? job.width),
+      height: this.safeDimension(sourceDimensions?.height ?? job.height),
       watermarked: this.imagorService.hasWatermark(imagorWatermark),
       order:
         Math.max(0, Number(job.order ?? 0)) ||
@@ -5171,6 +5180,7 @@ export class CollectionsService implements OnModuleInit {
   private publicImageRecord(
     image: Record<string, any>,
     watermark?: WatermarkData | null,
+    sourceDimensions?: { width: number; height: number },
   ) {
     const {
       originalObjectKey,
@@ -5216,6 +5226,7 @@ export class CollectionsService implements OnModuleInit {
       const urls = this.imagorService.imageUrls(
         sourceObjectKey,
         imagorWatermark,
+        sourceDimensions ?? { width: safe.width, height: safe.height },
       );
       if (urls) {
         const hasWatermark =
@@ -5226,6 +5237,8 @@ export class CollectionsService implements OnModuleInit {
         ).trim();
         return {
           ...safe,
+          width: sourceDimensions?.width ?? safe.width,
+          height: sourceDimensions?.height ?? safe.height,
           url: urls.url,
           thumbnailUrl: urls.thumbnailUrl,
           responsive: urls.responsive,
@@ -5289,9 +5302,31 @@ export class CollectionsService implements OnModuleInit {
       String(image.setId || 'highlights'),
       explicitWatermarkId || undefined,
     );
+    const sourceDimensions =
+      await this.imagorService.resolveSourceDimensions(originalObjectKey, {
+        width: image.width,
+        height: image.height,
+      });
+    if (
+      sourceDimensions &&
+      (!Number(image.width) || !Number(image.height))
+    ) {
+      void this.imageModel
+        .updateOne(
+          { _id: image._id },
+          {
+            $set: {
+              width: sourceDimensions.width,
+              height: sourceDimensions.height,
+            },
+          },
+        )
+        .catch(() => undefined);
+    }
     const urls = this.imagorService.imageUrls(
       originalObjectKey,
       this.toImagorWatermark(watermark),
+      sourceDimensions,
     );
     return urls?.url || storedCover;
   }
@@ -5332,6 +5367,42 @@ export class CollectionsService implements OnModuleInit {
       return images.map((image) => this.publicImageRecord(image));
     }
 
+    // Older direct uploads did not persist image width/height. Imagor's fit-in
+    // won't upscale small sources, so watermark pixels must be calculated from
+    // the real post-fit canvas. Resolve missing dimensions once through
+    // Imagor's metadata endpoint, cache them, and backfill the image record.
+    const sourceDimensions = new Map<
+      string,
+      { width: number; height: number }
+    >();
+    await this.mapWithConcurrency(originalImages, 8, async (image) => {
+      const sourceObjectKey =
+        String(image?.originalObjectKey ?? '').trim() ||
+        String(image?.metadata?.directUploadObjectKey ?? '').trim();
+      if (!sourceObjectKey) return;
+
+      const dimensions = await this.imagorService.resolveSourceDimensions(
+        sourceObjectKey,
+        { width: image.width, height: image.height },
+      );
+      if (!dimensions) return;
+
+      sourceDimensions.set(sourceObjectKey, dimensions);
+      if (!Number(image.width) || !Number(image.height)) {
+        void this.imageModel
+          .updateOne(
+            { _id: image._id },
+            {
+              $set: {
+                width: dimensions.width,
+                height: dimensions.height,
+              },
+            },
+          )
+          .catch(() => undefined);
+      }
+    });
+
     const watermarkCache = new Map<string, Promise<WatermarkData | null>>();
     const records: Record<string, any>[] = [];
     for (const image of images) {
@@ -5369,7 +5440,13 @@ export class CollectionsService implements OnModuleInit {
         );
       }
       const watermark = await watermarkCache.get(cacheKey)!;
-      records.push(this.publicImageRecord(image, watermark));
+      records.push(
+        this.publicImageRecord(
+          image,
+          watermark,
+          sourceDimensions.get(sourceObjectKey),
+        ),
+      );
     }
     return records;
   }

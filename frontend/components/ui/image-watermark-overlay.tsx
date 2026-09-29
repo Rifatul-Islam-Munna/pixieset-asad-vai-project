@@ -23,16 +23,19 @@ const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
 export function watermarkLayout(watermark: ImageWatermark) {
-  const scale = clamp(Number(watermark.scale ?? 42), 5, 100);
+  const scale = clamp(Number(watermark.scale ?? 42), 10, 120);
   const text = String(watermark.text ?? "Watermark");
   const isImage = watermark.type === "image";
-  const fontPct = clamp(scale * 0.12, 1.8, 12);
+
+  // Keep this mapping identical to backend ImagorService.watermarkLayout.
+  // Scale ~50 intentionally looks like a watermark instead of headline text.
+  const fontPct = clamp(scale * 0.075, 1.2, 8.5);
   const widthPct = isImage
-    ? clamp(scale * 0.28, 4, 32)
-    : clamp(text.length * fontPct * 0.55, 8, 90);
+    ? clamp(scale * 0.28, 4, 34)
+    : clamp(text.length * fontPct * 0.55, 8, 72);
   const heightPct = isImage
     ? widthPct
-    : clamp(fontPct * 1.5, 3, 20);
+    : clamp(fontPct * 1.65, 2, 16);
   const rawX = Number(watermark.position?.x ?? 15);
   const rawY = Number(watermark.position?.y ?? 85);
   const x = clamp(rawX, widthPct / 2, 100 - widthPct / 2);

@@ -3,13 +3,20 @@ import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { UpsertDashboardSettingDto } from './dto/upsert-dashboard-setting.dto';
 import { DashboardSettingType } from './entities/dashboard-setting.entity';
 import { SettingsService } from './settings.service';
+import {
+  ImagorService,
+  type ImagorWatermark,
+} from 'src/lib/imagor.service';
 
 const settingTypes = Object.values(DashboardSettingType);
 
 @Controller('settings')
 @UseGuards(AuthGuard)
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(
+    private readonly settingsService: SettingsService,
+    private readonly imagorService: ImagorService,
+  ) {}
 
   @Get(':type')
   async findAll(
@@ -20,6 +27,17 @@ export class SettingsController {
     this.assertType(type);
     const data = await this.settingsService.findAll(req.user.id, type, collectionId);
     return { data };
+  }
+
+  @Post('watermark/preview')
+  watermarkPreview(
+    @Body() body: { watermark?: ImagorWatermark | null },
+  ) {
+    const url = this.imagorService.watermarkPreviewUrl(body?.watermark);
+    if (!url) {
+      throw new BadRequestException('Imagor is not configured');
+    }
+    return { data: { url } };
   }
 
   @Post(':type')

@@ -7,6 +7,7 @@ import {
 import { SettingsController } from './settings.controller';
 import { SettingsService } from './settings.service';
 import { User, UserSchema } from 'src/user/entities/user.entity';
+import { ImagorService } from 'src/lib/imagor.service';
 
 @Module({
   imports: [
@@ -16,6 +17,6 @@ import { User, UserSchema } from 'src/user/entities/user.entity';
     ]),
   ],
   controllers: [SettingsController],
-  providers: [SettingsService],
+  providers: [SettingsService, ImagorService],
 })
 export class SettingsModule {}

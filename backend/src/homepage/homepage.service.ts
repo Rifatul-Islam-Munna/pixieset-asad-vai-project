@@ -272,9 +272,15 @@ export class HomepageService {
       collection,
       image,
     );
+    const sourceDimensions =
+      await this.imagorService.resolveSourceDimensions(sourceObjectKey, {
+        width: image.width,
+        height: image.height,
+      });
     const urls = this.imagorService.imageUrls(
       sourceObjectKey,
       watermark,
+      sourceDimensions,
     );
     return urls?.thumbnailUrl || urls?.url || '';
   }
