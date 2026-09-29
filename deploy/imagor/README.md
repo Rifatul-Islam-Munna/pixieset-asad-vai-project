@@ -31,13 +31,15 @@ Important values:
 - `S3_LOADER_*`: read access to private originals
 - `S3_RESULT_STORAGE_*`: Imagor Result Storage bucket/credentials
 - `S3_RESULT_STORAGE_PUBLIC_URL`: public R2/custom-domain root for direct delivery after the entire gallery is ready
-- `IMAGOR_CACHE_WORKER_INTERVAL=20s`: one gallery image warm job about every 20 seconds
+- `IMAGOR_CACHE_WORKER_CONCURRENCY=2`: run two independent image warm jobs at once; recommended for a 3-core Imagor allocation
+- `IMAGOR_CACHE_WORKER_INTERVAL=250ms`: only a tiny pause after a completed job instead of the old 20-second artificial delay
+- `IMAGOR_CACHE_WORKER_IDLE_POLL=2s`: cheap polling only when the warm queue is empty
 - `IMAGOR_CACHE_WORKER_LOG_ENABLED=true`: verbose polling, transform, and R2 verification logs for diagnosis
 - `DEBUG=1`: temporary Imagor-native debug logs, including configured result storage and S3 save errors
 - `CLOUDFLARE_ZONE_ID` / `CLOUDFLARE_API_TOKEN`: optional and kept only on Imagor
 
 `IMAGOR_RESULT_STORAGE_PATH_STYLE` must stay `digest`; the worker uses the exact same SHA-1 result-key algorithm as Imagor.
 
-The Docker image runs `/usr/local/bin/imagor` and the tiny static `imagor-cache-worker` side-by-side in the same container. The worker consumes transformed bytes only over localhost, so backend CPU, RAM, disk, and network are not used for copying processed images to R2.
+The Docker image runs `/usr/local/bin/imagor` and the tiny static `imagor-cache-worker` side-by-side in the same container. The worker consumes transformed bytes only over localhost, so backend CPU, RAM, disk, and network are not used for copying processed images to R2. Warm-job claiming is atomic in MongoDB, so multiple cache-worker goroutines safely claim different images and completed R2 results survive restarts.
 
 For a 20-25 day disposable cache, use a 25-day R2 lifecycle rule on the Result Storage bucket/custom cache prefix. The image URLs are content-versioned, so stale entries are never reused after a watermark/design path changes.

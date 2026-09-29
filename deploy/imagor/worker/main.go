@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -36,6 +37,7 @@ type config struct {
 	secretKey       string
 	interval        time.Duration
 	idlePoll        time.Duration
+	concurrency     int
 	cloudflareZone  string
 	cloudflareToken string
 }
@@ -75,10 +77,11 @@ func main() {
 	waitForImagor(cfg)
 
 	log.Printf(
-		"imagor cache worker started: backend=%s bucket=%s interval=%s debugLogs=%t",
+		"imagor cache worker started: backend=%s bucket=%s interval=%s concurrency=%d debugLogs=%t",
 		cfg.backendURL,
 		cfg.resultBucket,
 		cfg.interval,
+		cfg.concurrency,
 		cfg.logEnabled,
 	)
 	tracef(
@@ -96,17 +99,17 @@ func main() {
 		env("IMAGOR_SIGNER_TYPE", "sha256"),
 		env("IMAGOR_SIGNER_TRUNCATE", "40"),
 	)
+	for workerID := 1; workerID <= cfg.concurrency; workerID++ {
+		go warmLoop(cfg, workerID)
+	}
+
+	// Keep delete cleanup independent from warming so removing images never has
+	// to wait behind a long gallery-cache backlog.
 	for {
-		tracef(cfg, "poll started")
 		deleted := processDelete(cfg)
-		warmed := processWarm(cfg)
-		tracef(cfg, "poll finished: deleteJob=%t warmJob=%t", deleted, warmed)
-		switch {
-		case warmed:
-			time.Sleep(cfg.interval)
-		case deleted:
-			time.Sleep(500 * time.Millisecond)
-		default:
+		if deleted {
+			time.Sleep(250 * time.Millisecond)
+		} else {
 			time.Sleep(cfg.idlePoll)
 		}
 	}
@@ -151,8 +154,9 @@ func loadConfig() (config, error) {
 		resultRegion:    env("AWS_RESULT_STORAGE_REGION", "auto"),
 		accessKey:       strings.TrimSpace(env("AWS_RESULT_STORAGE_ACCESS_KEY_ID", "")),
 		secretKey:       strings.TrimSpace(env("AWS_RESULT_STORAGE_SECRET_ACCESS_KEY", "")),
-		interval:        envDuration("IMAGOR_CACHE_WORKER_INTERVAL", 20*time.Second),
-		idlePoll:        envDuration("IMAGOR_CACHE_WORKER_IDLE_POLL", 5*time.Second),
+		interval:        envDuration("IMAGOR_CACHE_WORKER_INTERVAL", 250*time.Millisecond),
+		idlePoll:        envDuration("IMAGOR_CACHE_WORKER_IDLE_POLL", 2*time.Second),
+		concurrency:     envInt("IMAGOR_CACHE_WORKER_CONCURRENCY", 2),
 		cloudflareZone:  strings.TrimSpace(env("CLOUDFLARE_ZONE_ID", "")),
 		cloudflareToken: strings.TrimSpace(env("CLOUDFLARE_API_TOKEN", "")),
 	}
@@ -179,13 +183,32 @@ func loadConfig() (config, error) {
 	if cfg.accessKey == "" || cfg.secretKey == "" {
 		return cfg, errors.New("AWS result-storage credentials are required")
 	}
-	if cfg.interval < time.Second {
-		cfg.interval = time.Second
+	if cfg.interval < 100*time.Millisecond {
+		cfg.interval = 100 * time.Millisecond
 	}
-	if cfg.idlePoll < time.Second {
-		cfg.idlePoll = time.Second
+	if cfg.idlePoll < 500*time.Millisecond {
+		cfg.idlePoll = 500 * time.Millisecond
+	}
+	if cfg.concurrency < 1 {
+		cfg.concurrency = 1
+	}
+	if cfg.concurrency > 4 {
+		cfg.concurrency = 4
 	}
 	return cfg, nil
+}
+
+func warmLoop(cfg config, workerID int) {
+	for {
+		tracef(cfg, "warm worker poll started: worker=%d", workerID)
+		warmed := processWarm(cfg)
+		tracef(cfg, "warm worker poll finished: worker=%d warmJob=%t", workerID, warmed)
+		if warmed {
+			time.Sleep(cfg.interval)
+		} else {
+			time.Sleep(cfg.idlePoll)
+		}
+	}
 }
 
 func processWarm(cfg config) bool {
@@ -634,6 +657,19 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 	value, err := time.ParseDuration(raw)
 	if err != nil {
 		log.Printf("invalid %s=%q, using %s", key, raw, fallback)
+		return fallback
+	}
+	return value
+}
+
+func envInt(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		log.Printf("invalid %s=%q, using %d", key, raw, fallback)
 		return fallback
 	}
 	return value
