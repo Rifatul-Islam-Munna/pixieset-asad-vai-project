@@ -5218,12 +5218,28 @@ export class CollectionsService implements OnModuleInit {
         imagorWatermark,
       );
       if (urls) {
+        const hasWatermark =
+          this.imagorService.hasWatermark(imagorWatermark);
+        const storedFallbackUrl = String(safe.url ?? '').trim();
+        const storedFallbackThumbnailUrl = String(
+          safe.thumbnailUrl ?? '',
+        ).trim();
         return {
           ...safe,
           url: urls.url,
           thumbnailUrl: urls.thumbnailUrl,
           responsive: urls.responsive,
-          watermarked: this.imagorService.hasWatermark(imagorWatermark),
+          watermarked: hasWatermark,
+          watermark: hasWatermark ? imagorWatermark : undefined,
+          fallbackUrl:
+            storedFallbackUrl && storedFallbackUrl !== urls.url
+              ? storedFallbackUrl
+              : undefined,
+          fallbackThumbnailUrl:
+            storedFallbackThumbnailUrl &&
+            storedFallbackThumbnailUrl !== urls.thumbnailUrl
+              ? storedFallbackThumbnailUrl
+              : undefined,
         };
       }
     }

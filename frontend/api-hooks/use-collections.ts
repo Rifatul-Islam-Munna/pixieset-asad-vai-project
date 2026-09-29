@@ -53,6 +53,8 @@ export type CollectionImageRecord = {
   setId?: string;
   url: string;
   thumbnailUrl?: string;
+  fallbackUrl?: string;
+  fallbackThumbnailUrl?: string;
   responsive?: {
     small?: string;
     medium?: string;
@@ -615,6 +617,33 @@ export function useCollectionDetail(collectionId?: string) {
       if (error) throw new Error(error.message);
       return data;
     },
+    onMutate: async (imageId) => {
+      const queryKey = ["collections", collectionId] as const;
+      await queryClient.cancelQueries({ queryKey });
+      const previous =
+        queryClient.getQueryData<ListResponse<CollectionDetailRecord>>(queryKey);
+      queryClient.setQueryData<ListResponse<CollectionDetailRecord>>(
+        queryKey,
+        (current) =>
+          current
+            ? {
+                ...current,
+                data: {
+                  ...current.data,
+                  images: current.data.images.filter(
+                    (image) => image._id !== imageId,
+                  ),
+                },
+              }
+            : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _imageId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["collections", collectionId], context.previous);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
@@ -631,6 +660,34 @@ export function useCollectionDetail(collectionId?: string) {
       }>(`/collections/${collectionId}/images/delete`, { imageIds });
       if (error) throw new Error(error.message);
       return data;
+    },
+    onMutate: async (imageIds) => {
+      const queryKey = ["collections", collectionId] as const;
+      await queryClient.cancelQueries({ queryKey });
+      const previous =
+        queryClient.getQueryData<ListResponse<CollectionDetailRecord>>(queryKey);
+      const deletedIds = new Set(imageIds);
+      queryClient.setQueryData<ListResponse<CollectionDetailRecord>>(
+        queryKey,
+        (current) =>
+          current
+            ? {
+                ...current,
+                data: {
+                  ...current.data,
+                  images: current.data.images.filter(
+                    (image) => !deletedIds.has(image._id),
+                  ),
+                },
+              }
+            : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _imageIds, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["collections", collectionId], context.previous);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["collections"] });

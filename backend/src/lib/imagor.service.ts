@@ -81,18 +81,17 @@ export class ImagorService {
     variant: VariantOptions,
   ) {
     if (!this.hasWatermark(watermark)) return '';
-    const x = `${this.percent(watermark?.position?.x, 15)}p`;
-    const y = `${this.percent(watermark?.position?.y, 85)}p`;
+
+    const layout = this.watermarkLayout(watermark!);
     const alpha = 100 - this.percent(watermark?.opacity, 90);
+
     if (watermark?.type === 'image') {
       const source = this.watermarkImageSource(String(watermark.image ?? ''));
       if (!source) return '';
-      const ratio = this.clamp(
-        Math.round(Number(watermark.scale ?? 42)),
-        5,
-        70,
-      );
-      return `watermark(${source},${x},${y},${alpha},${ratio},${ratio})`;
+      const ratio = layout.widthPct;
+      const x = this.percentToken(layout.x - ratio / 2);
+      const y = this.percentToken(layout.y - layout.heightPct / 2);
+      return `watermark(${source},${x},${y},${alpha},${ratio},${layout.heightPct})`;
     }
 
     const text = String(watermark?.text ?? '').trim();
@@ -103,12 +102,35 @@ export class ImagorService {
       12,
       Math.round(
         Math.min(variant.width, variant.height) *
-          (this.clamp(Number(watermark?.scale ?? 42), 5, 100) / 100) *
-          0.12,
+          (layout.fontPct / 100),
       ),
     );
     const font = this.safeFont(watermark?.font, fontSize);
-    return `text(${encodedText},${x},${y},${font},${color},${alpha})`;
+    const x = this.percentToken(layout.x - layout.widthPct / 2);
+    const y = this.percentToken(layout.y - layout.heightPct / 2);
+    return `text(${encodedText},${x},${y},${font},${color},${alpha},,${layout.widthPct}p,center,0,none,0,72)`;
+  }
+
+  private watermarkLayout(watermark: ImagorWatermark) {
+    const scale = this.clamp(Number(watermark.scale ?? 42), 5, 100);
+    const text = String(watermark.text ?? 'Watermark');
+    const isImage = watermark.type === 'image';
+    const fontPct = this.clamp(scale * 0.12, 1.8, 12);
+    const widthPct = isImage
+      ? this.clamp(scale * 0.28, 4, 32)
+      : this.clamp(text.length * fontPct * 0.55, 8, 90);
+    const heightPct = isImage
+      ? widthPct
+      : this.clamp(fontPct * 1.5, 3, 20);
+    const rawX = Number(watermark.position?.x ?? 15);
+    const rawY = Number(watermark.position?.y ?? 85);
+    const x = this.clamp(rawX, widthPct / 2, 100 - widthPct / 2);
+    const y = this.clamp(rawY, heightPct / 2, 100 - heightPct / 2);
+    return { x, y, widthPct, heightPct, fontPct };
+  }
+
+  private percentToken(value: number) {
+    return `${this.clamp(value, 0, 100).toFixed(2)}p`;
   }
   private watermarkImageSource(value: string) {
     const raw = value.trim();

@@ -19,6 +19,27 @@ function mediaUrl(value?: string) {
   return url.startsWith("/") ? `${baseUrl}${url}` : url;
 }
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+export function watermarkLayout(watermark: ImageWatermark) {
+  const scale = clamp(Number(watermark.scale ?? 42), 5, 100);
+  const text = String(watermark.text ?? "Watermark");
+  const isImage = watermark.type === "image";
+  const fontPct = clamp(scale * 0.12, 1.8, 12);
+  const widthPct = isImage
+    ? clamp(scale * 0.28, 4, 32)
+    : clamp(text.length * fontPct * 0.55, 8, 90);
+  const heightPct = isImage
+    ? widthPct
+    : clamp(fontPct * 1.5, 3, 20);
+  const rawX = Number(watermark.position?.x ?? 15);
+  const rawY = Number(watermark.position?.y ?? 85);
+  const x = clamp(rawX, widthPct / 2, 100 - widthPct / 2);
+  const y = clamp(rawY, heightPct / 2, 100 - heightPct / 2);
+  return { x, y, widthPct, heightPct, fontPct };
+}
+
 export function ImageWatermarkOverlay({
   watermark,
 }: {
@@ -26,9 +47,7 @@ export function ImageWatermarkOverlay({
 }) {
   if (!watermark) return null;
 
-  const position = watermark.position ?? { x: 15, y: 85 };
-  const left = Math.max(0, Math.min(100, Number(position.x ?? 15)));
-  const top = Math.max(0, Math.min(100, Number(position.y ?? 85)));
+  const layout = watermarkLayout(watermark);
   const opacity = Math.max(
     0,
     Math.min(1, Number(watermark.opacity ?? 90) / 100),
@@ -36,19 +55,25 @@ export function ImageWatermarkOverlay({
 
   if (watermark.type === "image" && watermark.image) {
     return (
-      <img
-        src={mediaUrl(watermark.image)}
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute z-20 max-h-[45%] max-w-[45%] -translate-x-1/2 -translate-y-1/2 select-none object-contain"
-        style={{
-          left: `${left}%`,
-          top: `${top}%`,
-          opacity,
-          width: `${Math.max(8, Math.min(70, Number(watermark.scale ?? 42)))}%`,
-        }}
-        draggable={false}
-      />
+      <span
+        className="pointer-events-none absolute inset-0 z-20"
+        style={{ containerType: "inline-size" }}
+      >
+        <img
+          src={mediaUrl(watermark.image)}
+          alt=""
+          aria-hidden="true"
+          className="absolute -translate-x-1/2 -translate-y-1/2 select-none object-contain"
+          style={{
+            left: `${layout.x}%`,
+            top: `${layout.y}%`,
+            opacity,
+            width: `${layout.widthPct}%`,
+            maxHeight: `${layout.heightPct}%`,
+          }}
+          draggable={false}
+        />
+      </span>
     );
   }
 
@@ -57,22 +82,26 @@ export function ImageWatermarkOverlay({
 
   return (
     <span
-      aria-hidden="true"
-      className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 select-none whitespace-nowrap font-bold"
-      style={{
-        left: `${left}%`,
-        top: `${top}%`,
-        color: watermark.color ?? "#ffffff",
-        fontFamily: watermark.font ?? "Times New Roman",
-        fontSize: `clamp(12px, ${Math.max(
-          1.4,
-          Math.min(7, Number(watermark.scale ?? 42) / 10),
-        )}vw, 48px)`,
-        opacity,
-        textShadow: "0 1px 2px rgba(0,0,0,0.35)",
-      }}
+      className="pointer-events-none absolute inset-0 z-20"
+      style={{ containerType: "inline-size" }}
     >
-      {text}
+      <span
+        aria-hidden="true"
+        className="absolute -translate-x-1/2 -translate-y-1/2 select-none whitespace-nowrap text-center font-bold"
+        style={{
+          left: `${layout.x}%`,
+          top: `${layout.y}%`,
+          width: `${layout.widthPct}%`,
+          color: watermark.color ?? "#ffffff",
+          fontFamily: watermark.font ?? "Times New Roman",
+          fontSize: `max(12px, ${layout.fontPct}cqw)`,
+          lineHeight: 1.1,
+          opacity,
+          textShadow: "0 1px 2px rgba(0,0,0,0.35)",
+        }}
+      >
+        {text}
+      </span>
     </span>
   );
 }

@@ -27,6 +27,9 @@ type PublicImage = {
   setId?: string;
   url: string;
   thumbnailUrl?: string;
+  fallbackUrl?: string;
+  fallbackThumbnailUrl?: string;
+  watermarked?: boolean;
   responsive?: {
     small?: string;
     medium?: string;
@@ -1334,7 +1337,7 @@ export function PublicGallery({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                 {favoriteGalleryImages.map((photo) => (
                   <button key={photo._id} className="group relative aspect-[4/3] overflow-hidden bg-white" onClick={() => setActiveImage(photo)} type="button">
-                    <GalleryImage src={imageSrc(photo.thumbnailUrl || photo.url)} fallbackSrc={imageSrc(photo.url)} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" watermark={photo.watermark} />
+                    <GalleryImage src={imageSrc(photo.thumbnailUrl || photo.url)} fallbackSrc={imageSrc(photo.fallbackThumbnailUrl || photo.fallbackUrl || photo.url)} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" watermark={photo.watermark} />
                     <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white text-red-500 shadow">
                       <Star className="size-4 fill-current" />
                     </span>
@@ -1683,7 +1686,7 @@ export function PublicGallery({
           ) : (
             <GalleryImage
               src={imageSrc(activeImage.url)}
-              fallbackSrc={imageSrc(activeImage.thumbnailUrl || activeImage.url)}
+              fallbackSrc={imageSrc(activeImage.fallbackUrl || activeImage.fallbackThumbnailUrl || activeImage.thumbnailUrl || activeImage.url)}
               srcSet={responsiveImageSrcSet(activeImage)}
               sizes="100vw"
               alt={displayCaption(activeImage)}
@@ -1747,7 +1750,7 @@ export function PublicGallery({
             <GalleryImage
               key={slideshowImage._id}
               src={imageSrc(slideshowImage.url)}
-              fallbackSrc={imageSrc(slideshowImage.thumbnailUrl || slideshowImage.url)}
+              fallbackSrc={imageSrc(slideshowImage.fallbackUrl || slideshowImage.fallbackThumbnailUrl || slideshowImage.thumbnailUrl || slideshowImage.url)}
               srcSet={responsiveImageSrcSet(slideshowImage)}
               sizes="100vw"
               alt={displayCaption(slideshowImage)}
@@ -1953,7 +1956,7 @@ function GalleryTile({
         ) : (
           <GalleryImage
             src={imageSrc(displayImageUrl(photo))}
-            fallbackSrc={imageSrc(photo.url)}
+            fallbackSrc={imageSrc(photo.fallbackThumbnailUrl || photo.fallbackUrl || photo.url)}
             srcSet={responsiveImageSrcSet(photo)}
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
             alt={displayCaption(photo)}
@@ -2036,11 +2039,13 @@ function GalleryImage({
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
   const [useSrcSet, setUseSrcSet] = useState(Boolean(srcSet));
+  const [fallbackActive, setFallbackActive] = useState(false);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const frameRef = useRef<HTMLSpanElement | null>(null);
   useEffect(() => {
     setCurrentSrc(src);
     setUseSrcSet(Boolean(srcSet));
+    setFallbackActive(false);
   }, [src, srcSet]);
   useEffect(() => {
     const image = imageRef.current;
@@ -2117,12 +2122,15 @@ function GalleryImage({
           if (fallbackSrc && currentSrc !== fallbackSrc) {
             setCurrentSrc(fallbackSrc);
             setUseSrcSet(false);
+            setFallbackActive(true);
           }
         }}
         className={className}
         style={style}
       />
-      <ImageWatermarkOverlay watermark={watermark} />
+      {fallbackActive && watermark && (
+        <ImageWatermarkOverlay watermark={watermark} />
+      )}
     </span>
   );
 }

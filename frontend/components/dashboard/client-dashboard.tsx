@@ -95,6 +95,10 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
+  ImageWatermarkOverlay,
+  watermarkLayout,
+} from "@/components/ui/image-watermark-overlay";
+import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
@@ -7985,35 +7989,31 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
   } = useDashboardStore();
   const { saveSetting } = useDashboardSettings("watermark");
 
-  const clamp = (value: number, min = 5, max = 95) =>
-    Math.max(min, Math.min(max, value));
-  const safePosition = () => {
-    const textPad =
-      watermarkType === "text"
-        ? Math.min(
-            45,
-            Math.max(
-              5,
-              ((watermarkText || "Watermark").length *
-                Math.max(14, watermarkScale / 2)) /
-                12,
-            ),
-          )
-        : Math.min(45, Math.max(5, watermarkScale / 6));
-    const yPad = Math.min(45, Math.max(5, watermarkScale / 10));
-
-    return {
-      x: clamp(watermarkPosition.x, textPad, 100 - textPad),
-      y: clamp(watermarkPosition.y, yPad, 100 - yPad),
-    };
+  const watermarkDraft = (position = watermarkPosition) => ({
+    type: watermarkType,
+    text: watermarkText || "Watermark",
+    font: watermarkFont,
+    color: watermarkColor,
+    scale: watermarkScale,
+    opacity: watermarkOpacity,
+    position,
+    image: watermarkImage,
+  });
+  const safePosition = (
+    position: { x: number; y: number } = watermarkPosition,
+  ) => {
+    const layout = watermarkLayout(watermarkDraft(position));
+    return { x: layout.x, y: layout.y };
   };
+  const previewWatermarkLayout = watermarkLayout(watermarkDraft());
   const moveWatermark = (clientX: number, clientY: number) => {
     const rect = previewRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setWatermarkPosition({
-      x: clamp(((clientX - rect.left) / rect.width) * 100),
-      y: clamp(((clientY - rect.top) / rect.height) * 100),
-    });
+    const position = {
+      x: ((clientX - rect.left) / rect.width) * 100,
+      y: ((clientY - rect.top) / rect.height) * 100,
+    };
+    setWatermarkPosition(safePosition(position));
   };
   const startDrag = (event: PointerEvent<HTMLElement>) => {
     event.preventDefault();
@@ -8276,12 +8276,16 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
             <button
               className="absolute cursor-grab select-none leading-none active:cursor-grabbing"
               style={{
-                left: `${watermarkPosition.x}%`,
-                top: `${watermarkPosition.y}%`,
+                left: `${previewWatermarkLayout.x}%`,
+                top: `${previewWatermarkLayout.y}%`,
+                width: `${previewWatermarkLayout.widthPct}%`,
                 transform: "translate(-50%, -50%)",
                 color: watermarkColor,
                 fontFamily: watermarkFont,
-                fontSize: `max(18px, ${watermarkScale * 0.2}cqw)`,
+                fontSize: `max(12px, ${previewWatermarkLayout.fontPct}cqw)`,
+                lineHeight: 1.1,
+                textAlign: "center",
+                whiteSpace: "nowrap",
                 opacity: watermarkOpacity / 100,
               }}
               onPointerDown={startDrag}
@@ -8294,9 +8298,10 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
               alt="Uploaded watermark"
               className="absolute cursor-grab select-none object-contain active:cursor-grabbing"
               style={{
-                left: `${watermarkPosition.x}%`,
-                top: `${watermarkPosition.y}%`,
-                width: `max(40px, ${watermarkScale * 0.28}cqw)`,
+                left: `${previewWatermarkLayout.x}%`,
+                top: `${previewWatermarkLayout.y}%`,
+                width: `${previewWatermarkLayout.widthPct}%`,
+                maxHeight: `${previewWatermarkLayout.heightPct}%`,
                 opacity: watermarkOpacity / 100,
                 transform: "translate(-50%, -50%)",
               }}
@@ -14046,12 +14051,15 @@ function CollectionDetailView({
   const imagesLoaderRef = useRef<HTMLDivElement | null>(null);
   const serverImageOffsetRef = useRef(0);
   const imageSetLoadInFlightRef = useRef(new Set<string>());
+  const deletedImageIdsRef = useRef(new Set<string>());
   const collectionIdRef = useRef(collectionId);
   const localObjectUrlsRef = useRef(new Map<string, string>());
   collectionIdRef.current = collectionId;
   useEffect(() => {
     setLoadedImages((current) => {
-      const serverImages = detail?.images ?? [];
+      const serverImages = (detail?.images ?? []).filter(
+        (image) => !deletedImageIdsRef.current.has(image._id),
+      );
       const serverDirectKeys = new Set(
         serverImages.map(collectionImageDirectKey).filter(Boolean),
       );
@@ -14072,6 +14080,7 @@ function CollectionDetailView({
   useEffect(() => {
     serverImageOffsetRef.current = detail?.images?.length ?? 0;
     imageSetLoadInFlightRef.current.clear();
+    deletedImageIdsRef.current.clear();
     setLoadedImages(detail?.images ?? []);
     setImagesHasMore(Boolean(detail?.imagesPage?.hasMore));
     setSetHasMoreById({});
@@ -14610,7 +14619,11 @@ function CollectionDetailView({
         const seen = new Set(current.map((image) => image._id));
         return [
           ...current,
-          ...page.items.filter((image) => !seen.has(image._id)),
+          ...page.items.filter(
+            (image) =>
+              !seen.has(image._id) &&
+              !deletedImageIdsRef.current.has(image._id),
+          ),
         ];
       });
       setImagesHasMore(page.hasMore);
@@ -14660,7 +14673,12 @@ function CollectionDetailView({
       if (collectionIdRef.current !== collectionId) return;
 
       setLoadedImages((current) =>
-        dedupeCollectionImages([...current, ...page.items]),
+        dedupeCollectionImages([
+          ...current,
+          ...page.items.filter(
+            (image) => !deletedImageIdsRef.current.has(image._id),
+          ),
+        ]),
       );
       setSetHasMoreById((current) => ({
         ...current,
@@ -15677,6 +15695,8 @@ function CollectionDetailView({
   };
   const deleteSingleImage = (image: CollectionImageRecord) => {
     if (deletingImages) return;
+    deletedImageIdsRef.current.add(image._id);
+
     if (form.coverImage === image.url) {
       setForm((value) => ({ ...value, coverImage: "" }));
     }
@@ -15685,12 +15705,17 @@ function CollectionDetailView({
       current.filter((item) => item._id !== image._id),
     );
     setSelectedImageIds((ids) => ids.filter((id) => id !== image._id));
+    if (activeImageId === image._id) {
+      setActiveImageId("");
+      setPreviewOpen(false);
+    }
 
     deleteImage.mutate(image._id, {
       onSuccess: () => {
         toast.success("Image removed. Storage cleanup is running in background.");
       },
       onError: () => {
+        deletedImageIdsRef.current.delete(image._id);
         toast.error("Delete could not be confirmed. Refreshing the gallery.");
         void collectionQuery.refetch();
       },
@@ -15701,6 +15726,7 @@ function CollectionDetailView({
 
     const idsToDelete = [...selectedImageIds];
     const selectedIdSet = new Set(idsToDelete);
+    idsToDelete.forEach((imageId) => deletedImageIdsRef.current.add(imageId));
     const selectedImages = images.filter((image) =>
       selectedIdSet.has(image._id),
     );
@@ -15713,6 +15739,10 @@ function CollectionDetailView({
       current.filter((image) => !selectedIdSet.has(image._id)),
     );
     setSelectedImageIds([]);
+    if (selectedIdSet.has(activeImageId)) {
+      setActiveImageId("");
+      setPreviewOpen(false);
+    }
     setBulkDeleting(true);
 
     try {
@@ -15722,6 +15752,7 @@ function CollectionDetailView({
         `${deleted || idsToDelete.length} image${(deleted || idsToDelete.length) === 1 ? "" : "s"} removed. R2 cleanup continues in background.`,
       );
     } catch {
+      idsToDelete.forEach((imageId) => deletedImageIdsRef.current.delete(imageId));
       toast.error("Bulk delete could not be confirmed. Refreshing the gallery.");
       await collectionQuery.refetch();
     } finally {
@@ -17649,7 +17680,11 @@ function CollectionDetailView({
                         ) : (
                           <DashboardImageWithSkeleton
                             src={imageSrc(image.thumbnailUrl || image.url)}
-                            fallbackSrc={imageSrc(image.url)}
+                            fallbackSrc={imageSrc(
+                              image.fallbackThumbnailUrl ||
+                                image.fallbackUrl ||
+                                image.url,
+                            )}
                             srcSet={collectionImageSrcSet(image)}
                             sizes={
                               collectionGridSize === "small"
@@ -17658,14 +17693,10 @@ function CollectionDetailView({
                             }
                             alt={collectionImageCaption(image)}
                             placeholder={image.blurDataUrl}
+                            watermark={image.watermark}
                             className={cn(
                               "aspect-[1.35] w-full object-contain transition-transform duration-500 ease-out group-hover:scale-[1.02]",
                             )}
-                          />
-                        )}
-                        {!image.watermarked && imageWatermarkFor(image) && (
-                          <WatermarkOverlay
-                            watermark={imageWatermarkFor(image)!}
                           />
                         )}
                       </button>
@@ -18113,12 +18144,18 @@ function CollectionDetailView({
                           </span>
                         </div>
                         <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
-                          <FallbackImage
+                          <DashboardImageWithSkeleton
                             src={imageSrc(activeImage.url)}
-                            fallbackSrc={imageSrc(activeImage.thumbnailUrl || "")}
+                            fallbackSrc={imageSrc(
+                              activeImage.fallbackUrl ||
+                                activeImage.fallbackThumbnailUrl ||
+                                activeImage.thumbnailUrl ||
+                                "",
+                            )}
                             alt={collectionImageCaption(activeImage)}
+                            placeholder={activeImage.blurDataUrl}
+                            watermark={activeImage.watermark}
                             className="max-h-[76dvh] max-w-full object-contain"
-                            decoding="async"
                           />
                         </div>
                       </div>
@@ -20046,6 +20083,7 @@ function DashboardImageWithSkeleton({
   alt,
   className,
   placeholder,
+  watermark,
 }: {
   src: string;
   fallbackSrc?: string;
@@ -20054,16 +20092,19 @@ function DashboardImageWithSkeleton({
   alt: string;
   className?: string;
   placeholder?: string;
+  watermark?: CollectionImageRecord["watermark"];
 }) {
   const [loaded, setLoaded] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(src);
   const [useSrcSet, setUseSrcSet] = useState(Boolean(srcSet));
+  const [fallbackActive, setFallbackActive] = useState(false);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     setLoaded(false);
     setCurrentSrc(src);
     setUseSrcSet(Boolean(srcSet));
+    setFallbackActive(false);
   }, [src, srcSet]);
 
   useEffect(() => {
@@ -20103,6 +20144,7 @@ function DashboardImageWithSkeleton({
           if (fallbackSrc && currentSrc !== fallbackSrc) {
             setCurrentSrc(fallbackSrc);
             setUseSrcSet(false);
+            setFallbackActive(true);
           }
         }}
         className={cn(
@@ -20111,6 +20153,9 @@ function DashboardImageWithSkeleton({
           loaded ? "scale-100 opacity-100" : "scale-[1.015] opacity-0",
         )}
       />
+      {fallbackActive && watermark && (
+        <ImageWatermarkOverlay watermark={watermark} />
+      )}
     </span>
   );
 }
@@ -20352,56 +20397,6 @@ function collectionForm(
 
 function collectionFormKey(form: CollectionFormState) {
   return JSON.stringify(form);
-}
-
-function WatermarkOverlay({
-  watermark,
-}: {
-  watermark: {
-    type: "text" | "image";
-    text?: string;
-    font?: string;
-    color?: string;
-    scale?: number;
-    opacity?: number;
-    position?: { x: number; y: number };
-    image?: string;
-  };
-}) {
-  const position = watermark.position ?? { x: 15, y: 85 };
-  const opacity = (watermark.opacity ?? 90) / 100;
-
-  if (watermark.type === "image" && watermark.image) {
-    return (
-      <img
-        src={watermark.image}
-        alt=""
-        className="pointer-events-none absolute max-w-[34%] -translate-x-1/2 -translate-y-1/2 object-contain"
-        style={{
-          left: `${position.x}%`,
-          top: `${position.y}%`,
-          opacity,
-          width: `${Math.max(12, watermark.scale ?? 42)}%`,
-        }}
-      />
-    );
-  }
-
-  return (
-    <span
-      className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-bold"
-      style={{
-        left: `${position.x}%`,
-        top: `${position.y}%`,
-        color: watermark.color ?? "#ffffff",
-        fontFamily: watermark.font ?? "Times New Roman",
-        fontSize: `${Math.max(14, (watermark.scale ?? 42) / 2)}px`,
-        opacity,
-      }}
-    >
-      {watermark.text || "Watermark"}
-    </span>
-  );
 }
 
 const metadataGroups = [
