@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-var variants = []string{"thumbnail", "view", "small", "medium", "large"}
+var variants = []string{"small", "view"}
 var workerLogEnabled bool
 
 type config struct {
@@ -51,11 +51,12 @@ type warmJob struct {
 }
 
 type deleteJob struct {
-	JobID        string   `json:"jobId"`
-	ImageID      string   `json:"imageId"`
-	CollectionID string   `json:"collectionId"`
-	Keys         []string `json:"keys"`
-	URLs         []string `json:"urls"`
+	JobID         string   `json:"jobId"`
+	ImageID       string   `json:"imageId"`
+	CollectionID  string   `json:"collectionId"`
+	Keys          []string `json:"keys"`
+	URLs          []string `json:"urls"`
+	TransformURLs []string `json:"transformUrls"`
 }
 
 type warmComplete struct {
@@ -324,8 +325,31 @@ func processDelete(cfg config) bool {
 		return false
 	}
 	job := response.Data
-	tracef(cfg, "delete job claimed: job=%s image=%s objects=%d", job.JobID, job.ImageID, len(job.Keys))
-	err := deleteResultObjects(cfg, job.Keys, job.URLs)
+	keys := append([]string{}, job.Keys...)
+	publicURLs := append([]string{}, job.URLs...)
+
+	// On-demand thumbnails are never pre-registered as permanent cache rows.
+	// Their signed Imagor URL is enough to deterministically derive the Result
+	// Storage key, so delete still removes every cached copy of the image.
+	for _, rawURL := range job.TransformURLs {
+		key, keyErr := resultStorageKey(cfg, rawURL)
+		if keyErr != nil {
+			workerLogf("cache transform delete key failed for %s: %v", job.ImageID, keyErr)
+			continue
+		}
+		keys = append(keys, key)
+		publicURLs = append(publicURLs, publicResultURL(cfg, key))
+	}
+
+	tracef(
+		cfg,
+		"delete job claimed: job=%s image=%s objects=%d transforms=%d",
+		job.JobID,
+		job.ImageID,
+		len(keys),
+		len(job.TransformURLs),
+	)
+	err := deleteResultObjects(cfg, keys, publicURLs)
 	payload := map[string]any{"success": err == nil}
 	if err != nil {
 		payload["error"] = err.Error()

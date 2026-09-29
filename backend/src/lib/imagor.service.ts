@@ -115,21 +115,36 @@ export class ImagorService {
     if (!this.isEnabled()) return null;
     const build = (variant: VariantOptions) =>
       this.buildUrl(objectKey, variant, watermark, source);
+
+    // Storage-conscious delivery model:
+    //   • thumbnail: generated only when a browser actually requests it
+    //   • small: permanent Result Storage warm target
+    //   • view: permanent Result Storage warm target
+    // Responsive medium/large reuse the same view URL, so one image can never
+    // explode into 5 permanent near-duplicate objects.
+    const thumbnailUrl = build({
+      width: this.numberSetting('IMAGOR_THUMB_WIDTH', 320, 160, 720),
+      height: this.numberSetting('IMAGOR_THUMB_HEIGHT', 320, 160, 720),
+      quality: this.numberSetting('IMAGOR_THUMB_QUALITY', 45, 30, 80),
+    });
+    const small = build({
+      width: this.numberSetting('IMAGOR_SMALL_WIDTH', 720, 320, 1200),
+      height: this.numberSetting('IMAGOR_SMALL_HEIGHT', 720, 320, 1200),
+      quality: this.numberSetting('IMAGOR_SMALL_QUALITY', 60, 35, 85),
+    });
+    const view = build({
+      width: this.numberSetting('IMAGOR_VIEW_WIDTH', 1800, 1200, 3200),
+      height: this.numberSetting('IMAGOR_VIEW_HEIGHT', 1800, 1200, 3200),
+      quality: this.numberSetting('IMAGOR_VIEW_QUALITY', 68, 45, 90),
+    });
+
     return {
-      thumbnailUrl: build({
-        width: this.numberSetting('IMAGOR_GRID_WIDTH', 720, 240, 1600),
-        height: this.numberSetting('IMAGOR_GRID_HEIGHT', 720, 240, 1600),
-        quality: this.numberSetting('IMAGOR_GRID_QUALITY', 76, 40, 95),
-      }),
-      url: build({
-        width: this.numberSetting('IMAGOR_VIEW_WIDTH', 2560, 1280, 5000),
-        height: this.numberSetting('IMAGOR_VIEW_HEIGHT', 2560, 1280, 5000),
-        quality: this.numberSetting('IMAGOR_VIEW_QUALITY', 84, 50, 100),
-      }),
+      thumbnailUrl,
+      url: view,
       responsive: {
-        small: build({ width: 480, height: 480, quality: 72 }),
-        medium: build({ width: 960, height: 960, quality: 76 }),
-        large: build({ width: 1600, height: 1600, quality: 80 }),
+        small,
+        medium: view,
+        large: view,
       },
     };
   }
@@ -139,7 +154,9 @@ export class ImagorService {
     watermark?: ImagorWatermark | null,
     source?: SourceDimensions,
   ) {
-    const filters = [`quality(${variant.quality})`, 'strip_exif()'];
+    // All generated gallery delivery copies are AVIF. Originals stay untouched
+    // in private R2 for purchase/download.
+    const filters = ['format(avif)', `quality(${variant.quality})`, 'strip_exif()'];
     const watermarkFilter = this.watermarkFilter(watermark, variant, source);
     if (watermarkFilter) filters.push(watermarkFilter);
 

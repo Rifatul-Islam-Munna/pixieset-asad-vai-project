@@ -101,3 +101,14 @@ CollectionImageSchema.index({
   faceIndexNextAttemptAt: 1,
   createdAt: 1,
 });
+CollectionImageSchema.index({
+  collectionId: 1,
+  mediaType: 1,
+  faceIndexVersion: 1,
+  faceIndexedAt: -1,
+});
+CollectionImageSchema.index({
+  collectionId: 1,
+  faceIndexNextAttemptAt: 1,
+  faceIndexAttempts: 1,
+});

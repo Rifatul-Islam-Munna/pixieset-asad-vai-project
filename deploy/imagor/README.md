@@ -9,9 +9,10 @@ This folder is the existing Imagor EasyPanel app. It does not create a second ca
 3. Until the whole gallery cache is ready, the gallery keeps serving every eligible image through Imagor.
 4. The small cache worker in this same Imagor container asks the backend only for signed URL jobs.
 5. The worker requests those URLs through localhost Imagor and discards the response locally.
-6. Imagor reads the private original, transforms it, and writes the processed result directly to `S3_RESULT_STORAGE_BUCKET`.
-7. The worker HEAD-checks R2 Result Storage. No transformed image bytes ever pass through the backend.
-8. Only when every eligible image has all required variants confirmed in R2 does the backend switch that gallery to the public Result Storage URLs.
+6. Imagor reads the private original, transforms it to AVIF, and writes the processed result directly to `S3_RESULT_STORAGE_BUCKET`.
+7. The worker permanently warms only **small (720px)** and **view (1800px)** AVIF. The **320px thumbnail is on-demand only** when a browser actually requests that image.
+8. The worker HEAD-checks the two permanent R2 Result Storage objects. No transformed image bytes ever pass through the backend.
+9. Only when every eligible image has small+view confirmed in R2 does the backend switch that gallery to direct Result Storage delivery; responsive medium/large reuse the view object instead of creating more permanent copies.
 
 The switch is gallery-wide. There is never a half-Imagor / half-R2 gallery.
 
@@ -19,7 +20,7 @@ The switch is gallery-wide. There is never a half-Imagor / half-R2 gallery.
 
 Watermark, preset, or set changes immediately mark cached variants stale and put the whole gallery back on Imagor while new variants are generated.
 
-When an image is deleted, it disappears from Mongo/gallery immediately. The Imagor-side worker deletes its Result Storage keys using the same R2 credentials already present on the Imagor app. Optional Cloudflare purge credentials also live on Imagor, not backend.
+When an image is deleted, it disappears from Mongo/gallery immediately. The normal delete worker removes the private original; the Imagor-side worker removes permanent small/view Result Storage objects and deterministically derives/removes the on-demand thumbnail object too. Optional Cloudflare purge credentials also live on Imagor, not backend.
 ## EasyPanel
 
 Build the existing Imagor app from `deploy/imagor/Dockerfile` and add the variables from `.env.example`.
@@ -42,4 +43,4 @@ Important values:
 
 The Docker image runs `/usr/local/bin/imagor` and the tiny static `imagor-cache-worker` side-by-side in the same container. The worker consumes transformed bytes only over localhost, so backend CPU, RAM, disk, and network are not used for copying processed images to R2. Warm-job claiming is atomic in MongoDB, so multiple cache-worker goroutines safely claim different images and completed R2 results survive restarts.
 
-For a 20-25 day disposable cache, use a 25-day R2 lifecycle rule on the Result Storage bucket/custom cache prefix. The image URLs are content-versioned, so stale entries are never reused after a watermark/design path changes.
+Do not apply a blanket expiration rule to this Result Storage bucket if small/view are your permanent delivery copies. The worker deletes obsolete versions when an image is rebuilt and deletes small/view plus any on-demand thumbnail when the image itself is deleted.

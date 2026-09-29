@@ -77,3 +77,5 @@ export class Collection {
 
 export const CollectionSchema = SchemaFactory.createForClass(Collection);
 CollectionSchema.index({ userId: 1, createdAt: -1 });
+CollectionSchema.index({ slug: 1 });
+CollectionSchema.index({ name: 1 });

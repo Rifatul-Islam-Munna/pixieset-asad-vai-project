@@ -27,6 +27,12 @@ export class CollectionImageDeleteJob {
   @Prop({ type: [String], default: [] })
   cachePublicUrls: string[];
 
+  // Signed Imagor URLs for on-demand Result Storage objects (currently the
+  // tiny thumbnail). The Imagor worker deterministically derives the R2 key on
+  // delete, so thumbnails do not need permanent metadata rows just to be cleaned.
+  @Prop({ type: [String], default: [] })
+  cacheTransformUrls: string[];
+
   @Prop({
     default: '',
     enum: ['', 'queued', 'processing', 'completed', 'failed'],

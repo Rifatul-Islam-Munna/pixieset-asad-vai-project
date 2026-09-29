@@ -7,6 +7,7 @@ import { FaceIdentity, FaceIdentitySchema } from './entities/face-identity.entit
 import { FacePerson, FacePersonSchema } from './entities/face-person.entity';
 import { FaceSearchController, FaceIdentityController } from './face-search.controller';
 import { FaceSearchService } from './face-search.service';
+import { ImagorService } from 'src/lib/imagor.service';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { FaceSearchService } from './face-search.service';
     ]),
   ],
   controllers: [FaceSearchController, FaceIdentityController],
-  providers: [FaceSearchService],
+  providers: [FaceSearchService, ImagorService],
   exports: [FaceSearchService],
 })
 export class FaceSearchModule {}

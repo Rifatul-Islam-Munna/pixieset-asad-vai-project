@@ -37,8 +37,17 @@ export class FacePerson {
 
   @Prop({ default: 0 })
   imageCount: number;
+
+  // Persist the photo membership for this person so clicking a face does not
+  // have to scan every vector in Qdrant again. Existing rows without this field
+  // transparently fall back to Qdrant once and are backfilled.
+  @Prop({ type: [String], default: [] })
+  imageIds: string[];
 }
 
 export const FacePersonSchema = SchemaFactory.createForClass(FacePerson);
 FacePersonSchema.index({ collectionId: 1, personKey: 1 }, { unique: true });
 FacePersonSchema.index({ userId: 1, identityKey: 1 });
+FacePersonSchema.index({ collectionId: 1, identityKey: 1 });
+FacePersonSchema.index({ collectionId: 1, imageCount: -1, faceCount: -1 });
+FacePersonSchema.index({ collectionId: 1, representativeFaceId: 1 });

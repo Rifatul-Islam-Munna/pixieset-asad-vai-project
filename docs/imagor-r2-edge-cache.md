@@ -9,13 +9,14 @@ The backend still creates deterministic signed Imagor URLs. That HMAC work is ti
 1. Original uploads go straight to private R2.
 2. The database stores the original object key; the gallery immediately uses deterministic Imagor URLs, so uploads never wait for cache generation.
 3. A tiny worker runs **inside the same Imagor container**. It asks the backend only for signed URL job metadata.
-4. The worker requests thumbnail, view, small, medium, and large variants through localhost Imagor and discards those response bytes locally.
-5. Imagor reads the private original, transforms it, and writes the result directly to its configured R2 Result Storage bucket.
-6. The worker HEAD-checks those exact Result Storage keys in R2. The backend never downloads transformed image bytes and never uploads transformed image bytes to R2.
-7. While even one eligible photo is missing a confirmed current Result Storage variant, **every photo in that gallery continues to use Imagor URLs**.
-8. Only after all required variants for every eligible photo are confirmed in R2 is the collection marked `imageCacheStatus=ready`; the next API response switches the entire gallery to the Result Storage public URLs together.
-9. If a photo, watermark, preset, or set assignment changes, the gallery immediately falls back to Imagor while the Imagor-side worker rebuilds the stale variants.
-10. Image deletion removes the gallery record immediately; the Imagor-side worker deletes the Result Storage keys and optionally purges their Cloudflare URLs.
+4. The worker permanently warms only **small AVIF (720px)** and **view AVIF (1800px)** through localhost Imagor. Medium/large responsive delivery reuses the same view object instead of creating extra copies.
+5. The **320px AVIF thumbnail is on-demand only**. It is generated/cached only when a browser actually requests that photo's thumbnail.
+6. Imagor reads the private original, transforms it, and writes the result directly to its configured R2 Result Storage bucket.
+7. The worker HEAD-checks the two permanent Result Storage keys in R2. The backend never downloads transformed image bytes and never uploads transformed image bytes to R2.
+8. While even one eligible photo is missing a confirmed current permanent Result Storage variant, **every photo in that gallery continues to use Imagor URLs**.
+9. Only after small+view for every eligible photo are confirmed in R2 is the collection marked `imageCacheStatus=ready`; the next API response switches normal delivery to Result Storage public URLs together.
+10. If a photo, watermark, preset, or set assignment changes, the gallery immediately falls back to Imagor while the Imagor-side worker rebuilds stale variants.
+11. Image deletion removes the gallery row immediately, deletes the private original, deletes permanent small/view Result Storage objects, derives/deletes any on-demand thumbnail Result Storage object, and optionally purges its Cloudflare URL.
 
 This keeps uploads instant, preserves the all-or-nothing switch, and keeps transformed bytes completely off the backend data path.
 
@@ -40,7 +41,7 @@ Create a separate bucket such as `gallarista-image-cache`. It is disposable cach
 
 The provided `deploy/imagor/Dockerfile` is meant to replace the image/build of the existing Imagor EasyPanel app. It enables the safe runtime defaults; add the R2 loader/result-storage credentials from `deploy/imagor/.env.example` to that same Imagor app. No second cache application is required.
 
-Use a 25-day R2 lifecycle rule for the Result Storage bucket/prefix. A deleted result is safely generated again by Imagor on the next cache miss.
+Do not use a blanket expiry on the Result Storage bucket when small/view are the permanent delivery copies. Old versions are removed after a successful rebuild, and deleting an image removes its private original, permanent small/view AVIF objects, and any on-demand thumbnail object.
 
 ## 8-core VPS allocation
 
@@ -55,4 +56,4 @@ This is a starting limit, not a guarantee that every workload will remain below 
 
 ## First-hit behavior
 
-R2 Result Storage and Cloudflare eliminate repeated work. A never-before-generated transformation still needs one Imagor/libvips pass. The worker inside the Imagor container warms one image about every 20 seconds by default, so the backend remains out of the transformed-image data path and Imagor CPU is not hit by an upload burst.
+R2 Result Storage and Cloudflare eliminate repeated work. A never-before-generated transformation still needs one Imagor/libvips pass. The worker inside the Imagor container runs two safe warm jobs in parallel by default and pauses only 250ms between successful jobs. Each job creates only the small+view AVIF pair, which is substantially faster and smaller than the previous five-variant warm set.

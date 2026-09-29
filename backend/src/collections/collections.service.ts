@@ -119,10 +119,17 @@ type ImageMetadataDefaults = {
 
 type FaceIndexQueueImage = Pick<
   CollectionImage,
-  'userId' | 'collectionId' | 'url' | 'thumbnailUrl'
+  | 'userId'
+  | 'collectionId'
+  | 'url'
+  | 'thumbnailUrl'
+  | 'originalObjectKey'
+  | 'metadata'
+  | 'width'
+  | 'height'
 > & { _id?: unknown };
 
-const IMAGE_CACHE_VERSION = 1;
+const IMAGE_CACHE_VERSION = 3;
 
 @Injectable()
 export class CollectionsService implements OnModuleInit {
@@ -2834,6 +2841,10 @@ export class CollectionsService implements OnModuleInit {
       collectionId: image.collectionId,
       url: image.url,
       thumbnailUrl: image.thumbnailUrl,
+      originalObjectKey: image.originalObjectKey,
+      metadata: image.metadata,
+      width: image.width,
+      height: image.height,
     }));
     setTimeout(() => {
       void this.indexFacesInBackground(faceQueue);
@@ -3669,6 +3680,10 @@ export class CollectionsService implements OnModuleInit {
       collectionId: image.collectionId,
       url: image.url,
       thumbnailUrl: image.thumbnailUrl,
+      originalObjectKey: image.originalObjectKey,
+      metadata: image.metadata,
+      width: image.width,
+      height: image.height,
     }];
     setTimeout(() => {
       void this.indexFacesInBackground(faceQueue);
@@ -4503,7 +4518,9 @@ export class CollectionsService implements OnModuleInit {
       return { accepted: true, ready: false, obsoleteKeys: [], obsoleteUrls: [] };
     }
 
-    const requiredVariants = ['thumbnail', 'view', 'small', 'medium', 'large'];
+    // Only two variants are permanent. The tiny thumbnail is generated and
+    // cached by Imagor only when a browser actually requests it.
+    const requiredVariants = ['small', 'view'];
     const keys = Object.fromEntries(
       requiredVariants.map((variant) => [
         variant,
@@ -4575,8 +4592,30 @@ export class CollectionsService implements OnModuleInit {
 
     const nextKeys = new Set(Object.values(keys));
     const nextUrls = new Set(Object.values(urls));
-    const obsoleteKeys = previousKeys.filter((key) => !nextKeys.has(key));
-    const obsoleteUrls = previousUrls.filter((url) => !nextUrls.has(url));
+    const incomingExtraKeys = Object.entries(
+      (body?.keys ?? {}) as Record<string, unknown>,
+    )
+      .filter(([variant]) => !requiredVariants.includes(variant))
+      .map(([, value]) => String(value || '').trim())
+      .filter(Boolean);
+    const incomingExtraUrls = Object.entries(
+      (body?.urls ?? {}) as Record<string, unknown>,
+    )
+      .filter(([variant]) => !requiredVariants.includes(variant))
+      .map(([, value]) => String(value || '').trim())
+      .filter(Boolean);
+    const obsoleteKeys = [
+      ...new Set([
+        ...previousKeys.filter((key) => !nextKeys.has(key)),
+        ...incomingExtraKeys.filter((key) => !nextKeys.has(key)),
+      ]),
+    ];
+    const obsoleteUrls = [
+      ...new Set([
+        ...previousUrls.filter((url) => !nextUrls.has(url)),
+        ...incomingExtraUrls.filter((url) => !nextUrls.has(url)),
+      ]),
+    ];
     const ready = await this.finalizeCollectionImageCache(collectionId);
     return { accepted: true, ready, obsoleteKeys, obsoleteUrls };
   }
@@ -4587,18 +4626,27 @@ export class CollectionsService implements OnModuleInit {
     const job = await this.imageDeleteJobModel
       .findOneAndUpdate(
         {
-          'cacheObjectKeys.0': { $exists: true },
-          $or: [
+          $and: [
             {
-              cacheDeleteStatus: { $in: ['', 'queued', 'failed'] },
               $or: [
-                { cacheDeleteNextAttemptAt: { $exists: false } },
-                { cacheDeleteNextAttemptAt: { $lte: now } },
+                { 'cacheObjectKeys.0': { $exists: true } },
+                { 'cacheTransformUrls.0': { $exists: true } },
               ],
             },
             {
-              cacheDeleteStatus: 'processing',
-              cacheDeleteProcessingStartedAt: { $lte: staleBefore },
+              $or: [
+                {
+                  cacheDeleteStatus: { $in: ['', 'queued', 'failed'] },
+                  $or: [
+                    { cacheDeleteNextAttemptAt: { $exists: false } },
+                    { cacheDeleteNextAttemptAt: { $lte: now } },
+                  ],
+                },
+                {
+                  cacheDeleteStatus: 'processing',
+                  cacheDeleteProcessingStartedAt: { $lte: staleBefore },
+                },
+              ],
             },
           ],
         },
@@ -4625,6 +4673,9 @@ export class CollectionsService implements OnModuleInit {
       collectionId: String(job.collectionId),
       keys: (job.cacheObjectKeys ?? []).map((value) => String(value)).filter(Boolean),
       urls: (job.cachePublicUrls ?? []).map((value) => String(value)).filter(Boolean),
+      transformUrls: (job.cacheTransformUrls ?? [])
+        .map((value) => String(value))
+        .filter(Boolean),
     };
   }
 
@@ -4800,7 +4851,12 @@ export class CollectionsService implements OnModuleInit {
           status: 'completed',
           completedAt: { $lte: new Date(now - 7 * 24 * 60 * 60 * 1000) },
           $or: [
-            { 'cacheObjectKeys.0': { $exists: false } },
+            {
+              $and: [
+                { 'cacheObjectKeys.0': { $exists: false } },
+                { 'cacheTransformUrls.0': { $exists: false } },
+              ],
+            },
             { cacheDeleteStatus: 'completed' },
           ],
         });
@@ -5057,6 +5113,11 @@ export class CollectionsService implements OnModuleInit {
         )
           .map((value) => String(value || '').trim())
           .filter(Boolean);
+        const cacheTransformUrls = this.onDemandCacheTransformUrls(
+          image as Record<string, any>,
+        );
+        const hasCacheCleanup =
+          imageCacheKeys.length > 0 || cacheTransformUrls.length > 0;
 
         return {
           updateOne: {
@@ -5070,9 +5131,10 @@ export class CollectionsService implements OnModuleInit {
                 privateObjectKeys: [...new Set(privateObjectKeys)],
                 cacheObjectKeys: [...new Set(imageCacheKeys)],
                 cachePublicUrls: [...new Set(imageCacheUrls)],
-                cacheDeleteStatus: imageCacheKeys.length ? 'queued' : '',
+                cacheTransformUrls: [...new Set(cacheTransformUrls)],
+                cacheDeleteStatus: hasCacheCleanup ? 'queued' : '',
                 cacheDeleteAttempts: 0,
-                cacheDeleteNextAttemptAt: imageCacheKeys.length ? now : undefined,
+                cacheDeleteNextAttemptAt: hasCacheCleanup ? now : undefined,
                 cacheDeleteLastError: '',
                 status: 'queued',
                 attempts: 0,
@@ -6004,22 +6066,27 @@ export class CollectionsService implements OnModuleInit {
         ? storedWatermark
         : this.toImagorWatermark(watermark);
     const hasWatermark = this.imagorService.hasWatermark(imagorWatermark);
+    const imagorUrls =
+      this.imagorService.isEnabled() &&
+      sourceObjectKey &&
+      safe.mediaType !== 'video'
+        ? this.imagorService.imageUrls(
+            sourceObjectKey,
+            imagorWatermark,
+            sourceDimensions ?? { width: safe.width, height: safe.height },
+          )
+        : null;
     const cacheUrl = (variant: string) =>
       String(imageCache?.urls?.[variant] ?? '').trim();
     const directViewUrl = cacheUrl('view');
-    const directThumbnailUrl = cacheUrl('thumbnail');
     const directSmallUrl = cacheUrl('small');
-    const directMediumUrl = cacheUrl('medium');
-    const directLargeUrl = cacheUrl('large');
+
     if (
       directCacheAllowed &&
       Number(imageCache?.version ?? 0) === IMAGE_CACHE_VERSION &&
       imageCache?.status === 'ready' &&
       directViewUrl &&
-      directThumbnailUrl &&
       directSmallUrl &&
-      directMediumUrl &&
-      directLargeUrl &&
       safe.mediaType !== 'video'
     ) {
       return {
@@ -6027,11 +6094,13 @@ export class CollectionsService implements OnModuleInit {
         width: sourceDimensions?.width ?? safe.width,
         height: sourceDimensions?.height ?? safe.height,
         url: directViewUrl,
-        thumbnailUrl: directThumbnailUrl,
+        // Thumbnail stays on-demand through Imagor. If Imagor is unavailable,
+        // the tiny permanent small AVIF remains a safe direct-R2 fallback.
+        thumbnailUrl: imagorUrls?.thumbnailUrl || directSmallUrl,
         responsive: {
           small: directSmallUrl,
-          medium: directMediumUrl,
-          large: directLargeUrl,
+          medium: directViewUrl,
+          large: directViewUrl,
         },
         watermarked: hasWatermark,
         watermark: hasWatermark ? imagorWatermark : undefined,
@@ -6039,44 +6108,34 @@ export class CollectionsService implements OnModuleInit {
       };
     }
 
-    if (
-      this.imagorService.isEnabled() &&
-      sourceObjectKey &&
-      safe.mediaType !== 'video'
-    ) {
-      const urls = this.imagorService.imageUrls(
-        sourceObjectKey,
-        imagorWatermark,
-        sourceDimensions ?? { width: safe.width, height: safe.height },
-      );
-      if (urls) {
-        const storedFallbackUrl = String(safe.url ?? '').trim();
-        const storedFallbackThumbnailUrl = String(
-          safe.thumbnailUrl ?? '',
-        ).trim();
-        return {
-          ...safe,
-          width: sourceDimensions?.width ?? safe.width,
-          height: sourceDimensions?.height ?? safe.height,
-          url: urls.url,
-          thumbnailUrl: urls.thumbnailUrl,
-          responsive: urls.responsive,
-          watermarked: hasWatermark,
-          watermark: hasWatermark ? imagorWatermark : undefined,
-          fallbackUrl:
-            storedFallbackUrl && storedFallbackUrl !== urls.url
-              ? storedFallbackUrl
-              : undefined,
-          fallbackThumbnailUrl:
-            storedFallbackThumbnailUrl &&
-            storedFallbackThumbnailUrl !== urls.thumbnailUrl
-              ? storedFallbackThumbnailUrl
-              : undefined,
-          // Legacy public gallery copies may already contain the watermark in
-          // the pixels. The browser must never draw a second overlay on those.
-          fallbackWatermarked: Boolean(safe.watermarked),
-        };
-      }
+    if (imagorUrls) {
+      const urls = imagorUrls;
+      const storedFallbackUrl = String(safe.url ?? '').trim();
+      const storedFallbackThumbnailUrl = String(
+        safe.thumbnailUrl ?? '',
+      ).trim();
+      return {
+        ...safe,
+        width: sourceDimensions?.width ?? safe.width,
+        height: sourceDimensions?.height ?? safe.height,
+        url: urls.url,
+        thumbnailUrl: urls.thumbnailUrl,
+        responsive: urls.responsive,
+        watermarked: hasWatermark,
+        watermark: hasWatermark ? imagorWatermark : undefined,
+        fallbackUrl:
+          storedFallbackUrl && storedFallbackUrl !== urls.url
+            ? storedFallbackUrl
+            : undefined,
+        fallbackThumbnailUrl:
+          storedFallbackThumbnailUrl &&
+          storedFallbackThumbnailUrl !== urls.thumbnailUrl
+            ? storedFallbackThumbnailUrl
+            : undefined,
+        // Legacy public gallery copies may already contain the watermark in
+        // the pixels. The browser must never draw a second overlay on those.
+        fallbackWatermarked: Boolean(safe.watermarked),
+      };
     }
 
     return safe;
@@ -6850,6 +6909,27 @@ export class CollectionsService implements OnModuleInit {
     }
   }
 
+  private onDemandCacheTransformUrls(image: Record<string, any>) {
+    const metadata = (image?.metadata ?? {}) as Record<string, any>;
+    const sourceObjectKey =
+      String(image?.originalObjectKey ?? '').trim() ||
+      String(metadata.directUploadObjectKey ?? '').trim();
+    if (!sourceObjectKey || !this.imagorService.isEnabled()) return [];
+
+    const watermark =
+      (metadata.imagorWatermark ??
+        metadata.imgproxyWatermark) as ImagorWatermark | undefined;
+    const urls = this.imagorService.imageUrls(
+      sourceObjectKey,
+      watermark,
+      {
+        width: Number(image?.width) || undefined,
+        height: Number(image?.height) || undefined,
+      },
+    );
+    return [String(urls?.thumbnailUrl ?? '').trim()].filter(Boolean);
+  }
+
   private async deleteStoredImageFiles(image: CollectionImageDocument) {
     const storageMode = String(
       (image.metadata as Record<string, any> | undefined)?.storageMode ?? '',
@@ -6879,7 +6959,10 @@ export class CollectionsService implements OnModuleInit {
     )
       .map((value) => String(value || '').trim())
       .filter(Boolean);
-    if (cacheObjectKeys.length) {
+    const cacheTransformUrls = this.onDemandCacheTransformUrls(
+      image.toObject() as Record<string, any>,
+    );
+    if (cacheObjectKeys.length || cacheTransformUrls.length) {
       const now = new Date();
       await this.imageDeleteJobModel
         .updateOne(
@@ -6900,6 +6983,7 @@ export class CollectionsService implements OnModuleInit {
             $set: {
               cacheObjectKeys: [...new Set(cacheObjectKeys)],
               cachePublicUrls: [...new Set(cachePublicUrls)],
+              cacheTransformUrls: [...new Set(cacheTransformUrls)],
               cacheDeleteStatus: 'queued',
               cacheDeleteAttempts: 0,
               cacheDeleteNextAttemptAt: now,

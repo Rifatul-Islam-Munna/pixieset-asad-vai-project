@@ -397,6 +397,7 @@ export function PublicGallery({
   useEffect(() => {
     manualSetSelectionRef.current = false;
     autoProbedEmptySetsRef.current = new Set();
+    faceResultCacheRef.current.clear();
   }, [collection?._id]);
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
@@ -417,6 +418,8 @@ export function PublicGallery({
   const [faceBusy, setFaceBusy] = useState(false);
   const [faceError, setFaceError] = useState("");
   const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
+  const faceResultCacheRef = useRef<Map<string, PublicImage[]>>(new Map());
+  const faceListInFlightRef = useRef(false);
   const [faces, setFaces] = useState<PublicFace[]>([]);
   const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceReady, setFaceReady] = useState(true);
@@ -1139,18 +1142,61 @@ export function PublicGallery({
     if (index <= 0) return slideshowAutoLoop ? visibleImages.length - 1 : 0;
     return index - 1;
   });
-  const loadFaces = async (force = false) => {
-    setFaceSheetOpen(true);
-    if (((!force && faces.length) || faceBusy)) return;
-    const silentRefresh = force;
+  const loadFaces = async (force = false, openSheet = true) => {
+    if (openSheet) setFaceSheetOpen(true);
+    if (faceBusy || faceListInFlightRef.current) return;
+    const alreadyHaveFaces = faces.length > 0;
+
+    const storageKey = collection?._id
+      ? `gallerista:face-sidebar:v3:${collection._id}`
+      : "";
+    let restoredCachedFaces = false;
+
+    // Show the last successful sidebar snapshot immediately. The server remains
+    // the source of truth and refreshes silently underneath it. This makes
+    // reopening a large wedding gallery feel instant instead of showing a
+    // blocking spinner every time.
+    if (!force && !faces.length && storageKey) {
+      try {
+        const raw = window.sessionStorage.getItem(storageKey);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          const age = Date.now() - Number(cached?.savedAt ?? 0);
+          if (
+            age >= 0 &&
+            age < 5 * 60_000 &&
+            Array.isArray(cached?.faces)
+          ) {
+            setFaces(cached.faces);
+            setFaceReady(cached.ready !== false);
+            setFacesIndexing(Boolean(cached.indexing));
+            setFaceMissingImages(Math.max(0, Number(cached.missingImages ?? 0)));
+            setFaceTotalImages(Math.max(0, Number(cached.totalImages ?? 0)));
+            setFaceIndexedImages(Math.max(0, Number(cached.indexedImages ?? 0)));
+            setFaceRetryingImages(Math.max(0, Number(cached.retryingImages ?? 0)));
+            setFaceFailedImages(Math.max(0, Number(cached.failedImages ?? 0)));
+            restoredCachedFaces = true;
+          }
+        }
+      } catch {
+        // Browser storage is only a speed hint; ignore unavailable/corrupt data.
+      }
+    }
+
+    const silentRefresh = force || restoredCachedFaces || alreadyHaveFaces;
     if (!silentRefresh) setFaceBusy(true);
     if (!silentRefresh) setFaceError("");
 
+    faceListInFlightRef.current = true;
     const response = await fetch(
       `${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces`,
-      { cache: "no-store" },
+      {
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      },
     ).catch(() => null);
     const payload = response ? await response.json().catch(() => null) : null;
+    faceListInFlightRef.current = false;
 
     if (!silentRefresh) setFaceBusy(false);
     if (!response?.ok) {
@@ -1175,26 +1221,72 @@ export function PublicGallery({
     const retryingImages = Math.max(0, Number(payload?.data?.retryingImages ?? 0));
     const failedImages = Math.max(0, Number(payload?.data?.failedImages ?? 0));
 
+    const nextFaces = Array.isArray(payload?.data?.faces)
+      ? payload.data.faces
+      : [];
+    const indexing = Boolean(payload?.data?.indexing) || !ready;
+
     setFaceReady(ready);
     setFaceMissingImages(missingImages);
     setFaceTotalImages(totalImages);
     setFaceIndexedImages(indexedImages);
     setFaceRetryingImages(retryingImages);
     setFaceFailedImages(failedImages);
-    setFaces(payload?.data?.faces ?? []);
-    setFacesIndexing(Boolean(payload?.data?.indexing) || !ready);
+    setFaces(nextFaces);
+    setFacesIndexing(indexing);
+
+    if (storageKey) {
+      try {
+        window.sessionStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            savedAt: Date.now(),
+            ready,
+            indexing,
+            missingImages,
+            totalImages,
+            indexedImages,
+            retryingImages,
+            failedImages,
+            faces: nextFaces,
+          }),
+        );
+      } catch {
+        // Ignore storage quota/private-mode failures.
+      }
+    }
   };
   const filterBySavedFace = async (faceId: string) => {
+    const cached = faceResultCacheRef.current.get(faceId);
+    if (cached) {
+      setFaceResults(cached);
+      setFaceSheetOpen(false);
+      return;
+    }
+
     setFaceBusy(true);
     setFaceError("");
-    const response = await fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces/${encodeURIComponent(faceId)}`).catch(() => null);
+    const response = await fetch(
+      `${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces/${encodeURIComponent(faceId)}`,
+      {
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      },
+    ).catch(() => null);
     const payload = response ? await response.json().catch(() => null) : null;
     setFaceBusy(false);
     if (!response?.ok) {
-      setFaceError(payload?.message ?? "Face filter failed.");
+      setFaceError(
+        payload?.message ??
+          "Face filter took too long. Please try this face again.",
+      );
       return;
     }
-    setFaceResults(payload?.data?.images ?? []);
+    const matchedImages = Array.isArray(payload?.data?.images)
+      ? payload.data.images
+      : [];
+    faceResultCacheRef.current.set(faceId, matchedImages);
+    setFaceResults(matchedImages);
     setFaceSheetOpen(false);
   };
   const searchByFace = async (file?: File) => {
@@ -1218,11 +1310,19 @@ export function PublicGallery({
   };
 
   useEffect(() => {
-    if (!faceSheetOpen || !facesIndexing) return;
+    if (!advancedFaceSearchEnabled || !collection?._id) return;
     const timer = window.setTimeout(() => {
-      void loadFaces(true);
-    }, 3500);
+      void loadFaces(true, false);
+    }, 1200);
     return () => window.clearTimeout(timer);
+  }, [advancedFaceSearchEnabled, collection?._id]);
+
+  useEffect(() => {
+    if (!faceSheetOpen || !facesIndexing) return;
+    const timer = window.setInterval(() => {
+      void loadFaces(true, false);
+    }, 5000);
+    return () => window.clearInterval(timer);
   }, [faceSheetOpen, facesIndexing]);
 
   useEffect(() => {
