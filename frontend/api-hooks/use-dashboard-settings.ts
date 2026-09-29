@@ -55,7 +55,18 @@ export function useDashboardSettings<T = unknown>(
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey });
+      if (type === "watermark") {
+        // Collection image responses carry Imagor URLs derived from the saved
+        // watermark. Refetch them immediately so position/style changes never
+        // keep using an older transformed URL from React Query.
+        void queryClient.invalidateQueries({
+          queryKey: ["collections"],
+          refetchType: "all",
+        });
+      }
+    },
   });
 
   const deleteSetting = useMutation({
@@ -68,7 +79,15 @@ export function useDashboardSettings<T = unknown>(
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey });
+      if (type === "watermark") {
+        void queryClient.invalidateQueries({
+          queryKey: ["collections"],
+          refetchType: "all",
+        });
+      }
+    },
   });
 
   return { query, saveSetting, deleteSetting };

@@ -8070,12 +8070,26 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
     };
 
     setWatermarkPosition(position);
-    saveWatermarkSettings();
-    saveSetting.mutate({
-      localId: activeWatermarkId,
-      name: watermark.name,
-      data: watermark,
-    });
+    saveSetting.mutate(
+      {
+        localId: activeWatermarkId,
+        name: watermark.name,
+        data: watermark,
+      },
+      {
+        onSuccess: () => {
+          saveWatermarkSettings();
+          toast.success("Watermark settings saved");
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Watermark settings could not be saved",
+          );
+        },
+      },
+    );
   };
 
   return (
