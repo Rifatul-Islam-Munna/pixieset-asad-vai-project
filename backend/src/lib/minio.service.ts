@@ -697,26 +697,6 @@ export class MinioService implements OnModuleInit {
     return this.privateBucketName;
   }
 
-  imgproxySourceUrl(objectKey: string) {
-    const key = String(objectKey || '').trim().replace(/^\/+/, '');
-    if (!key || key.includes('..')) {
-      throw new HttpException('Invalid image source key', HttpStatus.BAD_REQUEST);
-    }
-    const encodedKey = key
-      .split('/')
-      .map((part) => encodeURIComponent(part))
-      .join('/');
-    const bucket =
-      key.startsWith('private-direct/') || key.startsWith('originals/')
-        ? this.privateBucketName
-        : this.bucketName;
-    return `s3://${bucket}/${encodedKey}`;
-  }
-
-  privateSourceUrl(objectKey: string) {
-    return this.imgproxySourceUrl(objectKey);
-  }
-
   private publicUrl(objectKey: string) {
     const encodedKey = objectKey
       .split('/')

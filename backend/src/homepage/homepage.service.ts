@@ -10,9 +10,9 @@ import { BookingSetting, BookingSettingDocument } from 'src/bookings/entities/bo
 import { UpdateHomepageDto } from './dto/update-homepage.dto';
 import { Homepage, HomepageDocument } from './entities/homepage.entity';
 import {
-  ImgproxyService,
-  type ImgproxyWatermark,
-} from 'src/lib/imgproxy.service';
+  ImagorService,
+  type ImagorWatermark,
+} from 'src/lib/imagor.service';
 
 @Injectable()
 export class HomepageService {
@@ -29,7 +29,7 @@ export class HomepageService {
     private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(BookingSetting.name)
     private readonly bookingSettingModel: Model<BookingSettingDocument>,
-    private readonly imgproxyService: ImgproxyService,
+    private readonly imagorService: ImagorService,
   ) {}
 
   async getMine(userId: string) {
@@ -258,7 +258,7 @@ export class HomepageService {
       String(image?.originalObjectKey ?? '').trim() ||
       String(image?.metadata?.directUploadObjectKey ?? '').trim();
     if (
-      !this.imgproxyService.isEnabled() ||
+      !this.imagorService.isEnabled() ||
       image?.mediaType === 'video' ||
       (!sourceObjectKey.startsWith('private-direct/') &&
         !sourceObjectKey.startsWith('direct/') &&
@@ -272,7 +272,7 @@ export class HomepageService {
       collection,
       image,
     );
-    const urls = this.imgproxyService.imageUrls(
+    const urls = this.imagorService.imageUrls(
       sourceObjectKey,
       watermark,
     );
@@ -283,7 +283,7 @@ export class HomepageService {
     userId: string,
     collection: any,
     image: any,
-  ): Promise<ImgproxyWatermark | undefined> {
+  ): Promise<ImagorWatermark | undefined> {
     const explicit = String(image?.metadata?.watermarkId ?? '').trim();
     if (explicit === 'No watermark') return undefined;
 

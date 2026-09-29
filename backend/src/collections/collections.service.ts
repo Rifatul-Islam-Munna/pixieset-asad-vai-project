@@ -17,9 +17,9 @@ import * as exifr from 'exifr';
 import { setTimeout as delay } from 'timers/promises';
 import { MinioService } from 'src/lib/minio.service';
 import {
-  ImgproxyService,
-  type ImgproxyWatermark,
-} from 'src/lib/imgproxy.service';
+  ImagorService,
+  type ImagorWatermark,
+} from 'src/lib/imagor.service';
 import { MailService, type GlobalMailAttachment } from 'src/mail/mail.service';
 import { BrandingEmailService } from 'src/mail/branding-email.service';
 import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
@@ -154,7 +154,7 @@ export class CollectionsService implements OnModuleInit {
     @InjectModel(Homepage.name)
     private readonly homepageModel: Model<HomepageDocument>,
     private readonly minioService: MinioService,
-    private readonly imgproxyService: ImgproxyService,
+    private readonly imagorService: ImagorService,
     private readonly faceSearchService: FaceSearchService,
     private readonly imageMetadataAiService: ImageMetadataAiService,
     private readonly mailService: MailService,
@@ -164,7 +164,7 @@ export class CollectionsService implements OnModuleInit {
   ) {}
 
   private directImageWorkerRunning = false;
-  private readonly directImgproxySaveLocks = new Map<string, Promise<any>>();
+  private readonly directImagorSaveLocks = new Map<string, Promise<any>>();
   private lastDirectImageRecoveryAt = 0;
   private lastDirectUploadDiscoveryAt = 0;
   private imageDeleteWorkerRunning = false;
@@ -2477,7 +2477,7 @@ export class CollectionsService implements OnModuleInit {
           ).trim();
           const storageMode = String(metadata.storageMode ?? '');
           const publicReferences =
-            storageMode === 'original-imgproxy'
+            ['original-imgproxy', 'original-imagor'].includes(storageMode)
               ? []
               : [image.url, image.thumbnailUrl, image.filename].filter(
                   Boolean,
@@ -2964,7 +2964,7 @@ export class CollectionsService implements OnModuleInit {
     );
 
     let savedImages: any[] = [];
-    if (imageDirectFiles.length && this.imgproxyService.isEnabled()) {
+    if (imageDirectFiles.length && this.imagorService.isEnabled()) {
       const batchWatermark = await this.resolveEffectiveWatermark(
         userId,
         collection,
@@ -2997,7 +2997,7 @@ export class CollectionsService implements OnModuleInit {
             height: file.height,
             order: startOrder + index + 1,
           };
-          const image = await this.saveDirectImageForImgproxy(jobLike, {
+          const image = await this.saveDirectImageForImagor(jobLike, {
             collection,
             resolvedSetId,
             watermarkData: batchWatermark,
@@ -3064,7 +3064,7 @@ export class CollectionsService implements OnModuleInit {
 
     return {
       items: [...savedVideos, ...savedImages],
-      queued: this.imgproxyService.isEnabled() ? 0 : imageDirectFiles.length,
+      queued: this.imagorService.isEnabled() ? 0 : imageDirectFiles.length,
     };
   }
 
@@ -3175,24 +3175,24 @@ export class CollectionsService implements OnModuleInit {
     const recentCounts = new Map(
       recentRows.map((row) => [row._id || '', row.count]),
     );
-    const imgproxyActive = this.imgproxyService.isEnabled();
-    const queued = imgproxyActive ? 0 : (counts.get('queued') ?? 0);
-    const processing = imgproxyActive ? 0 : (counts.get('processing') ?? 0);
-    const failed = imgproxyActive ? 0 : (counts.get('failed') ?? 0);
-    const current = imgproxyActive ? null : (processingJob ?? queuedJob);
+    const imagorActive = this.imagorService.isEnabled();
+    const queued = imagorActive ? 0 : (counts.get('queued') ?? 0);
+    const processing = imagorActive ? 0 : (counts.get('processing') ?? 0);
+    const failed = imagorActive ? 0 : (counts.get('failed') ?? 0);
+    const current = imagorActive ? null : (processingJob ?? queuedJob);
 
     return {
       queued,
       processing,
       failed,
       pending: queued + processing,
-      optimized: imgproxyActive ? 0 : (recentCounts.get('optimized') ?? 0),
-      rawFallback: imgproxyActive
+      optimized: imagorActive ? 0 : (recentCounts.get('optimized') ?? 0),
+      rawFallback: imagorActive
         ? 0
         : (recentCounts.get('raw-fallback') ?? 0),
       imageCount,
       setImageCounts,
-      completedImages: imgproxyActive ? [] : publicCompletedImages,
+      completedImages: imagorActive ? [] : publicCompletedImages,
       current: current
         ? {
             name: current.name,
@@ -3210,12 +3210,12 @@ export class CollectionsService implements OnModuleInit {
     this.directImageWorkerRunning = true;
     try {
       const now = Date.now();
-      if (this.imgproxyService.isEnabled()) {
+      if (this.imagorService.isEnabled()) {
         if (now - this.lastDirectUploadDiscoveryAt >= 5_000) {
           this.lastDirectUploadDiscoveryAt = now;
           await this.discoverCompletedDirectUploads();
         }
-        await this.reconcileLegacyImgproxyJobsOnce();
+        await this.reconcileLegacyImagorJobsOnce();
         if (now - this.lastDirectImageRecoveryAt >= 60_000) {
           this.lastDirectImageRecoveryAt = now;
           await this.imageProcessingJobModel.deleteMany({
@@ -3336,9 +3336,9 @@ export class CollectionsService implements OnModuleInit {
       }
 
       if (verified) {
-        if (this.imgproxyService.isEnabled()) {
+        if (this.imagorService.isEnabled()) {
           if (this.mediaType(job.type) === 'image') {
-            await this.saveDirectImageForImgproxy(job as any);
+            await this.saveDirectImageForImagor(job as any);
           } else {
             await this.saveDirectVideoFromProcessingJob(job as any);
           }
@@ -3391,7 +3391,7 @@ export class CollectionsService implements OnModuleInit {
     });
   }
 
-  private async reconcileLegacyImgproxyJobsOnce() {
+  private async reconcileLegacyImagorJobsOnce() {
     const jobs = await this.imageProcessingJobModel
       .find({
         status: { $in: ['queued', 'processing', 'failed'] },
@@ -3429,7 +3429,7 @@ export class CollectionsService implements OnModuleInit {
         if (!verified) return;
 
         if (this.mediaType(job.type) === 'image') {
-          await this.saveDirectImageForImgproxy(job as any);
+          await this.saveDirectImageForImagor(job as any);
         } else {
           await this.saveDirectVideoFromProcessingJob(job as any);
         }
@@ -3487,9 +3487,9 @@ export class CollectionsService implements OnModuleInit {
     );
   }
 
-  private toImgproxyWatermark(
+  private toImagorWatermark(
     watermark: WatermarkData | null | undefined,
-  ): ImgproxyWatermark | undefined {
+  ): ImagorWatermark | undefined {
     if (!watermark) return undefined;
     return {
       type: watermark.type,
@@ -3545,7 +3545,7 @@ export class CollectionsService implements OnModuleInit {
     }, this.backgroundFaceStartDelayMs());
   }
 
-  private async saveDirectImageForImgproxy(
+  private async saveDirectImageForImagor(
     job: any,
     options: {
       manageCollection?: boolean;
@@ -3560,21 +3560,21 @@ export class CollectionsService implements OnModuleInit {
       String(job.collectionId ?? ''),
       String(job.objectKey ?? ''),
     ].join(':');
-    const existingLock = this.directImgproxySaveLocks.get(lockKey);
+    const existingLock = this.directImagorSaveLocks.get(lockKey);
     if (existingLock) return existingLock;
 
-    const savePromise = this.saveDirectImageForImgproxyUnlocked(job, options);
-    this.directImgproxySaveLocks.set(lockKey, savePromise);
+    const savePromise = this.saveDirectImageForImagorUnlocked(job, options);
+    this.directImagorSaveLocks.set(lockKey, savePromise);
     try {
       return await savePromise;
     } finally {
-      if (this.directImgproxySaveLocks.get(lockKey) === savePromise) {
-        this.directImgproxySaveLocks.delete(lockKey);
+      if (this.directImagorSaveLocks.get(lockKey) === savePromise) {
+        this.directImagorSaveLocks.delete(lockKey);
       }
     }
   }
 
-  private async saveDirectImageForImgproxyUnlocked(
+  private async saveDirectImageForImagorUnlocked(
     job: any,
     options: {
       manageCollection?: boolean;
@@ -3616,9 +3616,9 @@ export class CollectionsService implements OnModuleInit {
             resolvedSetId,
             job.watermarkId,
           )));
-    const proxyWatermark = this.toImgproxyWatermark(watermark);
-    const urls = this.imgproxyService.imageUrls(job.objectKey, proxyWatermark);
-    if (!urls) throw new Error('imgproxy is not configured');
+    const imagorWatermark = this.toImagorWatermark(watermark);
+    const urls = this.imagorService.imageUrls(job.objectKey, imagorWatermark);
+    if (!urls) throw new Error('Imagor is not configured');
 
     const requestedOrder = Math.max(0, Number(job.order ?? 0));
     const lastImage = requestedOrder
@@ -3647,16 +3647,16 @@ export class CollectionsService implements OnModuleInit {
       sizeBytes: size,
       width: this.safeDimension(job.width),
       height: this.safeDimension(job.height),
-      watermarked: this.imgproxyService.hasWatermark(proxyWatermark),
+      watermarked: this.imagorService.hasWatermark(imagorWatermark),
       order:
         Math.max(0, Number(job.order ?? 0)) ||
         Math.max(0, Number(lastImage?.order ?? 0)) + 1,
       metadata: {
         filename: job.name,
         directUploadObjectKey: job.objectKey,
-        storageMode: 'original-imgproxy',
+        storageMode: 'original-imagor',
         watermarkId: watermark?.id || job.watermarkId || '',
-        imgproxyWatermark: proxyWatermark,
+        imagorWatermark,
       },
     });
 
@@ -3675,17 +3675,9 @@ export class CollectionsService implements OnModuleInit {
         },
       );
     }
-    if (this.imgproxyService.hasWatermark(proxyWatermark)) {
-      this.imgproxyService.prewarmWatermark(
-        this.imgproxyService.watermarkUrl(
-          urls.responsive?.small || urls.thumbnailUrl,
-          proxyWatermark,
-        ),
-      );
-    }
     if (
       options.queuePostUpload !== false &&
-      this.imgproxyService.hasWatermark(proxyWatermark)
+      this.imagorService.hasWatermark(imagorWatermark)
     ) {
       void this.queueImagePostUpload(image.toObject());
     }
@@ -3805,10 +3797,10 @@ export class CollectionsService implements OnModuleInit {
 
     try {
       if (
-        this.imgproxyService.isEnabled() &&
+        this.imagorService.isEnabled() &&
         this.mediaType(job.type) === 'image'
       ) {
-        await this.saveDirectImageForImgproxy(job);
+        await this.saveDirectImageForImagor(job);
         await this.replaceImageAfterDirectProcessing(job);
         await this.imageProcessingJobModel.deleteOne({ _id: job._id });
         return;
@@ -4401,7 +4393,7 @@ export class CollectionsService implements OnModuleInit {
         ).trim();
         const storageMode = String(metadata.storageMode ?? '');
         const publicReferences =
-          storageMode === 'original-imgproxy'
+          ['original-imgproxy', 'original-imagor'].includes(storageMode)
             ? []
             : [image.url, image.thumbnailUrl, image.filename].filter(
                 Boolean,
@@ -4842,7 +4834,7 @@ export class CollectionsService implements OnModuleInit {
         .lean();
       if (existing) return this.publicImageRecord(existing);
     }
-    if (this.imgproxyService.isEnabled()) {
+    if (this.imagorService.isEnabled()) {
       const extension =
         extname(file.originalname)
           .toLowerCase()
@@ -4857,7 +4849,7 @@ export class CollectionsService implements OnModuleInit {
           await this.minioService.uploadPrivateFile(file, originalObjectKey);
           originalStored = true;
         }
-        const image = await this.saveDirectImageForImgproxy(
+        const image = await this.saveDirectImageForImagor(
           {
             userId,
             collectionId,
@@ -5197,29 +5189,33 @@ export class CollectionsService implements OnModuleInit {
       fallbackDirectObjectKey.startsWith('originals/')
         ? fallbackDirectObjectKey
         : '');
-    const storedWatermark = safe.metadata?.imgproxyWatermark as
-      | ImgproxyWatermark
-      | undefined;
-    if (safe.metadata?.imgproxyWatermark !== undefined) {
+    const storedWatermark =
+      (safe.metadata?.imagorWatermark ??
+        safe.metadata?.imgproxyWatermark) as ImagorWatermark | undefined;
+    if (
+      safe.metadata?.imagorWatermark !== undefined ||
+      safe.metadata?.imgproxyWatermark !== undefined
+    ) {
       const {
-        imgproxyWatermark: _imgproxyWatermark,
+        imagorWatermark: _imagorWatermark,
+        imgproxyWatermark: _legacyImgproxyWatermark,
         ...publicMetadata
       } = safe.metadata;
       safe.metadata = publicMetadata;
     }
 
     if (
-      this.imgproxyService.isEnabled() &&
+      this.imagorService.isEnabled() &&
       sourceObjectKey &&
       safe.mediaType !== 'video'
     ) {
-      const proxyWatermark =
+      const imagorWatermark =
         watermark === undefined
           ? storedWatermark
-          : this.toImgproxyWatermark(watermark);
-      const urls = this.imgproxyService.imageUrls(
+          : this.toImagorWatermark(watermark);
+      const urls = this.imagorService.imageUrls(
         sourceObjectKey,
-        proxyWatermark,
+        imagorWatermark,
       );
       if (urls) {
         return {
@@ -5227,10 +5223,7 @@ export class CollectionsService implements OnModuleInit {
           url: urls.url,
           thumbnailUrl: urls.thumbnailUrl,
           responsive: urls.responsive,
-          watermarked: false,
-          watermark: this.imgproxyService.hasWatermark(proxyWatermark)
-            ? proxyWatermark
-            : undefined,
+          watermarked: this.imagorService.hasWatermark(imagorWatermark),
         };
       }
     }
@@ -5240,7 +5233,7 @@ export class CollectionsService implements OnModuleInit {
 
   private async currentCollectionCover(collection: any) {
     const storedCover = String(collection?.coverImage ?? '').trim();
-    if (!storedCover || !this.imgproxyService.isEnabled()) {
+    if (!storedCover || !this.imagorService.isEnabled()) {
       return storedCover;
     }
 
@@ -5280,9 +5273,9 @@ export class CollectionsService implements OnModuleInit {
       String(image.setId || 'highlights'),
       explicitWatermarkId || undefined,
     );
-    const urls = this.imgproxyService.imageUrls(
+    const urls = this.imagorService.imageUrls(
       originalObjectKey,
-      this.toImgproxyWatermark(watermark),
+      this.toImagorWatermark(watermark),
     );
     return urls?.url || storedCover;
   }
@@ -5291,7 +5284,7 @@ export class CollectionsService implements OnModuleInit {
     images: Record<string, any>[],
   ) {
     if (!images.length) return [];
-    if (!this.imgproxyService.isEnabled()) {
+    if (!this.imagorService.isEnabled()) {
       return images.map((image) => this.publicImageRecord(image));
     }
 
@@ -5517,7 +5510,7 @@ export class CollectionsService implements OnModuleInit {
         collectionId,
         mediaType: { $ne: 'video' },
         thumbnailUrl: { $in: [null, ''] },
-        ...(this.imgproxyService.isEnabled()
+        ...(this.imagorService.isEnabled()
           ? {
               $or: [
                 { originalObjectKey: { $exists: false } },
@@ -5883,7 +5876,7 @@ export class CollectionsService implements OnModuleInit {
     );
     const originalObjectKey = String(image.originalObjectKey ?? '').trim();
 
-    if (storageMode !== 'original-imgproxy') {
+    if (!['original-imgproxy', 'original-imagor'].includes(storageMode)) {
       const references = [image.url, image.thumbnailUrl, image.filename].filter(
         Boolean,
       ) as string[];

@@ -68,8 +68,11 @@ export class CollectionImageProcessingJob {
   @Prop({ default: '' })
   lastError: string;
 
-  @Prop({ default: '', enum: ['', 'optimized', 'raw-fallback', 'imgproxy'] })
-  resultMode?: '' | 'optimized' | 'raw-fallback' | 'imgproxy';
+  @Prop({
+    default: '',
+    enum: ['', 'optimized', 'raw-fallback', 'imgproxy', 'imagor'],
+  })
+  resultMode?: '' | 'optimized' | 'raw-fallback' | 'imgproxy' | 'imagor';
 
   @Prop({ default: '' })
   statusMessage?: string;

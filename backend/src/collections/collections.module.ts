@@ -1,9 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MinioService } from 'src/lib/minio.service';
-import { ImgproxyService } from 'src/lib/imgproxy.service';
-import { WatermarkRenderService } from 'src/lib/watermark-render.service';
-import { WatermarkMediaController } from 'src/lib/watermark-media.controller';
+import { ImagorService } from 'src/lib/imagor.service';
 import {
   DashboardSetting,
   DashboardSettingSchema,
@@ -111,17 +109,12 @@ import {
     ImageMetadataAiModule,
     MarketingScheduleModule,
   ],
-  controllers: [
-    CollectionsController,
-    PublicCollectionsController,
-    WatermarkMediaController,
-  ],
+  controllers: [CollectionsController, PublicCollectionsController],
   providers: [
     CollectionsService,
     CollectionDownloadDeliveryService,
     MinioService,
-    ImgproxyService,
-    WatermarkRenderService,
+    ImagorService,
   ],
 })
 export class CollectionsModule {}
