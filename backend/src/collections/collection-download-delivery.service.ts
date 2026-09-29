@@ -12,6 +12,7 @@ import { cwd } from 'process';
 import { Readable } from 'stream';
 import { finished, pipeline } from 'stream/promises';
 import { MinioService } from 'src/lib/minio.service';
+import { backgroundWorkerEnabled } from 'src/lib/runtime-role';
 import { MailService } from 'src/mail/mail.service';
 import { BrandingEmailService } from 'src/mail/branding-email.service';
 import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
@@ -119,6 +120,7 @@ export class CollectionDownloadDeliveryService {
 
   @Interval(3000)
   async processQueue() {
+    if (!backgroundWorkerEnabled()) return;
     if (this.processing) return;
     this.processing = true;
     try {

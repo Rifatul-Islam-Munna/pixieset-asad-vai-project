@@ -40,6 +40,8 @@ type PublicImage = {
   mimetype?: string;
   mediaType?: "image" | "video";
   faceScore?: number;
+  width?: number;
+  height?: number;
   watermark?: ImageWatermark;
   metadata?: {
     filename?: string;
@@ -118,6 +120,8 @@ type PublicCollection = {
     };
   };
 };
+
+const PUBLIC_GALLERY_PAGE_SIZE = 20;
 
 const fallbackPhotos = [
   "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=900&q=80",
@@ -230,13 +234,26 @@ export function PublicGallery({
 }) {
   const [collection, setCollection] = useState(initialCollection);
   useEffect(() => setCollection(initialCollection), [initialCollection]);
+  const initialSetId = String(initialCollection?.sets?.[0]?.id ?? "highlights");
   const [loadedImages, setLoadedImages] = useState<PublicImage[]>(initialCollection?.images ?? []);
-  const [imagesHasMore, setImagesHasMore] = useState(Boolean(initialCollection?.imagesPage?.hasMore));
+  const [setHasMoreById, setSetHasMoreById] = useState<Record<string, boolean>>(
+    () => ({ [initialSetId]: Boolean(initialCollection?.imagesPage?.hasMore) }),
+  );
   const [imagesLoadingMore, setImagesLoadingMore] = useState(false);
+  const [loadingSetId, setLoadingSetId] = useState("");
   const loaderRef = useRef<HTMLDivElement | null>(null);
+  const pageRequestRef = useRef(0);
+  const pageLoadingRef = useRef(false);
   useEffect(() => {
+    const firstSetId = String(initialCollection?.sets?.[0]?.id ?? "highlights");
     setLoadedImages(initialCollection?.images ?? []);
-    setImagesHasMore(Boolean(initialCollection?.imagesPage?.hasMore));
+    setSetHasMoreById({
+      [firstSetId]: Boolean(initialCollection?.imagesPage?.hasMore),
+    });
+    pageRequestRef.current += 1;
+    pageLoadingRef.current = false;
+    setLoadingSetId("");
+    setImagesLoadingMore(false);
   }, [initialCollection]);
   const fallbackPresetDesign = useDashboardStore((state) => state.presetDesign);
   const fallbackPresetDownload = useDashboardStore((state) => state.presetDownload);
@@ -371,6 +388,8 @@ export function PublicGallery({
   const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
   const [faces, setFaces] = useState<PublicFace[]>([]);
   const [facesIndexing, setFacesIndexing] = useState(false);
+  const [faceReady, setFaceReady] = useState(true);
+  const [faceMissingImages, setFaceMissingImages] = useState(0);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
   const [shareTarget, setShareTarget] = useState<{
@@ -477,7 +496,22 @@ export function PublicGallery({
   const visibleImages = favoritesPanelOpen
     ? favoriteGalleryImages
     : faceResults ?? activeGalleryImages;
-  const canLoadMoreImages = Boolean(collection && !favoritesPanelOpen && !faceResults && imagesHasMore);
+  const activeSetLoadedCount = loadedImages.filter(
+    (image) => imageSetId(image) === activeSetId,
+  ).length;
+  const activeSetHasMore =
+    setHasMoreById[activeSetId] ??
+    (activeSetLoadedCount === 0 && Boolean(collection));
+  const activeSetLoading = loadingSetId === activeSetId;
+  const canLoadMoreImages = Boolean(
+    collection && !favoritesPanelOpen && !faceResults && activeSetHasMore,
+  );
+  const showInitialSetSkeleton = Boolean(
+    activeSetLoading &&
+      activeSetLoadedCount === 0 &&
+      !favoritesPanelOpen &&
+      !faceResults,
+  );
   const slideshowImage = slideshowIndex === null ? null : visibleImages[slideshowIndex];
   const slideshowPosition = slideshowIndex ?? 0;
   const pinRequired = !ownerPreview && (photoDownloadsEnabled || videoDownloadsEnabled) && boolSetting(download.downloadPin);
@@ -652,19 +686,20 @@ export function PublicGallery({
       return;
     }
     let allImages = galleryImages.filter((photo) => !isVideo(photo));
-    if (collection && imagesHasMore) {
+    if (collection) {
       setZipStage("Loading remaining gallery photos");
-      let offset = loadedImages.length;
-      let hasMore: boolean = imagesHasMore;
+      let offset = 0;
+      let hasMore = true;
       const loaded: PublicImage[] = [];
+      const setId = scope === "set" ? activeSetId : "__all__";
+
       while (hasMore) {
-        const params = new URLSearchParams({ limit: "120", offset: String(offset), siteSlug: name });
-        const email = accessSettings?.email || visitorEmail || accessEmail;
-        if (email) params.set("email", email);
-    if (accessPin) params.set("pin", accessPin);
-        const pageUrl = ownerPreview
-          ? `/api/collections/${encodeURIComponent(collection._id)}/owner-preview?${params.toString()}`
-          : `${apiBase}/public/collections/${encodeURIComponent(collection.slug ?? galary)}/images?${params.toString()}`;
+        const params = new URLSearchParams({
+          limit: "120",
+          offset: String(offset),
+          setId,
+        });
+        const pageUrl = `/api/collections/${encodeURIComponent(collection._id)}/owner-preview?${params.toString()}`;
         const response = await fetch(pageUrl).catch(() => null);
         const payload = response?.ok ? await response.json().catch(() => null) : null;
         const page = payload?.data;
@@ -673,14 +708,14 @@ export function PublicGallery({
         offset += page.items.length;
         hasMore = Boolean(page.hasMore);
       }
+
       if (loaded.length) {
-        const seen = new Set(allImages.map((image) => image._id));
-        allImages = [...allImages, ...loaded.filter((image) => !seen.has(image._id) && !isVideo(image))];
-        setLoadedImages((current) => {
-          const currentIds = new Set(current.map((image) => image._id));
-          return [...current, ...loaded.filter((image) => !currentIds.has(image._id))];
+        const seen = new Set<string>();
+        allImages = loaded.filter((image) => {
+          if (seen.has(image._id) || isVideo(image)) return false;
+          seen.add(image._id);
+          return true;
         });
-        setImagesHasMore(false);
       }
     }
     if (scope === "set") {
@@ -758,55 +793,112 @@ export function PublicGallery({
     setSlideshowIndex(null);
   }, [activeSetId]);
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
-  const loadMoreImages = async () => {
-    if (!collection || imagesLoadingMore || !imagesHasMore) return;
+  const loadMoreImages = async (setId = activeSetId) => {
+    if (!collection || pageLoadingRef.current) return;
+
+    const loadedForSet = loadedImages.filter(
+      (image) => imageSetId(image) === setId,
+    ).length;
+    const hasMore =
+      setHasMoreById[setId] ?? (loadedForSet === 0 && Boolean(collection));
+    if (!hasMore) return;
+
+    const requestId = ++pageRequestRef.current;
+    pageLoadingRef.current = true;
     setImagesLoadingMore(true);
+    setLoadingSetId(setId);
     const params = new URLSearchParams({
-      limit: "48",
-      offset: String(loadedImages.length),
+      limit: String(PUBLIC_GALLERY_PAGE_SIZE),
+      offset: String(loadedForSet),
       siteSlug: name,
+      setId,
     });
     const email = accessSettings?.email || visitorEmail || accessEmail;
     if (email) params.set("email", email);
-    const identifier = collection.slug ?? galary;
-    const pageUrl = ownerPreview
-      ? `/api/collections/${encodeURIComponent(collection._id)}/owner-preview?${params.toString()}`
-      : `${apiBase}/public/collections/${encodeURIComponent(identifier)}/images?${params.toString()}`;
-    const response = await fetch(pageUrl).catch(() => null);
-    const payload = response?.ok ? await response.json().catch(() => null) : null;
-    const page = payload?.data;
-    if (page?.items?.length) {
-      setLoadedImages((current) => {
-        const seen = new Set(current.map((image) => image._id));
-        return [...current, ...page.items.filter((image: PublicImage) => !seen.has(image._id))];
-      });
+    if (accessPin) params.set("pin", accessPin);
+
+    try {
+      const identifier = collection.slug ?? galary;
+      const pageUrl = ownerPreview
+        ? `/api/collections/${encodeURIComponent(collection._id)}/owner-preview?${params.toString()}`
+        : `${apiBase}/public/collections/${encodeURIComponent(identifier)}/images?${params.toString()}`;
+      const response = await fetch(pageUrl, { cache: "no-store" }).catch(() => null);
+      const payload = response?.ok ? await response.json().catch(() => null) : null;
+      const page = payload?.data;
+
+      if (page?.items?.length) {
+        setLoadedImages((current) => {
+          const seen = new Set(current.map((image) => image._id));
+          return [
+            ...current,
+            ...page.items.filter((image: PublicImage) => !seen.has(image._id)),
+          ];
+        });
+      }
+      setSetHasMoreById((current) => ({
+        ...current,
+        [setId]: Boolean(page?.hasMore),
+      }));
+    } finally {
+      if (pageRequestRef.current === requestId) {
+        pageLoadingRef.current = false;
+        setImagesLoadingMore(false);
+        setLoadingSetId("");
+      }
     }
-    setImagesHasMore(Boolean(page?.hasMore));
-    setImagesLoadingMore(false);
   };
+
   useEffect(() => {
-    if (!canLoadMoreImages) return;
+    if (!collection || favoritesPanelOpen || faceResults || imagesLoadingMore) return;
+    if (activeSetLoadedCount > 0 || setHasMoreById[activeSetId] === false) return;
+    void loadMoreImages(activeSetId);
+  }, [
+    activeSetId,
+    activeSetLoadedCount,
+    collection,
+    favoritesPanelOpen,
+    faceResults,
+    imagesLoadingMore,
+    setHasMoreById,
+  ]);
+
+  useEffect(() => {
+    if (!canLoadMoreImages || activeSetLoading) return;
     const target = loaderRef.current;
     if (!target) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) void loadMoreImages();
-    }, { rootMargin: "900px 0px" });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMoreImages(activeSetId);
+        }
+      },
+      { rootMargin: "1400px 0px" },
+    );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [canLoadMoreImages, loadedImages.length, imagesLoadingMore]);
+  }, [
+    activeSetId,
+    activeSetLoading,
+    canLoadMoreImages,
+    activeSetLoadedCount,
+    imagesLoadingMore,
+  ]);
   const verifyAccessPin = async () => {
     const pin = accessPin.trim();
     if (!pin || accessBusy) return;
     setAccessBusy(true); setAccessNotice("");
     try {
-      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?pin=${encodeURIComponent(pin)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
+      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?pin=${encodeURIComponent(pin)}&limit=${PUBLIC_GALLERY_PAGE_SIZE}&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
       const payload = response ? await response.json().catch(() => null) : null;
       if (!response?.ok || !payload?.data?.settings?.access?.pinAuthorized) {
         setAccessNotice("Incorrect PIN"); return;
       }
       setCollection(payload.data);
       setLoadedImages(payload.data?.images ?? []);
-      setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
+      const pageSetId = String(payload.data?.sets?.[0]?.id ?? "highlights");
+      setSetHasMoreById({
+        [pageSetId]: Boolean(payload.data?.imagesPage?.hasMore),
+      });
       window.sessionStorage.setItem(`collection-access-pin:${galary}`, pin);
     } finally { setAccessBusy(false); }
   };
@@ -817,7 +909,7 @@ export function PublicGallery({
     setAccessBusy(true);
     setAccessNotice("");
     try {
-      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=48&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
+      const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(galary)}?email=${encodeURIComponent(email)}&limit=${PUBLIC_GALLERY_PAGE_SIZE}&offset=0&siteSlug=${encodeURIComponent(name)}`).catch(() => null);
       const payload = response ? await response.json().catch(() => null) : null;
       if (!response?.ok || !payload?.data) {
         setAccessNotice(payload?.message ?? "Access check failed");
@@ -826,7 +918,7 @@ export function PublicGallery({
       if (!payload.data?.settings?.access?.emailAuthorized) {
         setCollection(payload.data);
         setLoadedImages([]);
-        setImagesHasMore(false);
+        setSetHasMoreById({});
         setAccessNotice("This email is not allowed to view this collection.");
         return;
       }
@@ -837,7 +929,10 @@ export function PublicGallery({
       );
       setCollection(payload.data);
       setLoadedImages(payload.data?.images ?? []);
-      setImagesHasMore(Boolean(payload.data?.imagesPage?.hasMore));
+      const pageSetId = String(payload.data?.sets?.[0]?.id ?? "highlights");
+      setSetHasMoreById({
+        [pageSetId]: Boolean(payload.data?.imagesPage?.hasMore),
+      });
       setVisitorEmail(email);
       setVisitorEmailSaved(true);
       setDownloadEmail(email);
@@ -1002,11 +1097,22 @@ export function PublicGallery({
     const payload = response ? await response.json().catch(() => null) : null;
     setFaceBusy(false);
     if (!response?.ok) {
-      setFaceError(payload?.message ?? "Face list failed.");
+      const message = payload?.message ?? "Face list failed.";
+      if (/face search is not ready/i.test(message)) {
+        setFaceReady(false);
+        setFacesIndexing(true);
+        setFaceError("");
+        return;
+      }
+      setFaceError(message);
       return;
     }
+    const ready = payload?.data?.ready !== false;
+    const missingImages = Math.max(0, Number(payload?.data?.missingImages ?? 0));
+    setFaceReady(ready);
+    setFaceMissingImages(missingImages);
     setFaces(payload?.data?.faces ?? []);
-    setFacesIndexing(Boolean(payload?.data?.indexing));
+    setFacesIndexing(Boolean(payload?.data?.indexing) || !ready);
   };
   const filterBySavedFace = async (faceId: string) => {
     setFaceBusy(true);
@@ -1128,6 +1234,9 @@ export function PublicGallery({
       {customFontName && design.customFontDataUrl && (
         <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
       )}
+      {design.coverFontName && design.coverFontDataUrl && (
+        <style>{`@font-face{font-family:"${design.coverFontName.replace(/"/g, "")}";src:url("${design.coverFontDataUrl}");font-display:swap;}`}</style>
+      )}
       <ScreenCaptureGuard />
       {logoRevealVisible && (
         <div className={cn("gallery-logo-reveal fixed inset-0 z-[120] grid place-items-center bg-[#101010] text-white", `gallery-logo-reveal--${design.logoRevealStyle || "scale"}`, logoRevealLeaving && "is-leaving")}>
@@ -1241,9 +1350,18 @@ export function PublicGallery({
 
       <section className="px-0 py-0">
         <div className="sticky top-0 z-20 grid min-h-[76px] grid-cols-1 items-center gap-2 border-y border-black/10 bg-white/95 px-3 py-3 text-[#202326] shadow-[0_10px_28px_rgba(0,0,0,0.08)] backdrop-blur sm:gap-3 sm:px-4 md:grid-cols-[minmax(180px,0.75fr)_minmax(0,1.6fr)_auto] md:px-8">
-          <div className="min-w-0">
-            <h1 className="break-words font-bold uppercase leading-tight tracking-[0.1em]" style={{ fontSize: responsiveGalleryFont(design.galleryTitleFontSizePx, 16, 16, 36), color: design.galleryTitleColor || undefined }}>{title}</h1>
-            <p className="mt-1 break-words text-[10px] uppercase leading-tight tracking-[0.18em] text-black/45 sm:text-[11px] sm:tracking-[0.22em]">{studioName}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            {collection?.branding?.logoUrl && (
+              <img
+                src={imageSrc(collection.branding.logoUrl)}
+                alt={collection.branding.brandText || studioName}
+                className="h-9 w-auto max-w-24 shrink-0 object-contain sm:h-10"
+              />
+            )}
+            <div className="min-w-0">
+              <h1 className="break-words font-bold uppercase leading-tight tracking-[0.1em]" style={{ fontSize: responsiveGalleryFont(design.galleryTitleFontSizePx, 16, 16, 36), color: design.galleryTitleColor || undefined }}>{title}</h1>
+              <p className="mt-1 break-words text-[10px] uppercase leading-tight tracking-[0.18em] text-black/45 sm:text-[11px] sm:tracking-[0.22em]" style={{ color: collection?.branding?.accentColor || undefined }}>{collection?.branding?.brandText || studioName}</p>
+            </div>
           </div>
           <div className="public-gallery-scroll-row -mx-1 flex min-w-0 gap-4 overflow-x-auto px-1 pb-1 font-semibold uppercase tracking-[0.1em] sm:gap-5 sm:tracking-[0.12em] md:justify-center" style={{ fontSize: responsiveGalleryFont(design.galleryNavigationFontSizePx, 12, 12, 24), color: design.galleryNavigationColor || undefined }}>
             {showSetTabs && gallerySets.map((set) => (
@@ -1388,7 +1506,6 @@ export function PublicGallery({
           </p>
         )}
 
-        {faceError && <p className="mx-4 mt-5 text-sm font-semibold text-red-600 md:mx-8">{faceError}</p>}
         {shareNotice && (
           <p className="mx-4 mt-5 inline-flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white md:mx-8">
             <Check className="size-4" />
@@ -1415,54 +1532,74 @@ export function PublicGallery({
           id="gallery"
           className="mt-0 bg-white p-0"
         >
-          <div
-            className={cn(
-              galleryLayout === "masonry" && masonryColumns,
-              galleryLayout === "classic" && "grid grid-cols-1 sm:grid-cols-2",
-              galleryLayout === "classic" && design.thumbnailSize === "Regular" && "lg:grid-cols-3 xl:grid-cols-4",
-              galleryLayout === "art" && "grid auto-rows-[minmax(180px,46vw)] grid-cols-2 sm:auto-rows-[260px] lg:grid-cols-4 lg:auto-rows-[300px]",
-              galleryLayout === "custom" && customGridColumns,
-            )}
-            style={{ gap: galleryLayout === "masonry" ? undefined : `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
-          >
-            {visibleImages.map((photo, index) => (
-              <div
-                key={photo._id}
-                className={cn(
-                  "min-w-0 break-inside-avoid",
-                  galleryLayout === "classic" && "aspect-square",
-                  galleryLayout === "art" && index % 7 === 0 && "col-span-2 row-span-2",
-                  galleryLayout === "custom" && customAspectClass,
-                )}
-              >
-                <GalleryTile
-                  photo={photo}
-                  spacing={galleryLayout === "masonry" ? masonryGapPx : 0}
-                  crop={galleryLayout !== "masonry" && !(galleryLayout === "custom" && !customAspectClass)}
-                  canFavorite={favoritesEnabled}
-                  canDownload={canDownloadMedia(photo)}
-                  canShare={socialSharingEnabled}
-                  sharpeningLevel={sharpeningLevel}
-                  favoriteBusy={favoriteImageBusy === photo._id}
-                  favorited={favoriteImageIds.has(photo._id)}
-                  privatePhoto={privateImageIds.has(photo._id)}
-                  privateBusy={privateImageBusy === photo._id}
-                  showFilename={showFilenames}
-                  priority={index < 4}
-                  parallax={Boolean(design.galleryParallaxEnabled)}
-                  parallaxStrength={design.galleryParallaxStrength ?? 36}
-                  onPrivate={togglePrivatePhoto}
-                  onDownload={downloadPhoto}
-                  onFavorite={toggleImageFavorite}
-                  onPreview={setActiveImage}
-                  onShare={sharePhoto}
+          {showInitialSetSkeleton ? (
+            <div
+              className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-4"
+              aria-label="Loading photos"
+              aria-busy="true"
+            >
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    "animate-pulse bg-gradient-to-br from-[#eeeeeb] via-[#f8f8f6] to-[#e9e9e6]",
+                    index % 3 === 0 ? "aspect-[4/5]" : index % 3 === 1 ? "aspect-[3/2]" : "aspect-square",
+                  )}
                 />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              className={cn(
+                galleryLayout === "masonry" && masonryColumns,
+                galleryLayout === "classic" && "grid grid-cols-1 sm:grid-cols-2",
+                galleryLayout === "classic" && design.thumbnailSize === "Regular" && "lg:grid-cols-3 xl:grid-cols-4",
+                galleryLayout === "art" && "grid auto-rows-[minmax(180px,46vw)] grid-cols-2 sm:auto-rows-[260px] lg:grid-cols-4 lg:auto-rows-[300px]",
+                galleryLayout === "custom" && customGridColumns,
+              )}
+              style={{ gap: galleryLayout === "masonry" ? undefined : `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
+            >
+              {visibleImages.map((photo, index) => (
+                <div
+                  key={photo._id}
+                  className={cn(
+                    "min-w-0 break-inside-avoid",
+                    galleryLayout === "classic" && "aspect-square",
+                    galleryLayout === "art" && index % 7 === 0 && "col-span-2 row-span-2",
+                    galleryLayout === "custom" && customAspectClass,
+                  )}
+                >
+                  <GalleryTile
+                    photo={photo}
+                    spacing={galleryLayout === "masonry" ? masonryGapPx : 0}
+                    crop={galleryLayout !== "masonry" && !(galleryLayout === "custom" && !customAspectClass)}
+                    canFavorite={favoritesEnabled}
+                    canDownload={canDownloadMedia(photo)}
+                    canShare={socialSharingEnabled}
+                    sharpeningLevel={sharpeningLevel}
+                    favoriteBusy={favoriteImageBusy === photo._id}
+                    favorited={favoriteImageIds.has(photo._id)}
+                    privatePhoto={privateImageIds.has(photo._id)}
+                    privateBusy={privateImageBusy === photo._id}
+                    showFilename={showFilenames}
+                    priority={index < 4}
+                    parallax={Boolean(design.galleryParallaxEnabled)}
+                    parallaxStrength={design.galleryParallaxStrength ?? 36}
+                    onPrivate={togglePrivatePhoto}
+                    onDownload={downloadPhoto}
+                    onFavorite={toggleImageFavorite}
+                    onPreview={setActiveImage}
+                    onShare={sharePhoto}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           {canLoadMoreImages && (
-            <div ref={loaderRef} className="flex h-24 items-center justify-center">
-              {imagesLoadingMore && <Loader2 className="size-6 animate-spin" />}
+            <div ref={loaderRef} className="flex h-20 items-center justify-center">
+              {imagesLoadingMore && activeSetLoadedCount > 0 && (
+                <Loader2 className="size-5 animate-spin text-black/45" />
+              )}
             </div>
           )}
         </div>
@@ -1690,9 +1827,12 @@ export function PublicGallery({
               srcSet={responsiveImageSrcSet(activeImage)}
               sizes="100vw"
               alt={displayCaption(activeImage)}
-              className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full object-contain"
+              width={activeImage.width}
+              height={activeImage.height}
+              className="mx-auto block max-h-[calc(100dvh-7rem)] max-w-full object-contain"
               watermark={activeImage.watermark}
               priority
+              showLoader
             />
           )}
           {showFilenames && displayFilename(activeImage) && (
@@ -1754,9 +1894,12 @@ export function PublicGallery({
               srcSet={responsiveImageSrcSet(slideshowImage)}
               sizes="100vw"
               alt={displayCaption(slideshowImage)}
-              className="mx-auto max-h-[calc(100dvh-7rem)] max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
+              width={slideshowImage.width}
+              height={slideshowImage.height}
+              className="mx-auto block max-h-[calc(100dvh-7rem)] max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
               watermark={slideshowImage.watermark}
               priority
+              showLoader
             />
           )}
           {showFilenames && displayFilename(slideshowImage) && (
@@ -1769,25 +1912,51 @@ export function PublicGallery({
 
       {faceSheetOpen && (
         <div className="fixed inset-0 z-40 flex justify-end bg-black/30">
-          <aside className="h-full w-full max-w-[360px] overflow-y-auto bg-white p-5 text-[#111] shadow-[-18px_0_40px_rgba(0,0,0,0.18)] sm:p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
+          <aside className="h-full w-full max-w-[380px] overflow-y-auto bg-white p-5 text-[#111] shadow-[-18px_0_40px_rgba(0,0,0,0.18)] sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 pt-1">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#777]">Face filter</p>
-                <h2 className="mt-2 text-2xl font-semibold">People in album</h2>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight">People in album</h2>
               </div>
-              <button onClick={() => setFaceSheetOpen(false)} aria-label="Close face filter">
-                <X className="size-5" />
+              <button
+                className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white text-black/70 transition hover:bg-black hover:text-white"
+                onClick={() => setFaceSheetOpen(false)}
+                aria-label="Close face filter"
+                type="button"
+              >
+                <X className="size-4" />
               </button>
             </div>
-            {faceBusy && <p className="mt-8 text-sm text-[#666]">Loading faces...</p>}
-            {facesIndexing && !faceBusy && (
-              <p className="mt-6 rounded bg-[#f6f6f4] px-3 py-2 text-sm font-semibold text-[#666]">
-                Detecting remaining faces...
+            {faceBusy && (
+              <div className="mt-7 flex items-center gap-2 text-sm font-medium text-[#666]">
+                <Loader2 className="size-4 animate-spin" />
+                Loading faces...
+              </div>
+            )}
+            {faceError && !faceBusy && (
+              <p className="mt-6 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {faceError}
               </p>
             )}
-            {!faceBusy && !faces.length && (
+            {!faceReady && !faceBusy && !faceError && (
+              <div className="mt-6 rounded-lg bg-[#f6f3ff] px-4 py-3 text-sm leading-6 text-[#5d45a5]">
+                <div className="flex items-center gap-2 font-semibold">
+                  <Loader2 className="size-4 animate-spin" />
+                  Face indexing is reconnecting
+                </div>
+                <p className="mt-1 text-xs text-[#7665aa]">
+                  Your photos stay queued. This panel will refresh automatically when the background face service is ready.
+                </p>
+              </div>
+            )}
+            {faceReady && facesIndexing && !faceBusy && (
+              <p className="mt-6 rounded-lg bg-[#f6f6f4] px-4 py-3 text-sm font-semibold text-[#666]">
+                Detecting {faceMissingImages > 0 ? `${faceMissingImages} ` : ""}remaining photo{faceMissingImages === 1 ? "" : "s"} in the background...
+              </p>
+            )}
+            {faceReady && !faceBusy && !faces.length && !facesIndexing && !faceError && (
               <p className="mt-8 text-sm leading-6 text-[#666]">
-                No indexed faces yet. New uploads index in background.
+                No faces were detected in this gallery yet.
               </p>
             )}
             <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-5">
@@ -1825,6 +1994,16 @@ function imageSrc(url?: string) {
   if (/^(https?:|data:|blob:)/i.test(url)) return url;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
   return url.startsWith("/") ? `${baseUrl}${url}` : url;
+}
+
+function warmPublicImageCache(url?: string) {
+  if (typeof window === "undefined") return;
+  const src = imageSrc(url);
+  if (!src) return;
+  const image = new Image();
+  image.decoding = "async";
+  image.fetchPriority = "high";
+  image.src = src;
 }
 
 function isPersistedImageId(value: string) {
@@ -1942,10 +2121,23 @@ function GalleryTile({
       style={{
         marginBottom: `${spacing}px`,
         contentVisibility: "auto",
-        containIntrinsicSize: "420px 320px",
+        containIntrinsicSize:
+          Number(photo.width) > 0 && Number(photo.height) > 0
+            ? `auto ${Math.max(
+                180,
+                Math.round((320 * Number(photo.height)) / Number(photo.width)),
+              )}px`
+            : "auto 300px",
       }}
     >
-      <button className={cn("block w-full", crop && "h-full")} onClick={() => onPreview(photo)} type="button" aria-label={`Open ${displayFilename(photo) || "photo"}`}>
+      <button
+        className={cn("block w-full", crop && "h-full")}
+        onPointerEnter={() => warmPublicImageCache(photo.url)}
+        onFocus={() => warmPublicImageCache(photo.url)}
+        onClick={() => onPreview(photo)}
+        type="button"
+        aria-label={`Open ${displayFilename(photo) || "photo"}`}
+      >
         {isVideo(photo) ? (
           <span className={cn("relative block w-full bg-black", crop ? "h-full" : "aspect-video")}>
             <video src={imageSrc(photo.url)} className="h-full w-full object-cover opacity-80" preload={priority ? "metadata" : "none"} muted />
@@ -1960,6 +2152,8 @@ function GalleryTile({
             srcSet={responsiveImageSrcSet(photo)}
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
             alt={displayCaption(photo)}
+            width={photo.width}
+            height={photo.height}
             className={crop ? "block h-full w-full object-cover" : "block h-auto w-full"}
             style={sharpenStyle(sharpeningLevel)}
             priority={priority}
@@ -2016,6 +2210,8 @@ function GalleryImage({
   srcSet,
   sizes,
   alt,
+  width,
+  height,
   className,
   style,
   onShape,
@@ -2023,12 +2219,15 @@ function GalleryImage({
   parallax = false,
   parallaxStrength = 36,
   watermark,
+  showLoader = false,
 }: {
   src: string;
   fallbackSrc?: string;
   srcSet?: string;
   sizes?: string;
   alt: string;
+  width?: number;
+  height?: number;
   className?: string;
   style?: CSSProperties;
   onShape?: (shape: "portrait" | "landscape" | "square") => void;
@@ -2036,17 +2235,25 @@ function GalleryImage({
   parallax?: boolean;
   parallaxStrength?: number;
   watermark?: ImageWatermark;
+  showLoader?: boolean;
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
   const [useSrcSet, setUseSrcSet] = useState(Boolean(srcSet));
   const [fallbackActive, setFallbackActive] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const frameRef = useRef<HTMLSpanElement | null>(null);
   useEffect(() => {
     setCurrentSrc(src);
     setUseSrcSet(Boolean(srcSet));
     setFallbackActive(false);
+    setLoaded(false);
   }, [src, srcSet]);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (image?.complete && image.naturalWidth > 0) setLoaded(true);
+  }, [currentSrc, useSrcSet]);
   useEffect(() => {
     const image = imageRef.current;
     const frame = frameRef.current;
@@ -2097,8 +2304,43 @@ function GalleryImage({
       image.style.willChange = "";
     };
   }, [currentSrc, parallax, parallaxStrength, useSrcSet]);
+  const validWidth = Math.max(0, Number(width ?? 0));
+  const validHeight = Math.max(0, Number(height ?? 0));
+  const hasIntrinsicSize = validWidth > 0 && validHeight > 0;
+  const fullHeight = Boolean(className?.includes("h-full"));
+
   return (
-    <span ref={frameRef} className={cn("relative block w-full bg-transparent", (parallax || className?.includes("h-full")) && "overflow-hidden", className?.includes("h-full") && "h-full")}>
+    <span
+      ref={frameRef}
+      className={cn(
+        "relative block w-full overflow-hidden bg-[#f4f4f2]",
+        (parallax || fullHeight) && "overflow-hidden",
+        fullHeight && "h-full",
+        showLoader && "min-h-[45vh] bg-black/20",
+      )}
+      style={
+        hasIntrinsicSize && !fullHeight && !showLoader
+          ? { aspectRatio: `${validWidth} / ${validHeight}` }
+          : undefined
+      }
+    >
+      {!loaded && (
+        <span
+          className={cn(
+            "pointer-events-none absolute inset-0 z-10 flex items-center justify-center",
+            showLoader
+              ? "bg-black/20"
+              : "animate-pulse bg-gradient-to-br from-[#eeeeeb] via-[#f7f7f5] to-[#e9e9e6]",
+          )}
+          aria-hidden="true"
+        >
+          {showLoader && (
+            <span className="flex size-12 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur">
+              <Loader2 className="size-6 animate-spin" />
+            </span>
+          )}
+        </span>
+      )}
       <img
         key={`${currentSrc}|${useSrcSet ? "responsive" : "single"}`}
         ref={imageRef}
@@ -2106,15 +2348,21 @@ function GalleryImage({
         srcSet={useSrcSet && currentSrc === src ? srcSet : undefined}
         sizes={useSrcSet && currentSrc === src ? sizes : undefined}
         alt={alt}
+        width={hasIntrinsicSize ? validWidth : undefined}
+        height={hasIntrinsicSize ? validHeight : undefined}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
         decoding="async"
         onLoad={(event) => {
+          setLoaded(true);
           const image = event.currentTarget;
           const ratio = image.naturalWidth / Math.max(1, image.naturalHeight);
-          onShape?.(ratio > 1.12 ? "landscape" : ratio < 0.9 ? "portrait" : "square");
+          onShape?.(
+            ratio > 1.12 ? "landscape" : ratio < 0.9 ? "portrait" : "square",
+          );
         }}
         onError={() => {
+          setLoaded(false);
           if (useSrcSet && srcSet && currentSrc === src) {
             setUseSrcSet(false);
             return;
@@ -2125,10 +2373,14 @@ function GalleryImage({
             setFallbackActive(true);
           }
         }}
-        className={className}
+        className={cn(
+          className,
+          "transition-opacity duration-200",
+          loaded ? "opacity-100" : "opacity-0",
+        )}
         style={style}
       />
-      {fallbackActive && watermark && (
+      {fallbackActive && loaded && watermark && (
         <ImageWatermarkOverlay watermark={watermark} />
       )}
     </span>

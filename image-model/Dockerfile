@@ -34,5 +34,11 @@ RUN chown -R appuser:appuser /app
 USER appuser
 EXPOSE 8010
 
-# One process. The app keeps a small internal worker pool for a 2-core VPS.
+# Give the model enough time to load/download on a cold boot, then continuously
+# expose a real container health signal to EasyPanel/Docker.
+HEALTHCHECK --interval=30s --timeout=8s --start-period=120s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=5).read()" || exit 1
+
+# One process. The app keeps a small internal worker pool so face detection stays
+# low-pressure even while the Nest API uses multiple PM2 workers.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1", "--limit-concurrency", "2", "--timeout-keep-alive", "20"]

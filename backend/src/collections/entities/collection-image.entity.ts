@@ -74,6 +74,15 @@ export class CollectionImage {
   @Prop({ default: 0, index: true })
   faceIndexVersion?: number;
 
+  @Prop({ default: 0 })
+  faceIndexAttempts?: number;
+
+  @Prop({ index: true })
+  faceIndexNextAttemptAt?: Date;
+
+  @Prop()
+  faceIndexLastError?: string;
+
   @Prop({ type: Object, default: {} })
   metadata: Record<string, unknown>;
 }
@@ -86,4 +95,9 @@ CollectionImageSchema.index({
   setId: 1,
   order: 1,
   createdAt: -1,
+});
+CollectionImageSchema.index({
+  faceIndexVersion: 1,
+  faceIndexNextAttemptAt: 1,
+  createdAt: 1,
 });

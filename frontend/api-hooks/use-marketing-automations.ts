@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
 
 export type MarketingAutomationStats = Partial<Record<"scheduled" | "sending" | "sent" | "failed" | "cancelled", number>>;
-export type MarketingAutomationTrigger = "new-subscriber" | "gallery-published" | "client-download" | "client-favorite";
+export type MarketingAutomationTrigger = "new-subscriber" | "gallery-published" | "gallery-updated" | "client-download" | "client-favorite";
 
 export type MarketingAutomationRecord = {
   _id: string;

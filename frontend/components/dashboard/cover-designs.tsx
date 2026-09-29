@@ -66,6 +66,8 @@ export type CoverPreviewSettings = CoverAnimationDesign & {
   typography?: string;
   customFontName?: string;
   customFontDataUrl?: string;
+  coverFontName?: string;
+  coverFontDataUrl?: string;
   customCoverTemplate?: CustomCoverTemplate;
   branding?: Partial<BrandSettings>;
 };
@@ -213,7 +215,7 @@ export function CoverPreview({
       design.typography as keyof typeof coverTypographyFamilyMap
     ] ?? coverTypographyFamilyMap.Classic;
   const fontFamily = resolveGalleryFontFamily(
-    design.customFontName,
+    design.coverFontName || design.customFontName,
     fallbackFontFamily,
   );
   if (design.customCoverTemplate) {

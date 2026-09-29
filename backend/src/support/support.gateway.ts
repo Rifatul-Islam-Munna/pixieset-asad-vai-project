@@ -81,6 +81,13 @@ export class SupportGateway implements OnGatewayConnection, OnGatewayDisconnect 
     this.server.to('support:admins').emit('support:conversation-cleared', { userId });
   }
 
+  notifyMessage(message: any) {
+    const userId = String(message?.userId ?? '');
+    if (!userId) return;
+    this.server.to(`support:user:${userId}`).emit('support:message', message);
+    this.server.to('support:admins').emit('support:message', message);
+  }
+
   @SubscribeMessage('support:send')
   async send(@ConnectedSocket() client: Socket, @MessageBody() body: { message: string; userId?: string }) {
     this.touch(client);

@@ -294,7 +294,7 @@ export class ImagorService {
     if (!imagePath) return undefined;
 
     const path = `meta/${imagePath}`;
-    const url = `${this.baseUrl()}/${this.signPath(path)}`;
+    const url = `${this.internalBaseUrl()}/${this.signPath(path)}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
 
@@ -429,6 +429,14 @@ export class ImagorService {
 
   private baseUrl() {
     return String(this.configService.get<string>('IMAGOR_URL') || '')
+      .trim()
+      .replace(/\/+$/, '');
+  }
+
+  private internalBaseUrl() {
+    return String(
+      this.configService.get<string>('IMAGOR_INTERNAL_URL') || this.baseUrl(),
+    )
       .trim()
       .replace(/\/+$/, '');
   }

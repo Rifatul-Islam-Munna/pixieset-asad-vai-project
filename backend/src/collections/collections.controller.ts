@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -10,10 +11,12 @@ import {
   Req,
   Res,
   UploadedFiles,
+  UnauthorizedException,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiConsumes } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { existsSync, mkdirSync } from 'fs';
 import { diskStorage } from 'multer';
@@ -21,6 +24,7 @@ import { extname, join } from 'path';
 import { cwd } from 'process';
 import type { Response } from 'express';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
+import { FaceSearchService } from 'src/face-search/face-search.service';
 import { CollectionDownloadDeliveryService } from './collection-download-delivery.service';
 import { CollectionsService } from './collections.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
@@ -71,6 +75,7 @@ export class PublicCollectionsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('siteSlug') siteSlug?: string,
+    @Query('setId') setId?: string,
   ) {
     const data = await this.collectionsService.findPublic(
       identifier,
@@ -79,6 +84,8 @@ export class PublicCollectionsController {
       limit,
       offset,
       siteSlug,
+      false,
+      setId,
     );
     return { data };
   }
@@ -105,6 +112,7 @@ export class PublicCollectionsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('siteSlug') siteSlug?: string,
+    @Query('setId') setId?: string,
   ) {
     const data = await this.collectionsService.findPublicImages(
       identifier,
@@ -113,6 +121,7 @@ export class PublicCollectionsController {
       limit,
       offset,
       siteSlug,
+      setId,
     );
     return { data };
   }
@@ -236,10 +245,87 @@ export class PublicCollectionsController {
   }
 }
 
+@Controller('internal/imagor-cache')
+export class ImagorCacheWorkerController {
+  constructor(
+    private readonly collectionsService: CollectionsService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private assertWorkerSecret(secret?: string) {
+    const expected = String(
+      this.configService.get<string>('IMAGOR_SECRET') || '',
+    ).trim();
+    if (!expected || String(secret || '').trim() !== expected) {
+      throw new UnauthorizedException('Invalid Imagor worker secret');
+    }
+  }
+
+  @Post('claim')
+  async claim(
+    @Headers('x-imagor-worker-secret') secret?: string,
+  ) {
+    this.assertWorkerSecret(secret);
+    return {
+      data: await this.collectionsService.claimImagorResultCacheJob(),
+    };
+  }
+
+  @Post('complete/:imageId')
+  async complete(
+    @Param('imageId') imageId: string,
+    @Headers('x-imagor-worker-secret') secret: string | undefined,
+    @Body()
+    body: {
+      collectionId?: string;
+      success?: boolean;
+      keys?: Record<string, string>;
+      urls?: Record<string, string>;
+      error?: string;
+    },
+  ) {
+    this.assertWorkerSecret(secret);
+    return {
+      data: await this.collectionsService.completeImagorResultCacheJob(
+        imageId,
+        body,
+      ),
+    };
+  }
+
+  @Post('delete/claim')
+  async claimDelete(
+    @Headers('x-imagor-worker-secret') secret?: string,
+  ) {
+    this.assertWorkerSecret(secret);
+    return {
+      data: await this.collectionsService.claimImagorResultCacheDeleteJob(),
+    };
+  }
+
+  @Post('delete/complete/:jobId')
+  async completeDelete(
+    @Param('jobId') jobId: string,
+    @Headers('x-imagor-worker-secret') secret: string | undefined,
+    @Body() body: { success?: boolean; error?: string },
+  ) {
+    this.assertWorkerSecret(secret);
+    return {
+      data: await this.collectionsService.completeImagorResultCacheDeleteJob(
+        jobId,
+        body,
+      ),
+    };
+  }
+}
+
 @Controller('collections')
 @UseGuards(AuthGuard)
 export class CollectionsController {
-  constructor(private readonly collectionsService: CollectionsService) {}
+  constructor(
+    private readonly collectionsService: CollectionsService,
+    private readonly faceSearchService: FaceSearchService,
+  ) {}
 
   @Post()
   async create(@Body() dto: CreateCollectionDto, @Req() req: ExpressRequest) {
@@ -309,6 +395,21 @@ export class CollectionsController {
       body,
     );
     return { data, message: 'Marketing contacts added' };
+  }
+
+  @Post(':id/reindex-faces')
+  async reindexFaces(
+    @Param('id') id: string,
+    @Req() req: ExpressRequest,
+  ) {
+    const data = await this.faceSearchService.requestCollectionFaceReindex(
+      req.user.id,
+      id,
+    );
+    return {
+      message: 'Face re-index queued. It will run slowly in the background.',
+      data,
+    };
   }
 
   @Get(':id/activity')
@@ -480,12 +581,14 @@ export class CollectionsController {
     @Req() req: ExpressRequest,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('setId') setId?: string,
   ) {
     const data = await this.collectionsService.findOwnerPreview(
       req.user.id,
       id,
       limit,
       offset,
+      setId,
     );
     return { data };
   }

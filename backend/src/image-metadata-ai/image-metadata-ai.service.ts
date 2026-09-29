@@ -9,6 +9,7 @@ import { Model, Types } from 'mongoose';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { MinioService } from 'src/lib/minio.service';
+import { backgroundWorkerEnabled } from 'src/lib/runtime-role';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { Plan, PlanDocument } from 'src/admin/entities/plan.entity';
 import {
@@ -306,6 +307,7 @@ export class ImageMetadataAiService implements OnModuleInit {
 
   @Interval(3_000)
   async processNextQueuedImage() {
+    if (!backgroundWorkerEnabled()) return;
     if (
       this.processing ||
       !this.apiKey() ||

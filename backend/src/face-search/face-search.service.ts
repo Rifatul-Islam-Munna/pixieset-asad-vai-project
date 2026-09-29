@@ -1,12 +1,14 @@
-import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { QdrantClient } from '@qdrant/js-client-rest';
+import { Interval } from '@nestjs/schedule';
 import { createHash } from 'crypto';
 import { Model } from 'mongoose';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
+import { backgroundWorkerEnabled } from 'src/lib/runtime-role';
 import { FaceIdentity, FaceIdentityDocument } from './entities/face-identity.entity';
 import { FacePerson, FacePersonDocument } from './entities/face-person.entity';
 
@@ -42,7 +44,10 @@ type FaceGroup = {
 
 const INSIGHT_VECTOR_SIZE = 512;
 const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
-const FACE_INDEX_VERSION = 8;
+// v9 forces one slow background rebuild of older face rows so images that
+// were incorrectly marked complete during an image-model/Qdrant outage are retried.
+const FACE_INDEX_VERSION = 9;
+const DEFAULT_FACE_REINDEX_COOLDOWN_HOURS = 24;
 
 /**
  * Face indexing/search service.
@@ -60,6 +65,9 @@ export class FaceSearchService implements OnModuleInit {
   private readonly identityCache = new Map<string, { expiresAt: number; items: any[] }>();
   private faceIndexTail: Promise<void> = Promise.resolve();
   private nextFaceIndexAt = 0;
+  private readinessRefresh?: Promise<boolean>;
+  private nextReadinessRefreshAt = 0;
+  private backgroundSweepRunning = false;
 
   constructor(
     private readonly configService: ConfigService,
@@ -74,8 +82,96 @@ export class FaceSearchService implements OnModuleInit {
     this.logger.log(
       `Face search boot: external image model=${this.imageModelUrl() || 'not configured'}; qdrant collection=${this.vectorCollection()}; vectorSize=${this.vectorSize()}`,
     );
-    await this.initQdrant();
-    await this.checkImageModel();
+    await this.refreshReadiness();
+  }
+
+  @Interval(5_000)
+  async processBackgroundFaceIndexTick() {
+    if (!backgroundWorkerEnabled() || this.backgroundSweepRunning) return;
+    this.backgroundSweepRunning = true;
+    try {
+      if (!(await this.ensureReady())) return;
+
+      const now = new Date();
+      const image = await this.imageModel
+        .findOne({
+          mediaType: { $ne: 'video' },
+          $and: [
+            {
+              $or: [
+                { faceIndexedAt: { $exists: false } },
+                { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
+              ],
+            },
+            {
+              $or: [
+                { faceIndexNextAttemptAt: { $exists: false } },
+                { faceIndexNextAttemptAt: { $lte: now } },
+              ],
+            },
+          ],
+        })
+        .sort({ faceIndexNextAttemptAt: 1, createdAt: 1 })
+        .lean();
+
+      if (!image) {
+        await this.finishCompletedReindexCollections();
+        return;
+      }
+
+      const collectionId = String(image.collectionId);
+      if (
+        (image as any).faceIndexedAt &&
+        Number((image as any).faceIndexVersion ?? 0) !== FACE_INDEX_VERSION
+      ) {
+        await this.deleteCollectionFaces(collectionId);
+        await this.imageModel.updateMany(
+          { collectionId, mediaType: { $ne: 'video' } },
+          {
+            $set: { faceCount: 0, faceIndexAttempts: 0, faceIndexLastError: '' },
+            $unset: {
+              faceIndexedAt: 1,
+              faceIndexVersion: 1,
+              faceIndexNextAttemptAt: 1,
+            },
+          },
+        );
+      }
+
+      await this.collectionModel.updateOne(
+        { _id: image.collectionId, faceReindexStatus: 'queued' },
+        { $set: { faceReindexStatus: 'processing' } },
+      );
+      await this.indexImage(image as IndexedImage);
+      await this.finishCompletedReindexCollections(String(image.collectionId));
+    } catch (error) {
+      this.logger.warn(
+        `Background face index tick failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      this.backgroundSweepRunning = false;
+    }
+  }
+
+  private async ensureReady() {
+    if (this.ready && this.qdrant) return true;
+    if (Date.now() < this.nextReadinessRefreshAt) return false;
+    return this.refreshReadiness();
+  }
+
+  private async refreshReadiness() {
+    if (this.readinessRefresh) return this.readinessRefresh;
+    this.readinessRefresh = (async () => {
+      this.ready = false;
+      await this.initQdrant();
+      await this.checkImageModel();
+      const ready = Boolean(this.ready && this.qdrant);
+      this.nextReadinessRefreshAt = ready ? 0 : Date.now() + 30_000;
+      return ready;
+    })().finally(() => {
+      this.readinessRefresh = undefined;
+    });
+    return this.readinessRefresh;
   }
 
   async indexImage(image: IndexedImage) {
@@ -98,53 +194,61 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private async indexImageNow(image: IndexedImage) {
-    if (!this.ready || !this.qdrant) return 0;
+    if (!(await this.ensureReady())) return 0;
 
     const imageId = image._id?.toString();
-    if (!imageId || !image.url) return 0;
+    const collectionId = String(image.collectionId ?? '');
+    if (!imageId || !image.url || !collectionId) return 0;
 
     const sourceUrl = this.faceIndexImageUrl(image);
-    const buffer = await this.readImage(sourceUrl).catch(() => null);
+    let buffer: Buffer | null = null;
+    try {
+      buffer = await this.readImage(sourceUrl);
+    } catch (error) {
+      await this.markFaceIndexFailure(
+        imageId,
+        `image download failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 0;
+    }
     if (!buffer) {
-      this.logger.warn(`Face indexing skipped for ${imageId}: image download failed`);
+      await this.markFaceIndexFailure(imageId, 'image download failed');
       return 0;
     }
 
-    await this.deleteImageFaces(String(image.collectionId), imageId);
+    await this.deleteImageFaces(collectionId, imageId);
 
-    const faces = await this.extractFaces(buffer).catch((error) => {
-      this.logger.warn(`Face indexing skipped for ${imageId}: ${error?.message ?? error}`);
-      return [];
-    });
+    let faces: DetectedFace[];
+    try {
+      faces = await this.extractFaces(buffer);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Face indexing failed for ${imageId}: ${message}`);
+      await this.markFaceIndexFailure(imageId, message);
+      return 0;
+    }
 
     if (!faces.length) {
-      await this.imageModel
-        .updateOne(
-          { _id: imageId },
-          { $set: { faceIndexedAt: new Date(), faceCount: 0, faceIndexVersion: FACE_INDEX_VERSION } },
-        )
-        .catch(() => undefined);
+      await this.markFaceIndexSuccess(imageId, 0);
       return 0;
     }
 
     const assignedFaces = await this.assignPersonIds(
       String(image.userId),
-      String(image.collectionId),
+      collectionId,
       imageId,
       image.url,
       faces,
     );
 
-    await this.qdrant
-      .upsert(this.vectorCollection(), {
-        // Face points are eventually visible; the Mongo record is still updated
-        // immediately so the image is not needlessly reprocessed.
-        wait: false,
+    try {
+      await this.qdrant!.upsert(this.vectorCollection(), {
+        wait: true,
         points: assignedFaces.map((face, index) => ({
-          id: this.pointId(`${image.collectionId}-${imageId}-${index}`),
+          id: this.pointId(`${collectionId}-${imageId}-${index}`),
           vector: face.vector,
           payload: {
-            collectionId: image.collectionId,
+            collectionId,
             imageId,
             url: image.url,
             personId: face.personId,
@@ -153,17 +257,60 @@ export class FaceSearchService implements OnModuleInit {
             box: face.box,
           },
         })),
-      })
-      .catch((error) => this.logger.warn(`Qdrant upsert failed: ${error?.message ?? error}`));
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Qdrant upsert failed for ${imageId}: ${message}`);
+      this.ready = false;
 
-    await this.imageModel
-      .updateOne(
-        { _id: imageId },
-        { $set: { faceIndexedAt: new Date(), faceCount: faces.length, faceIndexVersion: FACE_INDEX_VERSION } },
-      )
-      .catch(() => undefined);
+      // Person counters were already updated while assigning IDs. Reset this
+      // collection and let the slow background sweep rebuild it cleanly instead
+      // of counting the same face again on the next retry.
+      await this.deleteCollectionFaces(collectionId).catch(() => undefined);
+      await this.imageModel
+        .updateMany(
+          { collectionId, mediaType: { $ne: 'video' } },
+          {
+            $unset: { faceIndexedAt: 1, faceIndexVersion: 1 },
+            $set: { faceCount: 0 },
+          },
+        )
+        .catch(() => undefined);
+      await this.markFaceIndexFailure(imageId, `vector store failed: ${message}`);
+      return 0;
+    }
 
+    await this.markFaceIndexSuccess(imageId, faces.length);
     return assignedFaces.length;
+  }
+
+  private async markFaceIndexSuccess(imageId: string, faceCount: number) {
+    await this.imageModel.updateOne(
+      { _id: imageId },
+      {
+        $set: {
+          faceIndexedAt: new Date(),
+          faceCount,
+          faceIndexVersion: FACE_INDEX_VERSION,
+          faceIndexAttempts: 0,
+          faceIndexLastError: '',
+        },
+        $unset: { faceIndexNextAttemptAt: 1 },
+      },
+    );
+  }
+
+  private async markFaceIndexFailure(imageId: string, reason: string) {
+    await this.imageModel.updateOne(
+      { _id: imageId },
+      {
+        $inc: { faceIndexAttempts: 1 },
+        $set: {
+          faceIndexLastError: String(reason || 'Face indexing failed').slice(0, 500),
+          faceIndexNextAttemptAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      },
+    );
   }
 
   async deleteImageFaces(collectionId: string, imageId: string) {
@@ -224,7 +371,7 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   async reindexCollectionFaces(collectionId: string) {
-    if (!this.ready || !this.qdrant) {
+    if (!(await this.ensureReady())) {
       throw new BadRequestException('Face search is not ready');
     }
 
@@ -232,7 +379,10 @@ export class FaceSearchService implements OnModuleInit {
 
     let imageCount = 0;
     let faces = 0;
-    const cursor = this.imageModel.find({ collectionId }).lean().cursor();
+    const cursor = this.imageModel
+      .find({ collectionId, mediaType: { $ne: 'video' } })
+      .lean()
+      .cursor();
     for await (const image of cursor) {
       // Stream rows instead of holding a whole large collection in RAM.
       faces += await this.indexImage(image as IndexedImage);
@@ -240,6 +390,133 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     return { collectionId, images: imageCount, faces };
+  }
+
+  async requestCollectionFaceReindex(userId: string, collectionId: string) {
+    const collection = await this.collectionModel
+      .findOne({ _id: collectionId, userId })
+      .select('_id userId faceReindexRequestedAt')
+      .lean();
+    if (!collection) throw new NotFoundException('Collection not found');
+
+    await this.assertCollectionFeature(
+      collectionId,
+      'advancedFaceSearch',
+      'Advanced Face Search',
+    );
+
+    const cooldownHours = this.configNumber(
+      'FACE_REINDEX_COOLDOWN_HOURS',
+      DEFAULT_FACE_REINDEX_COOLDOWN_HOURS,
+      24,
+      30,
+    );
+    const cooldownMs = cooldownHours * 60 * 60 * 1000;
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - cooldownMs);
+
+    const reserved = await this.collectionModel
+      .findOneAndUpdate(
+        {
+          _id: collectionId,
+          userId,
+          $or: [
+            { faceReindexRequestedAt: { $exists: false } },
+            { faceReindexRequestedAt: { $lte: cutoff } },
+          ],
+        },
+        {
+          $set: {
+            faceReindexRequestedAt: now,
+            faceReindexStatus: 'queued',
+          },
+          $unset: { faceReindexCompletedAt: 1 },
+        },
+        { returnDocument: 'after' },
+      )
+      .lean();
+
+    if (!reserved) {
+      const latest = await this.collectionModel
+        .findOne({ _id: collectionId, userId })
+        .select('faceReindexRequestedAt')
+        .lean();
+      const last = latest?.faceReindexRequestedAt
+        ? new Date(latest.faceReindexRequestedAt).getTime()
+        : now.getTime();
+      const nextAllowedAt = new Date(last + cooldownMs);
+      throw new HttpException(
+        {
+          message: `Face re-index can be requested again after ${nextAllowedAt.toISOString()}.`,
+          nextAllowedAt,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    await this.deleteCollectionFaces(collectionId).catch((error) => {
+      this.logger.warn(
+        `Face re-index cleanup deferred for ${collectionId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+
+    const reset = await this.imageModel.updateMany(
+      { collectionId, mediaType: { $ne: 'video' } },
+      {
+        $set: {
+          faceCount: 0,
+          faceIndexAttempts: 0,
+          faceIndexLastError: '',
+        },
+        $unset: {
+          faceIndexedAt: 1,
+          faceIndexVersion: 1,
+          faceIndexNextAttemptAt: 1,
+        },
+      },
+    );
+
+    return {
+      collectionId,
+      queued: true,
+      images: Number(reset.modifiedCount ?? 0),
+      requestedAt: now,
+      nextAllowedAt: new Date(now.getTime() + cooldownMs),
+      ready: Boolean(this.ready && this.qdrant),
+    };
+  }
+
+  private async finishCompletedReindexCollections(collectionId?: string) {
+    const collections = await this.collectionModel
+      .find({
+        ...(collectionId ? { _id: collectionId } : {}),
+        faceReindexStatus: { $in: ['queued', 'processing'] },
+      })
+      .select('_id')
+      .limit(collectionId ? 1 : 20)
+      .lean();
+
+    for (const collection of collections) {
+      const pending = await this.imageModel.exists({
+        collectionId: String(collection._id),
+        mediaType: { $ne: 'video' },
+        $or: [
+          { faceIndexedAt: { $exists: false } },
+          { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
+        ],
+      });
+      if (pending) continue;
+
+      await this.collectionModel.updateOne(
+        { _id: collection._id },
+        {
+          $set: {
+            faceReindexStatus: 'completed',
+            faceReindexCompletedAt: new Date(),
+          },
+        },
+      );
+    }
   }
 
   async searchCollection(collectionIdOrSlug: string, file?: Express.Multer.File) {
@@ -615,12 +892,28 @@ export class FaceSearchService implements OnModuleInit {
 
   async listCollectionFaces(collectionIdOrSlug: string) {
     await this.assertCollectionFeature(collectionIdOrSlug, 'advancedFaceSearch', 'Advanced Face Search');
-    if (!this.ready || !this.qdrant) {
-      throw new BadRequestException('Face search is not ready');
-    }
-
     const collection = await this.findCollection(collectionIdOrSlug);
     const collectionId = collection._id.toString();
+
+    if (!this.ready || !this.qdrant) {
+      void this.ensureReady();
+      const missingImages = await this.imageModel.countDocuments({
+        collectionId,
+        mediaType: { $ne: 'video' },
+        $or: [
+          { faceIndexedAt: { $exists: false } },
+          { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
+        ],
+      });
+      return {
+        collectionId,
+        count: 0,
+        ready: false,
+        indexing: missingImages > 0,
+        missingImages,
+        faces: [],
+      };
+    }
 
     const response = await this.qdrant.scroll(this.vectorCollection(), {
       limit: 10000,
@@ -635,6 +928,7 @@ export class FaceSearchService implements OnModuleInit {
     const staleImages = await this.imageModel
       .find({
         collectionId,
+        mediaType: { $ne: 'video' },
         $or: [
           { faceIndexedAt: { $exists: false } },
           { faceIndexVersion: { $ne: FACE_INDEX_VERSION } },
@@ -643,10 +937,8 @@ export class FaceSearchService implements OnModuleInit {
       .limit(200)
       .lean();
 
-    if (staleImages.length) {
-      const needsFullReindex = staleImages.some((image: any) => image.faceIndexVersion !== FACE_INDEX_VERSION);
-      this.scheduleCollectionReindex(collectionId, staleImages as IndexedImage[], needsFullReindex);
-    }
+    // A dedicated low-pressure background sweep processes stale images.
+    // Public gallery requests only report progress and never start heavy work.
 
     // Cluster all face points: same person → 1 group.
     // Works for all photo types:
@@ -666,6 +958,7 @@ export class FaceSearchService implements OnModuleInit {
     return {
       collectionId,
       count: sortedGroups.length,
+      ready: true,
       indexing: staleImages.length > 0,
       missingImages: staleImages.length,
       faces: sortedGroups.map((group, index) => ({
@@ -1060,9 +1353,27 @@ export class FaceSearchService implements OnModuleInit {
     if (!exists) return;
 
     if (!exists.exists) {
-      await this.qdrant.createCollection(collection, {
-        vectors: { size: this.vectorSize(), distance: 'Cosine' },
-      });
+      const created = await this.qdrant
+        .createCollection(collection, {
+          vectors: { size: this.vectorSize(), distance: 'Cosine' },
+        })
+        .then(() => true)
+        .catch(async (error) => {
+          // PM2 workers may race on the very first boot. If another worker
+          // created the collection first, treat that as success.
+          const after = await this.qdrant
+            ?.collectionExists(collection)
+            .catch(() => null);
+          if (after?.exists) return true;
+          this.logger.error(
+            `Qdrant collection create failed: ${error?.message ?? error}`,
+          );
+          return false;
+        });
+      if (!created) {
+        this.qdrant = undefined;
+        return;
+      }
 
       await this.qdrant
         .createPayloadIndex(collection, {
@@ -1085,10 +1396,17 @@ export class FaceSearchService implements OnModuleInit {
     }
 
     this.logger.log(`Checking external image model health: ${url}/health`);
-    const response = await fetch(`${url.replace(/\/$/, '')}/health`).catch((error) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.configNumber('FACE_MODEL_HEALTH_TIMEOUT_MS', 5000, 1000, 15000),
+    );
+    const response = await fetch(`${url.replace(/\/$/, '')}/health`, {
+      signal: controller.signal,
+    }).catch((error) => {
       this.logger.error(`Image model connection failed: ${error?.message ?? error}`);
       return null;
-    });
+    }).finally(() => clearTimeout(timeout));
 
     if (!response?.ok) {
       this.ready = false;

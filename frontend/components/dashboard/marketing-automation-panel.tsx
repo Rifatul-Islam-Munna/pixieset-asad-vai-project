@@ -26,6 +26,7 @@ const DELAY_UNITS = [
 const AUTOMATION_TRIGGERS: Array<{ value: MarketingAutomationTrigger; label: string; description: string }> = [
   { value: "new-subscriber", label: "New subscriber", description: "When a client opts in to marketing." },
   { value: "gallery-published", label: "Gallery published", description: "When a draft gallery is published, send only to that gallery's selected Publish Recipients." },
+  { value: "gallery-updated", label: "Gallery updated", description: "When an already-published gallery is intentionally saved with content or design changes, notify its selected Publish Recipients." },
   { value: "client-download", label: "Download ready", description: "After the requested files are prepared, email the client their secure download button. The link expires 30 hours after preparation." },
   { value: "client-favorite", label: "Client favorite", description: "The first time that client adds a favorite in a gallery for this automation." },
 ];
@@ -82,7 +83,7 @@ export function MarketingAutomationPanel() {
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6337d8]">Lifecycle email</p>
           <h1 className="mt-2 text-[28px] font-medium leading-none">Marketing Automations</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#666]">
-            Automate subscriber, gallery-published, download, and favorite emails. Marketing opt-in is re-checked for subscriber campaigns; gallery lifecycle emails are transactional and still use your monthly email allowance.
+            Automate subscriber, gallery-published, gallery-update, download, and favorite emails. Marketing opt-in is re-checked for subscriber campaigns; gallery lifecycle emails are transactional and still use your monthly email allowance.
           </p>
         </div>
         <Button className="h-11 rounded-none bg-[#6337d8] px-6 font-bold text-white hover:bg-[#542bc2]" onClick={() => setOpen(true)}>
@@ -104,7 +105,7 @@ export function MarketingAutomationPanel() {
                   <div className="min-w-0"><h2 className="truncate text-lg font-bold">{item.name}</h2><p className="mt-1 text-xs text-[#777]">{triggerLabel(item.trigger)} → {item.trigger === "client-download" ? "after files are ready" : delayLabel(item.delayMinutes)} → {item.templateName}</p></div>
                 </div>
                 <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#666]">
-                  <span><b className="text-[#222]">Audience:</b> {item.trigger === "new-subscriber" ? item.recipientCategory || "All opted-in clients" : item.trigger === "gallery-published" ? "Selected publish recipients" : item.trigger === "client-download" ? "Client who requested the download" : "Client who performs the action"}</span>
+                  <span><b className="text-[#222]">Audience:</b> {item.trigger === "new-subscriber" ? item.recipientCategory || "All opted-in clients" : item.trigger === "gallery-published" || item.trigger === "gallery-updated" ? "Selected publish recipients" : item.trigger === "client-download" ? "Client who requested the download" : "Client who performs the action"}</span>
                   {item.collectionName && <span><b className="text-[#222]">Link:</b> {item.collectionName}</span>}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
@@ -243,7 +244,7 @@ function AutomationDialog({ open, onOpenChange, categories, contactsCount, colle
             <div className="flex items-start justify-between gap-5"><div><p className="font-bold">Trigger</p><p className="mt-1 text-sm text-[#666]">{AUTOMATION_TRIGGERS.find((item) => item.value === trigger)?.description}</p></div><MailCheck className="size-5 text-[#6337d8]" /></div>
             <div className="mt-5 grid gap-5 sm:grid-cols-2">
               <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Lifecycle trigger</span><select value={trigger} onChange={(event) => setTrigger(event.target.value as MarketingAutomationTrigger)} className="h-11 border bg-white px-3 text-sm">{AUTOMATION_TRIGGERS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-              <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Email template</span><select value={selectedTemplateId} onChange={(event) => setTemplateId(event.target.value)} className="h-11 border bg-white px-3 text-sm"><option value="" disabled>Choose template</option>{emailTemplates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.galleryCategory || "General"} · {template.language || "English"}</option>)}</select></label>
+              <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Email template</span><select value={selectedTemplateId} onChange={(event) => setTemplateId(event.target.value)} className="h-11 border bg-white px-3 text-sm"><option value="" disabled>Choose template</option>{emailTemplates.map((template) => <option key={template.id} value={template.id}>{template.source === "user" ? "My Template · " : "Pre-built · "}{template.name} · {template.galleryCategory || "General"} · {template.language || "English"}</option>)}</select></label>
             </div>
             {trigger === "new-subscriber" && <label className="mt-5 grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Subscriber audience</span><select value={category} onChange={(event) => setCategory(event.target.value)} className="h-11 border bg-white px-3 text-sm"><option value="">All opted-in clients</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>}
           </section>
@@ -265,7 +266,7 @@ function AutomationDialog({ open, onOpenChange, categories, contactsCount, colle
             <label className="flex cursor-pointer items-start gap-3"><Switch checked={enabled} onCheckedChange={setEnabled} /><span><span className="block text-sm font-bold">Start active</span><span className="mt-1 block text-xs leading-5 text-[#777]">Pause it any time from the automation list.</span></span></label>
           </div>
 
-          <div className="flex items-start gap-3 border-l-2 border-[#6337d8] bg-[#f7f4ff] px-4 py-3 text-sm leading-6 text-[#5d5472]"><Users className="mt-0.5 size-4 shrink-0" /><span>{trigger === "new-subscriber" ? (category ? `Only new subscribers in ${category} will enter this automation.` : `All new opted-in clients can enter this automation. ${contactsCount} contacts are currently subscribed.`) : trigger === "gallery-published" ? "Only the Publish Recipients selected on the matching gallery receive this message. Those emails also have gallery email access automatically." : trigger === "client-download" ? "The client who requested the files receives this email only after the archive is ready. The email button is always replaced with that request's secure 30-hour download link." : "The client email recorded by the favorite action receives this message."}</span></div>
+          <div className="flex items-start gap-3 border-l-2 border-[#6337d8] bg-[#f7f4ff] px-4 py-3 text-sm leading-6 text-[#5d5472]"><Users className="mt-0.5 size-4 shrink-0" /><span>{trigger === "new-subscriber" ? (category ? `Only new subscribers in ${category} will enter this automation.` : `All new opted-in clients can enter this automation. ${contactsCount} contacts are currently subscribed.`) : trigger === "gallery-published" ? "Only the Publish Recipients selected on the matching gallery receive this message when it is first published." : trigger === "gallery-updated" ? "Selected Publish Recipients receive this message after a published gallery is intentionally saved with content, design, watermark, recipient, or access changes." : trigger === "client-download" ? "The client who requested the files receives this email only after the archive is ready. The email button is always replaced with that request's secure 30-hour download link." : "The client email recorded by the favorite action receives this message."}</span></div>
         </div>
 
         <DialogFooter>

@@ -16,6 +16,7 @@ import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
 import { setTimeout as delay } from 'timers/promises';
 import { MinioService } from 'src/lib/minio.service';
+import { backgroundWorkerEnabled } from 'src/lib/runtime-role';
 import {
   ImagorService,
   type ImagorWatermark,
@@ -120,6 +121,8 @@ type FaceIndexQueueImage = Pick<
   CollectionImage,
   'userId' | 'collectionId' | 'url' | 'thumbnailUrl'
 > & { _id?: unknown };
+
+const IMAGE_CACHE_VERSION = 1;
 
 @Injectable()
 export class CollectionsService implements OnModuleInit {
@@ -547,6 +550,7 @@ export class CollectionsService implements OnModuleInit {
     offset?: string,
     siteSlug?: string,
     allowUnpublished = false,
+    setId?: string,
   ) {
     const collection = await this.findCollectionByIdentifier(
       identifier,
@@ -594,58 +598,81 @@ export class CollectionsService implements OnModuleInit {
         'email-registration',
       );
     }
-    const imagesPage = galleryAuthorized
+    const requestedSetId =
+      String(setId ?? '').trim() === '__all__'
+        ? ''
+        : String(setId || collection.sets?.[0]?.id || 'highlights').trim();
+    const imagesPagePromise = galleryAuthorized
       ? allowUnpublished
-        ? await this.findImagesPage(
-            {
-              collectionId: collection._id.toString(),
-              userId: collection.userId.toString(),
-            },
+        ? this.findImagesPage(
+            this.withSetFilter(
+              {
+                collectionId: collection._id.toString(),
+                userId: collection.userId.toString(),
+              },
+              requestedSetId,
+            ),
             limit,
             offset,
           )
-        : await this.findPublicImages(identifier, email, pin, limit, offset, siteSlug)
-      : {
+        : this.findVisiblePublicImagesPage(
+            collection._id.toString(),
+            limit,
+            offset,
+            requestedSetId,
+          )
+      : Promise.resolve({
           items: [],
           total: 0,
           limit: this.pageLimit(limit),
           offset: this.pageOffset(offset),
           hasMore: false,
-        };
+        });
+
     if (galleryAuthorized)
       void this.ensureCollectionPreviews(collection._id.toString());
-    const branding = await this.settingModel
-      .findOne({
-        userId: collection.userId,
-        type: DashboardSettingType.BRANDING,
-        localId: 'branding',
-      })
-      .lean();
-    const preferences = await this.settingModel
-      .findOne({
-        userId: collection.userId,
-        type: DashboardSettingType.PREFERENCE,
-        localId: 'preferences',
-      })
-      .lean();
-    const integrations = await this.settingModel
-      .findOne({
-        userId: collection.userId,
-        type: DashboardSettingType.INTEGRATION,
-        localId: 'google-analytics',
-      })
-      .lean();
-    const marketing = await this.settingModel
-      .findOne({
-        userId: collection.userId,
-        type: DashboardSettingType.MARKETING,
-        localId: 'gallery-marketing',
-      })
-      .lean();
-    const owner = await this.userModel
-      .findById(collection.userId)
-      .select('planFeatures')
-      .lean();
+
+    const [
+      imagesPage,
+      branding,
+      preferences,
+      integrations,
+      marketing,
+      owner,
+      coverImage,
+    ] = await Promise.all([
+      imagesPagePromise,
+      this.settingModel
+        .findOne({
+          userId: collection.userId,
+          type: DashboardSettingType.BRANDING,
+          localId: 'branding',
+        })
+        .lean(),
+      this.settingModel
+        .findOne({
+          userId: collection.userId,
+          type: DashboardSettingType.PREFERENCE,
+          localId: 'preferences',
+        })
+        .lean(),
+      this.settingModel
+        .findOne({
+          userId: collection.userId,
+          type: DashboardSettingType.INTEGRATION,
+          localId: 'google-analytics',
+        })
+        .lean(),
+      this.settingModel
+        .findOne({
+          userId: collection.userId,
+          type: DashboardSettingType.MARKETING,
+          localId: 'gallery-marketing',
+        })
+        .lean(),
+      this.userModel.findById(collection.userId).select('planFeatures').lean(),
+      this.currentCollectionCover(collection),
+    ]);
     const ownerFeatures = owner?.planFeatures ?? {};
 
     const mergedFavoriteSettings = {
@@ -704,7 +731,6 @@ export class CollectionsService implements OnModuleInit {
     }
 
     const { clientEmails: _hiddenClientEmails, ...publicCollection } = collection as any;
-    const coverImage = await this.currentCollectionCover(collection);
     return {
       ...publicCollection,
       coverImage: coverImage || publicCollection.coverImage,
@@ -739,12 +765,19 @@ export class CollectionsService implements OnModuleInit {
     id: string,
     limit?: string,
     offset?: string,
+    setId?: string,
   ) {
     await this.findOne(userId, id, '1', '0');
-    const [publicCollection, imagesPage] = await Promise.all([
-      this.findPublic(id, undefined, undefined, limit, offset, undefined, true),
-      this.findImages(userId, id, limit, offset),
-    ]);
+    const publicCollection = await this.findPublic(
+      id,
+      undefined,
+      undefined,
+      limit,
+      offset,
+      undefined,
+      true,
+      setId,
+    );
 
     return {
       ...publicCollection,
@@ -757,8 +790,8 @@ export class CollectionsService implements OnModuleInit {
           emailStatus: 'owner-preview',
         },
       },
-      images: imagesPage.items,
-      imagesPage,
+      images: publicCollection.images,
+      imagesPage: publicCollection.imagesPage,
     };
   }
 
@@ -882,6 +915,7 @@ export class CollectionsService implements OnModuleInit {
     limit?: string,
     offset?: string,
     siteSlug?: string,
+    setId?: string,
   ) {
     const collection = await this.findCollectionByIdentifier(
       identifier,
@@ -930,16 +964,12 @@ export class CollectionsService implements OnModuleInit {
       };
     }
     void this.ensureCollectionPreviews(collection._id.toString());
-    const privateRows = await this.privatePhotoModel
-      .find({ collectionId: collection._id.toString(), status: 'approved' })
-      .select('imageId')
-      .lean();
-    const hiddenImageIds = privateRows.map((row) => row.imageId);
-    const query: Record<string, unknown> = {
-      collectionId: collection._id.toString(),
-    };
-    if (hiddenImageIds.length) query._id = { $nin: hiddenImageIds };
-    return this.findImagesPage(query, limit, offset);
+    return this.findVisiblePublicImagesPage(
+      collection._id.toString(),
+      limit,
+      offset,
+      setId,
+    );
   }
 
   async requestPublicAccess(
@@ -2168,8 +2198,37 @@ export class CollectionsService implements OnModuleInit {
     this.syncCollectionSetNamesInSettings(collection);
 
     await collection.save();
+    if (
+      dto.watermarkId !== undefined ||
+      dto.presetId !== undefined ||
+      dto.sets !== undefined
+    ) {
+      await this.invalidateCollectionImageCache(id).catch(() => undefined);
+    }
     if (!wasPublished && collection.status === 'published') {
       await this.queuePublishedCollection(collection).catch(() => undefined);
+    } else if (wasPublished && collection.status === 'published') {
+      const lifecycleKeys = [
+        'name',
+        'eventDate',
+        'coverImage',
+        'sets',
+        'tags',
+        'clientEmails',
+        'watermarkId',
+        'expiresAt',
+        'design',
+        'settings',
+      ];
+      const shouldNotifyGalleryUpdate = lifecycleKeys.some(
+        (key) => (dto as Record<string, unknown>)[key] !== undefined,
+      );
+      if (shouldNotifyGalleryUpdate) {
+        const eventId = this.galleryUpdateEventId(id);
+        await this.queueUpdatedCollection(collection, eventId).catch(
+          () => undefined,
+        );
+      }
     }
     return collection.toObject();
   }
@@ -2225,7 +2284,11 @@ export class CollectionsService implements OnModuleInit {
           mimetype: image.mimetype,
           sizeBytes: image.sizeBytes,
           watermarked: image.watermarked,
-          metadata: image.metadata ?? {},
+          metadata: (() => {
+            const metadata = { ...((image.metadata ?? {}) as Record<string, any>) };
+            delete metadata.imageCache;
+            return metadata;
+          })(),
           order: image.order,
         })),
       );
@@ -2645,6 +2708,12 @@ export class CollectionsService implements OnModuleInit {
         },
       })),
     );
+    if (collection.status === 'published') {
+      await this.queueUpdatedCollection(
+        collection,
+        this.galleryUpdateEventId(collectionId),
+      ).catch(() => undefined);
+    }
 
     return { updated: orderedIds.length };
   }
@@ -2720,7 +2789,18 @@ export class CollectionsService implements OnModuleInit {
       { _id: collectionId, userId },
       {
         $inc: { imageCount: uploaded.length },
-        $set: { coverImage: collection.coverImage ?? uploaded[0]?.url },
+        $set: {
+          coverImage: collection.coverImage ?? uploaded[0]?.url,
+          ...(this.imagorService.isEnabled() && uploaded.length
+            ? {
+                imageCacheStatus: 'warming',
+                imageCacheVersion: IMAGE_CACHE_VERSION,
+              }
+            : {}),
+        },
+        ...(this.imagorService.isEnabled() && uploaded.length
+          ? { $unset: { imageCacheReadyAt: 1 } }
+          : {}),
       },
     );
     await this.imageMetadataAiService.enqueueMany(uploaded).catch((error) => {
@@ -2738,6 +2818,12 @@ export class CollectionsService implements OnModuleInit {
     setTimeout(() => {
       void this.indexFacesInBackground(faceQueue);
     }, this.backgroundFaceStartDelayMs());
+    if (collection.status === 'published' && uploaded.length) {
+      await this.queueUpdatedCollection(
+        collection,
+        this.galleryUpdateEventId(collectionId),
+      ).catch(() => undefined);
+    }
 
     return uploaded;
   }
@@ -2848,7 +2934,7 @@ export class CollectionsService implements OnModuleInit {
 
     const collection = await this.collectionModel
       .findOne({ _id: collectionId, userId })
-      .select('sets watermarkId presetId coverImage')
+      .select('userId name slug status clientEmails sets watermarkId presetId coverImage')
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
     const activeSet = setId
@@ -3062,8 +3148,31 @@ export class CollectionsService implements OnModuleInit {
       );
     }
 
+    const savedItems = [...savedVideos, ...savedImages];
+    if (
+      this.imagorService.isEnabled() &&
+      savedImages.length
+    ) {
+      await this.collectionModel.updateOne(
+        { _id: collectionId, userId },
+        {
+          $set: {
+            imageCacheStatus: 'warming',
+            imageCacheVersion: IMAGE_CACHE_VERSION,
+          },
+          $unset: { imageCacheReadyAt: 1 },
+        },
+      );
+    }
+    if (collection.status === 'published' && savedItems.length) {
+      await this.queueUpdatedCollection(
+        collection,
+        this.galleryUpdateEventId(collectionId),
+      ).catch(() => undefined);
+    }
+
     return {
-      items: [...savedVideos, ...savedImages],
+      items: savedItems,
       queued: this.imagorService.isEnabled() ? 0 : imageDirectFiles.length,
     };
   }
@@ -3206,6 +3315,7 @@ export class CollectionsService implements OnModuleInit {
 
   @Interval(2000)
   async processDirectImageQueueTick() {
+    if (!backgroundWorkerEnabled()) return;
     if (this.directImageWorkerRunning) return;
     this.directImageWorkerRunning = true;
     try {
@@ -4124,6 +4234,11 @@ export class CollectionsService implements OnModuleInit {
   }
 
   private async indexFacesInBackground(images: FaceIndexQueueImage[]) {
+    // In PM2 cluster mode only instance 0 performs face inference. Uploads that
+    // land on other API workers remain unindexed in Mongo and are picked up by
+    // FaceSearchService's global low-pressure sweep.
+    if (!backgroundWorkerEnabled()) return;
+
     for (const image of images) {
       await this.faceSearchService.indexImage(image).catch((error) => {
         console.warn('Face indexing failed:', error?.message ?? error);
@@ -4143,8 +4258,504 @@ export class CollectionsService implements OnModuleInit {
     );
   }
 
+  private imageCacheSourceClause() {
+    return {
+      $or: [
+        { originalObjectKey: { $regex: /^(private-direct\/|direct\/|originals\/)/ } },
+        {
+          'metadata.directUploadObjectKey': {
+            $regex: /^(private-direct\/|direct\/|originals\/)/,
+          },
+        },
+      ],
+    };
+  }
+
+  async claimImagorResultCacheJob() {
+    if (!this.imagorService.isEnabled()) return null;
+
+    const now = new Date();
+    const staleProcessingBefore = new Date(Date.now() - 15 * 60_000);
+    const jobToken = new Types.ObjectId().toString();
+    const image = await this.imageModel
+      .findOneAndUpdate(
+        {
+          mediaType: { $ne: 'video' },
+          $and: [
+            this.imageCacheSourceClause(),
+            {
+              $or: [
+                { 'metadata.imageCache.version': { $ne: IMAGE_CACHE_VERSION } },
+                { 'metadata.imageCache.status': { $exists: false } },
+                {
+                  'metadata.imageCache.status': {
+                    $in: ['', 'queued', 'stale', 'failed'],
+                  },
+                },
+                {
+                  'metadata.imageCache.status': 'processing',
+                  'metadata.imageCache.processingStartedAt': {
+                    $lte: staleProcessingBefore,
+                  },
+                },
+              ],
+            },
+            {
+              $or: [
+                { 'metadata.imageCache.nextAttemptAt': { $exists: false } },
+                { 'metadata.imageCache.nextAttemptAt': { $lte: now } },
+              ],
+            },
+          ],
+        } as any,
+        {
+          $set: {
+            'metadata.imageCache.version': IMAGE_CACHE_VERSION,
+            'metadata.imageCache.status': 'processing',
+            'metadata.imageCache.processingStartedAt': now,
+            'metadata.imageCache.jobToken': jobToken,
+            'metadata.imageCache.lastError': '',
+          },
+          $inc: { 'metadata.imageCache.attempts': 1 },
+          $unset: { 'metadata.imageCache.nextAttemptAt': 1 },
+        },
+        {
+          sort: { createdAt: 1 },
+          returnDocument: 'after',
+        },
+      )
+      .select(
+        '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
+      )
+      .lean();
+
+    if (!image) {
+      const warming = await this.collectionModel
+        .findOne({
+          imageCacheStatus: 'warming',
+          imageCacheVersion: IMAGE_CACHE_VERSION,
+        })
+        .select('_id')
+        .lean();
+      if (warming) {
+        await this.finalizeCollectionImageCache(String(warming._id));
+      }
+      return null;
+    }
+
+    const collectionId = String(image.collectionId);
+    const imageId = String(image._id);
+    const collection = await this.collectionModel
+      .findById(collectionId)
+      .select(
+        'userId presetId watermarkId sets imageCacheStatus imageCacheVersion',
+      )
+      .lean();
+    if (!collection) {
+      await this.imageModel.updateOne(
+        { _id: imageId },
+        {
+          $set: {
+            'metadata.imageCache.status': 'failed',
+            'metadata.imageCache.lastError': 'Collection no longer exists',
+            'metadata.imageCache.nextAttemptAt': new Date(
+              Date.now() + 6 * 60 * 60_000,
+            ),
+          },
+          $unset: { 'metadata.imageCache.processingStartedAt': 1 },
+        },
+      );
+      return null;
+    }
+
+    await this.collectionModel.updateOne(
+      { _id: collectionId },
+      {
+        $set: {
+          imageCacheStatus: 'warming',
+          imageCacheVersion: IMAGE_CACHE_VERSION,
+        },
+        $unset: { imageCacheReadyAt: 1 },
+      },
+    );
+
+    try {
+      const sourceObjectKey =
+        String((image as any).originalObjectKey ?? '').trim() ||
+        String((image.metadata as any)?.directUploadObjectKey ?? '').trim();
+      if (!sourceObjectKey) throw new Error('Original R2 object key is missing');
+
+      const explicitWatermarkId = String(
+        (image.metadata as any)?.watermarkId ?? '',
+      ).trim();
+      const watermark =
+        explicitWatermarkId === 'No watermark'
+          ? null
+          : await this.resolveEffectiveWatermark(
+              String(image.userId),
+              collection,
+              String(image.setId || 'highlights'),
+              explicitWatermarkId || undefined,
+            );
+      const dimensions = await this.imagorService.resolveSourceDimensions(
+        sourceObjectKey,
+        { width: Number(image.width), height: Number(image.height) },
+      );
+      const imagorUrls = this.imagorService.imageUrls(
+        sourceObjectKey,
+        this.toImagorWatermark(watermark),
+        dimensions,
+      );
+      if (!imagorUrls) throw new Error('Imagor URL generation is unavailable');
+
+      return {
+        imageId,
+        collectionId,
+        jobToken,
+        version: IMAGE_CACHE_VERSION,
+        urls: {
+          thumbnail: imagorUrls.thumbnailUrl,
+          view: imagorUrls.url,
+          small: imagorUrls.responsive.small,
+          medium: imagorUrls.responsive.medium,
+          large: imagorUrls.responsive.large,
+        },
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error ?? 'Cache claim failed');
+      await this.imageModel.updateOne(
+        { _id: imageId, collectionId },
+        {
+          $set: {
+            'metadata.imageCache.status': 'failed',
+            'metadata.imageCache.lastError': message.slice(0, 600),
+            'metadata.imageCache.nextAttemptAt': new Date(
+              Date.now() + 30 * 60_000,
+            ),
+          },
+          $unset: { 'metadata.imageCache.processingStartedAt': 1 },
+        },
+      );
+      return null;
+    }
+  }
+
+  async completeImagorResultCacheJob(
+    imageId: string,
+    body: {
+      collectionId?: string;
+      jobToken?: string;
+      success?: boolean;
+      keys?: Record<string, string>;
+      urls?: Record<string, string>;
+      error?: string;
+    },
+  ) {
+    const collectionId = String(body?.collectionId ?? '').trim();
+    if (!Types.ObjectId.isValid(imageId) || !Types.ObjectId.isValid(collectionId)) {
+      return { accepted: false, obsoleteKeys: [], obsoleteUrls: [] };
+    }
+
+    const image = await this.imageModel
+      .findOne({ _id: imageId, collectionId })
+      .select('metadata')
+      .lean();
+    if (!image) {
+      return { accepted: false, obsoleteKeys: [], obsoleteUrls: [] };
+    }
+
+    if (!body?.success) {
+      await this.imageModel.updateOne(
+        { _id: imageId, collectionId },
+        {
+          $set: {
+            'metadata.imageCache.version': IMAGE_CACHE_VERSION,
+            'metadata.imageCache.status': 'failed',
+            'metadata.imageCache.lastError': String(body?.error || 'Imagor cache warm failed').slice(0, 600),
+            'metadata.imageCache.nextAttemptAt': new Date(
+              Date.now() + 30 * 60_000,
+            ),
+          },
+          $unset: { 'metadata.imageCache.processingStartedAt': 1 },
+        },
+      );
+      return { accepted: true, ready: false, obsoleteKeys: [], obsoleteUrls: [] };
+    }
+
+    const requiredVariants = ['thumbnail', 'view', 'small', 'medium', 'large'];
+    const keys = Object.fromEntries(
+      requiredVariants.map((variant) => [
+        variant,
+        String(body?.keys?.[variant] ?? '').trim(),
+      ]),
+    );
+    const urls = Object.fromEntries(
+      requiredVariants.map((variant) => [
+        variant,
+        String(body?.urls?.[variant] ?? '').trim(),
+      ]),
+    );
+    if (
+      requiredVariants.some(
+        (variant) => !keys[variant] || !urls[variant],
+      )
+    ) {
+      await this.imageModel.updateOne(
+        { _id: imageId, collectionId },
+        {
+          $set: {
+            'metadata.imageCache.status': 'failed',
+            'metadata.imageCache.lastError':
+              'Imagor worker did not confirm every R2 Result Storage variant',
+            'metadata.imageCache.nextAttemptAt': new Date(
+              Date.now() + 30 * 60_000,
+            ),
+          },
+          $unset: { 'metadata.imageCache.processingStartedAt': 1 },
+        },
+      );
+      return { accepted: true, ready: false, obsoleteKeys: [], obsoleteUrls: [] };
+    }
+
+    const previousKeys = Object.values(
+      ((image.metadata as any)?.imageCache?.keys ?? {}) as Record<string, unknown>,
+    )
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+    const previousUrls = Object.values(
+      ((image.metadata as any)?.imageCache?.urls ?? {}) as Record<string, unknown>,
+    )
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+
+    const cacheCommit = await this.imageModel.updateOne(
+      { _id: imageId, collectionId },
+      {
+        $set: {
+          'metadata.imageCache': {
+            version: IMAGE_CACHE_VERSION,
+            status: 'ready',
+            keys,
+            urls,
+            readyAt: new Date(),
+            attempts: Number((image.metadata as any)?.imageCache?.attempts ?? 1),
+            lastError: '',
+          },
+        },
+      },
+    );
+    if (!cacheCommit.matchedCount) {
+      return {
+        accepted: false,
+        obsoleteKeys: Object.values(keys),
+        obsoleteUrls: Object.values(urls),
+      };
+    }
+
+    const nextKeys = new Set(Object.values(keys));
+    const nextUrls = new Set(Object.values(urls));
+    const obsoleteKeys = previousKeys.filter((key) => !nextKeys.has(key));
+    const obsoleteUrls = previousUrls.filter((url) => !nextUrls.has(url));
+    const ready = await this.finalizeCollectionImageCache(collectionId);
+    return { accepted: true, ready, obsoleteKeys, obsoleteUrls };
+  }
+
+  async claimImagorResultCacheDeleteJob() {
+    const now = new Date();
+    const staleBefore = new Date(Date.now() - 10 * 60_000);
+    const job = await this.imageDeleteJobModel
+      .findOneAndUpdate(
+        {
+          'cacheObjectKeys.0': { $exists: true },
+          $or: [
+            {
+              cacheDeleteStatus: { $in: ['', 'queued', 'failed'] },
+              $or: [
+                { cacheDeleteNextAttemptAt: { $exists: false } },
+                { cacheDeleteNextAttemptAt: { $lte: now } },
+              ],
+            },
+            {
+              cacheDeleteStatus: 'processing',
+              cacheDeleteProcessingStartedAt: { $lte: staleBefore },
+            },
+          ],
+        },
+        {
+          $set: {
+            cacheDeleteStatus: 'processing',
+            cacheDeleteProcessingStartedAt: now,
+            cacheDeleteLastError: '',
+          },
+          $inc: { cacheDeleteAttempts: 1 },
+          $unset: { cacheDeleteNextAttemptAt: 1 },
+        },
+        {
+          sort: { createdAt: 1 },
+          returnDocument: 'after',
+        },
+      )
+      .lean();
+    if (!job) return null;
+
+    return {
+      jobId: String(job._id),
+      imageId: String(job.imageId),
+      collectionId: String(job.collectionId),
+      keys: (job.cacheObjectKeys ?? []).map((value) => String(value)).filter(Boolean),
+      urls: (job.cachePublicUrls ?? []).map((value) => String(value)).filter(Boolean),
+    };
+  }
+
+  async completeImagorResultCacheDeleteJob(
+    jobId: string,
+    body: { success?: boolean; error?: string },
+  ) {
+    if (!Types.ObjectId.isValid(jobId)) return { accepted: false };
+    const success = Boolean(body?.success);
+    const job = await this.imageDeleteJobModel.findById(jobId).lean();
+    if (!job) return { accepted: false };
+
+    if (success) {
+      await this.imageDeleteJobModel.updateOne(
+        { _id: jobId },
+        {
+          $set: {
+            cacheDeleteStatus: 'completed',
+            cacheDeletedAt: new Date(),
+            cacheDeleteLastError: '',
+          },
+          $unset: {
+            cacheDeleteProcessingStartedAt: 1,
+            cacheDeleteNextAttemptAt: 1,
+          },
+        },
+      );
+      return { accepted: true };
+    }
+
+    const attempts = Math.max(1, Number(job.cacheDeleteAttempts ?? 1));
+    const retryDelayMs = Math.min(
+      60 * 60_000,
+      10_000 * 2 ** Math.min(8, Math.max(0, attempts - 1)),
+    );
+    await this.imageDeleteJobModel.updateOne(
+      { _id: jobId },
+      {
+        $set: {
+          cacheDeleteStatus: 'queued',
+          cacheDeleteNextAttemptAt: new Date(Date.now() + retryDelayMs),
+          cacheDeleteLastError: String(body?.error || 'Imagor R2 cache delete failed').slice(0, 1000),
+        },
+        $unset: { cacheDeleteProcessingStartedAt: 1 },
+      },
+    );
+    return { accepted: true };
+  }
+
+  private async invalidateCollectionImageCache(collectionId: string) {
+    if (!this.imagorService.isEnabled()) return;
+    const now = new Date();
+    await Promise.all([
+      this.collectionModel.updateOne(
+        { _id: collectionId },
+        {
+          $set: {
+            imageCacheStatus: 'warming',
+            imageCacheVersion: IMAGE_CACHE_VERSION,
+          },
+          $unset: { imageCacheReadyAt: 1 },
+        },
+      ),
+      this.imageModel.updateMany(
+        {
+          collectionId,
+          mediaType: { $ne: 'video' },
+          $and: [this.imageCacheSourceClause()],
+        } as any,
+        {
+          $set: {
+            'metadata.imageCache.status': 'stale',
+            'metadata.imageCache.version': IMAGE_CACHE_VERSION,
+            'metadata.imageCache.nextAttemptAt': now,
+          },
+          $unset: { 'metadata.imageCache.processingStartedAt': 1 },
+        },
+      ),
+    ]);
+  }
+
+  private async finalizeCollectionImageCache(collectionId: string) {
+    const pending = await this.imageModel.exists({
+      collectionId,
+      mediaType: { $ne: 'video' },
+      $and: [
+        this.imageCacheSourceClause(),
+        {
+          $or: [
+            { 'metadata.imageCache.version': { $ne: IMAGE_CACHE_VERSION } },
+            { 'metadata.imageCache.status': { $ne: 'ready' } },
+          ],
+        },
+      ],
+    } as any);
+    if (pending) return false;
+
+    await this.collectionModel.updateOne(
+      { _id: collectionId },
+      {
+        $set: {
+          imageCacheStatus: 'ready',
+          imageCacheVersion: IMAGE_CACHE_VERSION,
+          imageCacheReadyAt: new Date(),
+        },
+      },
+    );
+    return true;
+  }
+
+  private async directImageCacheReady(collection: any) {
+    if (
+      collection?.imageCacheStatus !== 'ready' ||
+      Number(collection?.imageCacheVersion ?? 0) !== IMAGE_CACHE_VERSION
+    ) {
+      return false;
+    }
+
+    const pending = await this.imageModel.exists({
+      collectionId: String(collection._id),
+      mediaType: { $ne: 'video' },
+      $and: [
+        this.imageCacheSourceClause(),
+        {
+          $or: [
+            { 'metadata.imageCache.version': { $ne: IMAGE_CACHE_VERSION } },
+            { 'metadata.imageCache.status': { $ne: 'ready' } },
+          ],
+        },
+      ],
+    } as any);
+    if (!pending) return true;
+
+    void this.collectionModel
+      .updateOne(
+        { _id: collection._id },
+        {
+          $set: {
+            imageCacheStatus: 'warming',
+            imageCacheVersion: IMAGE_CACHE_VERSION,
+          },
+          $unset: { imageCacheReadyAt: 1 },
+        },
+      )
+      .catch(() => undefined);
+    return false;
+  }
+
   @Interval(2000)
   async processImageDeleteQueueTick() {
+    if (!backgroundWorkerEnabled()) return;
     if (this.imageDeleteWorkerRunning) return;
     this.imageDeleteWorkerRunning = true;
     try {
@@ -4168,6 +4779,10 @@ export class CollectionsService implements OnModuleInit {
         await this.imageDeleteJobModel.deleteMany({
           status: 'completed',
           completedAt: { $lte: new Date(now - 7 * 24 * 60 * 60 * 1000) },
+          $or: [
+            { 'cacheObjectKeys.0': { $exists: false } },
+            { cacheDeleteStatus: 'completed' },
+          ],
         });
       }
 
@@ -4265,7 +4880,6 @@ export class CollectionsService implements OnModuleInit {
             .filter(Boolean),
         ),
       ];
-
       await Promise.all([
         ...publicReferences.map((reference) =>
           this.minioService.deleteService(reference),
@@ -4413,6 +5027,16 @@ export class CollectionsService implements OnModuleInit {
         ].filter(
           (key) => Boolean(key) && !sharedPrivateKeys.has(key),
         ) as string[];
+        const imageCacheKeys = Object.values(
+          (metadata.imageCache?.keys ?? {}) as Record<string, unknown>,
+        )
+          .map((value) => String(value || '').trim())
+          .filter(Boolean);
+        const imageCacheUrls = Object.values(
+          (metadata.imageCache?.urls ?? {}) as Record<string, unknown>,
+        )
+          .map((value) => String(value || '').trim())
+          .filter(Boolean);
 
         return {
           updateOne: {
@@ -4424,6 +5048,12 @@ export class CollectionsService implements OnModuleInit {
                 imageId: image._id.toString(),
                 publicReferences: [...new Set(publicReferences)],
                 privateObjectKeys: [...new Set(privateObjectKeys)],
+                cacheObjectKeys: [...new Set(imageCacheKeys)],
+                cachePublicUrls: [...new Set(imageCacheUrls)],
+                cacheDeleteStatus: imageCacheKeys.length ? 'queued' : '',
+                cacheDeleteAttempts: 0,
+                cacheDeleteNextAttemptAt: imageCacheKeys.length ? now : undefined,
+                cacheDeleteLastError: '',
                 status: 'queued',
                 attempts: 0,
                 nextAttemptAt: now,
@@ -4495,6 +5125,12 @@ export class CollectionsService implements OnModuleInit {
       this.collectionModel.updateOne({ _id: collectionId, userId }, update),
       this.decrementStorageUsedBytes(userId, reclaimedBytes),
     ]);
+    if (collection.status === 'published') {
+      await this.queueUpdatedCollection(
+        collection,
+        this.galleryUpdateEventId(collectionId),
+      ).catch(() => undefined);
+    }
 
     return {
       deleted: images.length,
@@ -4530,11 +5166,11 @@ export class CollectionsService implements OnModuleInit {
     const [sourceCollection, targetCollection, images] = await Promise.all([
       this.collectionModel
         .findOne({ _id: collectionId, userId })
-        .select('coverImage sets')
+        .select('userId name slug status clientEmails coverImage sets')
         .lean(),
       this.collectionModel
         .findOne({ _id: targetCollectionId, userId })
-        .select('coverImage sets')
+        .select('userId name slug status clientEmails coverImage sets')
         .lean(),
       this.imageModel
         .find({
@@ -4575,7 +5211,14 @@ export class CollectionsService implements OnModuleInit {
           userId,
           collectionId,
         },
-        { $set: { setId: targetSetId } },
+        {
+          $set: {
+            setId: targetSetId,
+            'metadata.imageCache.status': 'stale',
+            'metadata.imageCache.version': IMAGE_CACHE_VERSION,
+            'metadata.imageCache.nextAttemptAt': new Date(),
+          },
+        },
       );
     } else {
       const lastTargetImage = await this.imageModel
@@ -4593,6 +5236,9 @@ export class CollectionsService implements OnModuleInit {
                 collectionId: targetCollectionId,
                 setId: targetSetId,
                 order: firstOrder + index,
+                'metadata.imageCache.status': 'stale',
+                'metadata.imageCache.version': IMAGE_CACHE_VERSION,
+                'metadata.imageCache.nextAttemptAt': new Date(),
               },
             },
           },
@@ -4653,6 +5299,34 @@ export class CollectionsService implements OnModuleInit {
       ]);
     }
 
+    if (this.imagorService.isEnabled()) {
+      await this.collectionModel.updateOne(
+        { _id: targetCollectionId, userId },
+        {
+          $set: {
+            imageCacheStatus: 'warming',
+            imageCacheVersion: IMAGE_CACHE_VERSION,
+          },
+          $unset: { imageCacheReadyAt: 1 },
+        },
+      );
+    }
+    if (sourceCollection.status === 'published') {
+      await this.queueUpdatedCollection(
+        sourceCollection,
+        this.galleryUpdateEventId(collectionId),
+      ).catch(() => undefined);
+    }
+    if (
+      targetCollectionId !== collectionId &&
+      targetCollection.status === 'published'
+    ) {
+      await this.queueUpdatedCollection(
+        targetCollection,
+        this.galleryUpdateEventId(targetCollectionId),
+      ).catch(() => undefined);
+    }
+
     return {
       moved: movedIds.length,
       imageIds: movedIds,
@@ -4679,7 +5353,7 @@ export class CollectionsService implements OnModuleInit {
     if (!image) throw new NotFoundException('Image not found');
     const collection = await this.collectionModel
       .findOne({ _id: collectionId, userId })
-      .select('sets')
+      .select('userId name slug status clientEmails sets')
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
     if (dto.originalName !== undefined) {
@@ -4704,7 +5378,39 @@ export class CollectionsService implements OnModuleInit {
       image.metadata = { ...(image.metadata ?? {}), watermarkId };
       image.watermarked = false;
     }
+    if (dto.watermarkId !== undefined || dto.setId !== undefined) {
+      image.metadata = {
+        ...(image.metadata ?? {}),
+        imageCache: {
+          ...((image.metadata as any)?.imageCache ?? {}),
+          version: IMAGE_CACHE_VERSION,
+          status: 'stale',
+          nextAttemptAt: new Date(),
+        },
+      };
+    }
     await image.save();
+    if (
+      this.imagorService.isEnabled() &&
+      (dto.watermarkId !== undefined || dto.setId !== undefined)
+    ) {
+      await this.collectionModel.updateOne(
+        { _id: collectionId, userId },
+        {
+          $set: {
+            imageCacheStatus: 'warming',
+            imageCacheVersion: IMAGE_CACHE_VERSION,
+          },
+          $unset: { imageCacheReadyAt: 1 },
+        },
+      );
+    }
+    if (collection.status === 'published') {
+      await this.queueUpdatedCollection(
+        collection,
+        this.galleryUpdateEventId(collectionId),
+      ).catch(() => undefined);
+    }
     const [publicImage] = await this.publicImageRecordsForCollection([
       image.toObject() as any,
     ]);
@@ -4731,9 +5437,11 @@ export class CollectionsService implements OnModuleInit {
     const targetCollectionId = String(dto.targetCollectionId ?? '').trim();
     if (!Types.ObjectId.isValid(targetCollectionId))
       throw new BadRequestException('Target collection is required');
-    const targetCollection = await this.collectionModel
-      .findOne({ _id: targetCollectionId, userId })
-      .lean();
+    const [sourceCollection, targetCollection] = await Promise.all([
+      this.collectionModel.findOne({ _id: collectionId, userId }).lean(),
+      this.collectionModel.findOne({ _id: targetCollectionId, userId }).lean(),
+    ]);
+    if (!sourceCollection) throw new NotFoundException('Collection not found');
     if (!targetCollection)
       throw new NotFoundException('Target collection not found');
     const targetSetId =
@@ -4749,7 +5457,15 @@ export class CollectionsService implements OnModuleInit {
     if (dto.mode === 'move') {
       await this.imageModel.updateOne(
         { _id: imageId, userId, collectionId },
-        { $set: { collectionId: targetCollectionId, setId: targetSetId } },
+        {
+          $set: {
+            collectionId: targetCollectionId,
+            setId: targetSetId,
+            'metadata.imageCache.status': 'stale',
+            'metadata.imageCache.version': IMAGE_CACHE_VERSION,
+            'metadata.imageCache.nextAttemptAt': new Date(),
+          },
+        },
       );
       await this.collectionModel.updateOne(
         { _id: collectionId, userId },
@@ -4759,9 +5475,32 @@ export class CollectionsService implements OnModuleInit {
         { _id: targetCollectionId, userId },
         {
           $inc: { imageCount: 1 },
-          $set: { coverImage: targetCollection.coverImage ?? image.url },
+          $set: {
+            coverImage: targetCollection.coverImage ?? image.url,
+            ...(this.imagorService.isEnabled()
+              ? {
+                  imageCacheStatus: 'warming',
+                  imageCacheVersion: IMAGE_CACHE_VERSION,
+                }
+              : {}),
+          },
+          ...(this.imagorService.isEnabled()
+            ? { $unset: { imageCacheReadyAt: 1 } }
+            : {}),
         },
       );
+      if (sourceCollection.status === 'published') {
+        await this.queueUpdatedCollection(
+          sourceCollection,
+          this.galleryUpdateEventId(collectionId),
+        ).catch(() => undefined);
+      }
+      if (targetCollection.status === 'published') {
+        await this.queueUpdatedCollection(
+          targetCollection,
+          this.galleryUpdateEventId(targetCollectionId),
+        ).catch(() => undefined);
+      }
       return { moved: true, imageId, targetCollectionId, targetSetId };
     }
 
@@ -4775,6 +5514,8 @@ export class CollectionsService implements OnModuleInit {
     delete imageCopy.createdAt;
     delete imageCopy.updatedAt;
     delete imageCopy.__v;
+    imageCopy.metadata = { ...(imageCopy.metadata ?? {}) };
+    delete imageCopy.metadata.imageCache;
     const copy = await this.imageModel.create({
       ...imageCopy,
       collectionId: targetCollectionId,
@@ -4785,9 +5526,26 @@ export class CollectionsService implements OnModuleInit {
       { _id: targetCollectionId, userId },
       {
         $inc: { imageCount: 1 },
-        $set: { coverImage: targetCollection.coverImage ?? image.url },
+        $set: {
+          coverImage: targetCollection.coverImage ?? image.url,
+          ...(this.imagorService.isEnabled()
+            ? {
+                imageCacheStatus: 'warming',
+                imageCacheVersion: IMAGE_CACHE_VERSION,
+              }
+            : {}),
+        },
+        ...(this.imagorService.isEnabled()
+          ? { $unset: { imageCacheReadyAt: 1 } }
+          : {}),
       },
     );
+    if (targetCollection.status === 'published') {
+      await this.queueUpdatedCollection(
+        targetCollection,
+        this.galleryUpdateEventId(targetCollectionId),
+      ).catch(() => undefined);
+    }
     const [publicCopy] = await this.publicImageRecordsForCollection([
       copy.toObject() as any,
     ]);
@@ -5181,6 +5939,7 @@ export class CollectionsService implements OnModuleInit {
     image: Record<string, any>,
     watermark?: WatermarkData | null,
     sourceDimensions?: { width: number; height: number },
+    directCacheAllowed = false,
   ) {
     const {
       originalObjectKey,
@@ -5202,16 +5961,62 @@ export class CollectionsService implements OnModuleInit {
     const storedWatermark =
       (safe.metadata?.imagorWatermark ??
         safe.metadata?.imgproxyWatermark) as ImagorWatermark | undefined;
-    if (
-      safe.metadata?.imagorWatermark !== undefined ||
-      safe.metadata?.imgproxyWatermark !== undefined
-    ) {
+    const imageCache = safe.metadata?.imageCache as
+      | {
+          version?: number;
+          status?: string;
+          keys?: Record<string, string>;
+          urls?: Record<string, string>;
+        }
+      | undefined;
+    if (safe.metadata) {
       const {
         imagorWatermark: _imagorWatermark,
         imgproxyWatermark: _legacyImgproxyWatermark,
+        imageCache: _privateImageCache,
         ...publicMetadata
       } = safe.metadata;
       safe.metadata = publicMetadata;
+    }
+
+    const imagorWatermark =
+      watermark === undefined
+        ? storedWatermark
+        : this.toImagorWatermark(watermark);
+    const hasWatermark = this.imagorService.hasWatermark(imagorWatermark);
+    const cacheUrl = (variant: string) =>
+      String(imageCache?.urls?.[variant] ?? '').trim();
+    const directViewUrl = cacheUrl('view');
+    const directThumbnailUrl = cacheUrl('thumbnail');
+    const directSmallUrl = cacheUrl('small');
+    const directMediumUrl = cacheUrl('medium');
+    const directLargeUrl = cacheUrl('large');
+    if (
+      directCacheAllowed &&
+      Number(imageCache?.version ?? 0) === IMAGE_CACHE_VERSION &&
+      imageCache?.status === 'ready' &&
+      directViewUrl &&
+      directThumbnailUrl &&
+      directSmallUrl &&
+      directMediumUrl &&
+      directLargeUrl &&
+      safe.mediaType !== 'video'
+    ) {
+      return {
+        ...safe,
+        width: sourceDimensions?.width ?? safe.width,
+        height: sourceDimensions?.height ?? safe.height,
+        url: directViewUrl,
+        thumbnailUrl: directThumbnailUrl,
+        responsive: {
+          small: directSmallUrl,
+          medium: directMediumUrl,
+          large: directLargeUrl,
+        },
+        watermarked: hasWatermark,
+        watermark: hasWatermark ? imagorWatermark : undefined,
+        cacheDelivery: 'imagor-r2-result',
+      };
     }
 
     if (
@@ -5219,18 +6024,12 @@ export class CollectionsService implements OnModuleInit {
       sourceObjectKey &&
       safe.mediaType !== 'video'
     ) {
-      const imagorWatermark =
-        watermark === undefined
-          ? storedWatermark
-          : this.toImagorWatermark(watermark);
       const urls = this.imagorService.imageUrls(
         sourceObjectKey,
         imagorWatermark,
         sourceDimensions ?? { width: safe.width, height: safe.height },
       );
       if (urls) {
-        const hasWatermark =
-          this.imagorService.hasWatermark(imagorWatermark);
         const storedFallbackUrl = String(safe.url ?? '').trim();
         const storedFallbackThumbnailUrl = String(
           safe.thumbnailUrl ?? '',
@@ -5323,12 +6122,14 @@ export class CollectionsService implements OnModuleInit {
         )
         .catch(() => undefined);
     }
-    const urls = this.imagorService.imageUrls(
-      originalObjectKey,
-      this.toImagorWatermark(watermark),
+    const directCacheAllowed = await this.directImageCacheReady(collection);
+    const publicImage = this.publicImageRecord(
+      image as any,
+      watermark,
       sourceDimensions,
+      directCacheAllowed,
     );
-    return urls?.url || storedCover;
+    return publicImage?.url || storedCover;
   }
 
   private async publicImageRecordsForCollection(
@@ -5360,12 +6161,13 @@ export class CollectionsService implements OnModuleInit {
         _id: first.collectionId,
         userId: first.userId,
       })
-      .select('userId presetId watermarkId sets')
+      .select('userId presetId watermarkId sets imageCacheStatus imageCacheVersion imageCacheReadyAt')
       .lean();
 
     if (!collection) {
       return images.map((image) => this.publicImageRecord(image));
     }
+    const directCacheAllowed = await this.directImageCacheReady(collection);
 
     // Older direct uploads did not persist image width/height. Imagor's fit-in
     // won't upscale small sources, so watermark pixels must be calculated from
@@ -5445,6 +6247,7 @@ export class CollectionsService implements OnModuleInit {
           image,
           watermark,
           sourceDimensions.get(sourceObjectKey),
+          directCacheAllowed,
         ),
       );
     }
@@ -5520,6 +6323,27 @@ export class CollectionsService implements OnModuleInit {
     });
   }
 
+  private async findVisiblePublicImagesPage(
+    collectionId: string,
+    limitValue?: string,
+    offsetValue?: string,
+    setId?: string,
+  ) {
+    const privateRows = await this.privatePhotoModel
+      .find({ collectionId, status: 'approved' })
+      .select('imageId')
+      .lean();
+    const hiddenImageIds = privateRows.map((row) => row.imageId);
+    const query = this.withSetFilter(
+      {
+        collectionId,
+        ...(hiddenImageIds.length ? { _id: { $nin: hiddenImageIds } } : {}),
+      },
+      setId,
+    );
+    return this.findImagesPage(query, limitValue, offsetValue);
+  }
+
   private async findImagesPage(
     query: Record<string, unknown>,
     limitValue?: string,
@@ -5548,6 +6372,28 @@ export class CollectionsService implements OnModuleInit {
       offset,
       hasMore: offset + items.length < total,
     };
+  }
+
+  private withSetFilter(
+    query: Record<string, unknown>,
+    setId?: string,
+  ) {
+    const normalizedSetId = String(setId ?? '').trim();
+    if (!normalizedSetId || normalizedSetId === '__all__') return query;
+
+    if (normalizedSetId === 'highlights') {
+      return {
+        ...query,
+        $or: [
+          { setId: 'highlights' },
+          { setId: { $exists: false } },
+          { setId: null },
+          { setId: '' },
+        ],
+      };
+    }
+
+    return { ...query, setId: normalizedSetId };
   }
 
   private pageLimit(value?: string) {
@@ -5980,6 +6826,50 @@ export class CollectionsService implements OnModuleInit {
       );
     }
 
+    const cacheObjectKeys = Object.values(
+      (((image.metadata as Record<string, any> | undefined)?.imageCache?.keys ??
+        {}) as Record<string, unknown>),
+    )
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+    const cachePublicUrls = Object.values(
+      (((image.metadata as Record<string, any> | undefined)?.imageCache?.urls ??
+        {}) as Record<string, unknown>),
+    )
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+    if (cacheObjectKeys.length) {
+      const now = new Date();
+      await this.imageDeleteJobModel
+        .updateOne(
+          { imageId: image._id.toString() },
+          {
+            $setOnInsert: {
+              userId: String(image.userId),
+              collectionId: String(image.collectionId),
+              imageId: image._id.toString(),
+              publicReferences: [],
+              privateObjectKeys: [],
+              status: 'completed',
+              attempts: 0,
+              nextAttemptAt: now,
+              lastError: '',
+              completedAt: now,
+            },
+            $set: {
+              cacheObjectKeys: [...new Set(cacheObjectKeys)],
+              cachePublicUrls: [...new Set(cachePublicUrls)],
+              cacheDeleteStatus: 'queued',
+              cacheDeleteAttempts: 0,
+              cacheDeleteNextAttemptAt: now,
+              cacheDeleteLastError: '',
+            },
+          },
+          { upsert: true },
+        )
+        .catch(() => undefined);
+    }
+
     if (originalObjectKey) {
       const sharedReference = await this.imageModel.exists({
         _id: { $ne: image._id },
@@ -6327,7 +7217,13 @@ export class CollectionsService implements OnModuleInit {
     return `${frontendOrigin}/collection/${encodeURIComponent(resolvedSiteSlug)}/${encodeURIComponent(collectionSlug)}`;
   }
 
-  private async queueCollectionLifecycle(collection: any, trigger: 'gallery-published' | 'client-download' | 'client-favorite', emails: string[], siteSlug?: string) {
+  private async queueCollectionLifecycle(
+    collection: any,
+    trigger: 'gallery-published' | 'gallery-updated' | 'client-download' | 'client-favorite',
+    emails: string[],
+    siteSlug?: string,
+    eventId?: string,
+  ) {
     const recipientEmails = this.cleanEmailList(emails);
     if (!recipientEmails.length) return;
     const buttonLink = await this.collectionPublicLink(collection, siteSlug);
@@ -6338,6 +7234,7 @@ export class CollectionsService implements OnModuleInit {
       collectionId: String(collection._id),
       collectionName: String(collection.name || 'Gallery'),
       buttonLink,
+      eventId,
     }).catch(() => undefined);
   }
 
@@ -6346,6 +7243,22 @@ export class CollectionsService implements OnModuleInit {
       collection,
       'gallery-published',
       Array.isArray(collection.clientEmails) ? collection.clientEmails : [],
+    );
+  }
+
+  private galleryUpdateEventId(collectionId: string) {
+    // Collapse multiple saves/uploads/deletes from the same editing session into
+    // one lifecycle email per hour instead of spamming a client for each photo.
+    return `gallery-update:${collectionId}:${Math.floor(Date.now() / 3_600_000)}`;
+  }
+
+  private async queueUpdatedCollection(collection: any, eventId: string) {
+    await this.queueCollectionLifecycle(
+      collection,
+      'gallery-updated',
+      Array.isArray(collection.clientEmails) ? collection.clientEmails : [],
+      undefined,
+      eventId,
     );
   }
 

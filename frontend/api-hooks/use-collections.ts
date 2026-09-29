@@ -37,6 +37,12 @@ export type CollectionRecord = {
   settings?: Record<string, any>;
   status?: string;
   showOnHomepage?: boolean;
+  faceReindexRequestedAt?: string;
+  faceReindexCompletedAt?: string;
+  faceReindexStatus?: "queued" | "processing" | "completed" | "";
+  imageCacheStatus?: "" | "warming" | "ready";
+  imageCacheVersion?: number;
+  imageCacheReadyAt?: string;
   createdAt?: string;
 };
 
@@ -320,6 +326,14 @@ export function useCollectionDetail(collectionId?: string) {
       GetRequestNormal<
         ListResponse<CollectionDetailRecord>
       >(`/collections/${collectionId}?limit=60&offset=0`),
+    refetchInterval: (query) => {
+      const faceStatus = query.state.data?.data?.faceReindexStatus;
+      const cacheStatus = query.state.data?.data?.imageCacheStatus;
+      return faceStatus === "queued" || faceStatus === "processing" || cacheStatus === "warming"
+        ? 10_000
+        : false;
+    },
+    refetchIntervalInBackground: false,
   });
 
   const processingStatusQuery = useQuery({
@@ -770,6 +784,29 @@ export function useCollectionDetail(collectionId?: string) {
     },
   });
 
+  const reindexFaces = useMutation({
+    mutationFn: async () => {
+      if (!collectionId) throw new Error("Collection is required");
+      const [data, error] = await PostRequestAxios<{
+        data: {
+          collectionId: string;
+          queued: boolean;
+          images: number;
+          requestedAt: string;
+          nextAllowedAt: string;
+          ready: boolean;
+        };
+        message: string;
+      }>(`/collections/${collectionId}/reindex-faces`, {});
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({ queryKey: ["collections", collectionId] });
+    },
+  });
+
   const copyMoveImage = useMutation({
     mutationFn: async ({
       imageId,
@@ -815,6 +852,7 @@ export function useCollectionDetail(collectionId?: string) {
     updateImage,
     moveImages,
     copyMoveImage,
+    reindexFaces,
   };
 }
 

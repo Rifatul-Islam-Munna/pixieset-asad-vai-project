@@ -8,6 +8,7 @@ import {
 } from 'src/settings/entities/dashboard-setting.entity';
 import {
   CollectionsController,
+  ImagorCacheWorkerController,
   PublicCollectionsController,
 } from './collections.controller';
 import { CollectionsService } from './collections.service';
@@ -109,7 +110,11 @@ import {
     ImageMetadataAiModule,
     MarketingScheduleModule,
   ],
-  controllers: [CollectionsController, PublicCollectionsController],
+  controllers: [
+    CollectionsController,
+    PublicCollectionsController,
+    ImagorCacheWorkerController,
+  ],
   providers: [
     CollectionsService,
     CollectionDownloadDeliveryService,

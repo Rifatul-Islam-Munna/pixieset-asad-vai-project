@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { deleteSupportConversation, getAdminSupportHistory, getMySupport, getSupportConversations, setSupportBlocked, type SupportConversation, type SupportMessage } from "@/actions/support";
+import { deleteSupportConversation, getAdminSupportHistory, getMySupport, getSupportConversations, sendAdminSupportMessage, sendMySupportMessage, setSupportBlocked, type SupportConversation, type SupportMessage } from "@/actions/support";
 
 const wsUrl = process.env.NEXT_PUBLIC_SUPPORT_WS_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
 const idleMs = Math.max(60_000, Number(process.env.NEXT_PUBLIC_SUPPORT_IDLE_MINUTES ?? 5) * 60_000);
@@ -39,6 +39,7 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
   const [cooldownLimit, setCooldownLimit] = useState(20);
   const [supportBlocked, setSupportBlockedState] = useState(false);
   const [moderationBusy, setModerationBusy] = useState(false);
+  const [sendBusy, setSendBusy] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const selectedUserRef = useRef("");
   const lastActivityRef = useRef(Date.now());
@@ -157,6 +158,37 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
   }, [admin, selectedUserId]);
 
   useEffect(() => {
+    let disposed = false;
+    const refresh = async () => {
+      if (document.hidden || disposed) return;
+      try {
+        if (admin) {
+          const list = await getSupportConversations();
+          if (disposed) return;
+          setConversations(list);
+          if (selectedUserRef.current) {
+            const data = await getAdminSupportHistory(selectedUserRef.current);
+            if (!disposed) setMessages(data.messages);
+          }
+        } else {
+          const data = await getMySupport();
+          if (disposed) return;
+          setMessages(data.messages);
+          setSupportBlockedState(Boolean(data.supportBlocked));
+        }
+      } catch {
+        // WebSocket remains the fast path. Polling is the PM2 cross-worker
+        // consistency fallback, so a transient poll failure stays silent.
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 5000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [admin, selectedUserId]);
+
+  useEffect(() => {
     const markActive = () => {
       lastActivityRef.current = Date.now();
       if (idle) reconnectIfNeeded();
@@ -200,21 +232,36 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
     return () => window.clearInterval(timer);
   }, [cooldown]);
 
-  const send = () => {
+  const send = async () => {
     const message = text.trim();
-    if (!message) return;
-    if (!socketRef.current?.connected) {
-      reconnectIfNeeded();
-      toast.message("Reconnecting support chat…");
-      return;
-    }
+    if (!message || sendBusy) return;
+    if (admin && !selectedUserId) return;
     if (!admin && cooldown > 0) return;
-    socketRef.current.emit("support:send", { message, userId: admin ? selectedUserId : undefined }, (result: { ok: boolean; error?: string }) => {
-      if (!result?.ok) return toast.error(result?.error ?? "Message failed");
+
+    setSendBusy(true);
+    try {
+      const saved = admin
+        ? await sendAdminSupportMessage(selectedUserId, message)
+        : await sendMySupportMessage(message);
+
+      setMessages((current) =>
+        current.some((item) => item._id === saved._id)
+          ? current
+          : [...current, saved],
+      );
+      if (admin) updateConversationFromMessage(saved);
       setText("");
       lastActivityRef.current = Date.now();
       if (!admin) setCooldown(cooldownLimit);
-    });
+
+      // Keep the socket connected for instant local-worker events. The HTTP
+      // write above is authoritative and the 5s poll makes PM2 workers converge.
+      reconnectIfNeeded();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Message failed");
+    } finally {
+      setSendBusy(false);
+    }
   };
 
   const deleteConversation = async () => {
@@ -315,7 +362,7 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
               {!admin && supportBlocked && <div className="mb-3 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"><Ban className="size-4" />You have been blocked from sending new support messages. You can still read your existing chat.</div>}
               <div className="rounded-2xl border border-[#ddd6e8] bg-white p-2 shadow-[0_8px_30px_rgba(50,32,85,.06)] focus-within:border-[#bca9eb] focus-within:ring-2 focus-within:ring-[#6337d8]/10">
                 <Textarea value={text} onChange={(event) => setText(event.target.value)} onFocus={reconnectIfNeeded} disabled={(admin && !selectedUserId) || (!admin && supportBlocked)} placeholder={admin ? "Write a reply…" : supportBlocked ? "Messaging has been disabled for this support chat" : cooldown > 0 ? `You can send another message in ${cooldown}s` : "Write a message…"} className="min-h-[72px] resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0" onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }} />
-                <div className="flex items-center justify-between gap-3 border-t border-[#f0edf5] px-1 pt-2"><p className="text-[11px] text-[#9992a0]">{admin ? "Enter to send · Shift + Enter for a new line" : supportBlocked ? "Sending disabled by support admin" : cooldown > 0 ? `Rate limit active · ${cooldown}s remaining` : "One message every 20 seconds · Enter to send"}</p><Button type="button" onClick={send} disabled={!text.trim() || (!admin && (cooldown > 0 || supportBlocked)) || (admin && !selectedUserId)} className="h-9 rounded-xl bg-[#6337d8] px-4 text-white shadow-[0_6px_18px_rgba(99,55,216,.20)] hover:bg-[#5730c3]"><Send className="mr-2 size-3.5" />Send</Button></div>
+                <div className="flex items-center justify-between gap-3 border-t border-[#f0edf5] px-1 pt-2"><p className="text-[11px] text-[#9992a0]">{admin ? "Enter to send · Shift + Enter for a new line" : supportBlocked ? "Sending disabled by support admin" : cooldown > 0 ? `Rate limit active · ${cooldown}s remaining` : "One message every 20 seconds · Enter to send"}</p><Button type="button" onClick={() => void send()} disabled={sendBusy || !text.trim() || (!admin && (cooldown > 0 || supportBlocked)) || (admin && !selectedUserId)} className="h-9 rounded-xl bg-[#6337d8] px-4 text-white shadow-[0_6px_18px_rgba(99,55,216,.20)] hover:bg-[#5730c3]"><Send className="mr-2 size-3.5" />{sendBusy ? "Sending..." : "Send"}</Button></div>
               </div>
             </div>
           </section>

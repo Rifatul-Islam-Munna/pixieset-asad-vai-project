@@ -23,12 +23,26 @@ export async function getMySupport() {
   return supportRequest<{ messages: SupportMessage[]; cooldownSeconds: number; supportBlocked?: boolean }>("/support/me");
 }
 
+export async function sendMySupportMessage(message: string) {
+  return supportRequest<SupportMessage>("/support/messages", {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+}
+
 export async function getSupportConversations() {
   return supportRequest<SupportConversation[]>("/support/admin/conversations");
 }
 
 export async function getAdminSupportHistory(userId: string) {
   return supportRequest<{ user: SupportConversation["user"]; messages: SupportMessage[] }>(`/support/admin/users/${userId}`);
+}
+
+export async function sendAdminSupportMessage(userId: string, message: string) {
+  return supportRequest<SupportMessage>(`/support/admin/users/${userId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
 }
 
 export async function deleteSupportConversation(userId: string) {

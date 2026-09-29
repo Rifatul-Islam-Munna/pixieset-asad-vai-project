@@ -20,9 +20,11 @@ const baseUrl =
   process.env.NEXT_PUBLIC_BASE_URL ??
   "http://localhost:4000";
 
+const PUBLIC_GALLERY_PAGE_SIZE = 20;
+
 async function getCollection(identifier: string, siteSlug: string) {
   const response = await fetch(
-    `${baseUrl}/public/collections/${encodeURIComponent(identifier)}?limit=48&offset=0&siteSlug=${encodeURIComponent(siteSlug)}`,
+    `${baseUrl}/public/collections/${encodeURIComponent(identifier)}?limit=${PUBLIC_GALLERY_PAGE_SIZE}&offset=0&siteSlug=${encodeURIComponent(siteSlug)}`,
     {
       cache: "no-store",
       signal: AbortSignal.timeout(8000),
@@ -37,7 +39,7 @@ async function getOwnerPreview(collectionId?: string) {
   const token = (await cookies()).get("access_token")?.value;
   if (!token) return null;
   const response = await fetch(
-    `${baseUrl}/collections/${encodeURIComponent(collectionId)}/owner-preview?limit=48&offset=0`,
+    `${baseUrl}/collections/${encodeURIComponent(collectionId)}/owner-preview?limit=${PUBLIC_GALLERY_PAGE_SIZE}&offset=0`,
     {
       cache: "no-store",
       headers: { access_token: token },

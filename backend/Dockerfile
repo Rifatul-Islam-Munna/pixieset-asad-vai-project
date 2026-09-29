@@ -75,10 +75,11 @@ COPY --from=build --chown=nestjs:nodejs /app/dist ./dist
 
 # Copy package information
 COPY --chown=nestjs:nodejs package*.json ./
+COPY --chown=nestjs:nodejs ecosystem.config.cjs ./
 
 # Run as non-root
 USER nestjs
 
 EXPOSE 80
 
-CMD ["node", "dist/main.js"]
+CMD ["./node_modules/.bin/pm2-runtime", "ecosystem.config.cjs"]

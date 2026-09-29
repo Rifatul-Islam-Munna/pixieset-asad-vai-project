@@ -1,0 +1,565 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"strings"
+	"time"
+)
+
+var variants = []string{"thumbnail", "view", "small", "medium", "large"}
+
+type config struct {
+	backendURL      string
+	imagorLocalURL  string
+	secret          string
+	resultEndpoint  string
+	resultBucket    string
+	resultBaseDir   string
+	resultPublicURL string
+	resultRegion    string
+	accessKey       string
+	secretKey       string
+	interval        time.Duration
+	idlePoll        time.Duration
+	cloudflareZone  string
+	cloudflareToken string
+}
+
+type warmJob struct {
+	ImageID      string            `json:"imageId"`
+	CollectionID string            `json:"collectionId"`
+	Version      int               `json:"version"`
+	URLs         map[string]string `json:"urls"`
+}
+
+type deleteJob struct {
+	JobID        string   `json:"jobId"`
+	ImageID      string   `json:"imageId"`
+	CollectionID string   `json:"collectionId"`
+	Keys         []string `json:"keys"`
+	URLs         []string `json:"urls"`
+}
+
+type warmComplete struct {
+	Accepted     bool     `json:"accepted"`
+	Ready        bool     `json:"ready"`
+	ObsoleteKeys []string `json:"obsoleteKeys"`
+	ObsoleteURLs []string `json:"obsoleteUrls"`
+}
+
+func main() {
+	if !envBool("IMAGOR_CACHE_WORKER_ENABLED", true) {
+		log.Printf("imagor cache worker disabled")
+		return
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Printf("imagor cache worker disabled: %v", err)
+		return
+	}
+	waitForImagor(cfg)
+
+	log.Printf(
+		"imagor cache worker started: backend=%s bucket=%s interval=%s",
+		cfg.backendURL,
+		cfg.resultBucket,
+		cfg.interval,
+	)
+	for {
+		deleted := processDelete(cfg)
+		warmed := processWarm(cfg)
+		switch {
+		case warmed:
+			time.Sleep(cfg.interval)
+		case deleted:
+			time.Sleep(500 * time.Millisecond)
+		default:
+			time.Sleep(cfg.idlePoll)
+		}
+	}
+}
+
+func waitForImagor(cfg config) {
+	healthURL := strings.TrimRight(cfg.imagorLocalURL, "/") + "/healthcheck"
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+		if err == nil {
+			resp, requestErr := http.DefaultClient.Do(req)
+			if requestErr == nil {
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
+				if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+					cancel()
+					return
+				}
+			}
+		}
+		cancel()
+		time.Sleep(time.Second)
+	}
+}
+
+func loadConfig() (config, error) {
+	cfg := config{
+		backendURL:      strings.TrimRight(env("BACKEND_INTERNAL_URL", ""), "/"),
+		imagorLocalURL:  strings.TrimRight(env("IMAGOR_LOCAL_URL", "http://127.0.0.1:8000"), "/"),
+		secret:          strings.TrimSpace(env("IMAGOR_SECRET", "")),
+		resultEndpoint:  strings.TrimRight(env("S3_RESULT_STORAGE_ENDPOINT", ""), "/"),
+		resultBucket:    strings.TrimSpace(env("S3_RESULT_STORAGE_BUCKET", "")),
+		resultBaseDir:   strings.Trim(env("S3_RESULT_STORAGE_BASE_DIR", ""), "/"),
+		resultPublicURL: strings.TrimRight(env("S3_RESULT_STORAGE_PUBLIC_URL", ""), "/"),
+		resultRegion:    env("AWS_RESULT_STORAGE_REGION", "auto"),
+		accessKey:       strings.TrimSpace(env("AWS_RESULT_STORAGE_ACCESS_KEY_ID", "")),
+		secretKey:       strings.TrimSpace(env("AWS_RESULT_STORAGE_SECRET_ACCESS_KEY", "")),
+		interval:        envDuration("IMAGOR_CACHE_WORKER_INTERVAL", 20*time.Second),
+		idlePoll:        envDuration("IMAGOR_CACHE_WORKER_IDLE_POLL", 5*time.Second),
+		cloudflareZone:  strings.TrimSpace(env("CLOUDFLARE_ZONE_ID", "")),
+		cloudflareToken: strings.TrimSpace(env("CLOUDFLARE_API_TOKEN", "")),
+	}
+
+	if style := strings.ToLower(env("IMAGOR_RESULT_STORAGE_PATH_STYLE", "digest")); style != "digest" {
+		return cfg, fmt.Errorf("IMAGOR_RESULT_STORAGE_PATH_STYLE must be digest, got %q", style)
+	}
+	if cfg.backendURL == "" || cfg.secret == "" {
+		return cfg, errors.New("BACKEND_INTERNAL_URL and IMAGOR_SECRET are required")
+	}
+	if cfg.resultEndpoint == "" || cfg.resultBucket == "" || cfg.resultPublicURL == "" {
+		return cfg, errors.New("result storage endpoint, bucket, and public URL are required")
+	}
+	if cfg.accessKey == "" || cfg.secretKey == "" {
+		return cfg, errors.New("AWS result-storage credentials are required")
+	}
+	if cfg.interval < time.Second {
+		cfg.interval = time.Second
+	}
+	if cfg.idlePoll < time.Second {
+		cfg.idlePoll = time.Second
+	}
+	return cfg, nil
+}
+
+func processWarm(cfg config) bool {
+	var response struct {
+		Data *warmJob `json:"data"`
+	}
+	if err := postJSON(cfg, "/internal/imagor-cache/claim", map[string]any{}, &response); err != nil {
+		log.Printf("cache claim failed: %v", err)
+		return false
+	}
+	if response.Data == nil {
+		return false
+	}
+
+	job := response.Data
+	keys := make(map[string]string, len(variants))
+	publicURLs := make(map[string]string, len(variants))
+	for _, variant := range variants {
+		rawURL := strings.TrimSpace(job.URLs[variant])
+		if rawURL == "" {
+			failWarm(cfg, job, fmt.Errorf("missing %s URL", variant))
+			return true
+		}
+		key, publicURL, err := warmAndVerify(cfg, rawURL)
+		if err != nil {
+			failWarm(cfg, job, fmt.Errorf("%s: %w", variant, err))
+			return true
+		}
+		keys[variant] = key
+		publicURLs[variant] = publicURL
+	}
+
+	var completed struct {
+		Data warmComplete `json:"data"`
+	}
+	payload := map[string]any{
+		"collectionId": job.CollectionID,
+		"success":      true,
+		"keys":         keys,
+		"urls":         publicURLs,
+	}
+	endpoint := "/internal/imagor-cache/complete/" + url.PathEscape(job.ImageID)
+	if err := postJSON(cfg, endpoint, payload, &completed); err != nil {
+		log.Printf("cache completion callback failed for %s: %v", job.ImageID, err)
+		return true
+	}
+
+	if !completed.Data.Accepted {
+		_ = deleteResultObjects(cfg, mapValues(keys), mapValues(publicURLs))
+		return true
+	}
+	if len(completed.Data.ObsoleteKeys) > 0 {
+		if err := deleteResultObjects(cfg, completed.Data.ObsoleteKeys, completed.Data.ObsoleteURLs); err != nil {
+			log.Printf("obsolete result-cache cleanup failed: %v", err)
+		}
+	}
+	log.Printf(
+		"imagor result cache ready: image=%s gallery=%s galleryReady=%t",
+		job.ImageID,
+		job.CollectionID,
+		completed.Data.Ready,
+	)
+	return true
+}
+
+func failWarm(cfg config, job *warmJob, cause error) {
+	payload := map[string]any{
+		"collectionId": job.CollectionID,
+		"success":      false,
+		"error":        cause.Error(),
+	}
+	endpoint := "/internal/imagor-cache/complete/" + url.PathEscape(job.ImageID)
+	var ignored any
+	if err := postJSON(cfg, endpoint, payload, &ignored); err != nil {
+		log.Printf("cache failure callback failed for %s: %v", job.ImageID, err)
+	}
+	log.Printf("imagor result cache warm failed: image=%s error=%v", job.ImageID, cause)
+}
+
+func processDelete(cfg config) bool {
+	var response struct {
+		Data *deleteJob `json:"data"`
+	}
+	if err := postJSON(cfg, "/internal/imagor-cache/delete/claim", map[string]any{}, &response); err != nil {
+		log.Printf("cache delete claim failed: %v", err)
+		return false
+	}
+	if response.Data == nil {
+		return false
+	}
+	job := response.Data
+	err := deleteResultObjects(cfg, job.Keys, job.URLs)
+	payload := map[string]any{"success": err == nil}
+	if err != nil {
+		payload["error"] = err.Error()
+	}
+	endpoint := "/internal/imagor-cache/delete/complete/" + url.PathEscape(job.JobID)
+	var ignored any
+	if callbackErr := postJSON(cfg, endpoint, payload, &ignored); callbackErr != nil {
+		log.Printf("cache delete callback failed for %s: %v", job.JobID, callbackErr)
+	}
+	if err != nil {
+		log.Printf("imagor result cache delete failed: job=%s error=%v", job.JobID, err)
+	} else {
+		log.Printf("imagor result cache deleted: job=%s image=%s", job.JobID, job.ImageID)
+	}
+	return true
+}
+
+func warmAndVerify(cfg config, rawURL string) (string, string, error) {
+	key, err := resultStorageKey(cfg, rawURL)
+	if err != nil {
+		return "", "", err
+	}
+
+	localURL, err := rewriteImagorURL(cfg.imagorLocalURL, rawURL)
+	if err != nil {
+		return "", "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, localURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Accept", "image/webp,image/avif,image/*,*/*;q=0.8")
+	req.Header.Set("User-Agent", "gallerista-imagor-r2-worker/1.0")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	_, copyErr := io.Copy(io.Discard, resp.Body)
+	closeErr := resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("imagor returned HTTP %d", resp.StatusCode)
+	}
+	if copyErr != nil {
+		return "", "", copyErr
+	}
+	if closeErr != nil {
+		return "", "", closeErr
+	}
+
+	var headErr error
+	for attempt := 0; attempt < 6; attempt++ {
+		headErr = s3Request(cfg, http.MethodHead, key)
+		if headErr == nil {
+			break
+		}
+		time.Sleep(time.Duration(attempt+1) * 350 * time.Millisecond)
+	}
+	if headErr != nil {
+		return "", "", fmt.Errorf("R2 Result Storage did not confirm %s: %w", key, headErr)
+	}
+	return key, publicResultURL(cfg, key), nil
+}
+
+func resultStorageKey(cfg config, rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	escaped := strings.TrimPrefix(parsed.EscapedPath(), "/")
+	firstSlash := strings.IndexByte(escaped, '/')
+	if firstSlash < 0 || firstSlash == len(escaped)-1 {
+		return "", errors.New("invalid signed Imagor path")
+	}
+	processingPath := escaped[firstSlash+1:]
+	sum := sha1.Sum([]byte(processingPath))
+	hash := hex.EncodeToString(sum[:])
+	logicalKey := hash[:2] + "/" + hash[2:4] + "/" + hash[4:]
+	if cfg.resultBaseDir == "" {
+		return logicalKey, nil
+	}
+	return path.Join(cfg.resultBaseDir, logicalKey), nil
+}
+
+func rewriteImagorURL(localBase, rawURL string) (string, error) {
+	source, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	local, err := url.Parse(localBase)
+	if err != nil {
+		return "", err
+	}
+	source.Scheme = local.Scheme
+	source.Host = local.Host
+	if local.Path != "" && local.Path != "/" {
+		source.Path = strings.TrimRight(local.Path, "/") + "/" + strings.TrimLeft(source.Path, "/")
+		source.RawPath = ""
+	}
+	return source.String(), nil
+}
+
+func publicResultURL(cfg config, key string) string {
+	return cfg.resultPublicURL + "/" + escapeKey(key)
+}
+
+func deleteResultObjects(cfg config, keys, publicURLs []string) error {
+	seen := map[string]struct{}{}
+	for _, key := range keys {
+		key = strings.Trim(strings.TrimSpace(key), "/")
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if err := s3Request(cfg, http.MethodDelete, key); err != nil {
+			return err
+		}
+	}
+	if err := purgeCloudflare(cfg, publicURLs); err != nil {
+		return err
+	}
+	return nil
+}
+
+func s3Request(cfg config, method, key string) error {
+	escapedPath := "/" + url.PathEscape(cfg.resultBucket) + "/" + escapeKey(key)
+	requestURL := cfg.resultEndpoint + escapedPath
+	req, err := http.NewRequest(method, requestURL, nil)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	amzDate := now.Format("20060102T150405Z")
+	dateStamp := now.Format("20060102")
+	emptyHash := sha256.Sum256(nil)
+	payloadHash := hex.EncodeToString(emptyHash[:])
+	host := req.URL.Host
+
+	canonicalHeaders := "host:" + host + "\n" +
+		"x-amz-content-sha256:" + payloadHash + "\n" +
+		"x-amz-date:" + amzDate + "\n"
+	signedHeaders := "host;x-amz-content-sha256;x-amz-date"
+	canonicalRequest := method + "\n" + escapedPath + "\n\n" +
+		canonicalHeaders + "\n" + signedHeaders + "\n" + payloadHash
+	requestHash := sha256.Sum256([]byte(canonicalRequest))
+	scope := dateStamp + "/" + cfg.resultRegion + "/s3/aws4_request"
+	stringToSign := "AWS4-HMAC-SHA256\n" + amzDate + "\n" + scope + "\n" +
+		hex.EncodeToString(requestHash[:])
+
+	kDate := hmacSHA256([]byte("AWS4"+cfg.secretKey), dateStamp)
+	kRegion := hmacSHA256(kDate, cfg.resultRegion)
+	kService := hmacSHA256(kRegion, "s3")
+	kSigning := hmacSHA256(kService, "aws4_request")
+	signature := hex.EncodeToString(hmacSHA256(kSigning, stringToSign))
+	authorization := "AWS4-HMAC-SHA256 Credential=" + cfg.accessKey + "/" + scope +
+		", SignedHeaders=" + signedHeaders + ", Signature=" + signature
+
+	req.Header.Set("x-amz-content-sha256", payloadHash)
+	req.Header.Set("x-amz-date", amzDate)
+	req.Header.Set("Authorization", authorization)
+
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	return fmt.Errorf("R2 %s %s returned HTTP %d", method, key, resp.StatusCode)
+}
+
+func purgeCloudflare(cfg config, publicURLs []string) error {
+	if cfg.cloudflareZone == "" || cfg.cloudflareToken == "" || len(publicURLs) == 0 {
+		return nil
+	}
+	unique := make([]string, 0, len(publicURLs))
+	seen := map[string]struct{}{}
+	for _, item := range publicURLs {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		unique = append(unique, item)
+	}
+
+	for start := 0; start < len(unique); start += 30 {
+		end := start + 30
+		if end > len(unique) {
+			end = len(unique)
+		}
+		payload, _ := json.Marshal(map[string]any{"files": unique[start:end]})
+		apiURL := "https://api.cloudflare.com/client/v4/zones/" +
+			url.PathEscape(cfg.cloudflareZone) + "/purge_cache"
+		req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewReader(payload))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+cfg.cloudflareToken)
+		req.Header.Set("Content-Type", "application/json")
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("Cloudflare purge returned HTTP %d", resp.StatusCode)
+		}
+	}
+	return nil
+}
+
+func postJSON(cfg config, endpoint string, payload any, out any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		cfg.backendURL+endpoint,
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-imagor-worker-secret", cfg.secret)
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("backend returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+	}
+	if out == nil || len(data) == 0 {
+		return nil
+	}
+	return json.Unmarshal(data, out)
+}
+
+func escapeKey(key string) string {
+	parts := strings.Split(strings.Trim(key, "/"), "/")
+	for i := range parts {
+		parts[i] = url.PathEscape(parts[i])
+	}
+	return strings.Join(parts, "/")
+}
+
+func mapValues(values map[string]string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func hmacSHA256(key []byte, value string) []byte {
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write([]byte(value))
+	return mac.Sum(nil)
+}
+
+func env(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if raw == "" {
+		return fallback
+	}
+	switch raw {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := time.ParseDuration(raw)
+	if err != nil {
+		log.Printf("invalid %s=%q, using %s", key, raw, fallback)
+		return fallback
+	}
+	return value
+}

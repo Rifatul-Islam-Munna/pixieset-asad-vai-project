@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { Roles } from 'src/lib/roles.decorator';
 import { RolesGuard } from 'src/lib/roles.guard';
@@ -22,6 +22,20 @@ export class SupportController {
     return { data: { messages, cooldownSeconds: this.supportService.cooldownSeconds, supportBlocked: Boolean(user.supportBlocked) } };
   }
 
+  @Post('messages')
+  async sendMessage(
+    @Req() req: ExpressRequest,
+    @Body() body: { message?: string },
+  ) {
+    const data = await this.supportService.createMessage(
+      req.user.id,
+      'user',
+      String(body?.message ?? ''),
+    );
+    this.supportGateway.notifyMessage(data);
+    return { data };
+  }
+
   @Get('admin/conversations')
   @UseGuards(RolesGuard)
   @Roles(UserType.ADMIN)
@@ -34,6 +48,22 @@ export class SupportController {
   @Roles(UserType.ADMIN)
   async adminHistory(@Param('id') id: string) {
     return { data: await this.supportService.adminHistory(id) };
+  }
+
+  @Post('admin/users/:id/messages')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.ADMIN)
+  async sendAdminMessage(
+    @Param('id') id: string,
+    @Body() body: { message?: string },
+  ) {
+    const data = await this.supportService.createMessage(
+      id,
+      'admin',
+      String(body?.message ?? ''),
+    );
+    this.supportGateway.notifyMessage(data);
+    return { data };
   }
 
   @Delete('admin/users/:id/conversation')

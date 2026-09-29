@@ -10,10 +10,12 @@ export async function GET(
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   const { collectionId } = await params;
   const query = new URL(request.url).searchParams;
-  const limit = query.get("limit") ?? "48";
+  const limit = query.get("limit") ?? "20";
   const offset = query.get("offset") ?? "0";
+  const setId = query.get("setId") ?? "";
+  const setQuery = setId ? `&setId=${encodeURIComponent(setId)}` : "";
   const response = await fetch(
-    `${apiBaseUrl()}/collections/${encodeURIComponent(collectionId)}/owner-preview?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}`,
+    `${apiBaseUrl()}/collections/${encodeURIComponent(collectionId)}/owner-preview?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}${setQuery}`,
     { cache: "no-store", headers: { access_token: token } },
   );
   const payload = await response.json().catch(() => null);

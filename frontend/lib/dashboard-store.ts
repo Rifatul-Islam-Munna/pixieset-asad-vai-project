@@ -30,6 +30,8 @@ export type PresetDesignSettings = CoverAnimationDesign & {
   typography: string;
   customFontName?: string;
   customFontDataUrl?: string;
+  coverFontName?: string;
+  coverFontDataUrl?: string;
   coverSmallTitleFontSizePx?: number;
   coverTitleFontSizePx?: number;
   coverDateFontSizePx?: number;
@@ -283,8 +285,10 @@ const mergeEmailTemplates = (
   userTemplates: EmailTemplateItem[],
   globalTemplates: EmailTemplateItem[] = baseEmailTemplates,
 ) => [
-  ...globalTemplates.map((template) => ({ ...template, source: "admin" as const })),
+  // User-owned templates always come first everywhere: Settings, campaign
+  // creation, automation creation, sharing, and any future template picker.
   ...userTemplates.map((template) => ({ ...template, source: "user" as const })),
+  ...globalTemplates.map((template) => ({ ...template, source: "admin" as const })),
 ];
 
 const emptyPresetGeneral: PresetGeneralSettings = {
@@ -314,6 +318,8 @@ const emptyPresetDesign: PresetDesignSettings = {
   typography: "Classic",
   customFontName: "",
   customFontDataUrl: "",
+  coverFontName: "",
+  coverFontDataUrl: "",
   coverSmallTitleFontSizePx: 12,
   coverTitleFontSizePx: 60,
   coverDateFontSizePx: 14,

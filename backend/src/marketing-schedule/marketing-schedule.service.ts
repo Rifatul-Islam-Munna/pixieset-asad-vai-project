@@ -4,6 +4,7 @@ import { Interval } from '@nestjs/schedule';
 import { Model, Types } from 'mongoose';
 import { CollectionEmailRegistration, CollectionEmailRegistrationDocument } from 'src/collections/entities/collection-email-registration.entity';
 import { BrandingEmailService, type BrandingEmailPosition } from 'src/mail/branding-email.service';
+import { backgroundWorkerEnabled } from 'src/lib/runtime-role';
 
 const EMAIL_BLOCK_IDS = ['branding', 'eyebrow', 'title', 'image', 'message', 'button', 'footer'];
 import { MailService } from 'src/mail/mail.service';
@@ -11,7 +12,7 @@ import { User, UserDocument } from 'src/user/entities/user.entity';
 import { MarketingEmailAutomation, MarketingEmailAutomationDocument } from './entities/marketing-email-automation.entity';
 import { MarketingEmailSchedule, MarketingEmailScheduleDocument } from './entities/marketing-email-schedule.entity';
 
-export type MarketingAutomationTrigger = 'new-subscriber' | 'gallery-published' | 'client-download' | 'client-favorite';
+export type MarketingAutomationTrigger = 'new-subscriber' | 'gallery-published' | 'gallery-updated' | 'client-download' | 'client-favorite';
 
 export type LifecycleAutomationEvent = {
   userId: string;
@@ -219,6 +220,7 @@ export class MarketingScheduleService implements OnModuleInit {
 
   @Interval(15000)
   async processDueSchedules() {
+    if (!backgroundWorkerEnabled()) return;
     if (this.processing) return;
     this.processing = true;
     try {
@@ -494,6 +496,7 @@ export class MarketingScheduleService implements OnModuleInit {
   private renderLifecycleText(value: string, event: LifecycleAutomationEvent, recipientEmail: string) {
     const eventLabel: Record<LifecycleAutomationEvent['trigger'], string> = {
       'gallery-published': 'Gallery published',
+      'gallery-updated': 'Gallery updated',
       'client-download': 'Download ready',
       'client-favorite': 'Favorite added',
     };
@@ -525,7 +528,7 @@ export class MarketingScheduleService implements OnModuleInit {
 
   private automationTrigger(value: unknown): MarketingAutomationTrigger {
     const trigger = this.text(value, 40) as MarketingAutomationTrigger;
-    return ['new-subscriber', 'gallery-published', 'client-download', 'client-favorite'].includes(trigger)
+    return ['new-subscriber', 'gallery-published', 'gallery-updated', 'client-download', 'client-favorite'].includes(trigger)
       ? trigger
       : 'new-subscriber';
   }

@@ -52,6 +52,24 @@ export class Collection {
 
   @Prop({ default: true, index: true })
   showOnHomepage: boolean;
+
+  @Prop()
+  faceReindexRequestedAt?: Date;
+
+  @Prop()
+  faceReindexCompletedAt?: Date;
+
+  @Prop({ type: String, enum: ['', 'queued', 'processing', 'completed'], default: '' })
+  faceReindexStatus?: 'queued' | 'processing' | 'completed' | '';
+
+  @Prop({ type: String, enum: ['', 'warming', 'ready'], default: '', index: true })
+  imageCacheStatus?: '' | 'warming' | 'ready';
+
+  @Prop({ default: 0, index: true })
+  imageCacheVersion?: number;
+
+  @Prop()
+  imageCacheReadyAt?: Date;
 }
 
 export const CollectionSchema = SchemaFactory.createForClass(Collection);

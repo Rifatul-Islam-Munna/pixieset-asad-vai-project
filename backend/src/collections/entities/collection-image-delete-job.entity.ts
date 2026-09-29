@@ -21,6 +21,34 @@ export class CollectionImageDeleteJob {
   @Prop({ type: [String], default: [] })
   privateObjectKeys: string[];
 
+  @Prop({ type: [String], default: [] })
+  cacheObjectKeys: string[];
+
+  @Prop({ type: [String], default: [] })
+  cachePublicUrls: string[];
+
+  @Prop({
+    default: '',
+    enum: ['', 'queued', 'processing', 'completed', 'failed'],
+    index: true,
+  })
+  cacheDeleteStatus: '' | 'queued' | 'processing' | 'completed' | 'failed';
+
+  @Prop({ default: 0 })
+  cacheDeleteAttempts: number;
+
+  @Prop({ index: true })
+  cacheDeleteNextAttemptAt?: Date;
+
+  @Prop({ default: '' })
+  cacheDeleteLastError: string;
+
+  @Prop()
+  cacheDeleteProcessingStartedAt?: Date;
+
+  @Prop()
+  cacheDeletedAt?: Date;
+
   @Prop({
     default: 'queued',
     enum: ['queued', 'processing', 'completed', 'failed'],
@@ -50,5 +78,10 @@ export const CollectionImageDeleteJobSchema =
 CollectionImageDeleteJobSchema.index({
   status: 1,
   nextAttemptAt: 1,
+  createdAt: 1,
+});
+CollectionImageDeleteJobSchema.index({
+  cacheDeleteStatus: 1,
+  cacheDeleteNextAttemptAt: 1,
   createdAt: 1,
 });

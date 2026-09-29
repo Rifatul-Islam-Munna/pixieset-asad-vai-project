@@ -8,8 +8,8 @@ export class MarketingEmailAutomation {
   @Prop({ required: true, index: true }) userId: string;
   @Prop({ required: true, trim: true, maxlength: 160 }) name: string;
   @Prop({ default: true, index: true }) enabled: boolean;
-  @Prop({ required: true, enum: ['new-subscriber', 'gallery-published', 'client-download', 'client-favorite'], default: 'new-subscriber', index: true })
-  trigger: 'new-subscriber' | 'gallery-published' | 'client-download' | 'client-favorite';
+  @Prop({ required: true, enum: ['new-subscriber', 'gallery-published', 'gallery-updated', 'client-download', 'client-favorite'], default: 'new-subscriber', index: true })
+  trigger: 'new-subscriber' | 'gallery-published' | 'gallery-updated' | 'client-download' | 'client-favorite';
   @Prop({ trim: true, maxlength: 180 }) recipientCategory?: string;
   @Prop({ default: 0, min: 0, max: 525600 }) delayMinutes: number;
   @Prop({ required: true, trim: true, maxlength: 180 }) templateId: string;

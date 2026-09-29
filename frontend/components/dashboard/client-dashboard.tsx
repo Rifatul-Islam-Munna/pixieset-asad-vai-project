@@ -3141,6 +3141,36 @@ function TemplateGrid({
   onSelect: (template?: string) => void;
 }) {
   const { emailTemplates } = useDashboardStore();
+  const [query, setQuery] = useState("");
+  const [source, setSource] = useState<"all" | "mine" | "prebuilt">("all");
+  const [category, setCategory] = useState("All");
+  const [language, setLanguage] = useState("All");
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+  const filtered = emailTemplates
+    .filter((template) => {
+      const matchesQuery = [template.name, template.subject, template.category, template.galleryCategory, template.language]
+        .join(" ")
+        .toLowerCase()
+        .includes(query.trim().toLowerCase());
+      const matchesSource =
+        source === "all" ||
+        (source === "mine" ? template.source === "user" : template.source !== "user");
+      const matchesCategory =
+        category === "All" || (template.category || "Gallery Delivery") === category;
+      const matchesLanguage =
+        language === "All" || (template.language || "English") === language;
+      return matchesQuery && matchesSource && matchesCategory && matchesLanguage;
+    })
+    .sort((left, right) => {
+      const mineFirst = Number(right.source === "user") - Number(left.source === "user");
+      return mineFirst || (left.name || "").localeCompare(right.name || "");
+    });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const templates = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => setPage(1), [query, source, category, language]);
 
   if (isLoading && !emailTemplates.length) {
     return (
@@ -3163,32 +3193,74 @@ function TemplateGrid({
   }
 
   return (
-    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {emailTemplates.map((template) => (
-        <button
-          key={template.id}
-          className="border bg-white p-4 text-left hover:border-[#6337d8]"
-          onClick={() => onSelect(template.id)}
-        >
-          <div className="flex h-28 items-center justify-center bg-[#090d0f] text-white">
-            {template.image ? (
-              <img
-                src={template.image}
-                alt=""
-                className="h-full w-full object-cover opacity-75"
-              />
-            ) : (
-              <span className="px-3 text-center text-xl font-bold uppercase tracking-wide">
-                {template.title}
+    <div className="mt-8">
+      <div className="flex flex-wrap items-center gap-2 border-b pb-5">
+        <div className="flex h-10 min-w-[220px] flex-1 items-center gap-2 border bg-white px-3 sm:max-w-[320px]">
+          <Search className="size-4 text-[#777]" />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search templates" className="h-9 rounded-none border-0 px-0 focus-visible:ring-0" />
+        </div>
+        <select value={source} onChange={(event) => setSource(event.target.value as typeof source)} className="h-10 border bg-white px-3 text-sm font-semibold">
+          <option value="all">All templates</option>
+          <option value="mine">My Templates</option>
+          <option value="prebuilt">Pre-built</option>
+        </select>
+        <select value={category} onChange={(event) => setCategory(event.target.value)} className="h-10 border bg-white px-3 text-sm font-semibold">
+          <option value="All">All purposes</option>
+          {EMAIL_TEMPLATE_CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <select value={language} onChange={(event) => setLanguage(event.target.value)} className="h-10 border bg-white px-3 text-sm font-semibold">
+          <option value="All">All languages</option>
+          {EMAIL_TEMPLATE_LANGUAGES.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      </div>
+
+      {templates.length ? (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {templates.map((template) => (
+            <button
+              key={template.id}
+              className={cn("relative border bg-white p-4 text-left transition hover:border-[#6337d8] hover:shadow-sm", template.source === "user" && "border-[#d8ccfa]")}
+              onClick={() => onSelect(template.id)}
+            >
+              <span className={cn("absolute right-6 top-6 z-10 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.08em]", template.source === "user" ? "bg-[#6337d8] text-white" : "bg-white/90 text-[#666]")}>
+                {template.source === "user" ? "My Template" : "Pre-built"}
               </span>
-            )}
+              <div className="flex h-28 items-center justify-center overflow-hidden bg-[#090d0f] text-white">
+                {template.image ? (
+                  <img
+                    src={template.image}
+                    alt=""
+                    className="h-full w-full object-cover opacity-75"
+                  />
+                ) : (
+                  <span className="px-3 text-center text-xl font-bold uppercase tracking-wide">
+                    {template.title}
+                  </span>
+                )}
+              </div>
+              <p className="mt-4 truncate font-bold">{template.name}</p>
+              <p className="mt-2 line-clamp-2 text-sm text-[#666]">
+                {template.subject}
+              </p>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-8 border border-dashed py-16 text-center text-sm font-semibold text-[#777]">
+          No templates match these filters.
+        </div>
+      )}
+
+      {filtered.length > 0 && pageCount > 1 && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
+          <span className="text-[#777]">Showing {(safePage - 1) * pageSize + 1}-{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}</span>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" className="h-9 rounded-none px-4" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</Button>
+            <span className="min-w-20 text-center font-semibold">{safePage} / {pageCount}</span>
+            <Button type="button" variant="outline" className="h-9 rounded-none px-4" disabled={safePage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Next</Button>
           </div>
-          <p className="mt-4 font-bold">{template.name}</p>
-          <p className="mt-2 line-clamp-2 text-sm text-[#666]">
-            {template.subject}
-          </p>
-        </button>
-      ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -4499,6 +4571,8 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                   </button>
                   <button
                     className="flex size-8 items-center justify-center bg-white/90 text-[#333] shadow-sm hover:text-[#6337d8]"
+                    onPointerEnter={() => warmImageCache(photo.url)}
+                    onFocus={() => warmImageCache(photo.url)}
                     onClick={() => setPreviewImage(photo)}
                     aria-label="View image"
                   >
@@ -4584,7 +4658,10 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                 <img
                   src={imageSrc(previewImage.url)}
                   alt={collectionImageCaption(previewImage)}
-                  className="max-h-[76dvh] max-w-full object-contain"
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                  className="mx-auto block max-h-[76dvh] max-w-full object-contain"
                 />
               </div>
             </div>
@@ -5106,8 +5183,7 @@ function BrandingSettings() {
       <div className="bg-white">
         <h2 className="text-2xl font-medium">Branding</h2>
         <p className="mt-3 text-sm leading-6 text-[#666]">
-          Brand logo, text, color, and image can appear on custom admin cover
-          templates.
+          Brand logo, text, and accent color appear on the public gallery header and branded emails. Brand imagery is also available to cover templates.
         </p>
         <FieldGroup className="mt-8 gap-7">
           <Field>
@@ -5237,9 +5313,11 @@ function EmailTemplatesPanel({
   const router = useRouter();
   const [editorOpen, setEditorOpen] = useState(Boolean(editorId));
   const [templateSearch, setTemplateSearch] = useState("");
+  const [templateSource, setTemplateSource] = useState("All");
   const [templateCategory, setTemplateCategory] = useState("All");
   const [templateGalleryCategory, setTemplateGalleryCategory] = useState("All");
   const [templateLanguage, setTemplateLanguage] = useState("All");
+  const [templatePage, setTemplatePage] = useState(1);
   const createdEditorRouteRef = useRef("");
   const {
     addEmailTemplateDraft,
@@ -5260,19 +5338,38 @@ function EmailTemplatesPanel({
   const activeTemplate =
     emailTemplates.find((template) => template.id === activeEmailTemplateId) ??
     emailTemplates[0];
-  const visibleTemplates = emailTemplates.filter((template) => {
-    const galleryCategory = template.galleryCategory === "Custom label"
-      ? template.customGalleryCategoryLabel || "Custom label"
-      : template.galleryCategory || "General";
-    const matchesSearch = [template.name, template.subject, template.previewText, template.category, galleryCategory, template.language]
-      .join(" ")
-      .toLowerCase()
-      .includes(templateSearch.toLowerCase());
-    const matchesCategory = templateCategory === "All" || (template.category || "Gallery Delivery") === templateCategory;
-    const matchesGalleryCategory = templateGalleryCategory === "All" || (template.galleryCategory || "General") === templateGalleryCategory;
-    const matchesLanguage = templateLanguage === "All" || (template.language || "English") === templateLanguage;
-    return matchesSearch && matchesCategory && matchesGalleryCategory && matchesLanguage;
-  });
+  const visibleTemplates = emailTemplates
+    .filter((template) => {
+      const galleryCategory = template.galleryCategory === "Custom label"
+        ? template.customGalleryCategoryLabel || "Custom label"
+        : template.galleryCategory || "General";
+      const matchesSearch = [template.name, template.subject, template.previewText, template.category, galleryCategory, template.language]
+        .join(" ")
+        .toLowerCase()
+        .includes(templateSearch.toLowerCase());
+      const matchesSource =
+        templateSource === "All" ||
+        (templateSource === "Mine" ? template.source === "user" : template.source !== "user");
+      const matchesCategory = templateCategory === "All" || (template.category || "Gallery Delivery") === templateCategory;
+      const matchesGalleryCategory = templateGalleryCategory === "All" || (template.galleryCategory || "General") === templateGalleryCategory;
+      const matchesLanguage = templateLanguage === "All" || (template.language || "English") === templateLanguage;
+      return matchesSearch && matchesSource && matchesCategory && matchesGalleryCategory && matchesLanguage;
+    })
+    .sort((left, right) => {
+      const sourceOrder = Number(right.source === "user") - Number(left.source === "user");
+      if (sourceOrder) return sourceOrder;
+      return (left.name || "").localeCompare(right.name || "");
+    });
+  const templatePageSize = 12;
+  const templatePageCount = Math.max(1, Math.ceil(visibleTemplates.length / templatePageSize));
+  const safeTemplatePage = Math.min(templatePage, templatePageCount);
+  const pagedTemplates = visibleTemplates.slice(
+    (safeTemplatePage - 1) * templatePageSize,
+    safeTemplatePage * templatePageSize,
+  );
+  useEffect(() => {
+    setTemplatePage(1);
+  }, [templateSearch, templateSource, templateCategory, templateGalleryCategory, templateLanguage]);
   useEffect(() => {
     if (!editorId) {
       createdEditorRouteRef.current = "";
@@ -5361,6 +5458,11 @@ function EmailTemplatesPanel({
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
+          <select value={templateSource} onChange={(event) => setTemplateSource(event.target.value)} className="h-10 border bg-white px-3 text-sm font-semibold">
+            <option value="All">All templates</option>
+            <option value="Mine">My Templates</option>
+            <option value="Prebuilt">Pre-built</option>
+          </select>
           <select value={templateCategory} onChange={(event) => setTemplateCategory(event.target.value)} className="h-10 border bg-white px-3 text-sm font-semibold">
             <option value="All">All email purposes</option>
             {EMAIL_TEMPLATE_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
@@ -5406,7 +5508,7 @@ function EmailTemplatesPanel({
                 <span>Last Updated</span>
                 <span />
               </div>
-              {visibleTemplates.map((template) => (
+              {pagedTemplates.map((template) => (
                 <button
                   key={template.id}
                   className="grid w-full grid-cols-[2fr_2fr_1.2fr_1.2fr_40px] items-center border-b py-5 text-left text-sm hover:bg-[#fafafa]"
@@ -5430,10 +5532,26 @@ function EmailTemplatesPanel({
               ))}
               {!visibleTemplates.length && (
                 <div className="border-b py-12 text-center text-sm font-semibold text-[#777]">
-                  No templates match your search.
+                  No templates match your filters.
                 </div>
               )}
             </div>
+            {visibleTemplates.length > 0 && templatePageCount > 1 && (
+              <div className="mt-6 flex min-w-[760px] items-center justify-between border-t pt-4 text-sm md:min-w-[860px]">
+                <span className="text-[#777]">
+                  Showing {(safeTemplatePage - 1) * templatePageSize + 1}-{Math.min(safeTemplatePage * templatePageSize, visibleTemplates.length)} of {visibleTemplates.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" className="h-9 rounded-none px-4" disabled={safeTemplatePage <= 1} onClick={() => setTemplatePage((page) => Math.max(1, page - 1))}>
+                    Previous
+                  </Button>
+                  <span className="min-w-20 text-center font-semibold">{safeTemplatePage} / {templatePageCount}</span>
+                  <Button type="button" variant="outline" className="h-9 rounded-none px-4" disabled={safeTemplatePage >= templatePageCount} onClick={() => setTemplatePage((page) => Math.min(templatePageCount, page + 1))}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -6925,7 +7043,33 @@ function PresetDesignPanel({
       {activePanel === "typography" && (
         <PlanFeatureLock feature="advancedDesign" label="Advanced design">
           <h2 className="text-2xl font-medium">Typography</h2>
-          <p className="mt-3 text-sm leading-6 text-[#666]">Choose fonts by writing system. Greek, Cyrillic, German/Deutsch, English, and Arabic are grouped so the right glyph coverage is easy to find.</p>
+          <p className="mt-3 text-sm leading-6 text-[#666]">Choose fonts by writing system. The main choice styles the whole gallery, and you can override only the cover-photo text below.</p>
+          <div className="mt-6 border bg-[#fafafa] p-4">
+            <FieldLabel className="font-bold">Cover Photo Font</FieldLabel>
+            <p className="mt-1 text-xs leading-5 text-[#777]">Use a separate font for the cover title, studio name, date, and View Gallery button without changing the gallery navigation font.</p>
+            <select
+              value={design.coverFontName ? (design.coverFontDataUrl ? `uploaded:${design.coverFontDataUrl}` : `builtin:${design.coverFontName}`) : "same"}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value === "same") {
+                  onChange({ coverFontName: "", coverFontDataUrl: "" } as Partial<typeof design>);
+                  return;
+                }
+                if (value.startsWith("uploaded:")) {
+                  const url = value.slice("uploaded:".length);
+                  const font = uploadedFonts.find((item) => item.data.url === url);
+                  onChange({ coverFontName: font?.data.name || "", coverFontDataUrl: font?.data.url || "" } as Partial<typeof design>);
+                  return;
+                }
+                onChange({ coverFontName: value.replace(/^builtin:/, ""), coverFontDataUrl: "" } as Partial<typeof design>);
+              }}
+              className="mt-3 h-11 w-full border bg-white px-3 text-sm"
+            >
+              <option value="same">Same as gallery font</option>
+              {uploadedFonts.map((font) => <option key={`cover-uploaded-${font.localId}`} value={`uploaded:${font.data.url}`}>My Font · {font.data.name}</option>)}
+              {GALLERY_FONT_OPTIONS.map((font) => <option key={`cover-builtin-${font.name}`} value={`builtin:${font.name}`}>{font.name}</option>)}
+            </select>
+          </div>
           <div className="mt-5 flex flex-wrap gap-2">
             {(["All", ...GALLERY_FONT_CATEGORIES, "My Fonts"] as const).map((category) => (
               <button key={category} type="button" onClick={() => setFontCategory(category)} className={cn("h-9 border px-3 text-xs font-bold transition", fontCategory === category ? "border-[#6337d8] bg-[#f1ecff] text-[#6337d8]" : "bg-white text-[#555] hover:border-[#aaa]")}>{category}</button>
@@ -9250,6 +9394,17 @@ function StoreOrdersPanel() {
                       )}
                       {(item.imageId || item.imageUrl) && (
                         <div className="mt-4 flex flex-wrap gap-2">
+                          {item.imageId && (
+                            <a
+                              className="inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
+                              href={storeOrderOriginalSrc(viewOrder._id, item.imageId)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <Eye className="size-4" />
+                              View original
+                            </a>
+                          )}
                           <button
                             className="inline-flex h-10 items-center gap-2 border px-4 text-sm font-semibold"
                             onClick={() =>
@@ -14051,6 +14206,7 @@ function CollectionDetailView({
 }) {
   const router = useRouter();
   const coverImageAccess = usePlanFeatureAccess("coverImage");
+  const advancedFaceSearchAccess = usePlanFeatureAccess("advancedFaceSearch");
   const presetSettings = useDashboardSettings("preset").query;
   const preferenceSettings =
     useDashboardSettings<PreferenceSettings>("preference").query;
@@ -14085,6 +14241,7 @@ function CollectionDetailView({
     updateImage,
     moveImages,
     copyMoveImage,
+    reindexFaces,
   } = useCollectionDetail(collectionId);
   const activityQuery = useCollectionActivity(collectionId);
   const activityActions = useCollectionActivityActions(collectionId);
@@ -14093,6 +14250,14 @@ function CollectionDetailView({
     collectionQuery.data?.data ??
     collections.find((item) => item._id === collectionId);
   const backgroundProcessing = processingStatusQuery.data?.data;
+  const faceReindexRequestedAtMs = collection?.faceReindexRequestedAt
+    ? new Date(collection.faceReindexRequestedAt).getTime()
+    : 0;
+  const faceReindexNextAllowedAtMs = faceReindexRequestedAtMs
+    ? faceReindexRequestedAtMs + 24 * 60 * 60 * 1000
+    : 0;
+  const faceReindexOnCooldown =
+    faceReindexNextAllowedAtMs > 0 && Date.now() < faceReindexNextAllowedAtMs;
   const savedPreferences = collectionPreferencesFromGlobal(
     preferenceSettings.data?.data?.[0]?.data as
       Partial<PreferenceSettings> | undefined,
@@ -18211,7 +18376,8 @@ function CollectionDetailView({
                             alt={collectionImageCaption(activeImage)}
                             placeholder={activeImage.blurDataUrl}
                             watermark={activeImage.watermark}
-                            className="max-h-[76dvh] max-w-full object-contain"
+                            priority
+                            className="mx-auto block max-h-[76dvh] max-w-full object-contain"
                           />
                         </div>
                       </div>
@@ -18429,6 +18595,112 @@ function CollectionDetailView({
                           </option>
                         ))}
                       </select>
+                    </Field>
+                    <Field>
+                      <FieldLabel className="font-bold">Face Search Index</FieldLabel>
+                      <div className="border bg-white p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-[#222]">
+                                Background face indexing
+                              </p>
+                              {collection?.faceReindexStatus &&
+                                collection.faceReindexStatus !== "completed" && (
+                                  <span className="rounded-full bg-[#f1ebff] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6337d8]">
+                                    {collection.faceReindexStatus}
+                                  </span>
+                                )}
+                              {collection?.faceReindexStatus === "completed" && (
+                                <span className="rounded-full bg-[#e8f8f3] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#087f6c]">
+                                  Indexed
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-2 max-w-xl text-sm leading-6 text-[#666]">
+                              Re-scan every photo in this gallery for faces. Work is
+                              queued and processed slowly in the background so gallery
+                              traffic and uploads stay responsive.
+                            </p>
+                            <p className="mt-2 text-xs font-medium text-[#888]">
+                              One manual re-index request is allowed every 24 hours.
+                              {faceReindexOnCooldown && faceReindexNextAllowedAtMs > 0
+                                ? ` Available again ${format(new Date(faceReindexNextAllowedAtMs), "PPp")}.`
+                                : ""}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 shrink-0 rounded-none px-4"
+                            disabled={
+                              reindexFaces.isPending ||
+                              faceReindexOnCooldown ||
+                              advancedFaceSearchAccess.locked
+                            }
+                            onClick={async () => {
+                              try {
+                                const response = await reindexFaces.mutateAsync();
+                                toast.success(
+                                  response?.message ??
+                                    "Face re-index queued in the background.",
+                                );
+                              } catch (error) {
+                                toast.error(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Could not queue face re-index.",
+                                );
+                              }
+                            }}
+                          >
+                            <RefreshCw
+                              className={cn(
+                                "size-4",
+                                reindexFaces.isPending && "animate-spin",
+                              )}
+                            />
+                            {reindexFaces.isPending
+                              ? "Queuing..."
+                              : faceReindexOnCooldown
+                                ? "Re-index locked"
+                                : "Re-index Faces"}
+                          </Button>
+                        </div>
+                        {advancedFaceSearchAccess.locked && (
+                          <p className="mt-3 text-xs font-semibold text-amber-700">
+                            Advanced Face Search is not enabled on the current plan.
+                          </p>
+                        )}
+                      </div>
+                    </Field>
+                    <Field>
+                      <FieldLabel className="font-bold">Image Delivery Cache</FieldLabel>
+                      <div className="border bg-white p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-[#222]">
+                              {collection?.imageCacheStatus === "ready"
+                                ? "Imagor R2 Result Storage active"
+                                : "Imagor delivery while its R2 cache warms"}
+                            </p>
+                            <p className="mt-1 max-w-xl text-xs leading-5 text-[#777]">
+                              Imagor itself generates and writes every processed variant to R2 Result Storage. The backend never copies transformed image bytes. The gallery stays fully on Imagor until every required variant is confirmed in R2, then the whole gallery switches together.
+                            </p>
+                          </div>
+                          <span className={cn(
+                            "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[.08em]",
+                            collection?.imageCacheStatus === "ready"
+                              ? "bg-[#e8f8f3] text-[#087f6c]"
+                              : "bg-[#f1ebff] text-[#6337d8]",
+                          )}>
+                            {collection?.imageCacheStatus === "ready" ? "Ready" : "Warming"}
+                          </span>
+                        </div>
+                        {collection?.imageCacheReadyAt && collection.imageCacheStatus === "ready" && (
+                          <p className="mt-2 text-[11px] text-[#999]">Completed {format(new Date(collection.imageCacheReadyAt), "PPp")}</p>
+                        )}
+                      </div>
                     </Field>
                     <Field>
                       <FieldLabel className="font-bold">Auto Expiry</FieldLabel>
@@ -20140,6 +20412,7 @@ function DashboardImageWithSkeleton({
   className,
   placeholder,
   watermark,
+  priority = false,
 }: {
   src: string;
   fallbackSrc?: string;
@@ -20149,6 +20422,7 @@ function DashboardImageWithSkeleton({
   className?: string;
   placeholder?: string;
   watermark?: CollectionImageRecord["watermark"];
+  priority?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(src);
@@ -20188,7 +20462,8 @@ function DashboardImageWithSkeleton({
         srcSet={useSrcSet ? srcSet : undefined}
         sizes={useSrcSet ? sizes : undefined}
         alt={alt}
-        loading="lazy"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
         decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => {
@@ -20205,7 +20480,7 @@ function DashboardImageWithSkeleton({
         }}
         className={cn(
           className,
-          "transition-[opacity,transform] duration-500 ease-out",
+          "block transition-[opacity,transform] duration-300 ease-out",
           loaded ? "scale-100 opacity-100" : "scale-[1.015] opacity-0",
         )}
       />
@@ -20804,6 +21079,16 @@ function imageSrc(url?: string) {
   if (/^(https?:|data:|blob:)/i.test(url)) return url;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
   return url.startsWith("/") ? `${baseUrl}${url}` : url;
+}
+
+function warmImageCache(url?: string) {
+  if (typeof window === "undefined") return;
+  const src = imageSrc(url);
+  if (!src) return;
+  const image = new Image();
+  image.decoding = "async";
+  image.fetchPriority = "high";
+  image.src = src;
 }
 
 function collectionImageSrcSet(image?: CollectionImageRecord | null) {
