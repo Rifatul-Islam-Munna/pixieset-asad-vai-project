@@ -8,6 +8,7 @@ import { PublicGalleryHashOpener } from "@/components/dashboard/public-gallery-h
 import { PublicGalleryStoreBridge } from "@/components/dashboard/public-gallery-store-bridge";
 import { PublicGalleryViewTracker } from "@/components/dashboard/public-gallery-view-tracker";
 import { getHomeCms } from "@/lib/home-cms-server";
+import { apiBaseUrl } from "@/lib/api-base-url";
 import {
   JsonLdScript,
   absoluteUrl,
@@ -15,10 +16,7 @@ import {
   pageMetadata,
 } from "@/lib/seo";
 
-const baseUrl =
-  process.env.BASE_URL ??
-  process.env.NEXT_PUBLIC_BASE_URL ??
-  "http://localhost:4000";
+const baseUrl = apiBaseUrl();
 
 const PUBLIC_GALLERY_PAGE_SIZE = 20;
 
@@ -38,16 +36,57 @@ async function getOwnerPreview(collectionId?: string) {
   if (!collectionId) return null;
   const token = (await cookies()).get("access_token")?.value;
   if (!token) return null;
-  const response = await fetch(
-    `${baseUrl}/collections/${encodeURIComponent(collectionId)}/owner-preview?limit=${PUBLIC_GALLERY_PAGE_SIZE}&offset=0`,
-    {
-      cache: "no-store",
-      headers: { access_token: token },
-      signal: AbortSignal.timeout(8000),
-    },
-  ).catch(() => null);
-  const payload = response?.ok ? await response.json() : null;
-  return payload?.data ?? null;
+
+  const fetchPreview = async (setId?: string) => {
+    const query = new URLSearchParams({
+      limit: String(PUBLIC_GALLERY_PAGE_SIZE),
+      offset: "0",
+    });
+    if (setId) query.set("setId", setId);
+
+    const response = await fetch(
+      `${baseUrl}/collections/${encodeURIComponent(collectionId)}/owner-preview?${query.toString()}`,
+      {
+        cache: "no-store",
+        headers: { access_token: token },
+        signal: AbortSignal.timeout(8000),
+      },
+    ).catch(() => null);
+    const payload = response?.ok ? await response.json().catch(() => null) : null;
+    return payload?.data ?? null;
+  };
+
+  const preview = await fetchPreview();
+  if (!preview) return null;
+
+  const initialItems = Array.isArray(preview.imagesPage?.items)
+    ? preview.imagesPage.items
+    : Array.isArray(preview.images)
+      ? preview.images
+      : [];
+
+  if (initialItems.length) {
+    return {
+      ...preview,
+      previewInitialSetId: String(initialItems[0]?.setId || "highlights"),
+    };
+  }
+
+  // The first configured set can be empty. For owner preview, fetch across all
+  // sets once on the server so the page never opens as a blank gallery.
+  const allSetsPreview = await fetchPreview("__all__");
+  const allItems = Array.isArray(allSetsPreview?.imagesPage?.items)
+    ? allSetsPreview.imagesPage.items
+    : [];
+
+  if (!allSetsPreview || !allItems.length) return preview;
+
+  return {
+    ...allSetsPreview,
+    images: allItems,
+    imagesPage: allSetsPreview.imagesPage,
+    previewInitialSetId: String(allItems[0]?.setId || "highlights"),
+  };
 }
 
 function imageSrc(url?: string) {

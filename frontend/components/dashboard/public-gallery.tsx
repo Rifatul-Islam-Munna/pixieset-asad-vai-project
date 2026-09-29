@@ -66,6 +66,7 @@ type PublicFace = {
 type PublicCollection = {
   _id: string;
   ownerPreview?: boolean;
+  previewInitialSetId?: string;
   name: string;
   slug?: string;
   eventDate?: string;
@@ -235,7 +236,11 @@ export function PublicGallery({
 }) {
   const [collection, setCollection] = useState(initialCollection);
   useEffect(() => setCollection(initialCollection), [initialCollection]);
-  const initialSetId = String(initialCollection?.sets?.[0]?.id ?? "highlights");
+  const initialSetId = String(
+    initialCollection?.previewInitialSetId ??
+      initialCollection?.sets?.[0]?.id ??
+      "highlights",
+  );
   const [loadedImages, setLoadedImages] = useState<PublicImage[]>(initialCollection?.images ?? []);
   const [setHasMoreById, setSetHasMoreById] = useState<Record<string, boolean>>(
     () => ({ [initialSetId]: Boolean(initialCollection?.imagesPage?.hasMore) }),
@@ -246,7 +251,11 @@ export function PublicGallery({
   const pageRequestRef = useRef(0);
   const pageLoadingRef = useRef(false);
   useEffect(() => {
-    const firstSetId = String(initialCollection?.sets?.[0]?.id ?? "highlights");
+    const firstSetId = String(
+      initialCollection?.previewInitialSetId ??
+        initialCollection?.sets?.[0]?.id ??
+        "highlights",
+    );
     setLoadedImages(initialCollection?.images ?? []);
     setSetHasMoreById({
       [firstSetId]: Boolean(initialCollection?.imagesPage?.hasMore),
@@ -367,7 +376,9 @@ export function PublicGallery({
   const showSetTabs = gallerySets.length > 0;
   const coverPhoto = imageSrc(collection?.coverImage || images.find((image) => !isVideo(image))?.url || "");
   const coverMediaType = coverMatch?.mediaType ?? design.coverMediaType;
-  const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
+  const [activeSetId, setActiveSetId] = useState(
+    () => initialCollection?.previewInitialSetId ?? gallerySets[0]?.id ?? "highlights",
+  );
   const manualSetSelectionRef = useRef(false);
   const autoProbedEmptySetsRef = useRef<Set<string>>(new Set());
   useEffect(() => {

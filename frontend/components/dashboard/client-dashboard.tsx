@@ -4649,19 +4649,25 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                 <span className="truncate">
                   {imageDisplayName(previewImage, "Image")}
                 </span>
-                <span>
-                  {formatMetaValue(previewImage.metadata?.width)} x{" "}
-                  {formatMetaValue(previewImage.metadata?.height)}
-                </span>
+                {imagePixelSize(previewImage) && (
+                  <span className="shrink-0">{imagePixelSize(previewImage)}</span>
+                )}
               </div>
-              <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
-                <img
+              <div className="flex h-[58dvh] min-h-64 items-center justify-center overflow-hidden bg-[#f3f3f3] sm:h-[68dvh] sm:min-h-80">
+                <DashboardImageWithSkeleton
                   src={imageSrc(previewImage.url)}
+                  fallbackSrc={imageSrc(
+                    previewImage.fallbackUrl ||
+                      previewImage.fallbackThumbnailUrl ||
+                      previewImage.thumbnailUrl ||
+                      "",
+                  )}
                   alt={collectionImageCaption(previewImage)}
-                  loading="eager"
-                  fetchPriority="high"
-                  decoding="async"
-                  className="mx-auto block max-h-[76dvh] max-w-full object-contain"
+                  placeholder={previewImage.blurDataUrl}
+                  watermark={previewImage.watermark}
+                  fallbackWatermarked={previewImage.fallbackWatermarked}
+                  priority
+                  className="h-full w-full object-contain"
                 />
               </div>
             </div>
@@ -18360,12 +18366,11 @@ function CollectionDetailView({
                           <span className="truncate">
                             {imageDisplayName(activeImage, "Image")}
                           </span>
-                          <span>
-                            {formatMetaValue(activeImage.metadata?.width)} x{" "}
-                            {formatMetaValue(activeImage.metadata?.height)}
-                          </span>
+                          {imagePixelSize(activeImage) && (
+                            <span className="shrink-0">{imagePixelSize(activeImage)}</span>
+                          )}
                         </div>
-                        <div className="flex max-h-[76dvh] items-center justify-center bg-[#f3f3f3]">
+                        <div className="flex h-[58dvh] min-h-64 items-center justify-center overflow-hidden bg-[#f3f3f3] sm:h-[68dvh] sm:min-h-80">
                           <DashboardImageWithSkeleton
                             src={imageSrc(activeImage.url)}
                             fallbackSrc={imageSrc(
@@ -18379,7 +18384,7 @@ function CollectionDetailView({
                             watermark={activeImage.watermark}
                             fallbackWatermarked={activeImage.fallbackWatermarked}
                             priority
-                            className="mx-auto block max-h-[76dvh] max-w-full object-contain"
+                            className="h-full w-full object-contain"
                           />
                         </div>
                       </div>
@@ -20466,7 +20471,10 @@ function DashboardImageWithSkeleton({
   }, [currentSrc, fallbackActive, fallbackSrc, loaded, priority]);
 
   return (
-    <span className="relative block h-full w-full overflow-hidden bg-[#f3f3f1]">
+    <span
+      className="relative block h-full w-full overflow-hidden bg-[#f3f3f1]"
+      aria-busy={!loaded}
+    >
       {placeholder && !loaded && (
         <img
           src={placeholder}
@@ -20476,7 +20484,10 @@ function DashboardImageWithSkeleton({
         />
       )}
       {!placeholder && !loaded && (
-        <Skeleton className="absolute inset-0 h-full w-full rounded-none bg-[#eeeeec]" />
+        <Skeleton
+          className="absolute inset-0 h-full w-full rounded-none bg-[#e8e8e5]"
+          aria-hidden="true"
+        />
       )}
       <img
         ref={imageRef}
@@ -20507,7 +20518,7 @@ function DashboardImageWithSkeleton({
           loaded ? "scale-100 opacity-100" : "scale-[1.015] opacity-0",
         )}
       />
-      {fallbackActive && watermark && !fallbackWatermarked && (
+      {fallbackActive && loaded && watermark && !fallbackWatermarked && (
         <ImageWatermarkOverlay watermark={watermark} />
       )}
     </span>
@@ -20985,6 +20996,15 @@ function formatMetaValue(value: unknown) {
     return JSON.stringify(value);
   }
   return String(value);
+}
+
+function imagePixelSize(image: CollectionImageRecord) {
+  const width = Number(image.width ?? image.metadata?.width);
+  const height = Number(image.height ?? image.metadata?.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return "";
+  }
+  return `${Math.round(width)} × ${Math.round(height)} px`;
 }
 
 function titleCase(value: string) {
