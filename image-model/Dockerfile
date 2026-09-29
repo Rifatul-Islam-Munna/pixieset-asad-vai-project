@@ -41,4 +41,4 @@ HEALTHCHECK --interval=30s --timeout=8s --start-period=120s --retries=3 \
 
 # One process. The app keeps a small internal worker pool so face detection stays
 # low-pressure even while the Nest API uses multiple PM2 workers.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1", "--limit-concurrency", "2", "--timeout-keep-alive", "20"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1", "--backlog", "128", "--timeout-keep-alive", "20"]

@@ -33,6 +33,7 @@ class Settings:
     detection_size: int = int(os.getenv("DETECTION_SIZE", "960"))
     detection_threshold: float = float(os.getenv("DETECTION_THRESHOLD", "0.20"))
     worker_count: int = int(os.getenv("WORKER_COUNT", "1"))
+    request_concurrency: int = int(os.getenv("FACE_REQUEST_CONCURRENCY", "2"))
     process_nice: int = int(os.getenv("PROCESS_NICE", "7"))
     scan_yield_ms: float = float(os.getenv("SCAN_YIELD_MS", "5"))
     group_scan: bool = os.getenv("GROUP_SCAN", "true").lower() in {"1", "true", "yes"}
@@ -50,6 +51,7 @@ class Settings:
 SETTINGS = Settings()
 face_apps: list[FaceAnalysis] = []
 worker_queue: asyncio.Queue[FaceAnalysis] | None = None
+request_gate: asyncio.Semaphore | None = None
 
 
 @dataclass
@@ -373,7 +375,7 @@ async def analyze_content(content: bytes) -> dict[str, Any]:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global face_apps, worker_queue
+    global face_apps, worker_queue, request_gate
     Path(SETTINGS.model_root).mkdir(parents=True, exist_ok=True)
     try:
         if SETTINGS.process_nice > 0:
@@ -382,8 +384,10 @@ async def lifespan(_: FastAPI):
         # Nice is available in the Linux container; ignore unsupported hosts.
         pass
     worker_total = max(1, min(4, SETTINGS.worker_count))
+    request_total = max(1, min(16, SETTINGS.request_concurrency))
     face_apps = []
     worker_queue = asyncio.Queue(maxsize=worker_total)
+    request_gate = asyncio.Semaphore(request_total)
     for _ in range(worker_total):
         app = FaceAnalysis(
             name=SETTINGS.model_name,
@@ -401,6 +405,7 @@ async def lifespan(_: FastAPI):
     yield
     face_apps = []
     worker_queue = None
+    request_gate = None
 
 
 app = FastAPI(
@@ -417,6 +422,7 @@ def health() -> dict[str, Any]:
         "model": SETTINGS.model_name,
         "provider": "CPUExecutionProvider",
         "workers": len(face_apps),
+        "requestConcurrency": SETTINGS.request_concurrency,
         "processNice": SETTINGS.process_nice,
         "scanYieldMs": SETTINGS.scan_yield_ms,
         "groupScan": SETTINGS.group_scan,
@@ -432,14 +438,20 @@ def health() -> dict[str, Any]:
 
 @app.post("/v1/faces", dependencies=[Depends(require_api_key)])
 async def faces(file: UploadFile = File(...)) -> dict[str, Any]:
-    content = await file.read((SETTINGS.max_upload_mb * 1024 * 1024) + 1)
-    return await analyze_content(content)
+    if request_gate is None:
+        raise HTTPException(status_code=503, detail="Face model is not ready")
+    async with request_gate:
+        content = await file.read((SETTINGS.max_upload_mb * 1024 * 1024) + 1)
+        return await analyze_content(content)
 
 
 @app.post("/v1/faces/url", dependencies=[Depends(require_api_key)])
 async def faces_from_url(payload: SourceUrlRequest) -> dict[str, Any]:
-    # Background indexing uses this path so Nest never downloads an image only
-    # to upload the same bytes to the model service. The model fetches the
-    # thumbnail directly, reducing backend RAM, bandwidth and event-loop work.
-    content = await asyncio.to_thread(fetch_source_url, payload.url)
-    return await analyze_content(content)
+    # Keep heavy image fetch/decode requests behind an app-level gate so health
+    # checks always remain responsive even when many face jobs arrive together.
+    # The inference queue below still controls actual model concurrency.
+    if request_gate is None:
+        raise HTTPException(status_code=503, detail="Face model is not ready")
+    async with request_gate:
+        content = await asyncio.to_thread(fetch_source_url, payload.url)
+        return await analyze_content(content)

@@ -12,6 +12,8 @@ services:
       DETECTION_SIZE: "960"
       DETECTION_THRESHOLD: "0.20"
       WORKER_COUNT: "1"
+      # Heavy face requests wait behind this app-level gate. Health checks do not.
+      FACE_REQUEST_CONCURRENCY: "2"
       # Still below normal process priority, but no longer intentionally sleeps
       # as much between detector passes. This speeds large queues without adding
       # another model copy in RAM.

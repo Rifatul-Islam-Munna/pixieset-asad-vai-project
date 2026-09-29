@@ -16,6 +16,10 @@ This container exposes one private HTTP endpoint that receives an image and retu
 
 ## Deploy
 
+If you deploy the Dockerfile directly in EasyPanel, copy the variables from `image-model/.env.example` into that service's Environment section. In particular, keep `PROCESS_NICE=7`, `SCAN_YIELD_MS=5`, `SOURCE_FETCH_TIMEOUT_SECONDS=20`, `WORKER_COUNT=1`, and `FACE_REQUEST_CONCURRENCY=2` unless you intentionally retune the model. The Dockerfile deliberately does not use Uvicorn `--limit-concurrency`; heavy face requests are gated inside FastAPI so `/health` remains responsive during indexing.
+
+For Compose deployments:
+
 1. Edit `compose.yaml` and replace `API_KEY: change-this-to-a-long-random-secret`.
 2. Run:
 
