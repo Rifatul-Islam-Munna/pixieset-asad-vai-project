@@ -22,6 +22,7 @@ import (
 )
 
 var variants = []string{"thumbnail", "view", "small", "medium", "large"}
+var workerLogEnabled bool
 
 type config struct {
 	backendURL      string
@@ -65,18 +66,19 @@ type warmComplete struct {
 }
 
 func main() {
+	workerLogEnabled = envBool("IMAGOR_CACHE_WORKER_LOG_ENABLED", false)
 	if !envBool("IMAGOR_CACHE_WORKER_ENABLED", true) {
-		log.Printf("imagor cache worker disabled")
+		workerLogf("imagor cache worker disabled")
 		return
 	}
 	cfg, err := loadConfig()
 	if err != nil {
-		log.Printf("imagor cache worker disabled: %v", err)
+		workerLogf("imagor cache worker disabled: %v", err)
 		return
 	}
 	waitForImagor(cfg)
 
-	log.Printf(
+	workerLogf(
 		"imagor cache worker started: backend=%s bucket=%s interval=%s concurrency=%d debugLogs=%t",
 		cfg.backendURL,
 		cfg.resultBucket,
@@ -217,7 +219,7 @@ func processWarm(cfg config) bool {
 		Data *warmJob `json:"data"`
 	}
 	if err := postJSON(cfg, "/internal/imagor-cache/claim", map[string]any{}, &response); err != nil {
-		log.Printf("cache claim failed: %v", err)
+		workerLogf("cache claim failed: %v", err)
 		return false
 	}
 	if response.Data == nil {
@@ -272,7 +274,7 @@ func processWarm(cfg config) bool {
 	endpoint := "/internal/imagor-cache/complete/" + url.PathEscape(job.ImageID)
 	tracef(cfg, "sending completion callback: image=%s", job.ImageID)
 	if err := postJSON(cfg, endpoint, payload, &completed); err != nil {
-		log.Printf("cache completion callback failed for %s: %v", job.ImageID, err)
+		workerLogf("cache completion callback failed for %s: %v", job.ImageID, err)
 		return true
 	}
 
@@ -282,10 +284,10 @@ func processWarm(cfg config) bool {
 	}
 	if len(completed.Data.ObsoleteKeys) > 0 {
 		if err := deleteResultObjects(cfg, completed.Data.ObsoleteKeys, completed.Data.ObsoleteURLs); err != nil {
-			log.Printf("obsolete result-cache cleanup failed: %v", err)
+			workerLogf("obsolete result-cache cleanup failed: %v", err)
 		}
 	}
-	log.Printf(
+	workerLogf(
 		"imagor result cache ready: image=%s gallery=%s galleryReady=%t duration=%s",
 		job.ImageID,
 		job.CollectionID,
@@ -304,9 +306,9 @@ func failWarm(cfg config, job *warmJob, cause error) {
 	endpoint := "/internal/imagor-cache/complete/" + url.PathEscape(job.ImageID)
 	var ignored any
 	if err := postJSON(cfg, endpoint, payload, &ignored); err != nil {
-		log.Printf("cache failure callback failed for %s: %v", job.ImageID, err)
+		workerLogf("cache failure callback failed for %s: %v", job.ImageID, err)
 	}
-	log.Printf("imagor result cache warm failed: image=%s error=%v", job.ImageID, cause)
+	workerLogf("imagor result cache warm failed: image=%s error=%v", job.ImageID, cause)
 }
 
 func processDelete(cfg config) bool {
@@ -314,7 +316,7 @@ func processDelete(cfg config) bool {
 		Data *deleteJob `json:"data"`
 	}
 	if err := postJSON(cfg, "/internal/imagor-cache/delete/claim", map[string]any{}, &response); err != nil {
-		log.Printf("cache delete claim failed: %v", err)
+		workerLogf("cache delete claim failed: %v", err)
 		return false
 	}
 	if response.Data == nil {
@@ -331,12 +333,12 @@ func processDelete(cfg config) bool {
 	endpoint := "/internal/imagor-cache/delete/complete/" + url.PathEscape(job.JobID)
 	var ignored any
 	if callbackErr := postJSON(cfg, endpoint, payload, &ignored); callbackErr != nil {
-		log.Printf("cache delete callback failed for %s: %v", job.JobID, callbackErr)
+		workerLogf("cache delete callback failed for %s: %v", job.JobID, callbackErr)
 	}
 	if err != nil {
-		log.Printf("imagor result cache delete failed: job=%s error=%v", job.JobID, err)
+		workerLogf("imagor result cache delete failed: job=%s error=%v", job.JobID, err)
 	} else {
-		log.Printf("imagor result cache deleted: job=%s image=%s", job.JobID, job.ImageID)
+		workerLogf("imagor result cache deleted: job=%s image=%s", job.JobID, job.ImageID)
 	}
 	return true
 }
@@ -656,7 +658,7 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 	}
 	value, err := time.ParseDuration(raw)
 	if err != nil {
-		log.Printf("invalid %s=%q, using %s", key, raw, fallback)
+		workerLogf("invalid %s=%q, using %s", key, raw, fallback)
 		return fallback
 	}
 	return value
@@ -669,15 +671,22 @@ func envInt(key string, fallback int) int {
 	}
 	value, err := strconv.Atoi(raw)
 	if err != nil {
-		log.Printf("invalid %s=%q, using %d", key, raw, fallback)
+		workerLogf("invalid %s=%q, using %d", key, raw, fallback)
 		return fallback
 	}
 	return value
+}
+
+func workerLogf(format string, args ...any) {
+	if !workerLogEnabled {
+		return
+	}
+	log.Printf(format, args...)
 }
 
 func tracef(cfg config, format string, args ...any) {
 	if !cfg.logEnabled {
 		return
 	}
-	log.Printf("imagor cache debug: "+format, args...)
+	workerLogf("imagor cache debug: "+format, args...)
 }

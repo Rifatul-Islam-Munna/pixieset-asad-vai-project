@@ -25,7 +25,8 @@ ENV PORT=8000 \
     VIPS_MAX_WIDTH=16000 \
     VIPS_MAX_HEIGHT=16000 \
     AWS_EC2_METADATA_DISABLED=true \
-    IMAGOR_RESPONSE_RAW_ON_ERROR=0
+    IMAGOR_RESPONSE_RAW_ON_ERROR=0 \
+    SERVER_ACCESS_LOG=0
 
 COPY --from=cache-worker-builder /out/imagor-cache-worker /usr/local/bin/imagor-cache-worker
 COPY --chmod=755 start.sh /usr/local/bin/start-imagor-stack
