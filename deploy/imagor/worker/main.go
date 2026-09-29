@@ -26,6 +26,7 @@ type config struct {
 	backendURL      string
 	imagorLocalURL  string
 	secret          string
+	logEnabled      bool
 	resultEndpoint  string
 	resultBucket    string
 	resultBaseDir   string
@@ -74,14 +75,32 @@ func main() {
 	waitForImagor(cfg)
 
 	log.Printf(
-		"imagor cache worker started: backend=%s bucket=%s interval=%s",
+		"imagor cache worker started: backend=%s bucket=%s interval=%s debugLogs=%t",
 		cfg.backendURL,
 		cfg.resultBucket,
 		cfg.interval,
+		cfg.logEnabled,
+	)
+	tracef(
+		cfg,
+		"runtime config: imagorLocal=%s sourceBucket=%s sourceEndpoint=%s sourceRegion=%s resultBucket=%s resultEndpoint=%s resultPublicURL=%s resultRegion=%s resultBaseDir=%s signer=%s truncate=%s",
+		cfg.imagorLocalURL,
+		env("S3_LOADER_BUCKET", "<missing>"),
+		env("S3_LOADER_ENDPOINT", "<missing>"),
+		env("AWS_LOADER_REGION", "auto"),
+		cfg.resultBucket,
+		cfg.resultEndpoint,
+		cfg.resultPublicURL,
+		cfg.resultRegion,
+		cfg.resultBaseDir,
+		env("IMAGOR_SIGNER_TYPE", "sha256"),
+		env("IMAGOR_SIGNER_TRUNCATE", "40"),
 	)
 	for {
+		tracef(cfg, "poll started")
 		deleted := processDelete(cfg)
 		warmed := processWarm(cfg)
+		tracef(cfg, "poll finished: deleteJob=%t warmJob=%t", deleted, warmed)
 		switch {
 		case warmed:
 			time.Sleep(cfg.interval)
@@ -95,6 +114,7 @@ func main() {
 
 func waitForImagor(cfg config) {
 	healthURL := strings.TrimRight(cfg.imagorLocalURL, "/") + "/healthcheck"
+	tracef(cfg, "waiting for Imagor healthcheck: url=%s", healthURL)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
@@ -104,9 +124,13 @@ func waitForImagor(cfg config) {
 				_, _ = io.Copy(io.Discard, resp.Body)
 				_ = resp.Body.Close()
 				if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+					tracef(cfg, "Imagor healthcheck ready: status=%d", resp.StatusCode)
 					cancel()
 					return
 				}
+				tracef(cfg, "Imagor healthcheck not ready: status=%d", resp.StatusCode)
+			} else {
+				tracef(cfg, "Imagor healthcheck failed: %v", requestErr)
 			}
 		}
 		cancel()
@@ -119,6 +143,7 @@ func loadConfig() (config, error) {
 		backendURL:      strings.TrimRight(env("BACKEND_INTERNAL_URL", ""), "/"),
 		imagorLocalURL:  strings.TrimRight(env("IMAGOR_LOCAL_URL", "http://127.0.0.1:8000"), "/"),
 		secret:          strings.TrimSpace(env("IMAGOR_SECRET", "")),
+		logEnabled:      envBool("IMAGOR_CACHE_WORKER_LOG_ENABLED", false),
 		resultEndpoint:  strings.TrimRight(env("S3_RESULT_STORAGE_ENDPOINT", ""), "/"),
 		resultBucket:    strings.TrimSpace(env("S3_RESULT_STORAGE_BUCKET", "")),
 		resultBaseDir:   strings.Trim(env("S3_RESULT_STORAGE_BASE_DIR", ""), "/"),
@@ -164,6 +189,7 @@ func loadConfig() (config, error) {
 }
 
 func processWarm(cfg config) bool {
+	tracef(cfg, "requesting warm job from backend")
 	var response struct {
 		Data *warmJob `json:"data"`
 	}
@@ -172,10 +198,20 @@ func processWarm(cfg config) bool {
 		return false
 	}
 	if response.Data == nil {
+		tracef(cfg, "no eligible warm job returned")
 		return false
 	}
 
 	job := response.Data
+	jobStarted := time.Now()
+	tracef(
+		cfg,
+		"warm job claimed: image=%s gallery=%s version=%d variants=%d",
+		job.ImageID,
+		job.CollectionID,
+		job.Version,
+		len(variants),
+	)
 	keys := make(map[string]string, len(variants))
 	publicURLs := make(map[string]string, len(variants))
 	for _, variant := range variants {
@@ -184,6 +220,7 @@ func processWarm(cfg config) bool {
 			failWarm(cfg, job, fmt.Errorf("missing %s URL", variant))
 			return true
 		}
+		tracef(cfg, "variant started: image=%s variant=%s", job.ImageID, variant)
 		key, publicURL, err := warmAndVerify(cfg, rawURL)
 		if err != nil {
 			failWarm(cfg, job, fmt.Errorf("%s: %w", variant, err))
@@ -191,6 +228,13 @@ func processWarm(cfg config) bool {
 		}
 		keys[variant] = key
 		publicURLs[variant] = publicURL
+		tracef(
+			cfg,
+			"variant cached: image=%s variant=%s key=%s",
+			job.ImageID,
+			variant,
+			key,
+		)
 	}
 
 	var completed struct {
@@ -203,6 +247,7 @@ func processWarm(cfg config) bool {
 		"urls":         publicURLs,
 	}
 	endpoint := "/internal/imagor-cache/complete/" + url.PathEscape(job.ImageID)
+	tracef(cfg, "sending completion callback: image=%s", job.ImageID)
 	if err := postJSON(cfg, endpoint, payload, &completed); err != nil {
 		log.Printf("cache completion callback failed for %s: %v", job.ImageID, err)
 		return true
@@ -218,10 +263,11 @@ func processWarm(cfg config) bool {
 		}
 	}
 	log.Printf(
-		"imagor result cache ready: image=%s gallery=%s galleryReady=%t",
+		"imagor result cache ready: image=%s gallery=%s galleryReady=%t duration=%s",
 		job.ImageID,
 		job.CollectionID,
 		completed.Data.Ready,
+		time.Since(jobStarted).Round(time.Millisecond),
 	)
 	return true
 }
@@ -249,9 +295,11 @@ func processDelete(cfg config) bool {
 		return false
 	}
 	if response.Data == nil {
+		tracef(cfg, "no cache delete job returned")
 		return false
 	}
 	job := response.Data
+	tracef(cfg, "delete job claimed: job=%s image=%s objects=%d", job.JobID, job.ImageID, len(job.Keys))
 	err := deleteResultObjects(cfg, job.Keys, job.URLs)
 	payload := map[string]any{"success": err == nil}
 	if err != nil {
@@ -282,6 +330,8 @@ func warmAndVerify(cfg config, rawURL string) (string, string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
+	requestStarted := time.Now()
+	tracef(cfg, "Imagor transform request started: resultKey=%s", key)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, localURL, nil)
 	if err != nil {
 		return "", "", err
@@ -293,8 +343,17 @@ func warmAndVerify(cfg config, rawURL string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	_, copyErr := io.Copy(io.Discard, resp.Body)
+	responseBytes, copyErr := io.Copy(io.Discard, resp.Body)
 	closeErr := resp.Body.Close()
+	tracef(
+		cfg,
+		"Imagor transform response: status=%d contentType=%q bytes=%d duration=%s resultKey=%s",
+		resp.StatusCode,
+		resp.Header.Get("Content-Type"),
+		responseBytes,
+		time.Since(requestStarted).Round(time.Millisecond),
+		key,
+	)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", "", fmt.Errorf("imagor returned HTTP %d", resp.StatusCode)
 	}
@@ -307,10 +366,13 @@ func warmAndVerify(cfg config, rawURL string) (string, string, error) {
 
 	var headErr error
 	for attempt := 0; attempt < 6; attempt++ {
+		tracef(cfg, "R2 verify started: attempt=%d key=%s", attempt+1, key)
 		headErr = s3Request(cfg, http.MethodHead, key)
 		if headErr == nil {
+			tracef(cfg, "R2 verify succeeded: attempt=%d key=%s", attempt+1, key)
 			break
 		}
+		tracef(cfg, "R2 verify failed: attempt=%d key=%s error=%v", attempt+1, key, headErr)
 		time.Sleep(time.Duration(attempt+1) * 350 * time.Millisecond)
 	}
 	if headErr != nil {
@@ -572,4 +634,11 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return value
+}
+
+func tracef(cfg config, format string, args ...any) {
+	if !cfg.logEnabled {
+		return
+	}
+	log.Printf("imagor cache debug: "+format, args...)
 }

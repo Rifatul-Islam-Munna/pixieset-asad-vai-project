@@ -61,6 +61,7 @@ export type CollectionImageRecord = {
   thumbnailUrl?: string;
   fallbackUrl?: string;
   fallbackThumbnailUrl?: string;
+  fallbackWatermarked?: boolean;
   responsive?: {
     small?: string;
     medium?: string;

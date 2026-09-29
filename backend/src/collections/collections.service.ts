@@ -6052,6 +6052,9 @@ export class CollectionsService implements OnModuleInit {
             storedFallbackThumbnailUrl !== urls.thumbnailUrl
               ? storedFallbackThumbnailUrl
               : undefined,
+          // Legacy public gallery copies may already contain the watermark in
+          // the pixels. The browser must never draw a second overlay on those.
+          fallbackWatermarked: Boolean(safe.watermarked),
         };
       }
     }
@@ -6101,25 +6104,33 @@ export class CollectionsService implements OnModuleInit {
       String(image.setId || 'highlights'),
       explicitWatermarkId || undefined,
     );
+    const storedWidth = Number(image.width);
+    const storedHeight = Number(image.height);
     const sourceDimensions =
-      await this.imagorService.resolveSourceDimensions(originalObjectKey, {
-        width: image.width,
-        height: image.height,
-      });
-    if (
-      sourceDimensions &&
-      (!Number(image.width) || !Number(image.height))
-    ) {
-      void this.imageModel
-        .updateOne(
-          { _id: image._id },
-          {
-            $set: {
-              width: sourceDimensions.width,
-              height: sourceDimensions.height,
+      Number.isFinite(storedWidth) &&
+      Number.isFinite(storedHeight) &&
+      storedWidth > 0 &&
+      storedHeight > 0
+        ? {
+            width: Math.round(storedWidth),
+            height: Math.round(storedHeight),
+          }
+        : undefined;
+    if (!sourceDimensions) {
+      void this.imagorService
+        .resolveSourceDimensions(originalObjectKey)
+        .then((dimensions) => {
+          if (!dimensions) return;
+          return this.imageModel.updateOne(
+            { _id: image._id },
+            {
+              $set: {
+                width: dimensions.width,
+                height: dimensions.height,
+              },
             },
-          },
-        )
+          );
+        })
         .catch(() => undefined);
     }
     const directCacheAllowed = await this.directImageCacheReady(collection);
@@ -6169,30 +6180,40 @@ export class CollectionsService implements OnModuleInit {
     }
     const directCacheAllowed = await this.directImageCacheReady(collection);
 
-    // Older direct uploads did not persist image width/height. Imagor's fit-in
-    // won't upscale small sources, so watermark pixels must be calculated from
-    // the real post-fit canvas. Resolve missing dimensions once through
-    // Imagor's metadata endpoint, cache them, and backfill the image record.
+    // Never make a public-gallery request wait on Imagor/R2 metadata. Stored
+    // dimensions are used immediately; missing legacy dimensions are repaired
+    // asynchronously. This keeps the gallery responsive even if Imagor is
+    // restarting or R2 credentials are temporarily wrong.
     const sourceDimensions = new Map<
       string,
       { width: number; height: number }
     >();
-    await this.mapWithConcurrency(originalImages, 8, async (image) => {
+    for (const image of originalImages) {
       const sourceObjectKey =
         String(image?.originalObjectKey ?? '').trim() ||
         String(image?.metadata?.directUploadObjectKey ?? '').trim();
-      if (!sourceObjectKey) return;
+      if (!sourceObjectKey) continue;
 
-      const dimensions = await this.imagorService.resolveSourceDimensions(
-        sourceObjectKey,
-        { width: image.width, height: image.height },
-      );
-      if (!dimensions) return;
+      const width = Number(image.width);
+      const height = Number(image.height);
+      if (
+        Number.isFinite(width) &&
+        Number.isFinite(height) &&
+        width > 0 &&
+        height > 0
+      ) {
+        sourceDimensions.set(sourceObjectKey, {
+          width: Math.round(width),
+          height: Math.round(height),
+        });
+        continue;
+      }
 
-      sourceDimensions.set(sourceObjectKey, dimensions);
-      if (!Number(image.width) || !Number(image.height)) {
-        void this.imageModel
-          .updateOne(
+      void this.imagorService
+        .resolveSourceDimensions(sourceObjectKey)
+        .then((dimensions) => {
+          if (!dimensions) return;
+          return this.imageModel.updateOne(
             { _id: image._id },
             {
               $set: {
@@ -6200,10 +6221,10 @@ export class CollectionsService implements OnModuleInit {
                 height: dimensions.height,
               },
             },
-          )
-          .catch(() => undefined);
-      }
-    });
+          );
+        })
+        .catch(() => undefined);
+    }
 
     const watermarkCache = new Map<string, Promise<WatermarkData | null>>();
     const records: Record<string, any>[] = [];

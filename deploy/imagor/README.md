@@ -32,6 +32,7 @@ Important values:
 - `S3_RESULT_STORAGE_*`: Imagor Result Storage bucket/credentials
 - `S3_RESULT_STORAGE_PUBLIC_URL`: public R2/custom-domain root for direct delivery after the entire gallery is ready
 - `IMAGOR_CACHE_WORKER_INTERVAL=20s`: one gallery image warm job about every 20 seconds
+- `IMAGOR_CACHE_WORKER_LOG_ENABLED=true`: verbose polling, transform, and R2 verification logs for diagnosis
 - `CLOUDFLARE_ZONE_ID` / `CLOUDFLARE_API_TOKEN`: optional and kept only on Imagor
 
 `IMAGOR_RESULT_STORAGE_PATH_STYLE` must stay `digest`; the worker uses the exact same SHA-1 result-key algorithm as Imagor.

@@ -17915,6 +17915,7 @@ function CollectionDetailView({
                             alt={collectionImageCaption(image)}
                             placeholder={image.blurDataUrl}
                             watermark={image.watermark}
+                            fallbackWatermarked={image.fallbackWatermarked}
                             className={cn(
                               "aspect-[1.35] w-full object-contain transition-transform duration-500 ease-out group-hover:scale-[1.02]",
                             )}
@@ -18376,6 +18377,7 @@ function CollectionDetailView({
                             alt={collectionImageCaption(activeImage)}
                             placeholder={activeImage.blurDataUrl}
                             watermark={activeImage.watermark}
+                            fallbackWatermarked={activeImage.fallbackWatermarked}
                             priority
                             className="mx-auto block max-h-[76dvh] max-w-full object-contain"
                           />
@@ -20412,6 +20414,7 @@ function DashboardImageWithSkeleton({
   className,
   placeholder,
   watermark,
+  fallbackWatermarked = false,
   priority = false,
 }: {
   src: string;
@@ -20422,6 +20425,7 @@ function DashboardImageWithSkeleton({
   className?: string;
   placeholder?: string;
   watermark?: CollectionImageRecord["watermark"];
+  fallbackWatermarked?: boolean;
   priority?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
@@ -20441,6 +20445,25 @@ function DashboardImageWithSkeleton({
     const image = imageRef.current;
     if (image?.complete && image.naturalWidth > 0) setLoaded(true);
   }, [currentSrc, useSrcSet]);
+
+  useEffect(() => {
+    if (
+      !priority ||
+      loaded ||
+      fallbackActive ||
+      !fallbackSrc ||
+      currentSrc === fallbackSrc
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setLoaded(false);
+      setUseSrcSet(false);
+      setCurrentSrc(fallbackSrc);
+      setFallbackActive(true);
+    }, 3500);
+    return () => window.clearTimeout(timer);
+  }, [currentSrc, fallbackActive, fallbackSrc, loaded, priority]);
 
   return (
     <span className="relative block h-full w-full overflow-hidden bg-[#f3f3f1]">
@@ -20484,7 +20507,7 @@ function DashboardImageWithSkeleton({
           loaded ? "scale-100 opacity-100" : "scale-[1.015] opacity-0",
         )}
       />
-      {fallbackActive && watermark && (
+      {fallbackActive && watermark && !fallbackWatermarked && (
         <ImageWatermarkOverlay watermark={watermark} />
       )}
     </span>

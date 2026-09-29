@@ -29,6 +29,7 @@ type PublicImage = {
   thumbnailUrl?: string;
   fallbackUrl?: string;
   fallbackThumbnailUrl?: string;
+  fallbackWatermarked?: boolean;
   watermarked?: boolean;
   responsive?: {
     small?: string;
@@ -367,6 +368,12 @@ export function PublicGallery({
   const coverPhoto = imageSrc(collection?.coverImage || images.find((image) => !isVideo(image))?.url || "");
   const coverMediaType = coverMatch?.mediaType ?? design.coverMediaType;
   const [activeSetId, setActiveSetId] = useState(() => gallerySets[0]?.id ?? "highlights");
+  const manualSetSelectionRef = useRef(false);
+  const autoProbedEmptySetsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    manualSetSelectionRef.current = false;
+    autoProbedEmptySetsRef.current = new Set();
+  }, [collection?._id]);
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
@@ -821,7 +828,7 @@ export function PublicGallery({
       const identifier = collection.slug ?? galary;
       const pageUrl = ownerPreview
         ? `/api/collections/${encodeURIComponent(collection._id)}/owner-preview?${params.toString()}`
-        : `${apiBase}/public/collections/${encodeURIComponent(identifier)}/images?${params.toString()}`;
+        : `/api/public/collections/${encodeURIComponent(identifier)}/images?${params.toString()}`;
       const response = await fetch(pageUrl, { cache: "no-store" }).catch(() => null);
       const payload = response?.ok ? await response.json().catch(() => null) : null;
       const page = payload?.data;
@@ -850,6 +857,22 @@ export function PublicGallery({
 
   useEffect(() => {
     if (!collection || favoritesPanelOpen || faceResults || imagesLoadingMore) return;
+
+    if (
+      activeSetLoadedCount === 0 &&
+      setHasMoreById[activeSetId] === false &&
+      !manualSetSelectionRef.current
+    ) {
+      autoProbedEmptySetsRef.current.add(activeSetId);
+      const nextSet = gallerySets.find(
+        (set) => !autoProbedEmptySetsRef.current.has(set.id),
+      );
+      if (nextSet) {
+        setActiveSetId(nextSet.id);
+        return;
+      }
+    }
+
     if (activeSetLoadedCount > 0 || setHasMoreById[activeSetId] === false) return;
     void loadMoreImages(activeSetId);
   }, [
@@ -1371,7 +1394,10 @@ export function PublicGallery({
                   "shrink-0 transition hover:opacity-100",
                   activeSetId === set.id ? "opacity-100 underline decoration-2 underline-offset-4" : "opacity-55",
                 )}
-                onClick={() => setActiveSetId(set.id)}
+                onClick={() => {
+                  manualSetSelectionRef.current = true;
+                  setActiveSetId(set.id);
+                }}
                 type="button"
               >
                 {set.name}
@@ -1455,7 +1481,7 @@ export function PublicGallery({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                 {favoriteGalleryImages.map((photo) => (
                   <button key={photo._id} className="group relative aspect-[4/3] overflow-hidden bg-white" onClick={() => setActiveImage(photo)} type="button">
-                    <GalleryImage src={imageSrc(photo.thumbnailUrl || photo.url)} fallbackSrc={imageSrc(photo.fallbackThumbnailUrl || photo.fallbackUrl || photo.url)} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" watermark={photo.watermark} />
+                    <GalleryImage src={imageSrc(photo.thumbnailUrl || photo.url)} fallbackSrc={imageSrc(photo.fallbackThumbnailUrl || photo.fallbackUrl || photo.url)} fallbackWatermarked={photo.fallbackWatermarked} alt={displayCaption(photo)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" watermark={photo.watermark} />
                     <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-white text-red-500 shadow">
                       <Star className="size-4 fill-current" />
                     </span>
@@ -1785,11 +1811,11 @@ export function PublicGallery({
       </Dialog>
 
       {activeImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 px-2 pb-4 pt-24 sm:p-4" role="dialog" aria-modal="true" aria-label={`Preview ${displayFilename(activeImage) || "photo"}`}>
-          <button className="polished-icon-button absolute left-3 top-3 sm:left-5 sm:top-5" onClick={() => setActiveImage(null)} aria-label="Back to gallery" title="Back">
+        <div className="fixed inset-0 z-50 isolate flex items-center justify-center overflow-hidden bg-black px-2 pb-4 pt-24 sm:p-4" role="dialog" aria-modal="true" aria-label={`Preview ${displayFilename(activeImage) || "photo"}`}>
+          <button className="polished-icon-button absolute left-3 top-3 z-30 sm:left-5 sm:top-5" onClick={() => setActiveImage(null)} aria-label="Back to gallery" title="Back">
             <ChevronLeft className="size-5" />
           </button>
-          <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
+          <div className="absolute left-3 right-3 top-16 z-30 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
               <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={displayFilename(activeImage)} data-buy-photo-media-type={activeImage.mediaType} type="button" aria-label="Print order" title="Print order">
                 <ShoppingBag className="size-5" />
@@ -1819,7 +1845,7 @@ export function PublicGallery({
             )}
           </div>
           {isVideo(activeImage) ? (
-            <video src={imageSrc(activeImage.url)} className="max-h-full max-w-full object-contain" controls autoPlay />
+            <video src={imageSrc(activeImage.url)} className="relative z-0 max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
             <GalleryImage
               src={imageSrc(activeImage.url)}
@@ -1831,12 +1857,13 @@ export function PublicGallery({
               height={activeImage.height}
               className="mx-auto block max-h-[calc(100dvh-7rem)] max-w-full object-contain"
               watermark={activeImage.watermark}
+              fallbackWatermarked={activeImage.fallbackWatermarked}
               priority
               showLoader
             />
           )}
           {showFilenames && displayFilename(activeImage) && (
-            <p className="absolute bottom-4 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full bg-black/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
+            <p className="absolute bottom-4 left-1/2 z-30 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full bg-black/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
               {displayFilename(activeImage)}
             </p>
           )}
@@ -1844,20 +1871,20 @@ export function PublicGallery({
       )}
 
       {slideshowImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black px-2 pb-4 pt-24 sm:p-4" onDoubleClick={closeSlideshow}>
-          <button className="polished-icon-button absolute left-3 top-3 sm:left-5 sm:top-5" onClick={closeSlideshow} aria-label="Back to gallery" title="Back">
+        <div className="fixed inset-0 z-50 isolate flex items-center justify-center overflow-hidden bg-black px-2 pb-4 pt-24 sm:p-4" onDoubleClick={closeSlideshow}>
+          <button className="polished-icon-button absolute left-3 top-3 z-30 sm:left-5 sm:top-5" onClick={closeSlideshow} aria-label="Back to gallery" title="Back">
             <ChevronLeft className="size-5" />
           </button>
-          <div className="absolute right-3 top-3 rounded-full bg-white/10 px-3 py-2 text-sm font-bold text-white backdrop-blur sm:left-5 sm:right-auto sm:top-20 sm:px-4">
+          <div className="absolute right-3 top-3 z-30 rounded-full bg-white/10 px-3 py-2 text-sm font-bold text-white backdrop-blur sm:left-5 sm:right-auto sm:top-20 sm:px-4">
             {slideshowPosition + 1} / {visibleImages.length}
           </div>
-          <button className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-black shadow sm:left-5 sm:p-3" onClick={showPreviousSlide} aria-label="Previous slide" type="button">
+          <button className="absolute left-2 top-1/2 z-30 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-black shadow sm:left-5 sm:p-3" onClick={showPreviousSlide} aria-label="Previous slide" type="button">
             <ChevronLeft className="size-5 sm:size-6" />
           </button>
-          <button className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-black shadow sm:right-5 sm:p-3" onClick={showNextSlide} aria-label="Next slide" type="button">
+          <button className="absolute right-2 top-1/2 z-30 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-black shadow sm:right-5 sm:p-3" onClick={showNextSlide} aria-label="Next slide" type="button">
             <ChevronRight className="size-5 sm:size-6" />
           </button>
-          <div className="absolute left-3 right-3 top-16 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
+          <div className="absolute left-3 right-3 top-16 z-30 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
             {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
               <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={displayFilename(slideshowImage)} data-buy-photo-media-type={slideshowImage.mediaType} type="button" aria-label="Print order" title="Print order">
                 <ShoppingBag className="size-5" />
@@ -1885,7 +1912,7 @@ export function PublicGallery({
             </button>
           </div>
           {isVideo(slideshowImage) ? (
-            <video key={slideshowImage._id} src={imageSrc(slideshowImage.url)} className="max-h-full max-w-full object-contain" controls autoPlay />
+            <video key={slideshowImage._id} src={imageSrc(slideshowImage.url)} className="relative z-0 max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
             <GalleryImage
               key={slideshowImage._id}
@@ -1898,12 +1925,13 @@ export function PublicGallery({
               height={slideshowImage.height}
               className="mx-auto block max-h-[calc(100dvh-7rem)] max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
               watermark={slideshowImage.watermark}
+              fallbackWatermarked={slideshowImage.fallbackWatermarked}
               priority
               showLoader
             />
           )}
           {showFilenames && displayFilename(slideshowImage) && (
-            <p className="absolute bottom-4 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-black shadow">
+            <p className="absolute bottom-4 left-1/2 z-30 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-black shadow">
               {displayFilename(slideshowImage)}
             </p>
           )}
@@ -2160,6 +2188,7 @@ function GalleryTile({
             parallax={parallax}
             parallaxStrength={parallaxStrength}
             watermark={photo.watermark}
+            fallbackWatermarked={photo.fallbackWatermarked}
           />
         )}
       </button>
@@ -2219,6 +2248,7 @@ function GalleryImage({
   parallax = false,
   parallaxStrength = 36,
   watermark,
+  fallbackWatermarked = false,
   showLoader = false,
 }: {
   src: string;
@@ -2235,6 +2265,7 @@ function GalleryImage({
   parallax?: boolean;
   parallaxStrength?: number;
   watermark?: ImageWatermark;
+  fallbackWatermarked?: boolean;
   showLoader?: boolean;
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
@@ -2254,6 +2285,33 @@ function GalleryImage({
     const image = imageRef.current;
     if (image?.complete && image.naturalWidth > 0) setLoaded(true);
   }, [currentSrc, useSrcSet]);
+
+  useEffect(() => {
+    if (
+      loaded ||
+      fallbackActive ||
+      !fallbackSrc ||
+      currentSrc === fallbackSrc ||
+      (!priority && !showLoader)
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setLoaded(false);
+      setUseSrcSet(false);
+      setCurrentSrc(fallbackSrc);
+      setFallbackActive(true);
+    }, 3500);
+    return () => window.clearTimeout(timer);
+  }, [
+    currentSrc,
+    fallbackActive,
+    fallbackSrc,
+    loaded,
+    priority,
+    showLoader,
+  ]);
+
   useEffect(() => {
     const image = imageRef.current;
     const frame = frameRef.current;
@@ -2380,7 +2438,7 @@ function GalleryImage({
         )}
         style={style}
       />
-      {fallbackActive && loaded && watermark && (
+      {fallbackActive && loaded && watermark && !fallbackWatermarked && (
         <ImageWatermarkOverlay watermark={watermark} />
       )}
     </span>
