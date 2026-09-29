@@ -336,7 +336,10 @@ func warmAndVerify(cfg config, rawURL string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("Accept", "image/webp,image/avif,image/*,*/*;q=0.8")
+	// Keep cache warming format-neutral. Advertising AVIF/WebP makes Imagor's
+	// auto-format feature rewrite the processing path, producing a different
+	// digest key from the signed URL key that this worker verifies and publishes.
+	req.Header.Set("Accept", "image/*,*/*;q=0.8")
 	req.Header.Set("User-Agent", "gallerista-imagor-r2-worker/1.0")
 
 	resp, err := http.DefaultClient.Do(req)
