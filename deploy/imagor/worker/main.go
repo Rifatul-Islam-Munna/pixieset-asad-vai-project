@@ -139,7 +139,17 @@ func loadConfig() (config, error) {
 		return cfg, errors.New("BACKEND_INTERNAL_URL and IMAGOR_SECRET are required")
 	}
 	if cfg.resultEndpoint == "" || cfg.resultBucket == "" || cfg.resultPublicURL == "" {
-		return cfg, errors.New("result storage endpoint, bucket, and public URL are required")
+		missing := []string{}
+		if cfg.resultEndpoint == "" {
+			missing = append(missing, "S3_RESULT_STORAGE_ENDPOINT")
+		}
+		if cfg.resultBucket == "" {
+			missing = append(missing, "S3_RESULT_STORAGE_BUCKET")
+		}
+		if cfg.resultPublicURL == "" {
+			missing = append(missing, "S3_RESULT_STORAGE_PUBLIC_URL")
+		}
+		return cfg, fmt.Errorf("missing required Imagor cache worker env: %s", strings.Join(missing, ", "))
 	}
 	if cfg.accessKey == "" || cfg.secretKey == "" {
 		return cfg, errors.New("AWS result-storage credentials are required")
