@@ -65,7 +65,7 @@ export class AdminService implements OnModuleInit {
     user.loginExpiresAt = expiresAt;
     user.loginAttempts = 0;
     await user.save();
-    const appUrl = (this.configService.get<string>('FRONTEND_URL') || this.configService.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '');
+    const appUrl = (this.configService.get<string>('FRONTEND_URL') || this.configService.get<string>('APP_URL') || 'https://gallerista.app').replace(/\/$/, '');
     const link = `${appUrl}/login?magic=${encodeURIComponent(token)}`;
     const validity = hours % 24 === 0 ? `${hours / 24} day${hours === 24 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'}`;
     const subject = 'Your secure login access';
@@ -502,7 +502,7 @@ export class AdminService implements OnModuleInit {
 
     if (provider === 'paypal') {
       if (!paypalReady) throw new BadRequestException('PayPal is not configured');
-      const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+      const frontendUrl = process.env.FRONTEND_URL ?? 'https://gallerista.app';
       const result = await createPayPalOrder(paypalConfig, {
         amount,
         currency: 'EUR',
@@ -532,8 +532,8 @@ export class AdminService implements OnModuleInit {
         },
       }],
       customer_email: user?.email || undefined,
-      success_url: successUrl || `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/dashboard/client-gallery/storage?plan=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/dashboard/client-gallery/storage?plan=cancel`,
+      success_url: successUrl || `${process.env.FRONTEND_URL ?? 'https://gallerista.app'}/dashboard/client-gallery/storage?plan=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.FRONTEND_URL ?? 'https://gallerista.app'}/dashboard/client-gallery/storage?plan=cancel`,
       metadata: {
         type: 'plan',
         userId,

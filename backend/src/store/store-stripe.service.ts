@@ -59,7 +59,7 @@ export class StoreStripeService {
           name: priced.coupon?.code || 'Discount',
         })
       : null;
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://gallerista.app';
     return stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],

@@ -464,10 +464,10 @@ export class StoreService {
       },
       success_url:
         dto.successUrl ||
-        `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/store/success?session_id={CHECKOUT_SESSION_ID}`,
+        `${process.env.FRONTEND_URL ?? 'https://gallerista.app'}/store/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:
         dto.cancelUrl ||
-        `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/store/cancel`,
+        `${process.env.FRONTEND_URL ?? 'https://gallerista.app'}/store/cancel`,
       metadata: {
         orderId: order._id?.toString(),
         ownerUserId: collection.userId,

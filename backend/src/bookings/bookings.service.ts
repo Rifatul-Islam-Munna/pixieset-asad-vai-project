@@ -431,7 +431,7 @@ export class BookingsService {
     const configuredBase = String(
       this.configService.get<string>('FRONTEND_URL') ||
       this.configService.get<string>('PUBLIC_APP_URL') ||
-      'http://localhost:3000',
+      'https://gallerista.app',
     ).replace(/\/$/, '');
     const base = this.safeFrontendOrigin(requestedOrigin, configuredBase) || configuredBase;
     return `${base}/book/${encodeURIComponent(identifier)}?invite=${encodeURIComponent(token)}`;

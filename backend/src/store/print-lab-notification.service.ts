@@ -414,7 +414,7 @@ export class PrintLabNotificationService {
   }
 
   private secureLink(orderId: string, token: string) {
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://gallerista.app';
     return `${frontendUrl.replace(/\/+$/, '')}/print-lab/orders/${encodeURIComponent(orderId)}?token=${encodeURIComponent(token)}`;
   }
 

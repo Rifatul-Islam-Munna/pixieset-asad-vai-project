@@ -7332,7 +7332,7 @@ export class CollectionsService implements OnModuleInit {
     const frontendOrigin = String(
       this.configService.get<string>('FRONTEND_URL') ||
       this.configService.get<string>('PUBLIC_APP_URL') ||
-      'http://localhost:3000',
+      'https://gallerista.app',
     ).replace(/\/$/, '');
     const root = configuredRoot.replace(/^https?:\/\//i, '').replace(/\/$/, '');
     if (root && !/^localhost(?::\d+)?$/i.test(root)) {

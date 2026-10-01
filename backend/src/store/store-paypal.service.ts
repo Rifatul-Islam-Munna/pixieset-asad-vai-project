@@ -25,7 +25,7 @@ export class StorePayPalService {
   async createCheckoutOrder(priced: any, order: StoreOrderDocument, body: any) {
     const config = this.config(priced.resolved.settings);
     this.requireReady(config);
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://gallerista.app';
     const result = await createPayPalOrder(config, {
       amount: Number(priced.total ?? 0),
       currency: String(priced.currency ?? 'EUR'),

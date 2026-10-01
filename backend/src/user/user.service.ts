@@ -128,7 +128,7 @@ export class UserService implements OnModuleInit {
     user.loginExpiresAt = expiresAt;
     user.loginAttempts = 0;
     await user.save();
-    const appUrl = (this.configService.get<string>('FRONTEND_URL') || this.configService.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '');
+    const appUrl = (this.configService.get<string>('FRONTEND_URL') || this.configService.get<string>('APP_URL') || 'https://gallerista.app').replace(/\/$/, '');
     const link = `${appUrl}/login?magic=${encodeURIComponent(token)}`;
     const expiryText = expiresAt.toLocaleString();
     const text = `Hello ${user.name || 'there'},\n\nYou requested access to your account.\n\nYour 6-digit login PIN is: ${pin}\n\nOr use this direct login link:\n${link}\n\nThis access is valid for 30 days, until ${expiryText}, and can only be used once.\n\nIf you did not request this email, you can ignore it.`;

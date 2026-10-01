@@ -15,7 +15,7 @@ async function requestOrigin() {
     const protocol = forwardedProto || (/^(localhost|127\.0\.0\.1)(:|$)/i.test(host) ? "http" : "https");
     return `${protocol}://${host}`;
   }
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://gallerista.app";
 }
 export type BillingUser = {
   _id: string;
