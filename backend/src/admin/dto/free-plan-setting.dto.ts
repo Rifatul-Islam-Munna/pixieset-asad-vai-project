@@ -8,6 +8,11 @@ export class FreePlanSettingDto {
 
   @IsNumber()
   @Min(0)
+  @Max(1000)
+  subdomainLimit: number;
+
+  @IsNumber()
+  @Min(0)
   @Max(1000000000)
   monthlyEmails: number;
 }

@@ -10,8 +10,10 @@ import {
   Mail,
   MapPin,
   Phone,
+  Plus,
   RefreshCw,
   Save,
+  Trash2,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -20,6 +22,7 @@ import { PlanFeatureLock } from "@/components/dashboard/plan-feature-lock";
 import { useCollections } from "@/api-hooks/use-collections";
 import {
   type HomepageRecord,
+  type HomepageSite,
   type HomepageVisibility,
   useHomepageSettings,
 } from "@/api-hooks/use-homepage";
@@ -33,7 +36,7 @@ const defaultVisibility: HomepageVisibility = {
   address: true,
 };
 
-const emptyForm: Omit<HomepageRecord, "_id" | "userId" | "slug" | "publicPath" | "hasPassword"> = {
+const emptyForm: Omit<HomepageRecord, "_id" | "userId" | "slug" | "publicPath" | "hasPassword" | "sites" | "subdomainLimit" | "subdomainsUsed"> = {
   enabled: true,
   brandName: "",
   logoUrl: "",
@@ -50,7 +53,7 @@ const emptyForm: Omit<HomepageRecord, "_id" | "userId" | "slug" | "publicPath" |
 };
 
 export function HomepageSettingsPanel() {
-  const { query, update } = useHomepageSettings();
+  const { query, update, createSubdomain, updateSubdomain, deleteSubdomain } = useHomepageSettings();
   const { collectionsQuery } = useCollections();
   const record = query.data?.data;
   const publishedCollections = useMemo(
@@ -63,10 +66,13 @@ export function HomepageSettingsPanel() {
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [siteDrafts, setSiteDrafts] = useState<Record<string, Pick<HomepageSite, "name" | "slug">>>({});
+  const [newSite, setNewSite] = useState({ name: "", slug: "" });
 
   useEffect(() => setOrigin(window.location.origin), []);
   useEffect(() => {
     if (!record) return;
+    setSiteDrafts(Object.fromEntries((record.sites ?? []).map((site) => [site.id, { name: site.name, slug: site.slug }])));
     setForm({
       enabled: record.enabled,
       brandName: record.brandName || "",
@@ -85,16 +91,12 @@ export function HomepageSettingsPanel() {
   }, [record]);
 
   const publicUrl = useMemo(
-    () => {
-      if (!record?.slug) return "Generating your unique URL...";
-      const configuredRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim();
-      const rootDomain = configuredRoot?.replace(/^https?:\/\//, "").replace(/\/$/, "");
-      if (!rootDomain) return `${origin}/home/${record.slug}`;
-      const protocol = configuredRoot?.startsWith("http://") || origin.startsWith("http://") ? "http" : "https";
-      return `${protocol}://${record.slug}.${rootDomain}`;
-    },
+    () => record?.slug ? homepageUrl(origin, record.slug) : "Generating your unique URL...",
     [origin, record?.slug],
   );
+  const subdomainLimit = Math.max(0, Number(record?.subdomainLimit ?? 1));
+  const subdomainsUsed = Number(record?.subdomainsUsed ?? record?.sites?.length ?? 1);
+  const canCreateSubdomain = subdomainLimit === 0 || subdomainsUsed < subdomainLimit;
 
   const save = () => {
     update.mutate(
@@ -111,6 +113,50 @@ export function HomepageSettingsPanel() {
         onError: (error) => toast.error(error.message),
       },
     );
+  };
+
+  const createSite = () => {
+    const name = newSite.name.trim();
+    const slug = newSite.slug.trim().toLowerCase();
+    if (!name || !slug) {
+      toast.error("Add a name and subdomain");
+      return;
+    }
+    createSubdomain.mutate(
+      { name, slug },
+      {
+        onSuccess: () => {
+          setNewSite({ name: "", slug: "" });
+          toast.success("Subdomain created");
+        },
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+
+  const saveSite = (site: HomepageSite) => {
+    const draft = siteDrafts[site.id];
+    if (!draft) return;
+    updateSubdomain.mutate(
+      {
+        siteId: site.id,
+        name: draft.name.trim(),
+        slug: draft.slug.trim().toLowerCase(),
+      },
+      {
+        onSuccess: () => toast.success(site.isMain ? "Main subdomain updated" : "Subdomain updated"),
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  };
+
+  const removeSite = (site: HomepageSite) => {
+    if (site.isMain) return;
+    if (!window.confirm(`Delete ${site.slug}? Galleries assigned only to it will move back to the main subdomain.`)) return;
+    deleteSubdomain.mutate(site.id, {
+      onSuccess: () => toast.success("Subdomain deleted"),
+      onError: (error) => toast.error(error.message),
+    });
   };
 
   const copyUrl = async () => {
@@ -229,6 +275,71 @@ export function HomepageSettingsPanel() {
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />}{copied ? "Copied" : "Copy"}
               </button>
             </div>
+          </Section>
+
+          <Section title="Subdomains">
+            <div className="flex items-center justify-between gap-4 border border-[#E8E5E1] bg-[#FAFAF8] px-4 py-3">
+              <div>
+                <p className="text-sm font-bold">Public sites</p>
+                <p className="mt-1 text-xs text-[#667085]">Your current subdomain is the main site. Add more and route galleries to each one.</p>
+              </div>
+              <span className="shrink-0 text-xs font-bold text-[#6F57D9]">
+                {subdomainsUsed} / {subdomainLimit === 0 ? "Unlimited" : subdomainLimit}
+              </span>
+            </div>
+
+            <div className="grid gap-3">
+              {(record?.sites ?? []).map((site) => {
+                const draft = siteDrafts[site.id] ?? { name: site.name, slug: site.slug };
+                return (
+                  <div key={site.id} className="border border-[#E8E5E1] bg-white p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Globe2 className="size-4 text-[#6F57D9]" />
+                        <span className="text-sm font-bold">{site.isMain ? "Main subdomain" : "Subdomain"}</span>
+                        {site.isMain && <span className="bg-[#EEE9FF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6F57D9]">Default</span>}
+                      </div>
+                      {!site.isMain && (
+                        <button type="button" onClick={() => removeSite(site)} disabled={deleteSubdomain.isPending} className="inline-flex items-center gap-1 text-xs font-bold text-red-600 disabled:opacity-50">
+                          <Trash2 className="size-3.5" />Delete
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#667085]">Name</span>
+                        <input value={draft.name} onChange={(event) => setSiteDrafts((current) => ({ ...current, [site.id]: { ...draft, name: event.target.value } }))} className="h-11 border border-[#E8E5E1] px-3 text-sm outline-none focus:border-[#6F57D9]" />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#667085]">Subdomain</span>
+                        <input value={draft.slug} onChange={(event) => setSiteDrafts((current) => ({ ...current, [site.id]: { ...draft, slug: event.target.value.toLowerCase() } }))} className="h-11 border border-[#E8E5E1] px-3 text-sm outline-none focus:border-[#6F57D9]" />
+                      </label>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                      <button type="button" onClick={() => void navigator.clipboard.writeText(homepageUrl(origin, site.slug)).then(() => toast.success("Subdomain URL copied"))} className="min-w-0 truncate text-left text-xs font-semibold text-[#667085] hover:text-[#6F57D9]">
+                        {homepageUrl(origin, site.slug)}
+                      </button>
+                      <button type="button" onClick={() => saveSite(site)} disabled={updateSubdomain.isPending} className="inline-flex h-9 items-center gap-2 bg-[#1C1C1C] px-4 text-xs font-bold text-white disabled:opacity-50">
+                        {updateSubdomain.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}Save
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="border border-dashed border-[#CFC9E8] bg-[#FAF9FF] p-4">
+              <p className="text-sm font-bold">Add another subdomain</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <input value={newSite.name} onChange={(event) => setNewSite((current) => ({ ...current, name: event.target.value }))} placeholder="Site name" disabled={!canCreateSubdomain} className="h-11 border border-[#E8E5E1] bg-white px-3 text-sm outline-none disabled:opacity-50" />
+                <input value={newSite.slug} onChange={(event) => setNewSite((current) => ({ ...current, slug: event.target.value.toLowerCase() }))} placeholder="new-subdomain" disabled={!canCreateSubdomain} className="h-11 border border-[#E8E5E1] bg-white px-3 text-sm outline-none disabled:opacity-50" />
+              </div>
+              <button type="button" onClick={createSite} disabled={!canCreateSubdomain || createSubdomain.isPending} className="mt-3 inline-flex h-10 items-center gap-2 bg-[#6F57D9] px-4 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                {createSubdomain.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                {canCreateSubdomain ? "Create subdomain" : "Plan limit reached"}
+              </button>
+            </div>
+            <HelpText>Subdomain limits come from the account plan. You can rename a subdomain anytime; gallery assignments use stable IDs so renaming does not move or lose galleries.</HelpText>
           </Section>
 
           <PlanFeatureLock feature="passwordProtection" label="Password Protection">
@@ -377,6 +488,14 @@ export function HomepageSettingsPanel() {
       </div>
     </div>
   );
+}
+
+function homepageUrl(origin: string, slug: string) {
+  const configuredRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim();
+  const rootDomain = configuredRoot?.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (!rootDomain) return `${origin}/home/${slug}`;
+  const protocol = configuredRoot?.startsWith("http://") || origin.startsWith("http://") ? "http" : "https";
+  return `${protocol}://${slug}.${rootDomain}`;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

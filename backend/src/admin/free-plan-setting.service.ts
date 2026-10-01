@@ -4,7 +4,7 @@ import { Model } from 'mongoose';
 import { FreePlanSettingDto } from './dto/free-plan-setting.dto';
 import { FreePlanSetting, FreePlanSettingDocument } from './entities/free-plan-setting.entity';
 
-export const DEFAULT_FREE_PLAN = { storageGb: 3, monthlyEmails: 1000 } as const;
+export const DEFAULT_FREE_PLAN = { storageGb: 3, subdomainLimit: 1, monthlyEmails: 1000 } as const;
 
 @Injectable()
 export class FreePlanSettingService {
@@ -21,6 +21,7 @@ export class FreePlanSettingService {
     ).lean();
     return {
       storageGb: Number(setting?.storageGb ?? DEFAULT_FREE_PLAN.storageGb),
+      subdomainLimit: Number(setting?.subdomainLimit ?? DEFAULT_FREE_PLAN.subdomainLimit),
       monthlyEmails: Number(setting?.monthlyEmails ?? DEFAULT_FREE_PLAN.monthlyEmails),
     };
   }
@@ -28,11 +29,12 @@ export class FreePlanSettingService {
   async update(dto: FreePlanSettingDto) {
     const setting = await this.settingModel.findOneAndUpdate(
       { key: 'global' },
-      { $set: { storageGb: Number(dto.storageGb), monthlyEmails: Number(dto.monthlyEmails) } },
+      { $set: { storageGb: Number(dto.storageGb), subdomainLimit: Number(dto.subdomainLimit), monthlyEmails: Number(dto.monthlyEmails) } },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     ).lean();
     return {
       storageGb: Number(setting?.storageGb ?? 0),
+      subdomainLimit: Number(setting?.subdomainLimit ?? 1),
       monthlyEmails: Number(setting?.monthlyEmails ?? 0),
     };
   }

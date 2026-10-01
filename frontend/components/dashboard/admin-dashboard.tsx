@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Check, Clock3, Copy, Edit3, Euro, ExternalLink, FileImage, FileText, GripVertical, HardDrive, Images, Loader2, LogOut, Mail, Menu, MessageCircle, Newspaper, Package, PlusCircle, Search, Send, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
+import { BarChart3, Check, Clock3, Copy, Edit3, Euro, ExternalLink, FileImage, FileText, Globe2, GripVertical, HardDrive, Images, Loader2, LogOut, Mail, Menu, MessageCircle, Newspaper, Package, PlusCircle, Search, Send, ShieldCheck, ShoppingBag, Trash2, Users, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import {
@@ -149,7 +149,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
     initialData.paypal ?? { enabled: false, environment: "sandbox", clientId: "" },
   );
   const [freePlanForm, setFreePlanForm] = useState<AdminFreePlanSetting>(
-    initialData.freePlan ?? { storageGb: 3, monthlyEmails: 1000 },
+    initialData.freePlan ?? { storageGb: 3, subdomainLimit: 1, monthlyEmails: 1000 },
   );
   const [loginAccessUser, setLoginAccessUser] = useState<AdminUser | null>(null);
   const [loginAccess, setLoginAccess] = useState<AdminLoginAccess | null>(null);
@@ -1339,7 +1339,7 @@ function FreePlanSettingsPanel({ form, setForm, onSave, busy }: {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <FieldGroup className="grid gap-4 md:grid-cols-2">
+        <FieldGroup className="grid gap-4 md:grid-cols-3">
           <Field className="border bg-muted/30 p-4">
             <div className="flex items-center gap-3">
               <HardDrive className="size-5 text-primary" />
@@ -1355,6 +1355,22 @@ function FreePlanSettingsPanel({ form, setForm, onSave, busy }: {
               onChange={(event) => setForm({ ...form, storageGb: Math.max(0, Number(event.target.value)) })}
             />
             <FieldDescription>GB available to each free user. Use 0 to disable uploads.</FieldDescription>
+          </Field>
+          <Field className="border bg-muted/30 p-4">
+            <div className="flex items-center gap-3">
+              <Globe2 className="size-5 text-primary" />
+              <FieldLabel htmlFor="free-subdomains">Public subdomains</FieldLabel>
+            </div>
+            <Input
+              id="free-subdomains"
+              type="number"
+              min={0}
+              max={1000}
+              step="1"
+              value={form.subdomainLimit}
+              onChange={(event) => setForm({ ...form, subdomainLimit: Math.max(0, Math.floor(Number(event.target.value))) })}
+            />
+            <FieldDescription>Total subdomains including the main one. Use 0 for unlimited.</FieldDescription>
           </Field>
           <Field className="border bg-muted/30 p-4">
             <div className="flex items-center gap-3">

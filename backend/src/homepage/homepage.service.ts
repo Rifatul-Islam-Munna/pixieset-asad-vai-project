@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Collection, CollectionDocument } from 'src/collections/entities/collection.entity';
@@ -7,7 +7,9 @@ import { CollectionImage, CollectionImageDocument } from 'src/collections/entiti
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { BookingSetting, BookingSettingDocument } from 'src/bookings/entities/booking-setting.entity';
+import { Plan, PlanDocument } from 'src/admin/entities/plan.entity';
 import { UpdateHomepageDto } from './dto/update-homepage.dto';
+import { CreateHomepageSubdomainDto, UpdateHomepageSubdomainDto } from './dto/homepage-subdomain.dto';
 import { Homepage, HomepageDocument } from './entities/homepage.entity';
 import {
   ImagorService,
@@ -29,6 +31,8 @@ export class HomepageService {
     private readonly settingModel: Model<DashboardSettingDocument>,
     @InjectModel(BookingSetting.name)
     private readonly bookingSettingModel: Model<BookingSettingDocument>,
+    @InjectModel(Plan.name)
+    private readonly planModel: Model<PlanDocument>,
     private readonly imagorService: ImagorService,
   ) {}
 
@@ -42,11 +46,100 @@ export class HomepageService {
   }
 
   async setUsername(userId: string, username: string) {
-    const collision = await this.homepageModel.exists({ slug: username, userId: { $ne: userId } });
-    if (collision) throw new ConflictException('Username is not available');
+    const slug = this.normalizeSubdomainSlug(username);
+    await this.ensureSubdomainAvailable(slug, userId, 'main');
     const homepage = await this.getOrCreate(userId);
-    homepage.slug = username;
+    homepage.slug = slug;
     await homepage.save();
+  }
+
+  async createSubdomain(userId: string, dto: CreateHomepageSubdomainDto) {
+    const [homepage, limit] = await Promise.all([
+      this.getOrCreate(userId),
+      this.subdomainLimitForUser(userId),
+    ]);
+    const used = 1 + (homepage.subdomains?.length ?? 0);
+    if (limit > 0 && used >= limit) {
+      throw new ConflictException(`Your plan allows ${limit} subdomain${limit === 1 ? '' : 's'} including the main subdomain.`);
+    }
+
+    const name = String(dto.name ?? '').trim();
+    if (!name) throw new BadRequestException('Subdomain name is required');
+    const slug = this.normalizeSubdomainSlug(dto.slug);
+    await this.ensureSubdomainAvailable(slug, userId);
+
+    homepage.subdomains = [
+      ...(homepage.subdomains ?? []),
+      {
+        id: randomBytes(8).toString('hex'),
+        name: name.slice(0, 100),
+        slug,
+        enabled: true,
+        createdAt: new Date(),
+      },
+    ];
+    homepage.markModified('subdomains');
+    await homepage.save();
+    return this.privatePayload(homepage);
+  }
+
+  async updateSubdomain(userId: string, siteId: string, dto: UpdateHomepageSubdomainDto) {
+    const homepage = await this.getOrCreate(userId);
+    if (siteId === 'main') {
+      if (dto.slug !== undefined) {
+        const slug = this.normalizeSubdomainSlug(dto.slug);
+        await this.ensureSubdomainAvailable(slug, userId, 'main');
+        homepage.slug = slug;
+      }
+      if (dto.name !== undefined) {
+        const name = String(dto.name).trim();
+        if (!name) throw new BadRequestException('Subdomain name is required');
+        homepage.mainSiteName = name.slice(0, 100);
+      }
+      if (dto.enabled !== undefined) homepage.enabled = Boolean(dto.enabled);
+      await homepage.save();
+      return this.privatePayload(homepage);
+    }
+
+    const sites = [...(homepage.subdomains ?? [])];
+    const index = sites.findIndex((site) => String(site.id) === siteId);
+    if (index < 0) throw new NotFoundException('Subdomain not found');
+    const current = sites[index] as any;
+    if (dto.slug !== undefined) {
+      const slug = this.normalizeSubdomainSlug(dto.slug);
+      await this.ensureSubdomainAvailable(slug, userId, siteId);
+      current.slug = slug;
+    }
+    if (dto.name !== undefined) {
+      const name = String(dto.name).trim();
+      if (!name) throw new BadRequestException('Subdomain name is required');
+      current.name = name.slice(0, 100);
+    }
+    if (dto.enabled !== undefined) current.enabled = Boolean(dto.enabled);
+    homepage.subdomains = sites;
+    homepage.markModified('subdomains');
+    await homepage.save();
+    return this.privatePayload(homepage);
+  }
+
+  async deleteSubdomain(userId: string, siteId: string) {
+    if (siteId === 'main') throw new BadRequestException('The main subdomain cannot be deleted');
+    const homepage = await this.getOrCreate(userId);
+    const before = homepage.subdomains?.length ?? 0;
+    homepage.subdomains = (homepage.subdomains ?? []).filter((site) => String(site.id) !== siteId);
+    if (homepage.subdomains.length === before) throw new NotFoundException('Subdomain not found');
+    homepage.markModified('subdomains');
+    await homepage.save();
+
+    await this.collectionModel.updateMany(
+      { userId, homepageSiteIds: siteId },
+      { $pull: { homepageSiteIds: siteId } },
+    );
+    await this.collectionModel.updateMany(
+      { userId, homepageSiteIds: { $size: 0 } },
+      { $set: { homepageSiteIds: ['main'] } },
+    );
+    return this.privatePayload(homepage);
   }
 
   async updateMine(userId: string, dto: UpdateHomepageDto) {
@@ -107,12 +200,21 @@ export class HomepageService {
   }
 
   async getPublic(slug: string, password?: string) {
-    const homepage = await this.homepageModel.findOne({ slug: slug.toLowerCase() }).lean();
-    if (!homepage || !homepage.enabled) throw new NotFoundException('Homepage not found');
+    const requestedSlug = String(slug ?? '').trim().toLowerCase();
+    const homepage = await this.homepageModel.findOne({
+      enabled: true,
+      $or: [
+        { slug: requestedSlug },
+        { subdomains: { $elemMatch: { slug: requestedSlug, enabled: { $ne: false } } } },
+      ],
+    }).lean();
+    if (!homepage) throw new NotFoundException('Homepage not found');
+    const site = this.siteForSlug(homepage, requestedSlug);
+    if (!site || site.enabled === false) throw new NotFoundException('Homepage not found');
 
     const isLocked = Boolean(homepage.passwordHash);
     const passwordValid = !isLocked || this.hashPassword(homepage.userId, password ?? '') === homepage.passwordHash;
-    const base = this.publicBase(homepage);
+    const base = this.publicBase(homepage, site);
     const [integrations, bookingSettings, owner] = await Promise.all([
       this.settingModel
         .findOne({
@@ -147,13 +249,25 @@ export class HomepageService {
       };
     }
 
+    const siteVisibility = site.id === 'main'
+      ? {
+          $or: [
+            { homepageSiteIds: { $exists: false } },
+            { homepageSiteIds: { $size: 0 } },
+            { homepageSiteIds: 'main' },
+          ],
+        }
+      : { homepageSiteIds: site.id };
     const query = this.collectionModel.find({
       userId: homepage.userId,
       status: 'published',
-      // Legacy collections do not have this field yet, so anything except an
-      // explicit false remains visible. This preserves existing homepages.
+      // showOnHomepage remains the master visibility switch. Legacy galleries
+      // with no site assignment stay on the main subdomain by default.
       showOnHomepage: { $ne: false },
-      $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+      $and: [
+        siteVisibility,
+        { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
+      ],
     });
     if (homepage.sortOrder === 'oldest') query.sort('createdAt');
     else if (homepage.sortOrder === 'name') query.sort('name');
@@ -371,6 +485,7 @@ export class HomepageService {
       slug: user.username || await this.uniqueSlug(user.name),
       enabled: true,
       brandName: brandingData.brandText || user.name,
+      mainSiteName: 'Main',
       logoUrl: brandingData.logoUrl || '',
       biography: '',
       website: '',
@@ -400,7 +515,7 @@ export class HomepageService {
     // equal display names safe. The unique index remains the final authority.
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const candidate = `${base}-${randomBytes(6).toString('hex')}`;
-      if (!(await this.homepageModel.exists({ slug: candidate }))) return candidate;
+      if (!(await this.homepageModel.exists({ $or: [{ slug: candidate }, { 'subdomains.slug': candidate }] }))) return candidate;
     }
 
     return `${base}-${randomBytes(6).toString('hex')}`;
@@ -415,6 +530,63 @@ export class HomepageService {
       .slice(0, 50);
   }
 
+  private normalizeSubdomainSlug(value: string) {
+    const slug = String(value ?? '').trim().toLowerCase();
+    if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) {
+      throw new BadRequestException('Subdomain must use only lowercase letters, numbers, and hyphens, and cannot start or end with a hyphen');
+    }
+    const reserved = new Set(['www', 'api', 'admin', 'app', 'mail', 'ftp', 'cdn', 'assets', 'support', 'status']);
+    if (reserved.has(slug)) throw new ConflictException('This subdomain is reserved');
+    return slug;
+  }
+
+  private async ensureSubdomainAvailable(slug: string, userId: string, currentSiteId?: string) {
+    const collision = await this.homepageModel
+      .findOne({ $or: [{ slug }, { 'subdomains.slug': slug }] })
+      .select('userId slug subdomains')
+      .lean();
+    if (!collision) return;
+    if (String(collision.userId) !== String(userId)) {
+      throw new ConflictException('This subdomain is already in use');
+    }
+    if (currentSiteId === 'main' && collision.slug === slug) return;
+    const site = (collision.subdomains ?? []).find((item: any) => String(item.slug) === slug);
+    if (site && String(site.id) === String(currentSiteId)) return;
+    throw new ConflictException('This subdomain is already in use');
+  }
+
+  private siteForSlug(homepage: any, slug: string) {
+    if (String(homepage.slug) === slug) {
+      return {
+        id: 'main',
+        name: homepage.mainSiteName || homepage.brandName || 'Main',
+        slug: homepage.slug,
+        enabled: homepage.enabled !== false,
+        isMain: true,
+      };
+    }
+    const site = (homepage.subdomains ?? []).find((item: any) => String(item.slug) === slug);
+    return site ? { ...site, isMain: false } : null;
+  }
+
+  private async subdomainLimitForUser(userId: string) {
+    const user = await this.userModel
+      .findById(userId)
+      .select('subdomainLimit planId')
+      .lean();
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.planId) {
+      const plan = await this.planModel
+        .findById(user.planId)
+        .select('subdomainLimit')
+        .lean();
+      if (plan) return Math.max(0, Number(plan.subdomainLimit ?? 1));
+    }
+
+    return Math.max(0, Number(user.subdomainLimit ?? 1));
+  }
+
   private hashPassword(userId: string, password: string) {
     return createHash('sha256').update(`${userId}:${password}`).digest('hex');
   }
@@ -425,21 +597,43 @@ export class HomepageService {
     );
   }
 
-  private privatePayload(homepage: HomepageDocument) {
+  private async privatePayload(homepage: HomepageDocument) {
     const row = homepage.toObject();
+    const subdomainLimit = await this.subdomainLimitForUser(row.userId);
     const { passwordHash: _passwordHash, ...safe } = row as any;
+    const sites = [
+      {
+        id: 'main',
+        name: row.mainSiteName || row.brandName || 'Main',
+        slug: row.slug,
+        enabled: row.enabled !== false,
+        isMain: true,
+      },
+      ...((row.subdomains ?? []).map((site: any) => ({
+        id: String(site.id),
+        name: String(site.name || site.slug),
+        slug: String(site.slug),
+        enabled: site.enabled !== false,
+        isMain: false,
+      }))),
+    ];
     return {
       ...safe,
       _id: row._id.toString(),
       hasPassword: Boolean(row.passwordHash),
       publicPath: `/home/${row.slug}`,
+      sites,
+      subdomainLimit,
+      subdomainsUsed: sites.length,
     };
   }
 
-  private publicBase(homepage: any) {
+  private publicBase(homepage: any, site: any) {
     const show = homepage.show ?? {};
     return {
-      slug: homepage.slug,
+      slug: site.slug,
+      siteId: site.id,
+      siteName: site.name,
       brandName: homepage.brandName || 'Gallery',
       logoUrl: homepage.logoUrl || '',
       biography: show.biography ? homepage.biography || '' : '',

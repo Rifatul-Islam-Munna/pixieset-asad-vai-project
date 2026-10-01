@@ -14255,6 +14255,15 @@ function CollectionDetailView({
   const collection =
     collectionQuery.data?.data ??
     collections.find((item) => item._id === collectionId);
+  const homepageSites = homepageQuery.data?.data?.sites?.length
+    ? homepageQuery.data.data.sites
+    : [{
+        id: "main",
+        name: homepageQuery.data?.data?.brandName || "Main",
+        slug: homepageQuery.data?.data?.slug || "",
+        enabled: true,
+        isMain: true,
+      }];
   const backgroundProcessing = processingStatusQuery.data?.data;
   const faceReindexRequestedAtMs = collection?.faceReindexRequestedAt
     ? new Date(collection.faceReindexRequestedAt).getTime()
@@ -15064,6 +15073,14 @@ function CollectionDetailView({
       payload.status = collectionStatus;
     if (form.showOnHomepage !== (collection.showOnHomepage !== false))
       payload.showOnHomepage = form.showOnHomepage;
+    const currentHomepageSiteIds = collection.homepageSiteIds?.length
+      ? collection.homepageSiteIds
+      : ["main"];
+    const nextHomepageSiteIds = form.homepageSiteIds.length
+      ? form.homepageSiteIds
+      : ["main"];
+    if (JSON.stringify(nextHomepageSiteIds) !== JSON.stringify(currentHomepageSiteIds))
+      payload.homepageSiteIds = nextHomepageSiteIds;
     if (JSON.stringify(form.design) !== JSON.stringify(collection.design ?? {}))
       payload.design = form.design;
     if (
@@ -18734,6 +18751,60 @@ function CollectionDetailView({
                       }
                       text="Show this published gallery on your public subdomain homepage. Turn this off to hide it from the homepage while keeping its direct gallery link available."
                     />
+                    {form.showOnHomepage && (
+                      <Field>
+                        <FieldLabel className="font-bold">Show this gallery on</FieldLabel>
+                        <div className="grid gap-2">
+                          {homepageSites.filter((site) => site.enabled !== false).map((site) => {
+                            const checked = form.homepageSiteIds.includes(site.id);
+                            return (
+                              <label
+                                key={site.id}
+                                className={cn(
+                                  "flex cursor-pointer items-center justify-between gap-4 border px-4 py-3 transition",
+                                  checked ? "border-[#6F57D9] bg-[#F8F6FF]" : "border-[#E8E5E1] bg-white hover:border-[#CFC9E8]",
+                                )}
+                              >
+                                <span className="flex min-w-0 items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => {
+                                      setForm((current) => {
+                                        if (checked && current.homepageSiteIds.length === 1) {
+                                          toast.error("Choose at least one subdomain for this gallery");
+                                          return current;
+                                        }
+                                        return {
+                                          ...current,
+                                          homepageSiteIds: checked
+                                            ? current.homepageSiteIds.filter((id) => id !== site.id)
+                                            : [...current.homepageSiteIds, site.id],
+                                        };
+                                      });
+                                    }}
+                                    className="size-4 shrink-0 accent-[#6F57D9]"
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="flex items-center gap-2 text-sm font-semibold">
+                                      <span className="truncate">{site.name || site.slug || "Main"}</span>
+                                      {site.isMain && <span className="bg-[#EEE9FF] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-[#6F57D9]">Main</span>}
+                                    </span>
+                                    <span className="mt-0.5 block truncate text-xs text-[#888]">
+                                      {site.slug ? `${site.slug}.${(process.env.NEXT_PUBLIC_ROOT_DOMAIN || "gallerista.app").replace(/^https?:\/\//, "").replace(/\/$/, "")}` : "Main subdomain"}
+                                    </span>
+                                  </span>
+                                </span>
+                                {checked && <Check className="size-4 shrink-0 text-[#6F57D9]" />}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs leading-5 text-[#777]">
+                          New and existing galleries use the main subdomain by default. Select one or more subdomains where this gallery should appear.
+                        </p>
+                      </Field>
+                    )}
                     <SettingSwitch
                       label="Slideshow"
                       checked={form.general.slideshow}
@@ -20656,6 +20727,7 @@ type CollectionFormState = {
   expiresAt: string;
   clientEmails: string;
   showOnHomepage: boolean;
+  homepageSiteIds: string[];
   sets: NonNullable<CollectionRecord["sets"]>;
   design: PresetDesignSettings;
   general: PresetGeneralSettings;
@@ -20712,6 +20784,9 @@ function collectionForm(
     expiresAt: collection?.expiresAt ? collection.expiresAt.slice(0, 10) : "",
     clientEmails: (collection?.clientEmails ?? []).join(", "),
     showOnHomepage: collection?.showOnHomepage !== false,
+    homepageSiteIds: collection?.homepageSiteIds?.length
+      ? collection.homepageSiteIds
+      : ["main"],
     sets: collection?.sets?.length
       ? collection.sets
       : [{ id: "highlights", name: "Featured" }],

@@ -175,12 +175,29 @@ export class StoreCatalogService {
   async resolve(identifier: string, requireEnabled = true, siteSlug?: string): Promise<ResolvedCollectionStore> {
     const query: Record<string, unknown>[] = [{ slug: identifier }, { name: identifier }];
     if (Types.ObjectId.isValid(identifier)) query.unshift({ _id: identifier });
-    const owner = siteSlug
-      ? await this.homepageModel.findOne({ slug: siteSlug.toLowerCase(), enabled: true }).select('userId').lean()
+    const requestedSiteSlug = String(siteSlug ?? '').trim().toLowerCase();
+    const owner = requestedSiteSlug
+      ? await this.homepageModel.findOne({
+          enabled: true,
+          $or: [
+            { slug: requestedSiteSlug },
+            { subdomains: { $elemMatch: { slug: requestedSiteSlug, enabled: { $ne: false } } } },
+          ],
+        }).select('userId slug subdomains').lean()
       : null;
-    if (siteSlug && !owner) throw new NotFoundException('Collection not found');
+    if (requestedSiteSlug && !owner) throw new NotFoundException('Collection not found');
     const collection = await this.collectionModel.findOne({ $or: query, ...(owner ? { userId: owner.userId } : {}) }).lean();
     if (!collection) throw new NotFoundException('Collection not found');
+    if (owner) {
+      const siteId = String(owner.slug) === requestedSiteSlug
+        ? 'main'
+        : String((owner.subdomains ?? []).find((site: any) => String(site.slug) === requestedSiteSlug)?.id ?? '');
+      const assigned = Array.isArray((collection as any).homepageSiteIds)
+        ? (collection as any).homepageSiteIds.map((value: unknown) => String(value)).filter(Boolean)
+        : [];
+      const allowed = siteId === 'main' ? assigned.length === 0 || assigned.includes('main') : assigned.includes(siteId);
+      if (!siteId || !allowed) throw new NotFoundException('Collection not found');
+    }
     const userId = String(collection.userId);
     const settings = await this.settingModel.findOne({ userId }).lean();
     const raw = ((collection.settings as any)?.store ?? {}) as Record<string, any>;

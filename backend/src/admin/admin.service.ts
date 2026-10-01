@@ -230,6 +230,7 @@ export class AdminService implements OnModuleInit {
       isOtpVerified: true,
       otpNumber: '000000',
       storageLimitGb: freePlan.storageGb,
+      subdomainLimit: freePlan.subdomainLimit,
       aiImageMetadataLimit: 0,
       aiImageMetadataUsed: 0,
       aiImageMetadataUsageKey: this.currentMonthKey(),
@@ -310,6 +311,7 @@ export class AdminService implements OnModuleInit {
       name: dto.name.trim(),
       storageGb: Number(dto.storageGb ?? 0),
       galleryLimit: Number(dto.galleryLimit ?? 0),
+      subdomainLimit: Number(dto.subdomainLimit ?? 1),
       aiImageMetadataLimit: Number(dto.aiImageMetadataLimit ?? 0),
       monthlyEmails: Number(dto.monthlyEmails ?? 0),
       videoMinutes: Number(dto.videoMinutes ?? 0),
@@ -344,6 +346,7 @@ export class AdminService implements OnModuleInit {
     if (dto.name !== undefined) plan.name = dto.name.trim();
     if (dto.storageGb !== undefined) plan.storageGb = Number(dto.storageGb);
     if (dto.galleryLimit !== undefined) plan.galleryLimit = Number(dto.galleryLimit);
+    if (dto.subdomainLimit !== undefined) plan.subdomainLimit = Number(dto.subdomainLimit);
     if (dto.aiImageMetadataLimit !== undefined) plan.aiImageMetadataLimit = Number(dto.aiImageMetadataLimit);
     if (dto.monthlyEmails !== undefined) plan.monthlyEmails = Number(dto.monthlyEmails);
     if (dto.videoMinutes !== undefined) plan.videoMinutes = Number(dto.videoMinutes);
@@ -366,6 +369,7 @@ export class AdminService implements OnModuleInit {
           planName: plan.name,
           storageLimitGb: Number(plan.storageGb ?? 0),
           galleryLimit: Number(plan.galleryLimit ?? 0),
+          subdomainLimit: Number(plan.subdomainLimit ?? 1),
           aiImageMetadataLimit: Number(plan.aiImageMetadataLimit ?? 0),
           monthlyEmailLimit: Number(plan.monthlyEmails ?? 0),
           videoUploadLimitMinutes: Number(plan.videoMinutes ?? 0),
@@ -412,12 +416,13 @@ export class AdminService implements OnModuleInit {
     return settings;
   }
 
-  private async syncFreeUsers(settings: { storageGb: number; monthlyEmails: number }) {
+  private async syncFreeUsers(settings: { storageGb: number; subdomainLimit: number; monthlyEmails: number }) {
     await this.userModel.updateMany(
       { planName: 'Free' },
       {
         $set: {
           storageLimitGb: settings.storageGb,
+          subdomainLimit: settings.subdomainLimit,
           aiImageMetadataLimit: 0,
           aiImageMetadataUsed: 0,
           aiImageMetadataUsageKey: this.currentMonthKey(),
@@ -658,6 +663,7 @@ export class AdminService implements OnModuleInit {
           planName: plan.name,
           storageLimitGb: plan.storageGb,
           galleryLimit: Number(plan.galleryLimit ?? 0),
+          subdomainLimit: Number(plan.subdomainLimit ?? 1),
           aiImageMetadataLimit: Number(plan.aiImageMetadataLimit ?? 0),
           monthlyEmailLimit: plan.monthlyEmails,
           videoUploadLimitMinutes: plan.videoMinutes ?? 0,
@@ -714,6 +720,7 @@ export class AdminService implements OnModuleInit {
           planName: 'Free',
           storageLimitGb: freePlan.storageGb,
           galleryLimit: 10,
+          subdomainLimit: freePlan.subdomainLimit,
           aiImageMetadataLimit: 0,
           monthlyEmailLimit: freePlan.monthlyEmails,
           videoUploadLimitMinutes: 0,
@@ -737,7 +744,7 @@ export class AdminService implements OnModuleInit {
   async userCapabilities(userId: string) {
     const user = await this.userModel
       .findById(userId)
-      .select('planId planName planFeatures storageLimitGb galleryLimit aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey monthlyEmailLimit videoUploadLimitMinutes videoUploadQuality')
+      .select('planId planName planFeatures storageLimitGb galleryLimit subdomainLimit aiImageMetadataLimit aiImageMetadataUsed aiImageMetadataUsageKey monthlyEmailLimit videoUploadLimitMinutes videoUploadQuality')
       .lean();
     const aiUsageKey = this.currentMonthKey();
     const aiImageMetadataUsed = user?.aiImageMetadataUsageKey === aiUsageKey
@@ -754,6 +761,7 @@ export class AdminService implements OnModuleInit {
           planName: plan.name,
           storageLimitGb: Number(plan.storageGb ?? 0),
           galleryLimit: Number(plan.galleryLimit ?? 0),
+          subdomainLimit: Number(plan.subdomainLimit ?? 1),
           aiImageMetadataLimit: Number(plan.aiImageMetadataLimit ?? 0),
           monthlyEmailLimit: Number(plan.monthlyEmails ?? 0),
           videoUploadLimitMinutes: Number(plan.videoMinutes ?? 0),
@@ -767,6 +775,7 @@ export class AdminService implements OnModuleInit {
           planName: current.planName,
           storageLimitGb: current.storageLimitGb,
           galleryLimit: current.galleryLimit,
+          subdomainLimit: current.subdomainLimit,
           aiImageMetadataLimit: current.aiImageMetadataLimit,
           aiImageMetadataUsed,
           monthlyEmailLimit: current.monthlyEmailLimit,
@@ -781,6 +790,7 @@ export class AdminService implements OnModuleInit {
       planName: user?.planName ?? 'Free',
       storageLimitGb: user?.storageLimitGb ?? 0,
       galleryLimit: user?.galleryLimit ?? 10,
+      subdomainLimit: user?.subdomainLimit ?? 1,
       aiImageMetadataLimit: user?.aiImageMetadataLimit ?? 0,
       aiImageMetadataUsed,
       monthlyEmailLimit: user?.monthlyEmailLimit ?? 0,

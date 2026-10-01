@@ -2217,6 +2217,8 @@ export class CollectionsService implements OnModuleInit {
     if (dto.status !== undefined) collection.status = dto.status;
     if (dto.showOnHomepage !== undefined)
       collection.showOnHomepage = dto.showOnHomepage;
+    if (dto.homepageSiteIds !== undefined)
+      collection.homepageSiteIds = await this.validateHomepageSiteIds(userId, dto.homepageSiteIds);
     if (dto.design !== undefined) collection.design = dto.design;
     if (dto.settings !== undefined || dto.clientEmails !== undefined)
       collection.settings = syncedSettings;
@@ -2244,6 +2246,7 @@ export class CollectionsService implements OnModuleInit {
         'clientEmails',
         'watermarkId',
         'expiresAt',
+        'homepageSiteIds',
         'design',
         'settings',
       ];
@@ -2291,6 +2294,9 @@ export class CollectionsService implements OnModuleInit {
       imageCount: images.length,
       status: 'draft',
       showOnHomepage: source.showOnHomepage !== false,
+      homepageSiteIds: Array.isArray(source.homepageSiteIds) && source.homepageSiteIds.length
+        ? source.homepageSiteIds
+        : ['main'],
     });
 
     if (images.length) {
@@ -7045,19 +7051,57 @@ export class CollectionsService implements OnModuleInit {
       { name: identifier },
     ];
     if (identifier.match(/^[a-f\d]{24}$/i)) query.unshift({ _id: identifier });
-    const owner = siteSlug
+    const requestedSiteSlug = String(siteSlug ?? '').trim().toLowerCase();
+    const owner = requestedSiteSlug
       ? await this.homepageModel
-          .findOne({ slug: siteSlug.toLowerCase(), enabled: true })
-          .select('userId')
+          .findOne({
+            enabled: true,
+            $or: [
+              { slug: requestedSiteSlug },
+              { subdomains: { $elemMatch: { slug: requestedSiteSlug, enabled: { $ne: false } } } },
+            ],
+          })
+          .select('userId slug subdomains')
           .lean()
       : null;
-    if (siteSlug && !owner) throw new NotFoundException('Collection not found');
+    if (requestedSiteSlug && !owner) throw new NotFoundException('Collection not found');
     const collection = await this.collectionModel
       .findOne({ $or: query, ...(owner ? { userId: owner.userId } : {}) })
       .sort({ createdAt: -1 })
       .lean();
     if (!collection) throw new NotFoundException('Collection not found');
+    if (owner) {
+      const siteId = String(owner.slug) === requestedSiteSlug
+        ? 'main'
+        : String((owner.subdomains ?? []).find((site: any) => String(site.slug) === requestedSiteSlug)?.id ?? '');
+      if (!siteId || !this.collectionAssignedToHomepageSite(collection, siteId)) {
+        throw new NotFoundException('Collection not found');
+      }
+    }
     return collection;
+  }
+
+  private collectionAssignedToHomepageSite(collection: any, siteId: string) {
+    const ids = Array.isArray(collection?.homepageSiteIds)
+      ? collection.homepageSiteIds.map((value: unknown) => String(value)).filter(Boolean)
+      : [];
+    return siteId === 'main' ? ids.length === 0 || ids.includes('main') : ids.includes(siteId);
+  }
+
+  private async validateHomepageSiteIds(userId: string, values: string[]) {
+    const requested = [...new Set((values ?? []).map((value) => String(value).trim()).filter(Boolean))];
+    if (!requested.length) return ['main'];
+    const homepage = await this.homepageModel
+      .findOne({ userId })
+      .select('subdomains')
+      .lean();
+    const valid = new Set([
+      'main',
+      ...((homepage?.subdomains ?? []).map((site: any) => String(site.id))),
+    ]);
+    const invalid = requested.find((siteId) => !valid.has(siteId));
+    if (invalid) throw new BadRequestException('One of the selected subdomains no longer exists');
+    return requested;
   }
 
   private isPublicCollectionVisible(collection: {
@@ -7319,8 +7363,22 @@ export class CollectionsService implements OnModuleInit {
   private async collectionPublicLink(collection: any, siteSlug?: string) {
     const homepage = siteSlug
       ? null
-      : await this.homepageModel.findOne({ userId: String(collection.userId) }).select('slug').lean();
-    const resolvedSiteSlug = String(siteSlug || homepage?.slug || '').trim();
+      : await this.homepageModel
+          .findOne({ userId: String(collection.userId) })
+          .select('slug subdomains')
+          .lean();
+    let resolvedSiteSlug = String(siteSlug || '').trim();
+    if (!resolvedSiteSlug && homepage) {
+      const assigned = Array.isArray(collection?.homepageSiteIds)
+        ? collection.homepageSiteIds.map((value: unknown) => String(value)).filter(Boolean)
+        : [];
+      if (!assigned.length || assigned.includes('main')) {
+        resolvedSiteSlug = String(homepage.slug || '');
+      } else {
+        const site = (homepage.subdomains ?? []).find((item: any) => assigned.includes(String(item.id)) && item.enabled !== false);
+        resolvedSiteSlug = String(site?.slug || homepage.slug || '');
+      }
+    }
     if (!resolvedSiteSlug) return '';
     const collectionSlug = String(collection.slug || collection._id || '').trim();
     if (!collectionSlug) return '';

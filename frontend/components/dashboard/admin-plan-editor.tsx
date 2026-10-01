@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, Check, ChevronRight, HardDrive, Images, Info, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Globe2, HardDrive, Images, Info, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { createAdminPlan, updateAdminPlan, type AdminPlan } from "@/actions/admin";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ type PlanEditorForm = {
   name: string;
   storageGb: string;
   galleryLimit: string;
+  subdomainLimit: string;
   aiImageMetadataLimit: string;
   monthlyEmails: string;
   videoMinutes: string;
@@ -73,6 +74,7 @@ function makeInitial(plan?: AdminPlan | null): PlanEditorForm {
     name: plan?.name ?? "",
     storageGb: String(plan?.storageGb ?? ""),
     galleryLimit: String(plan?.galleryLimit ?? ""),
+    subdomainLimit: String(plan?.subdomainLimit ?? 1),
     aiImageMetadataLimit: String(plan?.aiImageMetadataLimit ?? ""),
     monthlyEmails: String(plan?.monthlyEmails ?? ""),
     videoMinutes: String(plan?.videoMinutes ?? ""),
@@ -98,6 +100,7 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
       name: form.name.trim(),
       storageGb: Number(form.storageGb || 0),
       galleryLimit: Number(form.galleryLimit || 0),
+      subdomainLimit: Number(form.subdomainLimit || 0),
       aiImageMetadataLimit: Number(form.aiImageMetadataLimit || 0),
       monthlyEmails: Number(form.monthlyEmails || 0),
       videoMinutes: Number(form.videoMinutes || 0),
@@ -154,6 +157,7 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
               <PlanField label="Monthly price EUR" value={form.priceMonthly} onChange={(priceMonthly) => setForm({ ...form, priceMonthly })} type="number" required />
               <PlanField label="Storage limit GB" value={form.storageGb} onChange={(storageGb) => setForm({ ...form, storageGb })} type="number" required help="Backend upload quota." />
               <PlanField label="Gallery limit" value={form.galleryLimit} onChange={(galleryLimit) => setForm({ ...form, galleryLimit })} type="number" required help="Use 0 for unlimited galleries." />
+              <PlanField label="Subdomain limit" value={form.subdomainLimit} onChange={(subdomainLimit) => setForm({ ...form, subdomainLimit })} type="number" required help="Total public subdomains including the main subdomain. Use 0 for unlimited." />
               <PlanField label="AI metadata images / month" value={form.aiImageMetadataLimit} onChange={(aiImageMetadataLimit) => setForm({ ...form, aiImageMetadataLimit })} type="number" required help="Maximum uploaded photos that receive AI title + description each month. Use 0 for unlimited when AI Image Title & Description is enabled." />
               <PlanField label="Emails / month" value={form.monthlyEmails} onChange={(monthlyEmails) => setForm({ ...form, monthlyEmails })} type="number" required help="Monthly email usage allowance." />
               <PlanField label="Total video minutes" value={form.videoMinutes} onChange={(videoMinutes) => setForm({ ...form, videoMinutes })} type="number" required />
@@ -208,6 +212,7 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
             <div className="mt-5 grid gap-3 text-sm">
               <Summary icon={<HardDrive className="size-4" />} label="Storage" value={`${form.storageGb || 0} GB`} />
               <Summary icon={<Images className="size-4" />} label="Galleries" value={Number(form.galleryLimit || 0) === 0 ? "Unlimited" : form.galleryLimit || "0"} />
+              <Summary icon={<Globe2 className="size-4" />} label="Subdomains" value={Number(form.subdomainLimit || 0) === 0 ? "Unlimited" : form.subdomainLimit || "0"} />
               <Summary icon={<Check className="size-4" />} label="AI metadata" value={!form.features.aiImageMetadata ? "Not included" : Number(form.aiImageMetadataLimit || 0) === 0 ? "Unlimited / month" : `${form.aiImageMetadataLimit || 0} / month`} />
               <Summary icon={<Check className="size-4" />} label="Enabled capabilities" value={String(selectedCount)} />
             </div>

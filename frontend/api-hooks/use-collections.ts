@@ -37,6 +37,7 @@ export type CollectionRecord = {
   settings?: Record<string, any>;
   status?: string;
   showOnHomepage?: boolean;
+  homepageSiteIds?: string[];
   faceReindexRequestedAt?: string;
   faceReindexCompletedAt?: string;
   faceReindexStatus?: "queued" | "processing" | "completed" | "";

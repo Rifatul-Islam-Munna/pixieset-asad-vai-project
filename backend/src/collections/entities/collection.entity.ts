@@ -53,6 +53,10 @@ export class Collection {
   @Prop({ default: true, index: true })
   showOnHomepage: boolean;
 
+  // Stable homepage site IDs. Missing/empty means main for legacy compatibility.
+  @Prop({ type: [String], default: [] })
+  homepageSiteIds: string[];
+
   @Prop()
   faceReindexRequestedAt?: Date;
 

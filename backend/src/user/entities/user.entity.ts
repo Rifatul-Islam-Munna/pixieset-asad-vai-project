@@ -93,6 +93,10 @@ export class User {
   @Prop({ default: 10, min: 0 })
   galleryLimit: number;
 
+  // Total public subdomains including the main subdomain. 0 means unlimited.
+  @Prop({ default: 1, min: 0 })
+  subdomainLimit: number;
+
   // 0 means unlimited AI metadata images when the plan feature is enabled.
   @Prop({ default: 0, min: 0 })
   aiImageMetadataLimit: number;

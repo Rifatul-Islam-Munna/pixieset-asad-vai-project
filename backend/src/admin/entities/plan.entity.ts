@@ -15,6 +15,10 @@ export class Plan {
   @Prop({ default: 0, min: 0 })
   galleryLimit: number;
 
+  // Total public subdomains including the main subdomain. 0 means unlimited.
+  @Prop({ default: 1, min: 0 })
+  subdomainLimit: number;
+
   // Monthly AI title/description image allowance. 0 means unlimited when enabled.
   @Prop({ default: 0, min: 0 })
   aiImageMetadataLimit: number;

@@ -5,6 +5,7 @@ import { CollectionImage, CollectionImageSchema } from 'src/collections/entities
 import { DashboardSetting, DashboardSettingSchema } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { BookingSetting, BookingSettingSchema } from 'src/bookings/entities/booking-setting.entity';
+import { Plan, PlanSchema } from 'src/admin/entities/plan.entity';
 import { Homepage, HomepageSchema } from './entities/homepage.entity';
 import { HomepageController, PublicHomepageController } from './homepage.controller';
 import { HomepageService } from './homepage.service';
@@ -20,6 +21,7 @@ import { ImagorService } from 'src/lib/imagor.service';
       { name: CollectionImage.name, schema: CollectionImageSchema },
       { name: DashboardSetting.name, schema: DashboardSettingSchema },
       { name: BookingSetting.name, schema: BookingSettingSchema },
+      { name: Plan.name, schema: PlanSchema },
     ]),
   ],
   controllers: [HomepageController, PublicHomepageController],

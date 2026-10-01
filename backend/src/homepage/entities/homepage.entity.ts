@@ -19,6 +19,14 @@ export type HomepageVisibility = {
   address?: boolean;
 };
 
+export type HomepageSubdomain = {
+  id: string;
+  name: string;
+  slug: string;
+  enabled: boolean;
+  createdAt?: Date;
+};
+
 @Schema({ timestamps: true, autoIndex: true })
 export class Homepage {
   @Prop({ required: true, unique: true, index: true })
@@ -38,11 +46,27 @@ export class Homepage {
   @Prop({ default: true })
   enabled: boolean;
 
+  @Prop({
+    type: [{
+      _id: false,
+      id: { type: String, required: true },
+      name: { type: String, required: true, trim: true, maxlength: 100 },
+      slug: { type: String, required: true, trim: true, lowercase: true, maxlength: 63 },
+      enabled: { type: Boolean, default: true },
+      createdAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  })
+  subdomains: HomepageSubdomain[];
+
   @Prop()
   passwordHash?: string;
 
   @Prop({ trim: true })
   brandName?: string;
+
+  @Prop({ trim: true, maxlength: 100 })
+  mainSiteName?: string;
 
   @Prop({ trim: true })
   logoUrl?: string;
@@ -92,3 +116,4 @@ export class Homepage {
 }
 
 export const HomepageSchema = SchemaFactory.createForClass(Homepage);
+HomepageSchema.index({ 'subdomains.slug': 1 }, { sparse: true });

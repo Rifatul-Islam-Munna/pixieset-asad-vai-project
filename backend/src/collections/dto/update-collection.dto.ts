@@ -60,6 +60,11 @@ export class UpdateCollectionDto {
   showOnHomepage?: boolean;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  homepageSiteIds?: string[];
+
+  @IsOptional()
   @IsObject()
   design?: Record<string, unknown>;
 

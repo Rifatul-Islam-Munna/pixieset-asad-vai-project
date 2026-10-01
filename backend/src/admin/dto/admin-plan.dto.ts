@@ -17,6 +17,11 @@ export class AdminCreatePlanDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  subdomainLimit?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   aiImageMetadataLimit?: number;
 
   @IsNumber()
@@ -78,6 +83,11 @@ export class AdminUpdatePlanDto {
   @IsNumber()
   @Min(0)
   galleryLimit?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  subdomainLimit?: number;
 
   @IsOptional()
   @IsNumber()

@@ -29,6 +29,7 @@ export type AdminUser = {
   storageLimitGb?: number;
   storageUsedBytes?: number;
   galleryLimit?: number;
+  subdomainLimit?: number;
   aiImageMetadataLimit?: number;
   aiImageMetadataUsed?: number;
   monthlyEmailLimit?: number;
@@ -72,6 +73,7 @@ export type AdminPlan = {
   name: string;
   storageGb: number;
   galleryLimit?: number;
+  subdomainLimit?: number;
   aiImageMetadataLimit?: number;
   monthlyEmails: number;
   videoMinutes?: number;
@@ -137,6 +139,7 @@ export type AdminPayPalSetting = {
 
 export type AdminFreePlanSetting = {
   storageGb: number;
+  subdomainLimit: number;
   monthlyEmails: number;
 };
 
@@ -206,6 +209,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     }),
     adminOptionalRequest<AdminFreePlanSetting>("/admin/free-plan", {
       storageGb: 3,
+      subdomainLimit: 1,
       monthlyEmails: 1000,
     }),
     adminOptionalRequest<HomeCmsData>("/home-cms", mergeHomeCms()),

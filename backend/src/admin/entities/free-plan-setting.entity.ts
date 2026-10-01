@@ -11,6 +11,9 @@ export class FreePlanSetting {
   @Prop({ required: true, default: 3, min: 0 })
   storageGb: number;
 
+  @Prop({ required: true, default: 1, min: 0 })
+  subdomainLimit: number;
+
   @Prop({ required: true, default: 1000, min: 0 })
   monthlyEmails: number;
 }

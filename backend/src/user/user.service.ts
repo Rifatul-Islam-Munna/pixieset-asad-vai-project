@@ -81,6 +81,7 @@ export class UserService implements OnModuleInit {
       isOtpVerified: true,
       otpNumber: '000000',
       storageLimitGb: freePlan.storageGb,
+      subdomainLimit: freePlan.subdomainLimit,
       videoUploadLimitMinutes: 0,
       videoUploadQuality: 'hd',
       monthlyEmailLimit: freePlan.monthlyEmails,
@@ -209,6 +210,7 @@ export class UserService implements OnModuleInit {
         isOtpVerified: true,
         otpNumber: '000000',
         storageLimitGb: freePlan.storageGb,
+        subdomainLimit: freePlan.subdomainLimit,
         videoUploadLimitMinutes: 0,
         videoUploadQuality: 'hd',
         monthlyEmailLimit: freePlan.monthlyEmails,
@@ -253,6 +255,7 @@ export class UserService implements OnModuleInit {
       userRecord.planId = undefined;
       userRecord.planName = 'Free';
       userRecord.storageLimitGb = freePlan.storageGb;
+      userRecord.subdomainLimit = freePlan.subdomainLimit;
       userRecord.videoUploadLimitMinutes = 0;
       userRecord.videoUploadQuality = 'hd';
       userRecord.monthlyEmailLimit = freePlan.monthlyEmails;

@@ -308,15 +308,32 @@ export class CollectionDownloadDeliveryService {
   private async findPublicCollection(identifier: string, siteSlug?: string) {
     const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];
     if (/^[a-f\d]{24}$/i.test(identifier)) query.unshift({ _id: identifier });
-    const owner = siteSlug
-      ? await this.homepageModel.findOne({ slug: siteSlug.toLowerCase(), enabled: true }).select('userId').lean()
+    const requestedSiteSlug = String(siteSlug ?? '').trim().toLowerCase();
+    const owner = requestedSiteSlug
+      ? await this.homepageModel.findOne({
+          enabled: true,
+          $or: [
+            { slug: requestedSiteSlug },
+            { subdomains: { $elemMatch: { slug: requestedSiteSlug, enabled: { $ne: false } } } },
+          ],
+        }).select('userId slug subdomains').lean()
       : null;
-    if (siteSlug && !owner) throw new NotFoundException('Collection not found');
+    if (requestedSiteSlug && !owner) throw new NotFoundException('Collection not found');
     const collection = await this.collectionModel.findOne({
       $or: query,
       ...(owner ? { userId: owner.userId } : {}),
     }).sort({ createdAt: -1 }).lean();
     if (!collection || collection.status !== 'published') throw new NotFoundException('Collection not found');
+    if (owner) {
+      const siteId = String(owner.slug) === requestedSiteSlug
+        ? 'main'
+        : String((owner.subdomains ?? []).find((site: any) => String(site.slug) === requestedSiteSlug)?.id ?? '');
+      const assigned = Array.isArray((collection as any).homepageSiteIds)
+        ? (collection as any).homepageSiteIds.map((value: unknown) => String(value)).filter(Boolean)
+        : [];
+      const allowed = siteId === 'main' ? assigned.length === 0 || assigned.includes('main') : assigned.includes(siteId);
+      if (!siteId || !allowed) throw new NotFoundException('Collection not found');
+    }
     if (collection.expiresAt) {
       const expiresAt = new Date(collection.expiresAt);
       if (!Number.isNaN(expiresAt.getTime()) && expiresAt <= new Date()) throw new NotFoundException('Collection not found');
