@@ -77,6 +77,15 @@ export class User {
   @Prop({ default: 0 })
   loginAttempts?: number;
 
+  @Prop({ trim: true })
+  lastLoginIp?: string;
+
+  @Prop({ trim: true })
+  lastLoginUserAgent?: string;
+
+  @Prop()
+  lastLoginAt?: Date;
+
   @Prop({ default: 0 })
   numberOfConnections: number;
 

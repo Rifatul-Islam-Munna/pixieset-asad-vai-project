@@ -471,10 +471,10 @@ export function PublicGallery({
     ? Math.min(40, Math.max(0, Number(design.gridSpacingPx ?? 4)))
     : design.gridSpacing === "Large" ? 20 : 4;
   const masonryColumns = design.thumbnailSize === "Extra Large"
-    ? "columns-1"
+    ? "columns-1 sm:columns-2"
     : design.thumbnailSize === "Large"
-      ? "columns-1 sm:columns-2"
-      : "columns-1 sm:columns-2 lg:columns-3 xl:columns-4";
+      ? "columns-1 sm:columns-2 lg:columns-3 xl:columns-4"
+      : "columns-2 sm:columns-3 lg:columns-4";
   const customGridColumns = design.gridColumns === 2
     ? "grid grid-cols-1 sm:grid-cols-2"
     : design.gridColumns === 3
@@ -493,6 +493,24 @@ export function PublicGallery({
       : design.gridStyle === "Horizontal"
         ? "classic"
         : design.gridStyle === "Custom" ? "custom" : "masonry";
+  const tileImageSizes =
+    galleryLayout === "art"
+      ? "(max-width: 640px) 50vw, 50vw"
+      : galleryLayout === "custom"
+        ? design.gridColumns === 2
+          ? "(max-width: 640px) 100vw, 50vw"
+          : design.gridColumns === 3
+            ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            : design.gridColumns === 5
+              ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 20vw"
+              : design.gridColumns === 6
+                ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 17vw"
+                : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+        : design.thumbnailSize === "Extra Large"
+          ? "(max-width: 640px) 100vw, 50vw"
+          : design.thumbnailSize === "Large"
+            ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+            : "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw";
   const photoDownloadsEnabled =
     quickShareDownload === "1"
       ? true
@@ -1726,7 +1744,8 @@ export function PublicGallery({
               className={cn(
                 galleryLayout === "masonry" && masonryColumns,
                 galleryLayout === "classic" && "grid grid-cols-1 sm:grid-cols-2",
-                galleryLayout === "classic" && design.thumbnailSize === "Regular" && "lg:grid-cols-3 xl:grid-cols-4",
+                galleryLayout === "classic" && design.thumbnailSize === "Large" && "lg:grid-cols-3 xl:grid-cols-4",
+                galleryLayout === "classic" && design.thumbnailSize === "Regular" && "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
                 galleryLayout === "art" && "grid auto-rows-[minmax(180px,46vw)] grid-cols-2 sm:auto-rows-[260px] lg:grid-cols-4 lg:auto-rows-[300px]",
                 galleryLayout === "custom" && customGridColumns,
               )}
@@ -1749,6 +1768,7 @@ export function PublicGallery({
                     canFavorite={favoritesEnabled}
                     canDownload={canDownloadMedia(photo)}
                     canShare={socialSharingEnabled}
+                    imageSizes={tileImageSizes}
                     sharpeningLevel={sharpeningLevel}
                     favoriteBusy={favoriteImageBusy === photo._id}
                     favorited={favoriteImageIds.has(photo._id)}
@@ -2285,6 +2305,7 @@ function GalleryTile({
   canFavorite,
   canDownload,
   canShare,
+  imageSizes,
   sharpeningLevel,
   favoriteBusy,
   favorited,
@@ -2306,6 +2327,7 @@ function GalleryTile({
   canFavorite: boolean;
   canDownload: boolean;
   canShare: boolean;
+  imageSizes: string;
   sharpeningLevel: "optimal" | "low" | "high";
   favoriteBusy: boolean;
   favorited: boolean;
@@ -2360,7 +2382,7 @@ function GalleryTile({
             src={imageSrc(displayImageUrl(photo))}
             fallbackSrc={imageSrc(photo.fallbackThumbnailUrl || photo.fallbackUrl || photo.url)}
             srcSet={responsiveImageSrcSet(photo)}
-            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
+            sizes={imageSizes}
             alt={displayCaption(photo)}
             width={photo.width}
             height={photo.height}
@@ -2379,7 +2401,7 @@ function GalleryTile({
           {displayFilename(photo)}
         </p>
       )}
-      <div className="absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 sm:right-3 sm:top-3 sm:gap-2">
+      <div className="pointer-events-none absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 sm:right-3 sm:top-3 sm:gap-2">
         {canFavorite && isPersistedImageId(photo._id) && (
           <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label={favorited ? "Remove star" : "Star photo"} title={favorited ? "Remove star" : "Star photo"} type="button">
             <Star className={cn("size-4", favorited && "fill-amber-400 text-amber-500")} />

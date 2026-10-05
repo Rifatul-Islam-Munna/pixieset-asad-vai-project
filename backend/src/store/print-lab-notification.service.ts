@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Model, Types } from 'mongoose';
@@ -10,6 +10,11 @@ import {
 import { MailService } from '../mail/mail.service';
 import { StoreOrder, StoreOrderDocument } from './entities/store-order.entity';
 import { MinioService } from '../lib/minio.service';
+import { User, UserDocument } from '../user/entities/user.entity';
+import {
+  buildSystemNotificationEmail,
+  formatNotificationTime,
+} from '../mail/system-notification-email';
 
 export type PrintLabDeliveryResult = {
   status: 'sent' | 'failed' | 'skipped';
@@ -66,6 +71,9 @@ export class PrintLabNotificationService {
     private readonly imageModel: Model<CollectionImageDocument>,
     private readonly mailService: MailService,
     private readonly minioService: MinioService,
+    @Optional()
+    @InjectModel(User.name)
+    private readonly userModel?: Model<UserDocument>,
   ) {}
 
   async notify(
@@ -82,6 +90,14 @@ export class PrintLabNotificationService {
           .findOne({ _id: order.collectionId, userId: order.userId })
           .lean()
       : null;
+    if (!modeMatchesOrder(order, mode)) {
+      return { status: 'skipped', reason: 'ineligible-order' };
+    }
+
+    if (!force) {
+      void this.notifyOwner(order, collection, mode);
+    }
+
     const settings = ((collection?.settings as any)?.store ?? {}) as Record<string, unknown>;
     const recipient = String(settings.printLabEmail ?? '').trim();
     if (!isValidEmail(recipient)) {
@@ -94,9 +110,6 @@ export class PrintLabNotificationService {
         : settings.notifyPrintLabForPaidOrders === true;
     if (!enabled) return { status: 'skipped', reason: 'disabled' };
 
-    if (!modeMatchesOrder(order, mode)) {
-      return { status: 'skipped', reason: 'ineligible-order' };
-    }
     if (!force && order.printLabNotificationStatus === 'pending') {
       const recovered = await this.recoverStaleClaim(orderId);
       return recovered
@@ -105,6 +118,119 @@ export class PrintLabNotificationService {
     }
 
     return this.deliver(orderId, order, collection, mode, recipient, force);
+  }
+
+  private async notifyOwner(order: any, collection: any, mode: NotificationMode) {
+    if (!this.userModel) return;
+    const orderId = idOf(order);
+    if (!orderId) return;
+
+    try {
+      const claimed = await this.orderModel
+        .findOneAndUpdate(
+          {
+            _id: orderId,
+            $or: [
+              { ownerNotificationStatus: { $exists: false } },
+              { ownerNotificationStatus: 'not-sent' },
+              { ownerNotificationStatus: 'failed' },
+            ],
+          },
+          {
+            $set: {
+              ownerNotificationStatus: 'pending',
+              ownerNotificationError: '',
+            },
+            $unset: { ownerNotificationSentAt: 1 },
+          },
+          { returnDocument: 'after' },
+        )
+        .lean();
+      if (!claimed) return;
+
+      const owner = await this.userModel
+        .findById(claimed.userId)
+        .select('email name businessName')
+        .lean();
+      if (!owner?.email) {
+        await this.orderModel.updateOne(
+          { _id: orderId, ownerNotificationStatus: 'pending' },
+          {
+            $set: {
+              ownerNotificationStatus: 'failed',
+              ownerNotificationError: 'Account owner does not have an email address.',
+            },
+          },
+        );
+        return;
+      }
+
+      const galleryName = String(collection?.name ?? 'Store');
+      const customerName = String(claimed.customer?.name || claimed.customer?.email || 'Customer');
+      const total = Number(claimed.total ?? 0);
+      const websiteBrand = await this.mailService.getWebsiteBranding();
+      const email = buildSystemNotificationEmail({
+        brand: websiteBrand.brandText,
+        logoUrl: websiteBrand.logoUrl,
+        subject: `New order received - ${claimed.orderNumber}`,
+        heading: 'New order received',
+        intro: 'A customer has placed a new order in your account.',
+        details: [
+          { label: 'Order', value: String(claimed.orderNumber ?? '') },
+          { label: 'Gallery', value: galleryName },
+          { label: 'Customer', value: customerName },
+          { label: 'Total', value: Number.isFinite(total) ? total.toFixed(2) : '0.00' },
+          { label: 'Type', value: mode === 'free' ? 'Print request' : 'Paid order' },
+          {
+            label: 'Time',
+            value: formatNotificationTime(
+              (claimed as any).createdAt
+                ? new Date((claimed as any).createdAt)
+                : new Date(),
+            ),
+          },
+        ],
+        footerText: 'Open your dashboard to review the order details.',
+      });
+
+      const delivery = await this.mailService.send({
+        to: owner.email,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+      });
+
+      await this.orderModel.updateOne(
+        { _id: orderId, ownerNotificationStatus: 'pending' },
+        delivery.sent
+          ? {
+              $set: {
+                ownerNotificationStatus: 'sent',
+                ownerNotificationSentAt: new Date(),
+                ownerNotificationError: '',
+              },
+            }
+          : {
+              $set: {
+                ownerNotificationStatus: 'failed',
+                ownerNotificationError:
+                  delivery.reason || 'Account activity email delivery failed.',
+              },
+            },
+      );
+    } catch {
+      await this.orderModel
+        .updateOne(
+          { _id: orderId, ownerNotificationStatus: 'pending' },
+          {
+            $set: {
+              ownerNotificationStatus: 'failed',
+              ownerNotificationError: 'Account activity email delivery failed.',
+            },
+          },
+        )
+        .catch(() => undefined);
+    }
   }
 
   private async deliver(

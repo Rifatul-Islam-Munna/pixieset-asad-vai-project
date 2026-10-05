@@ -23,6 +23,10 @@ import {
 } from 'src/lib/imagor.service';
 import { MailService, type GlobalMailAttachment } from 'src/mail/mail.service';
 import { BrandingEmailService } from 'src/mail/branding-email.service';
+import {
+  buildSystemNotificationEmail,
+  formatNotificationTime,
+} from 'src/mail/system-notification-email';
 import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
 import { FaceSearchService } from 'src/face-search/face-search.service';
 import { ImageMetadataAiService } from 'src/image-metadata-ai/image-metadata-ai.service';
@@ -211,7 +215,10 @@ export class CollectionsService implements OnModuleInit {
   }
 
   async create(userId: string, dto: CreateCollectionDto) {
-    const owner = await this.userModel.findById(userId).select('galleryLimit').lean();
+    const owner = await this.userModel
+      .findById(userId)
+      .select('galleryLimit email name businessName')
+      .lean();
     const galleryLimit = Number(owner?.galleryLimit ?? 10);
     if (galleryLimit > 0) {
       const galleryCount = await this.collectionModel.countDocuments({ userId });
@@ -251,6 +258,32 @@ export class CollectionsService implements OnModuleInit {
     if (collection.status === 'published') {
       await this.queuePublishedCollection(collection).catch(() => undefined);
     }
+
+    if (owner?.email) {
+      const websiteBrand = await this.mailService.getWebsiteBranding();
+      const brand = websiteBrand.brandText;
+      const email = buildSystemNotificationEmail({
+        brand,
+        logoUrl: websiteBrand.logoUrl,
+        subject: `New gallery created - ${collection.name}`,
+        heading: 'New gallery created',
+        intro: `A new gallery was created in your ${brand} account.`,
+        details: [
+          { label: 'Gallery', value: collection.name },
+          { label: 'Status', value: collection.status },
+          { label: 'Time', value: formatNotificationTime(new Date()) },
+        ],
+        warning:
+          'If you did not create this gallery, review your account activity and change your password immediately.',
+      });
+      void this.mailService.send({
+        to: owner.email,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+      });
+    }
+
     return collection.toObject();
   }
 

@@ -15,6 +15,17 @@ import { FreePlanSettingService } from 'src/admin/free-plan-setting.service';
 import { HomepageService } from 'src/homepage/homepage.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { MailService } from 'src/mail/mail.service';
+import {
+  buildSystemNotificationEmail,
+  describeUserAgent,
+  formatNotificationTime,
+} from 'src/mail/system-notification-email';
+
+type LoginContext = {
+  ipAddress?: string;
+  userAgent?: string;
+  location?: string;
+};
 
 @Injectable()
 export class UserService implements OnModuleInit {
@@ -96,7 +107,7 @@ export class UserService implements OnModuleInit {
     return { message: 'User created successfully', data: safeUser, user: safeUser, access_token };
   }
 
-  async loginUser(dto: LoginDto) {
+  async loginUser(dto: LoginDto, context: LoginContext = {}) {
     const login = dto.phoneNumber.trim().toLowerCase();
     const user = await this.userModel.findOne({
       $or: [{ phoneNumber: login }, { email: login }],
@@ -112,6 +123,7 @@ export class UserService implements OnModuleInit {
 
     const { password, ...safeUser } = user;
     const access_token = await this.signToken(safeUser);
+    await this.recordSuccessfulLogin(String(user._id), context);
 
     return { message: 'User logged in successfully', access_token, user: safeUser };
   }
@@ -141,7 +153,7 @@ export class UserService implements OnModuleInit {
     return genericResponse;
   }
 
-  async loginWithPin(loginValue: string, pin: string) {
+  async loginWithPin(loginValue: string, pin: string, context: LoginContext = {}) {
     const login = loginValue.trim().toLowerCase();
     const user = await this.userModel.findOne({ $or: [{ phoneNumber: login }, { email: login }] });
     if (!user || !user.loginPinHash || !user.loginExpiresAt || user.loginExpiresAt.getTime() < Date.now())
@@ -149,26 +161,27 @@ export class UserService implements OnModuleInit {
     if ((user.loginAttempts ?? 0) >= 5) throw new HttpException('PIN is locked. Ask for a new login email.', HttpStatus.TOO_MANY_REQUESTS);
     const valid = await bcrypt.compare(pin, user.loginPinHash);
     if (!valid) { user.loginAttempts = (user.loginAttempts ?? 0) + 1; await user.save(); throw new HttpException('PIN is invalid or expired', HttpStatus.BAD_REQUEST); }
-    return this.finishPasswordlessLogin(user);
+    return this.finishPasswordlessLogin(user, context);
   }
 
-  async loginWithMagicLink(token: string) {
+  async loginWithMagicLink(token: string, context: LoginContext = {}) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const user = await this.userModel.findOne({ loginTokenHash: tokenHash });
     if (!user || !user.loginExpiresAt || user.loginExpiresAt.getTime() < Date.now())
       throw new HttpException('Login link is invalid or expired', HttpStatus.BAD_REQUEST);
-    return this.finishPasswordlessLogin(user);
+    return this.finishPasswordlessLogin(user, context);
   }
 
-  private async finishPasswordlessLogin(user: UserDocument) {
+  private async finishPasswordlessLogin(user: UserDocument, context: LoginContext = {}) {
     user.loginPinHash = undefined; user.loginTokenHash = undefined; user.loginExpiresAt = undefined; user.loginAttempts = 0;
     await user.save();
     const raw = user.toObject(); const { password, loginPinHash, loginTokenHash, ...safeUser } = raw as any;
     const access_token = await this.signToken(safeUser);
+    await this.recordSuccessfulLogin(user._id.toString(), context);
     return { message: 'User logged in successfully', access_token, user: safeUser };
   }
 
-  async loginWithGoogle(tokenId: string) {
+  async loginWithGoogle(tokenId: string, context: LoginContext = {}) {
     const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     if (!googleClientId) {
       throw new HttpException('Google login is not configured', HttpStatus.BAD_REQUEST);
@@ -229,8 +242,64 @@ export class UserService implements OnModuleInit {
 
     const { password, ...safeUser } = user.toObject();
     const access_token = await this.signToken(safeUser);
+    await this.recordSuccessfulLogin(user._id.toString(), context);
 
     return { message: 'User logged in successfully', access_token, user: safeUser };
+  }
+
+  private async recordSuccessfulLogin(userId: string, context: LoginContext) {
+    try {
+      const now = new Date();
+      const ipAddress = this.normalizeIp(context.ipAddress);
+      const userAgent = String(context.userAgent ?? '').trim().slice(0, 500);
+      const loginState: Record<string, unknown> = { lastLoginAt: now };
+      if (ipAddress) loginState.lastLoginIp = ipAddress;
+      if (userAgent) loginState.lastLoginUserAgent = userAgent;
+
+      const previous = await this.userModel
+        .findByIdAndUpdate(userId, { $set: loginState }, { new: false })
+        .select('email name lastLoginIp')
+        .lean();
+
+      const previousIp = this.normalizeIp(previous?.lastLoginIp);
+      if (!previous?.email || !ipAddress || !previousIp || previousIp === ipAddress) return;
+
+      const websiteBrand = await this.mailService.getWebsiteBranding();
+      const brand = websiteBrand.brandText;
+      const email = buildSystemNotificationEmail({
+        brand,
+        logoUrl: websiteBrand.logoUrl,
+        subject: `New login to ${brand}`,
+        heading: `New login to ${brand}`,
+        intro: `We noticed a new login with your ${brand} account`,
+        accountEmail: previous.email,
+        details: [
+          { label: 'Device', value: describeUserAgent(userAgent) },
+          ...(context.location ? [{ label: 'Location', value: context.location }] : []),
+          { label: 'Previous IP', value: previousIp },
+          { label: 'New IP', value: ipAddress },
+          { label: 'Time', value: formatNotificationTime(now) },
+        ],
+        warning:
+          'If you do not recognize this login, we recommend that you change your password immediately to secure your account.',
+      });
+
+      void this.mailService.send({
+        to: previous.email,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+      });
+    } catch {
+      // A security notification must never block an otherwise valid login.
+    }
+  }
+
+  private normalizeIp(value?: string) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    const first = raw.split(',')[0]?.trim() || '';
+    return first.startsWith('::ffff:') ? first.slice(7) : first;
   }
 
   async verifyOtp(otp: string) {

@@ -1,5 +1,8 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { HomeCms, HomeCmsDocument } from '../home-cms/entities/home-cms.entity';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { createConnection, type Socket } from 'node:net';
@@ -54,7 +57,12 @@ export class MailService implements OnModuleInit {
   private config?: SmtpConfig;
   private warnedNotConfigured = false;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional()
+    @InjectModel(HomeCms.name)
+    private readonly homeCmsModel?: Model<HomeCmsDocument>,
+  ) {}
 
   onModuleInit() {
     this.config = this.readConfig();
@@ -63,6 +71,45 @@ export class MailService implements OnModuleInit {
 
   isConfigured() {
     return Boolean(this.config);
+  }
+
+  async getWebsiteBranding() {
+    const fallbackBrand =
+      this.configService.get<string>('APP_NAME')?.trim() || 'Gallerista';
+    if (!this.homeCmsModel) {
+      return { brandText: fallbackBrand, logoUrl: '' };
+    }
+
+    try {
+      const cms = await this.homeCmsModel
+        .findOne({ key: 'home' })
+        .select('brand')
+        .lean();
+      const brand = ((cms as any)?.brand ?? {}) as Record<string, unknown>;
+      const brandText =
+        String(brand.brandText ?? '').trim() || fallbackBrand;
+      const rawLogo = String(
+        brand.logoUrl ?? brand.brandImageUrl ?? '',
+      ).trim();
+      const logoUrl = this.absoluteWebsiteAsset(rawLogo);
+      return { brandText, logoUrl };
+    } catch {
+      return { brandText: fallbackBrand, logoUrl: '' };
+    }
+  }
+
+  private absoluteWebsiteAsset(value: string) {
+    if (!value) return '';
+    if (/^https?:\/\//i.test(value) || /^data:image\//i.test(value)) {
+      return value;
+    }
+    if (!value.startsWith('/')) return '';
+    const base = (
+      this.configService.get<string>('FRONTEND_URL') ||
+      this.configService.get<string>('APP_URL') ||
+      'https://gallerista.app'
+    ).replace(/\/+$/, '');
+    return `${base}${value}`;
   }
 
   async fetchInlineImage(url: string, contentId: string, filename: string): Promise<GlobalMailAttachment | undefined> {

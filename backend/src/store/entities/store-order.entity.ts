@@ -194,6 +194,15 @@ export class StoreOrder {
 
   @Prop({ default: '' })
   printLabNotificationRecipient: string;
+
+  @Prop({ default: 'not-sent', index: true })
+  ownerNotificationStatus: 'not-sent' | 'pending' | 'sent' | 'failed';
+
+  @Prop()
+  ownerNotificationSentAt?: Date;
+
+  @Prop({ default: '' })
+  ownerNotificationError: string;
 }
 
 export const StoreOrderSchema = SchemaFactory.createForClass(StoreOrder);

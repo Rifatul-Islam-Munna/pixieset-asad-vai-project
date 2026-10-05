@@ -7335,7 +7335,7 @@ function PresetDesignPanel({
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs leading-5 text-[#777]">Extra Large gives clients a much bigger-photo gallery. Custom layout below lets you choose the exact desktop column count.</p>
+            <p className="mt-2 text-xs leading-5 text-[#777]">Photo sizes are tuned more compactly: Extra Large now uses the former Large density, while Large uses the former Regular density. Custom layout below still lets you choose an exact desktop column count.</p>
           </OptionSection>
           {design.gridStyle === "Custom" && (
             <OptionSection title="Custom Layout Controls">
@@ -7481,8 +7481,8 @@ function CollectionDesignLivePreview({
     ? Math.min(40, Math.max(0, Number(design.gridSpacingPx ?? 4)))
     : design.gridSpacing === "Large" ? 20 : 4;
   const masonryColumns = design.thumbnailSize === "Extra Large"
-    ? "columns-1"
-    : design.thumbnailSize === "Large" ? "columns-2" : "columns-4";
+    ? "columns-2"
+    : "columns-4";
   const customColumns = design.gridColumns === 2 ? "grid-cols-2"
     : design.gridColumns === 3 ? "grid-cols-3"
       : design.gridColumns === 5 ? "grid-cols-5"
@@ -7644,7 +7644,7 @@ function CollectionDesignLivePreview({
                   ? isMobilePreview ? "columns-2" : masonryColumns
                   : "grid grid-cols-2",
                 design.gridStyle === "Art" && !isMobilePreview && "grid-cols-4",
-                design.gridStyle === "Horizontal" && !isMobilePreview && (design.thumbnailSize === "Extra Large" ? "grid-cols-1" : design.thumbnailSize === "Large" ? "grid-cols-2" : "grid-cols-3"),
+                design.gridStyle === "Horizontal" && !isMobilePreview && (design.thumbnailSize === "Extra Large" ? "grid-cols-2" : design.thumbnailSize === "Large" ? "grid-cols-3" : "grid-cols-4"),
                 design.gridStyle === "Custom" && !isMobilePreview && customColumns,
               )}
               style={{ gap: `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
