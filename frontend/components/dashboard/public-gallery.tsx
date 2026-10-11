@@ -5,6 +5,7 @@ import { Camera, Check, ChevronLeft, ChevronRight, Copy, Download, Eye, EyeOff, 
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
+import { ProgressivePhotoPreview } from "@/components/ui/progressive-photo-preview";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -2014,19 +2015,21 @@ export function PublicGallery({
           {isVideo(activeImage) ? (
             <video src={imageSrc(activeImage.url)} className="relative z-0 max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
-            <GalleryImage
+            <ProgressivePhotoPreview
+              key={activeImage._id}
               src={imageSrc(activeImage.url)}
+              previewSrc={imageSrc(activeImage.thumbnailUrl || activeImage.responsive?.small || activeImage.fallbackThumbnailUrl)}
               fallbackSrc={imageSrc(activeImage.fallbackUrl || activeImage.fallbackThumbnailUrl || activeImage.thumbnailUrl || activeImage.url)}
               srcSet={responsiveImageSrcSet(activeImage)}
               sizes="100vw"
               alt={displayCaption(activeImage)}
               width={activeImage.width}
               height={activeImage.height}
-              className="mx-auto block max-h-[calc(100dvh-7rem)] max-w-full object-contain"
+              placeholder={activeImage.blurDataUrl}
               watermark={activeImage.watermark}
+              previewWatermarked={activeImage.thumbnailUrl || activeImage.responsive?.small ? activeImage.watermarked : activeImage.fallbackWatermarked}
               fallbackWatermarked={activeImage.fallbackWatermarked}
-              priority
-              showLoader
+              className="h-full w-full"
             />
           )}
           {showFilenames && displayFilename(activeImage) && (
@@ -2081,20 +2084,21 @@ export function PublicGallery({
           {isVideo(slideshowImage) ? (
             <video key={slideshowImage._id} src={imageSrc(slideshowImage.url)} className="relative z-0 max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
-            <GalleryImage
+            <ProgressivePhotoPreview
               key={slideshowImage._id}
               src={imageSrc(slideshowImage.url)}
+              previewSrc={imageSrc(slideshowImage.thumbnailUrl || slideshowImage.responsive?.small || slideshowImage.fallbackThumbnailUrl)}
               fallbackSrc={imageSrc(slideshowImage.fallbackUrl || slideshowImage.fallbackThumbnailUrl || slideshowImage.thumbnailUrl || slideshowImage.url)}
               srcSet={responsiveImageSrcSet(slideshowImage)}
               sizes="100vw"
               alt={displayCaption(slideshowImage)}
               width={slideshowImage.width}
               height={slideshowImage.height}
-              className="mx-auto block max-h-[calc(100dvh-7rem)] max-w-full animate-in fade-in zoom-in-95 object-contain duration-500"
+              placeholder={slideshowImage.blurDataUrl}
               watermark={slideshowImage.watermark}
+              previewWatermarked={slideshowImage.thumbnailUrl || slideshowImage.responsive?.small ? slideshowImage.watermarked : slideshowImage.fallbackWatermarked}
               fallbackWatermarked={slideshowImage.fallbackWatermarked}
-              priority
-              showLoader
+              className="h-full w-full"
             />
           )}
           {showFilenames && displayFilename(slideshowImage) && (

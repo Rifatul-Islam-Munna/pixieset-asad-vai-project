@@ -153,6 +153,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FallbackImage } from "@/components/ui/fallback-image";
+import { ProgressivePhotoPreview } from "@/components/ui/progressive-photo-preview";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -4654,21 +4655,23 @@ function LibraryPanel({ onNewCollection }: { onNewCollection: () => void }) {
                 )}
               </div>
               <div className="flex h-[58dvh] min-h-64 items-center justify-center overflow-hidden bg-[#f3f3f3] sm:h-[68dvh] sm:min-h-80">
-                <DashboardImageWithSkeleton
+                <ProgressivePhotoPreview
+                  key={previewImage._id}
                   src={imageSrc(previewImage.url)}
-                  fallbackSrc={imageSrc(
-                    previewImage.fallbackUrl ||
-                      previewImage.fallbackThumbnailUrl ||
-                      previewImage.thumbnailUrl ||
-                      "",
-                  )}
+                  previewSrc={imageSrc(previewImage.thumbnailUrl || previewImage.responsive?.small || previewImage.fallbackThumbnailUrl)}
+                  fallbackSrc={imageSrc(previewImage.fallbackUrl || previewImage.fallbackThumbnailUrl || previewImage.thumbnailUrl || "")}
+                  srcSet={collectionImageSrcSet(previewImage)}
+                  sizes="90vw"
                   alt={collectionImageCaption(previewImage)}
+                  width={previewImage.width}
+                  height={previewImage.height}
                   placeholder={previewImage.blurDataUrl}
                   watermark={previewImage.watermark}
+                  previewWatermarked={previewImage.thumbnailUrl || previewImage.responsive?.small ? previewImage.watermarked : previewImage.fallbackWatermarked}
                   fallbackWatermarked={previewImage.fallbackWatermarked}
-                  priority
-                  className="h-full w-full object-contain"
-                />
+                  theme="light"
+                  className="h-full w-full"
+                  />
               </div>
             </div>
           )}
@@ -18388,21 +18391,23 @@ function CollectionDetailView({
                           )}
                         </div>
                         <div className="flex h-[58dvh] min-h-64 items-center justify-center overflow-hidden bg-[#f3f3f3] sm:h-[68dvh] sm:min-h-80">
-                          <DashboardImageWithSkeleton
+                          <ProgressivePhotoPreview
+                            key={activeImage._id}
                             src={imageSrc(activeImage.url)}
-                            fallbackSrc={imageSrc(
-                              activeImage.fallbackUrl ||
-                                activeImage.fallbackThumbnailUrl ||
-                                activeImage.thumbnailUrl ||
-                                "",
-                            )}
+                            previewSrc={imageSrc(activeImage.thumbnailUrl || activeImage.responsive?.small || activeImage.fallbackThumbnailUrl)}
+                            fallbackSrc={imageSrc(activeImage.fallbackUrl || activeImage.fallbackThumbnailUrl || activeImage.thumbnailUrl || "")}
+                            srcSet={collectionImageSrcSet(activeImage)}
+                            sizes="90vw"
                             alt={collectionImageCaption(activeImage)}
+                            width={activeImage.width}
+                            height={activeImage.height}
                             placeholder={activeImage.blurDataUrl}
                             watermark={activeImage.watermark}
+                            previewWatermarked={activeImage.thumbnailUrl || activeImage.responsive?.small ? activeImage.watermarked : activeImage.fallbackWatermarked}
                             fallbackWatermarked={activeImage.fallbackWatermarked}
-                            priority
-                            className="h-full w-full object-contain"
-                          />
+                            theme="light"
+                            className="h-full w-full"
+                            />
                         </div>
                       </div>
                     )}
