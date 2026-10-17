@@ -217,6 +217,7 @@ export function CoverPreview({
   const fontFamily = resolveGalleryFontFamily(
     design.coverFontName || design.customFontName,
     fallbackFontFamily,
+    Boolean(design.coverFontName ? design.coverFontDataUrl : design.customFontDataUrl),
   );
   if (design.customCoverTemplate) {
     return (

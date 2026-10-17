@@ -264,6 +264,8 @@ import { imageDisplayName } from "@/lib/image-display-name";
 import { GALLERY_LANGUAGES, normalizeGalleryLanguage, type GalleryLanguage } from "@/lib/gallery-language";
 import { CLIENT_GALLERY_CATEGORIES } from "@/lib/gallery-categories";
 import { GALLERY_FONT_CATEGORIES, GALLERY_FONT_OPTIONS, galleryFontSample, resolveGalleryFontFamily, type GalleryFontCategory } from "@/lib/gallery-fonts";
+import { galleryGridDensity } from "@/lib/gallery-grid-density";
+import { CoverFontSelector } from "@/components/dashboard/cover-font-selector";
 import { ClientGalleryOverview } from "@/components/dashboard/client-gallery-overview";
 import { EmailBlockOrderEditor } from "@/components/dashboard/email-block-order-editor";
 import { usePlanFeatureAccess } from "@/api-hooks/use-plan-capabilities";
@@ -6299,16 +6301,18 @@ function PresetGeneralPanel({
               </option>
             ))}
           </select>
-          <p className="text-sm leading-6 text-[#666]">
-            Set default watermark. Manage watermarks in{" "}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="min-w-0 text-sm leading-6 text-[#666]">
+              Choose an existing watermark, or create a new one in Settings.
+            </p>
             <Link
               href={`/dashboard/${section}/settings/watermark`}
-              className="text-[#6337d8]"
+              className="inline-flex h-10 items-center gap-2 border border-[#6337d8] bg-white px-4 text-sm font-semibold text-[#6337d8] transition hover:bg-[#f5f1ff]"
             >
-              App Settings
+              <PlusCircle className="size-4" />
+              Add Watermark
             </Link>
-            .
-          </p>
+          </div>
         </Field>
 
         {[
@@ -6673,22 +6677,29 @@ function PresetDesignPanel({
     item.localId.startsWith("font:"),
   );
   const customCoverAccess = usePlanFeatureAccess("customCover");
-  const uploadFonts = async (files: FileList | null) => {
+  const uploadFonts = async (files: FileList | null, applyToCover = false) => {
     const valid = Array.from(files ?? []).filter((file) =>
       /\.(woff2?|ttf|otf)$/i.test(file.name),
     );
-    if (!valid.length)
-      return toast.error("Choose WOFF, WOFF2, TTF, or OTF fonts");
+    if (!valid.length) {
+      toast.error("Choose WOFF, WOFF2, TTF, or OTF fonts");
+      return;
+    }
     setFontUploading(true);
     try {
+      let firstUploaded: { name: string; url: string } | null = null;
       for (const file of valid) {
         const url = await uploadDashboardAsset(file);
         const name = file.name.replace(/\.[^.]+$/, "");
+        if (!firstUploaded) firstUploaded = { name, url };
         await fontLibrary.saveSetting.mutateAsync({
           localId: `font:${crypto.randomUUID()}`,
           name,
           data: { name, url, fileName: file.name, category: fontUploadCategory },
         });
+      }
+      if (applyToCover && firstUploaded) {
+        onChange({ coverFontName: firstUploaded.name, coverFontDataUrl: firstUploaded.url });
       }
       toast.success(
         `${valid.length} font${valid.length === 1 ? "" : "s"} uploaded`,
@@ -6722,8 +6733,25 @@ function PresetDesignPanel({
     onChange({ coverFocalX: x, coverFocalY: y });
   };
 
+  const coverFontPicker = (
+    <CoverFontSelector
+      fontName={design.coverFontName}
+      fontUrl={design.coverFontDataUrl}
+      galleryFontName={design.customFontName || design.typography}
+      uploadedFonts={uploadedFonts}
+      uploadCategory={fontUploadCategory}
+      onUploadCategoryChange={setFontUploadCategory}
+      onFontChange={(name, url) => onChange({ coverFontName: name, coverFontDataUrl: url })}
+      onFontUpload={(files) => uploadFonts(files, true)}
+      uploading={fontUploading}
+    />
+  );
+
   return (
     <div className="min-w-0 border bg-white p-7">
+      {design.coverFontName && design.coverFontDataUrl && (
+        <style>{`@font-face{font-family:"${design.coverFontName.replace(/["\\]/g, "")}";src:url("${design.coverFontDataUrl.replace(/["\\]/g, "")}");font-display:swap;}`}</style>
+      )}
       {activePanel === "cover" && (
         <>
           <h2 className="text-2xl font-medium">Cover</h2>
@@ -6849,6 +6877,11 @@ function PresetDesignPanel({
               </DialogContent>
             </Dialog>
           </OptionSection>}
+          <OptionSection title="Cover Text Font">
+            <PlanFeatureLock feature="advancedDesign" label="Advanced design">
+              {coverFontPicker}
+            </PlanFeatureLock>
+          </OptionSection>
           <OptionSection title="Animated Cover Studio">
             <CoverAnimationStudio design={design} onChange={onChange} />
           </OptionSection>
@@ -7055,30 +7088,8 @@ function PresetDesignPanel({
           <h2 className="text-2xl font-medium">Typography</h2>
           <p className="mt-3 text-sm leading-6 text-[#666]">Choose fonts by writing system. The main choice styles the whole gallery, and you can override only the cover-photo text below.</p>
           <div className="mt-6 border bg-[#fafafa] p-4">
-            <FieldLabel className="font-bold">Cover Photo Font</FieldLabel>
-            <p className="mt-1 text-xs leading-5 text-[#777]">Use a separate font for the cover title, studio name, date, and View Gallery button without changing the gallery navigation font.</p>
-            <select
-              value={design.coverFontName ? (design.coverFontDataUrl ? `uploaded:${design.coverFontDataUrl}` : `builtin:${design.coverFontName}`) : "same"}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value === "same") {
-                  onChange({ coverFontName: "", coverFontDataUrl: "" } as Partial<typeof design>);
-                  return;
-                }
-                if (value.startsWith("uploaded:")) {
-                  const url = value.slice("uploaded:".length);
-                  const font = uploadedFonts.find((item) => item.data.url === url);
-                  onChange({ coverFontName: font?.data.name || "", coverFontDataUrl: font?.data.url || "" } as Partial<typeof design>);
-                  return;
-                }
-                onChange({ coverFontName: value.replace(/^builtin:/, ""), coverFontDataUrl: "" } as Partial<typeof design>);
-              }}
-              className="mt-3 h-11 w-full border bg-white px-3 text-sm"
-            >
-              <option value="same">Same as gallery font</option>
-              {uploadedFonts.map((font) => <option key={`cover-uploaded-${font.localId}`} value={`uploaded:${font.data.url}`}>My Font · {font.data.name}</option>)}
-              {GALLERY_FONT_OPTIONS.map((font) => <option key={`cover-builtin-${font.name}`} value={`builtin:${font.name}`}>{font.name}</option>)}
-            </select>
+            <h3 className="font-bold">Cover Photo Font</h3>
+            <div className="mt-3">{coverFontPicker}</div>
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
             {(["All", ...GALLERY_FONT_CATEGORIES, "My Fonts"] as const).map((category) => (
@@ -7339,7 +7350,7 @@ function PresetDesignPanel({
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs leading-5 text-[#777]">Photo sizes are tuned more compactly: Extra Large now uses the former Large density, while Large uses the former Regular density. Custom layout below still lets you choose an exact desktop column count.</p>
+            <p className="mt-2 text-xs leading-5 text-[#777]">Regular photos are smaller, with up to 6 columns on desktop. Large uses up to 4 columns, and Extra Large uses 2. Custom layout lets you choose an exact desktop column count.</p>
           </OptionSection>
           {design.gridStyle === "Custom" && (
             <OptionSection title="Custom Layout Controls">
@@ -7484,9 +7495,8 @@ function CollectionDesignLivePreview({
   const masonryGapPx = design.gridStyle === "Custom"
     ? Math.min(40, Math.max(0, Number(design.gridSpacingPx ?? 4)))
     : design.gridSpacing === "Large" ? 20 : 4;
-  const masonryColumns = design.thumbnailSize === "Extra Large"
-    ? "columns-2"
-    : "columns-4";
+  const photoGridDensity = galleryGridDensity(design.thumbnailSize);
+  const masonryColumns = photoGridDensity.editorMasonry;
   const customColumns = design.gridColumns === 2 ? "grid-cols-2"
     : design.gridColumns === 3 ? "grid-cols-3"
       : design.gridColumns === 5 ? "grid-cols-5"
@@ -7512,7 +7522,7 @@ function CollectionDesignLivePreview({
       design.typography as keyof typeof collectionPreviewTypeMap
     ] ?? collectionPreviewTypeMap.Classic;
   const customFontName = design.customFontName?.trim();
-  const fontFamily = resolveGalleryFontFamily(customFontName, fallbackFontFamily);
+  const fontFamily = resolveGalleryFontFamily(customFontName, fallbackFontFamily, Boolean(design.customFontDataUrl));
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">(
     "desktop",
   );
@@ -7554,6 +7564,9 @@ function CollectionDesignLivePreview({
       >
         {customFontName && design.customFontDataUrl && (
           <style>{`@font-face{font-family:"${customFontName.replace(/"/g, "")}";src:url("${design.customFontDataUrl}");font-display:swap;}`}</style>
+        )}
+        {design.coverFontName && design.coverFontDataUrl && (
+          <style>{`@font-face{font-family:"${design.coverFontName.replace(/["\\]/g, "")}";src:url("${design.coverFontDataUrl.replace(/["\\]/g, "")}");font-display:swap;}`}</style>
         )}
         <div
           className={cn(
@@ -7648,7 +7661,7 @@ function CollectionDesignLivePreview({
                   ? isMobilePreview ? "columns-2" : masonryColumns
                   : "grid grid-cols-2",
                 design.gridStyle === "Art" && !isMobilePreview && "grid-cols-4",
-                design.gridStyle === "Horizontal" && !isMobilePreview && (design.thumbnailSize === "Extra Large" ? "grid-cols-2" : design.thumbnailSize === "Large" ? "grid-cols-3" : "grid-cols-4"),
+                design.gridStyle === "Horizontal" && !isMobilePreview && photoGridDensity.editorClassic,
                 design.gridStyle === "Custom" && !isMobilePreview && customColumns,
               )}
               style={{ gap: `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
@@ -16937,6 +16950,14 @@ function CollectionDetailView({
               </option>
             ))}
           </select>
+          <Link
+            href={`/dashboard/${section}/settings/watermark`}
+            onClick={() => setImageWatermarkOpen(false)}
+            className="inline-flex h-10 w-fit items-center gap-2 text-sm font-semibold text-[#6337d8] hover:underline"
+          >
+            <PlusCircle className="size-4" />
+            Add Watermark in Settings
+          </Link>
           <DialogFooter>
             <Button
               variant="outline"
@@ -18625,6 +18646,18 @@ function CollectionDetailView({
                           </option>
                         ))}
                       </select>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs leading-5 text-[#777]">
+                          Create a watermark in Settings, then select it for this gallery.
+                        </p>
+                        <Link
+                          href={`/dashboard/${section}/settings/watermark`}
+                          className="inline-flex h-10 items-center gap-2 border border-[#6337d8] bg-white px-4 text-sm font-semibold text-[#6337d8] transition hover:bg-[#f5f1ff]"
+                        >
+                          <PlusCircle className="size-4" />
+                          Add Watermark
+                        </Link>
+                      </div>
                     </Field>
                     <Field>
                       <FieldLabel className="font-bold">Face Search Index</FieldLabel>

@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import { galleryLanguageCode } from "@/lib/gallery-language";
 import { resolveGalleryFontFamily } from "@/lib/gallery-fonts";
+import { galleryGridDensity } from "@/lib/gallery-grid-density";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 import { imageDisplayName } from "@/lib/image-display-name";
@@ -467,15 +468,12 @@ export function PublicGallery({
   const fallbackFontFamily =
     typeMap[design.typography as keyof typeof typeMap] ?? typeMap.Classic;
   const customFontName = design.customFontName?.trim();
-  const fontFamily = resolveGalleryFontFamily(customFontName, fallbackFontFamily);
+  const fontFamily = resolveGalleryFontFamily(customFontName, fallbackFontFamily, Boolean(design.customFontDataUrl));
   const masonryGapPx = design.gridStyle === "Custom"
     ? Math.min(40, Math.max(0, Number(design.gridSpacingPx ?? 4)))
     : design.gridSpacing === "Large" ? 20 : 4;
-  const masonryColumns = design.thumbnailSize === "Extra Large"
-    ? "columns-1 sm:columns-2"
-    : design.thumbnailSize === "Large"
-      ? "columns-1 sm:columns-2 lg:columns-3 xl:columns-4"
-      : "columns-2 sm:columns-3 lg:columns-4";
+  const photoGridDensity = galleryGridDensity(design.thumbnailSize);
+  const masonryColumns = photoGridDensity.masonry;
   const customGridColumns = design.gridColumns === 2
     ? "grid grid-cols-1 sm:grid-cols-2"
     : design.gridColumns === 3
@@ -507,11 +505,7 @@ export function PublicGallery({
               : design.gridColumns === 6
                 ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 17vw"
                 : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-        : design.thumbnailSize === "Extra Large"
-          ? "(max-width: 640px) 100vw, 50vw"
-          : design.thumbnailSize === "Large"
-            ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
-            : "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw";
+        : photoGridDensity.imageSizes;
   const photoDownloadsEnabled =
     quickShareDownload === "1"
       ? true
@@ -1726,7 +1720,14 @@ export function PublicGallery({
         >
           {showInitialSetSkeleton ? (
             <div
-              className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-4"
+              className={cn(
+                "grid gap-1",
+                galleryLayout === "masonry" || galleryLayout === "classic"
+                  ? photoGridDensity.classic
+                  : galleryLayout === "custom"
+                    ? customGridColumns
+                    : "grid-cols-2 lg:grid-cols-4",
+              )}
               aria-label="Loading photos"
               aria-busy="true"
             >
@@ -1744,9 +1745,8 @@ export function PublicGallery({
             <div
               className={cn(
                 galleryLayout === "masonry" && masonryColumns,
-                galleryLayout === "classic" && "grid grid-cols-1 sm:grid-cols-2",
-                galleryLayout === "classic" && design.thumbnailSize === "Large" && "lg:grid-cols-3 xl:grid-cols-4",
-                galleryLayout === "classic" && design.thumbnailSize === "Regular" && "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+                galleryLayout === "classic" && "grid",
+                galleryLayout === "classic" && photoGridDensity.classic,
                 galleryLayout === "art" && "grid auto-rows-[minmax(180px,46vw)] grid-cols-2 sm:auto-rows-[260px] lg:grid-cols-4 lg:auto-rows-[300px]",
                 galleryLayout === "custom" && customGridColumns,
               )}

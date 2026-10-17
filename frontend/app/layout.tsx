@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Manrope, Noto_Naskh_Arabic, Noto_Sans_Arabic } from "next/font/google";
+import { Geist_Mono, Manrope, Noto_Naskh_Arabic, Noto_Sans, Noto_Sans_Arabic, Noto_Serif } from "next/font/google";
 import { GoogleTagManager } from "@next/third-parties/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,9 @@ const manrope = Manrope({
   variable: "--font-sans",
   display: "swap",
 });
+
+const greekSans = Noto_Sans({ subsets: ["latin", "greek", "cyrillic"], variable: "--font-greek-sans", display: "swap", preload: false });
+const greekSerif = Noto_Serif({ subsets: ["latin", "greek", "cyrillic"], variable: "--font-greek-serif", display: "swap", preload: false });
 
 const arabicSans = Noto_Sans_Arabic({ subsets: ["arabic"], variable: "--font-arabic-sans", display: "swap" });
 const arabicSerif = Noto_Naskh_Arabic({ subsets: ["arabic"], variable: "--font-arabic-serif", display: "swap" });
@@ -62,6 +65,8 @@ export default async function RootLayout({
         "h-full",
         "antialiased",
         manrope.variable,
+        greekSans.variable,
+        greekSerif.variable,
         arabicSans.variable,
         arabicSerif.variable,
         geistMono.variable,

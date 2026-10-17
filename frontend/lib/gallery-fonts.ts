@@ -1,4 +1,4 @@
-export const GALLERY_FONT_CATEGORIES = ["English", "Greek", "Cyrillic", "Deutsch", "Arabic"] as const;
+export const GALLERY_FONT_CATEGORIES = ["English", "Greek", "Cyrillic", "Deutsch", "Arabic", "Other"] as const;
 export type GalleryFontCategory = (typeof GALLERY_FONT_CATEGORIES)[number];
 
 export type GalleryFontOption = {
@@ -13,6 +13,7 @@ export const GALLERY_FONT_SAMPLES: Record<GalleryFontCategory, string> = {
   Cyrillic: "Красивые истории",
   Deutsch: "Schöne Geschichten",
   Arabic: "قصص جميلة",
+  Other: "Aa · 123",
 };
 
 export const GALLERY_FONT_OPTIONS: GalleryFontOption[] = [
@@ -27,11 +28,13 @@ export const GALLERY_FONT_OPTIONS: GalleryFontOption[] = [
   { name: "Helvetica", family: "Helvetica", categories: ["English", "Deutsch"] },
 ];
 
-export function resolveGalleryFontFamily(name: string | undefined, fallback: string) {
+export function resolveGalleryFontFamily(name: string | undefined, fallback: string, uploaded = false) {
   const clean = String(name ?? "").trim();
   if (!clean) return fallback;
+  const uploadedFamily = `"${clean.replace(/["\\]/g, "")}", ${fallback}`;
+  if (uploaded) return uploadedFamily;
   const builtIn = GALLERY_FONT_OPTIONS.find((font) => font.name === clean);
-  return builtIn ? `${builtIn.family}, ${fallback}` : `"${clean.replace(/"/g, "")}", ${fallback}`;
+  return builtIn ? `${builtIn.family}, ${fallback}` : uploadedFamily;
 }
 
 export function galleryFontSample(category: GalleryFontCategory | "All") {
