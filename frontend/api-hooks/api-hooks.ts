@@ -1,6 +1,7 @@
 "use server"
 
 
+import { customerFacingStorageMessage } from "@/lib/customer-facing-storage-message"
 import axios from "axios"
 import { AxiosError } from "axios"
 import { isRedirectError } from "next/dist/client/components/redirect-error"
@@ -32,7 +33,7 @@ function parseAxiosError(error: AxiosError): { message: string, statusCode: numb
     else if (typeof nested === 'string') message = nested;
   }
 
-  return { message, statusCode };
+  return { message: customerFacingStorageMessage(message, "Something went wrong. Please try again."), statusCode };
 }
 
 export const PostRequestAxios = async <T>(
@@ -134,13 +135,13 @@ export const GetRequestNormal = async <T>(url: string,revalidate=0 ,revalidateTa
    
       const errorPayload = await response.json()
       console.log("error",errorPayload)
-     throw new Error(errorPayload.message)
+     throw new Error(customerFacingStorageMessage(errorPayload?.message, "Request could not be completed. Please try again."))
     }
 
     }catch(error ){
           if (isRedirectError(error)) throw error;
        if (error instanceof Error) {
-      throw new Error(error.message)
+      throw new Error(customerFacingStorageMessage(error.message, "Request could not be completed. Please try again."))
     }
     throw new Error("Unknown error")
      

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { customerFacingStorageMessage } from "@/lib/customer-facing-storage-message";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteRequestAxios, GetRequestNormal, PatchRequestAxios, PostRequestAxios } from "./api-hooks";
 import {
@@ -505,7 +506,7 @@ export function useCollectionDetail(collectionId?: string) {
         const metadata = await directUploadMetadata(uploadBatch);
         onActivity?.({
           stage: "authorizing",
-          message: "Getting fresh secure upload permission from R2",
+          message: "Getting secure upload permission from Gallerista server",
         });
         const [authorization, authorizationError] = await PostRequestAxios<{
           data: DirectUploadTicket[];
@@ -521,13 +522,13 @@ export function useCollectionDetail(collectionId?: string) {
         );
         if (authorizationError || !authorization) {
           throw new Error(
-            authorizationError?.message || "Could not authorize upload",
+            customerFacingStorageMessage(authorizationError?.message, "Could not start upload to Gallerista server. Please try again."),
           );
         }
 
         onActivity?.({
           stage: "uploading",
-          message: `Uploading ${uploadBatch.length} file${uploadBatch.length === 1 ? "" : "s"} directly from browser to Cloudflare R2`,
+          message: `Uploading to Gallerista server (${uploadBatch.length} file${uploadBatch.length === 1 ? "" : "s"})`,
         });
         const batchBytes = uploadBatch.reduce(
           (sum, file) => sum + file.size,
@@ -599,7 +600,7 @@ export function useCollectionDetail(collectionId?: string) {
 
       return {
         data: uploaded,
-        message: "Upload complete. Originals are ready for imgproxy.",
+        message: "Upload complete. Originals are ready in your Gallerista gallery.",
         queued: 0,
       } as ListResponse<CollectionImageRecord[]> & {
         message: string;

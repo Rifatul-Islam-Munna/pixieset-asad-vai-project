@@ -140,8 +140,8 @@ export async function uploadFilesDirectlyToS3(
         fileName: file.name,
         message:
           ticket.strategy === "multipart"
-            ? `Uploading ${file.name} in ${ticket.parts?.length ?? 0} parts`
-            : `Uploading ${file.name} directly to R2`,
+            ? `Uploading to Gallerista server: ${file.name} (${ticket.parts?.length ?? 0} parts)`
+            : `Uploading to Gallerista server: ${file.name}`,
       });
 
       if (ticket.strategy === "multipart") {
@@ -177,13 +177,13 @@ export async function uploadFilesDirectlyToS3(
               report();
             },
             false,
-            (attempt, maxAttempts, error) => {
+            (attempt, maxAttempts) => {
               onEvent?.({
                 type: "retrying",
                 fileName: file.name,
                 attempt,
                 maxAttempts,
-                message: `Retrying ${file.name} automatically (${attempt}/${maxAttempts}): ${error.message}`,
+                message: `Retrying ${file.name} automatically (${attempt}/${maxAttempts})`,
               });
             },
           ),
@@ -199,7 +199,7 @@ export async function uploadFilesDirectlyToS3(
       onEvent?.({
         type: "uploaded",
         fileName: file.name,
-        message: `${file.name} reached R2 successfully`,
+        message: `${file.name} uploaded to Gallerista server successfully`,
       });
     }
   };
@@ -398,7 +398,7 @@ async function putMultipartFile(
             report();
           },
           true,
-          (attempt, maxAttempts, error) => {
+          (attempt, maxAttempts) => {
             onEvent?.({
               type: "retrying",
               fileName,
@@ -406,7 +406,7 @@ async function putMultipartFile(
               maxAttempts,
               partNumber: part.partNumber,
               totalParts: ticket.parts?.length ?? 0,
-              message: `Retrying part ${part.partNumber}/${ticket.parts?.length ?? 0} of ${fileName} (${attempt}/${maxAttempts}): ${error.message}`,
+              message: `Retrying part ${part.partNumber}/${ticket.parts?.length ?? 0} of ${fileName} (${attempt}/${maxAttempts})`,
             });
           },
         ),
@@ -503,17 +503,17 @@ function putBlob(
       if (request.status >= 200 && request.status < 300) {
         const etag = request.getResponseHeader("ETag");
         if (requireEtag && !etag && blob.size > 0) {
-          reject(new Error("Storage did not expose the multipart ETag"));
+          reject(new Error("Upload confirmation was incomplete. Please try again."));
           return;
         }
         resolve(etag || "");
         return;
       }
-      reject(new Error(`S3 upload failed (${request.status})`));
+      reject(new Error(`Gallerista upload failed (${request.status})`));
     };
     request.onerror = () => {
       clearStallTimer();
-      reject(new Error("Could not connect to S3"));
+      reject(new Error("Could not connect to Gallerista server"));
     };
     request.onabort = () => {
       clearStallTimer();
@@ -521,7 +521,7 @@ function putBlob(
         new Error(
           stalled
             ? "Upload stalled with no network progress"
-            : "S3 upload cancelled",
+            : "Upload cancelled",
         ),
       );
     };

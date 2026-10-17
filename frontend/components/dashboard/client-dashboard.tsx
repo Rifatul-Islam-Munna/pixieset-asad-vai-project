@@ -21,6 +21,7 @@ import UnderlineExtension from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { toast } from "sonner";
+import { customerFacingStorageMessage } from "@/lib/customer-facing-storage-message";
 import { ReactSortable } from "react-sortablejs";
 import {
   ArrowLeft,
@@ -8108,7 +8109,7 @@ async function uploadDashboardAsset(file: File) {
     body: form,
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.message || "Upload failed");
+  if (!response.ok) throw new Error(customerFacingStorageMessage(payload?.message, "Upload failed"));
   const url = String(payload?.data?.url || "");
   if (!url) throw new Error("Upload failed");
   return url;
@@ -8486,7 +8487,7 @@ function WatermarkSettings({ section }: { section: DashboardSection }) {
             <img
               key={imagorPreviewUrl}
               src={imagorPreviewUrl}
-              alt="Imagor watermark preview"
+              alt="Watermark preview"
               className={cn(
                 "pointer-events-none absolute inset-0 h-full w-full object-fill",
                 imagorPreviewReady ? "opacity-100" : "opacity-0",
@@ -15164,7 +15165,7 @@ function CollectionDetailView({
     };
     const fallbackSetId = nextSets[0]?.id ?? "highlights";
 
-    // Remove the collection and its media from the UI immediately. R2/object
+    // Remove the collection and its media from the UI immediately. Object
     // cleanup continues on the server in the background after confirmation.
     syncedCollectionFormKeyRef.current = collectionFormKey(optimisticForm);
     setForm(optimisticForm);
@@ -15598,7 +15599,7 @@ function CollectionDetailView({
           updateUploadProgressForSession(targetSessionKey, (current) => ({
             ...current,
             phase: activity.stage,
-            currentName: activity.message,
+            currentName: customerFacingStorageMessage(activity.message, "Uploading to Gallerista server"),
             ...(!["uploading", "retrying"].includes(activity.stage)
               ? { bytesPerSecond: 0, megabitsPerSecond: 0 }
               : {}),
@@ -15645,7 +15646,7 @@ function CollectionDetailView({
         currentPercent: 100,
         phase: "queued",
         currentName:
-          "Upload complete. Original is in R2 and ready for imgproxy.",
+          "Upload complete. Original saved to Gallerista server.",
       }));
       toast.success(
         targetReplaceImageId
@@ -15662,7 +15663,7 @@ function CollectionDetailView({
         setLoadedImages((current) =>
           current.filter((image) => !localPreviewIds.includes(image._id)),
         );
-        toast.error(error instanceof Error ? error.message : "Upload failed");
+        toast.error(customerFacingStorageMessage(error instanceof Error ? error.message : "", "Upload failed. Please try again."));
       }
     } finally {
       if (collectionIdRef.current !== targetCollectionId) {
@@ -15996,7 +15997,7 @@ function CollectionDetailView({
       const response = await deleteImages.mutateAsync(idsToDelete);
       const deleted = Math.max(0, Number(response?.data?.deleted ?? 0));
       toast.success(
-        `${deleted || idsToDelete.length} image${(deleted || idsToDelete.length) === 1 ? "" : "s"} removed. R2 cleanup continues in background.`,
+        `${deleted || idsToDelete.length} image${(deleted || idsToDelete.length) === 1 ? "" : "s"} removed. Storage cleanup continues in the background.`,
       );
     } catch {
       idsToDelete.forEach((imageId) => deletedImageIdsRef.current.delete(imageId));
@@ -16761,12 +16762,12 @@ function CollectionDetailView({
                     : uploadProgress.phase === "authorizing"
                       ? "Getting secure upload permission"
                       : uploadProgress.phase === "finalizing"
-                        ? "Confirming uploaded files with R2"
+                        ? "Confirming uploads on Gallerista server"
                         : uploadProgress.phase === "queued"
                           ? "Raw upload complete"
                           : uploadProgress.phase === "preparing"
                             ? "Preparing files"
-                            : `Uploading ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} directly to R2 / ${uploadProgress.currentPercent}%`
+                            : `Uploading to Gallerista server · ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} · ${uploadProgress.currentPercent}%`
                   : replaceImageId
                     ? "Drag one replacement photo here"
                     : "Drag photos and videos here to upload"}
@@ -17020,14 +17021,14 @@ function CollectionDetailView({
                 {uploadProgress.phase === "preparing"
                   ? "Preparing files"
                   : uploadProgress.phase === "authorizing"
-                    ? "Getting secure R2 upload permission"
+                    ? "Getting secure upload permission"
                     : uploadProgress.phase === "retrying"
                       ? "Retrying automatically"
                       : uploadProgress.phase === "finalizing"
-                        ? "Confirming uploaded files with R2"
+                        ? "Confirming uploads on Gallerista server"
                         : uploadProgress.phase === "queued"
                           ? "Raw upload complete"
-                          : `Uploading ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} directly to R2 / ${uploadProgress.currentPercent}%`}
+                          : `Uploading to Gallerista server · ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} · ${uploadProgress.currentPercent}%`}
               </p>
               <span className="text-xs font-bold tabular-nums text-[#096f64]">
                 {uploadProgress.currentPercent}%
@@ -17036,10 +17037,10 @@ function CollectionDetailView({
             <p className="mt-1 break-words text-xs font-semibold text-[#3f8179]">
               {slowUploadNetwork && uploadProgress.phase === "uploading"
                 ? "Connection is slow, but bytes are still moving. The uploader will retry automatically if a request truly stalls."
-                : uploadProgress.currentName || "Browser → Cloudflare R2"}
+                : customerFacingStorageMessage(uploadProgress.currentName, "Uploading to Gallerista server")}
             </p>
             <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold">
-              <span className="rounded-full bg-white/80 px-2 py-1">Browser → R2</span>
+              <span className="rounded-full bg-white/80 px-2 py-1">Browser → Gallerista server</span>
               <span className="rounded-full bg-white/80 px-2 py-1">
                 {uploadTransferredMb.toFixed(1)} / {uploadTotalMb.toFixed(1)} MB
               </span>
@@ -17059,9 +17060,9 @@ function CollectionDetailView({
               />
             </div>
             <p className="mt-2 text-[11px] font-semibold text-[#3f8179]">
-              Keep this tab open only while Browser → R2 is sending the original.
-              As soon as R2 receives it, the upload is done and imgproxy serves
-              the optimized size on demand. No server image-processing wait.
+              Keep this tab open until your originals finish uploading to Gallerista
+              server. Your gallery is ready to use after upload, and Gallerista delivers
+              optimized photos automatically without an extra processing wait.
             </p>
           </div>
         </div>
@@ -17072,14 +17073,14 @@ function CollectionDetailView({
           <p className="font-semibold">
             {activeUploadSessionKeys.length} upload
             {activeUploadSessionKeys.length === 1 ? "" : "s"} still sending to
-            R2 in the background. Keep working normally; the upload continues
+            Gallerista server in the background. Keep working normally; the upload continues
             while you move around the app.
           </p>
         </div>
       )}
       {uploadImages.error && (
         <p className="mt-4 text-sm font-semibold text-red-600">
-          {uploadImages.error.message}
+          {customerFacingStorageMessage(uploadImages.error.message, "Upload failed. Please try again.")}
         </p>
       )}
 
@@ -17708,17 +17709,17 @@ function CollectionDetailView({
                       : uploadProgress.phase === "authorizing"
                         ? "Getting secure upload permission"
                         : uploadProgress.phase === "finalizing"
-                          ? "Confirming uploaded files with R2"
+                          ? "Confirming uploads on Gallerista server"
                           : uploadProgress.phase === "queued"
                             ? "Raw upload complete"
                             : uploadProgress.phase === "preparing"
                               ? "Preparing files"
-                              : `Uploading ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} directly to R2 / ${uploadProgress.currentPercent}%`
+                              : `Uploading to Gallerista server · ${uploadProgress.total} file${uploadProgress.total === 1 ? "" : "s"} · ${uploadProgress.currentPercent}%`
                     : "Drag photos and videos here to upload"}
                 </p>
                 <p className="mt-3 text-sm text-[#6337d8]">
                   {uploading
-                    ? uploadProgress.currentName
+                    ? customerFacingStorageMessage(uploadProgress.currentName, "Uploading to Gallerista server")
                     : "or Browse files"}
                 </p>
                 {uploading && uploadProgress.totalBytes > 0 && (
@@ -18704,17 +18705,17 @@ function CollectionDetailView({
                       </div>
                     </Field>
                     <Field>
-                      <FieldLabel className="font-bold">Image Delivery Cache</FieldLabel>
+                      <FieldLabel className="font-bold">Photo optimization</FieldLabel>
                       <div className="border bg-white p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold text-[#222]">
                               {collection?.imageCacheStatus === "ready"
-                                ? "Imagor R2 Result Storage active"
-                                : "Imagor delivery while its R2 cache warms"}
+                                ? "Optimized image delivery ready"
+                                : "Preparing optimized image delivery"}
                             </p>
                             <p className="mt-1 max-w-xl text-xs leading-5 text-[#777]">
-                              Imagor itself generates and writes every processed variant to R2 Result Storage. The backend never copies transformed image bytes. The gallery stays fully on Imagor until every required variant is confirmed in R2, then the whole gallery switches together.
+                              Gallerista prepares optimized versions of your images in the background. Your gallery stays available while this finishes and automatically switches to the faster versions once they are ready.
                             </p>
                           </div>
                           <span className={cn(
