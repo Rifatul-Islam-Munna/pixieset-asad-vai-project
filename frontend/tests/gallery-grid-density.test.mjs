@@ -9,21 +9,19 @@ test("Regular is visibly smaller than Large on desktop", () => {
 
   assert.ok(regular.desktopColumns > large.desktopColumns);
   assert.ok(large.desktopColumns > extraLarge.desktopColumns);
-  assert.equal(regular.desktopColumns, 6);
+  assert.equal(regular.desktopColumns, 5);
   assert.equal(large.desktopColumns, 4);
   assert.equal(extraLarge.desktopColumns, 2);
 });
 
-test("Regular uses responsive columns, compact image sizes and matching live previews", () => {
+test("Regular masonry matches the five-column reference and live preview", () => {
   const regular = GALLERY_GRID_DENSITY.Regular;
-  assert.match(regular.masonry, /columns-2/);
-  assert.match(regular.masonry, /sm:columns-3/);
-  assert.match(regular.masonry, /lg:columns-5/);
-  assert.match(regular.masonry, /xl:columns-6/);
+  assert.deepEqual(regular.masonryBreakpoints, { 0: 2, 640: 3, 768: 4, 1024: 5 });
+  assert.match(regular.masonrySkeleton, /lg:grid-cols-5/);
   assert.match(regular.classic, /xl:grid-cols-6/);
-  assert.equal(regular.editorMasonry, "columns-6");
+  assert.equal(regular.editorMasonryColumns, 5);
   assert.equal(regular.editorClassic, "grid-cols-6");
-  assert.match(regular.imageSizes, /17vw/);
+  assert.match(regular.imageSizes, /20vw/);
 });
 
 test("Saved size values remain compatible and unknown values have a safe fallback", () => {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, Copy, Download, Eye, EyeOff, Loader2, Lock, Play, Printer, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
+import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
+import { Camera, Check, ChevronLeft, ChevronRight, Copy, Download, Ellipsis, EyeOff, Loader2, Lock, Play, Printer, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
 
 import { CoverPreview } from "@/components/dashboard/cover-designs";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
@@ -11,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Textarea } from "@/components/ui/textarea";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettings } from "@/lib/dashboard-store";
 import { galleryLanguageCode } from "@/lib/gallery-language";
 import { resolveGalleryFontFamily } from "@/lib/gallery-fonts";
@@ -473,7 +475,6 @@ export function PublicGallery({
     ? Math.min(40, Math.max(0, Number(design.gridSpacingPx ?? 4)))
     : design.gridSpacing === "Large" ? 20 : 4;
   const photoGridDensity = galleryGridDensity(design.thumbnailSize);
-  const masonryColumns = photoGridDensity.masonry;
   const customGridColumns = design.gridColumns === 2
     ? "grid grid-cols-1 sm:grid-cols-2"
     : design.gridColumns === 3
@@ -1411,6 +1412,104 @@ export function PublicGallery({
     }
   };
 
+  const galleryTiles = visibleImages.map((photo, index) => (
+    <div
+      key={photo._id}
+      className={cn(
+        "min-w-0",
+        galleryLayout === "classic" && "aspect-square",
+        galleryLayout === "art" && index % 7 === 0 && "col-span-2 row-span-2",
+        galleryLayout === "custom" && customAspectClass,
+      )}
+    >
+      <GalleryTile
+        photo={photo}
+        masonry={galleryLayout === "masonry"}
+        crop={galleryLayout !== "masonry" && !(galleryLayout === "custom" && !customAspectClass)}
+        imageSizes={tileImageSizes}
+        sharpeningLevel={sharpeningLevel}
+        showFilename={showFilenames}
+        priority={index < 5}
+        parallax={Boolean(design.galleryParallaxEnabled)}
+        parallaxStrength={design.galleryParallaxStrength ?? 36}
+        onPreview={setActiveImage}
+      />
+    </div>
+  ));
+
+  const photoOptions = (photo: PublicImage, index = 0) => (
+    <DropdownMenu key={photo._id}>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="polished-icon-button absolute right-3 top-3 z-30 sm:right-5 sm:top-5"
+          type="button"
+          aria-label="More photo options"
+          title="More photo options"
+        >
+          <Ellipsis className="size-5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} className="z-[80] w-56">
+        {favoritesEnabled && isPersistedImageId(photo._id) && (
+          <DropdownMenuItem
+            disabled={favoriteImageBusy === photo._id}
+            onSelect={() => void toggleImageFavorite(photo)}
+          >
+            <Star className={cn("size-4", favoriteImageIds.has(photo._id) && "fill-amber-400 text-amber-500")} />
+            {favoriteImageIds.has(photo._id) ? "Remove favorite" : "Add to favorites"}
+          </DropdownMenuItem>
+        )}
+        {isPersistedImageId(photo._id) && (
+          <DropdownMenuItem
+            disabled={privateImageBusy === photo._id}
+            onSelect={() => void togglePrivatePhoto(photo)}
+          >
+            <EyeOff className="size-4" />
+            {privateImageIds.has(photo._id) ? "Cancel hide request" : "Request hide"}
+          </DropdownMenuItem>
+        )}
+        {socialSharingEnabled && (
+          <DropdownMenuItem onSelect={() => sharePhoto(photo)}>
+            <Share2 className="size-4" />
+            Share photo
+          </DropdownMenuItem>
+        )}
+        {(isVideo(photo) ? videoDownloadsEnabled : photoDownloadsEnabled && singlePhotoDownloadEnabled) && (
+          <DropdownMenuItem onSelect={() => requestPhotoDownload(photo, index)}>
+            <Download className="size-4" />
+            Download photo
+          </DropdownMenuItem>
+        )}
+        {(showBuyPhotoButton || (showPrintRequestButton && !isVideo(photo))) && isPersistedImageId(photo._id) && (
+          <DropdownMenuSeparator />
+        )}
+        {showBuyPhotoButton && isPersistedImageId(photo._id) && (
+          <DropdownMenuItem
+            data-buy-photo-open={photo._id}
+            data-buy-photo-url={photo.url}
+            data-buy-photo-thumbnail={photo.thumbnailUrl}
+            data-buy-photo-name={displayFilename(photo)}
+            data-buy-photo-media-type={photo.mediaType}
+          >
+            <ShoppingBag className="size-4" />
+            Print order
+          </DropdownMenuItem>
+        )}
+        {showPrintRequestButton && !isVideo(photo) && isPersistedImageId(photo._id) && (
+          <DropdownMenuItem
+            data-print-request-open={photo._id}
+            data-print-request-url={photo.url}
+            data-print-request-thumbnail={photo.thumbnailUrl}
+            data-print-request-name={displayFilename(photo)}
+          >
+            <Printer className="size-4" />
+            Request print
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <>
       <span hidden data-gallery-language={galleryLanguageCode(generalSettings.language)} />
@@ -1722,11 +1821,13 @@ export function PublicGallery({
             <div
               className={cn(
                 "grid gap-1",
-                galleryLayout === "masonry" || galleryLayout === "classic"
-                  ? photoGridDensity.classic
-                  : galleryLayout === "custom"
-                    ? customGridColumns
-                    : "grid-cols-2 lg:grid-cols-4",
+                galleryLayout === "masonry"
+                  ? photoGridDensity.masonrySkeleton
+                  : galleryLayout === "classic"
+                    ? photoGridDensity.classic
+                    : galleryLayout === "custom"
+                      ? customGridColumns
+                      : "grid-cols-2 lg:grid-cols-4",
               )}
               aria-label="Loading photos"
               aria-busy="true"
@@ -1741,52 +1842,21 @@ export function PublicGallery({
                 />
               ))}
             </div>
+          ) : galleryLayout === "masonry" ? (
+            <ResponsiveMasonry columnsCountBreakPoints={photoGridDensity.masonryBreakpoints}>
+              <Masonry gutter={`${masonryGapPx}px`}>{galleryTiles}</Masonry>
+            </ResponsiveMasonry>
           ) : (
             <div
               className={cn(
-                galleryLayout === "masonry" && masonryColumns,
                 galleryLayout === "classic" && "grid",
                 galleryLayout === "classic" && photoGridDensity.classic,
                 galleryLayout === "art" && "grid auto-rows-[minmax(180px,46vw)] grid-cols-2 sm:auto-rows-[260px] lg:grid-cols-4 lg:auto-rows-[300px]",
                 galleryLayout === "custom" && customGridColumns,
               )}
-              style={{ gap: galleryLayout === "masonry" ? undefined : `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
+              style={{ gap: `${masonryGapPx}px` }}
             >
-              {visibleImages.map((photo, index) => (
-                <div
-                  key={photo._id}
-                  className={cn(
-                    "min-w-0 break-inside-avoid",
-                    galleryLayout === "classic" && "aspect-square",
-                    galleryLayout === "art" && index % 7 === 0 && "col-span-2 row-span-2",
-                    galleryLayout === "custom" && customAspectClass,
-                  )}
-                >
-                  <GalleryTile
-                    photo={photo}
-                    spacing={galleryLayout === "masonry" ? masonryGapPx : 0}
-                    crop={galleryLayout !== "masonry" && !(galleryLayout === "custom" && !customAspectClass)}
-                    canFavorite={favoritesEnabled}
-                    canDownload={canDownloadMedia(photo)}
-                    canShare={socialSharingEnabled}
-                    imageSizes={tileImageSizes}
-                    sharpeningLevel={sharpeningLevel}
-                    favoriteBusy={favoriteImageBusy === photo._id}
-                    favorited={favoriteImageIds.has(photo._id)}
-                    privatePhoto={privateImageIds.has(photo._id)}
-                    privateBusy={privateImageBusy === photo._id}
-                    showFilename={showFilenames}
-                    priority={index < 4}
-                    parallax={Boolean(design.galleryParallaxEnabled)}
-                    parallaxStrength={design.galleryParallaxStrength ?? 36}
-                    onPrivate={togglePrivatePhoto}
-                    onDownload={downloadPhoto}
-                    onFavorite={toggleImageFavorite}
-                    onPreview={setActiveImage}
-                    onShare={sharePhoto}
-                  />
-                </div>
-              ))}
+              {galleryTiles}
             </div>
           )}
           {canLoadMoreImages && (
@@ -1979,39 +2049,11 @@ export function PublicGallery({
       </Dialog>
 
       {activeImage && (
-        <div className="fixed inset-0 z-50 isolate flex items-center justify-center overflow-hidden bg-black px-2 pb-4 pt-24 sm:p-4" role="dialog" aria-modal="true" aria-label={`Preview ${displayFilename(activeImage) || "photo"}`}>
+        <div className="fixed inset-0 z-50 isolate flex items-center justify-center overflow-hidden bg-black px-2 pb-4 pt-16 sm:p-4" role="dialog" aria-modal="true" aria-label={`Preview ${displayFilename(activeImage) || "photo"}`}>
           <button className="polished-icon-button absolute left-3 top-3 z-30 sm:left-5 sm:top-5" onClick={() => setActiveImage(null)} aria-label="Back to gallery" title="Back">
             <ChevronLeft className="size-5" />
           </button>
-          <div className="absolute left-3 right-3 top-16 z-30 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
-            {showBuyPhotoButton && isPersistedImageId(activeImage._id) && (
-              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-buy-photo-open={activeImage._id} data-buy-photo-url={activeImage.url} data-buy-photo-thumbnail={activeImage.thumbnailUrl} data-buy-photo-name={displayFilename(activeImage)} data-buy-photo-media-type={activeImage.mediaType} type="button" aria-label="Print order" title="Print order">
-                <ShoppingBag className="size-5" />
-                <span>Print Order</span>
-              </button>
-            )}
-            {showPrintRequestButton && !isVideo(activeImage) && isPersistedImageId(activeImage._id) && (
-              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-print-request-open={activeImage._id} data-print-request-url={activeImage.url} data-print-request-thumbnail={activeImage.thumbnailUrl} data-print-request-name={displayFilename(activeImage)} type="button" aria-label="Request print" title="Request print">
-                <Printer className="size-5" />
-                <span>Request Print</span>
-              </button>
-            )}
-            {favoritesEnabled && isPersistedImageId(activeImage._id) && (
-              <button className="polished-icon-button" onClick={() => void toggleImageFavorite(activeImage)} type="button" aria-label={favoriteImageIds.has(activeImage._id) ? "Remove star" : "Star photo"} title={favoriteImageIds.has(activeImage._id) ? "Remove star" : "Star photo"}>
-                <Star className={cn("size-5", favoriteImageIds.has(activeImage._id) && "fill-amber-400 text-amber-500")} />
-              </button>
-            )}
-            {socialSharingEnabled && (
-              <button className="polished-icon-button" onClick={() => void sharePhoto(activeImage)} type="button" aria-label="Share" title="Share">
-                <Share2 className="size-5" />
-              </button>
-            )}
-            {activeImage && (
-              <button className="polished-icon-button" onClick={() => requestPhotoDownload(activeImage)} type="button" aria-label="Download" title="Download">
-                <Download className="size-5" />
-              </button>
-            )}
-          </div>
+          {photoOptions(activeImage, Math.max(0, visibleImages.findIndex((photo) => photo._id === activeImage._id)))}
           {isVideo(activeImage) ? (
             <video src={imageSrc(activeImage.url)} className="relative z-0 max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
@@ -2041,11 +2083,11 @@ export function PublicGallery({
       )}
 
       {slideshowImage && (
-        <div className="fixed inset-0 z-50 isolate flex items-center justify-center overflow-hidden bg-black px-2 pb-4 pt-24 sm:p-4" onDoubleClick={closeSlideshow}>
+        <div className="fixed inset-0 z-50 isolate flex items-center justify-center overflow-hidden bg-black px-2 pb-4 pt-16 sm:p-4" onDoubleClick={closeSlideshow}>
           <button className="polished-icon-button absolute left-3 top-3 z-30 sm:left-5 sm:top-5" onClick={closeSlideshow} aria-label="Back to gallery" title="Back">
             <ChevronLeft className="size-5" />
           </button>
-          <div className="absolute right-3 top-3 z-30 rounded-full bg-white/10 px-3 py-2 text-sm font-bold text-white backdrop-blur sm:left-5 sm:right-auto sm:top-20 sm:px-4">
+          <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full bg-white/10 px-3 py-2 text-sm font-bold text-white backdrop-blur sm:left-5 sm:right-auto sm:top-20 sm:translate-x-0 sm:px-4">
             {slideshowPosition + 1} / {visibleImages.length}
           </div>
           <button className="absolute left-2 top-1/2 z-30 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-black shadow sm:left-5 sm:p-3" onClick={showPreviousSlide} aria-label="Previous slide" type="button">
@@ -2054,33 +2096,7 @@ export function PublicGallery({
           <button className="absolute right-2 top-1/2 z-30 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-black shadow sm:right-5 sm:p-3" onClick={showNextSlide} aria-label="Next slide" type="button">
             <ChevronRight className="size-5 sm:size-6" />
           </button>
-          <div className="absolute left-3 right-3 top-16 z-30 flex gap-2 overflow-x-auto pb-1 sm:left-auto sm:right-5 sm:top-5 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
-            {showBuyPhotoButton && isPersistedImageId(slideshowImage._id) && (
-              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-buy-photo-open={slideshowImage._id} data-buy-photo-url={slideshowImage.url} data-buy-photo-thumbnail={slideshowImage.thumbnailUrl} data-buy-photo-name={displayFilename(slideshowImage)} data-buy-photo-media-type={slideshowImage.mediaType} type="button" aria-label="Print order" title="Print order">
-                <ShoppingBag className="size-5" />
-                <span>Print Order</span>
-              </button>
-            )}
-            {showPrintRequestButton && !isVideo(slideshowImage) && isPersistedImageId(slideshowImage._id) && (
-              <button className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-black shadow" data-print-request-open={slideshowImage._id} data-print-request-url={slideshowImage.url} data-print-request-thumbnail={slideshowImage.thumbnailUrl} data-print-request-name={displayFilename(slideshowImage)} type="button" aria-label="Request print" title="Request print">
-                <Printer className="size-5" />
-                <span>Request Print</span>
-              </button>
-            )}
-            {favoritesEnabled && isPersistedImageId(slideshowImage._id) && (
-              <button className="polished-icon-button" onClick={() => void toggleImageFavorite(slideshowImage)} type="button" aria-label={favoriteImageIds.has(slideshowImage._id) ? "Remove star" : "Star photo"} title={favoriteImageIds.has(slideshowImage._id) ? "Remove star" : "Star photo"}>
-                <Star className={cn("size-5", favoriteImageIds.has(slideshowImage._id) && "fill-amber-400 text-amber-500")} />
-              </button>
-            )}
-            {socialSharingEnabled && (
-              <button className="polished-icon-button" onClick={() => void sharePhoto(slideshowImage)} type="button" aria-label="Share" title="Share">
-                <Share2 className="size-5" />
-              </button>
-            )}
-            <button className="polished-icon-button" onClick={() => requestPhotoDownload(slideshowImage, slideshowPosition)} type="button" aria-label="Download" title="Download">
-                <Download className="size-5" />
-            </button>
-          </div>
+          {photoOptions(slideshowImage, slideshowPosition)}
           {isVideo(slideshowImage) ? (
             <video key={slideshowImage._id} src={imageSrc(slideshowImage.url)} className="relative z-0 max-h-full max-w-full object-contain" controls autoPlay />
           ) : (
@@ -2304,66 +2320,43 @@ function safeDownloadName(value: string) {
 
 function GalleryTile({
   photo,
-  spacing,
+  masonry,
   crop,
-  canFavorite,
-  canDownload,
-  canShare,
   imageSizes,
   sharpeningLevel,
-  favoriteBusy,
-  favorited,
-  privatePhoto,
-  privateBusy,
   showFilename,
   priority,
   parallax,
   parallaxStrength,
-  onPrivate,
-  onDownload,
-  onFavorite,
   onPreview,
-  onShare,
 }: {
   photo: PublicImage;
-  spacing: number;
+  masonry: boolean;
   crop: boolean;
-  canFavorite: boolean;
-  canDownload: boolean;
-  canShare: boolean;
   imageSizes: string;
   sharpeningLevel: "optimal" | "low" | "high";
-  favoriteBusy: boolean;
-  favorited: boolean;
-  privatePhoto: boolean;
-  privateBusy: boolean;
   showFilename: boolean;
   priority: boolean;
   parallax: boolean;
   parallaxStrength: number;
-  onPrivate: (photo: PublicImage) => void;
-  onDownload: (photo: PublicImage) => void;
-  onFavorite: (photo: PublicImage) => void;
   onPreview: (photo: PublicImage) => void;
-  onShare: (photo: PublicImage) => void;
 }) {
   return (
     <div
       id={`photo-${photo._id}`}
       className={cn(
-        "group relative mb-0 w-full break-inside-avoid bg-[#f4f4f2] text-left transition-[box-shadow] duration-300 hover:shadow-[0_18px_45px_rgba(0,0,0,0.16)]",
+        "relative mb-0 w-full break-inside-avoid bg-[#f4f4f2] text-left",
         crop && "h-full overflow-hidden",
       )}
       style={{
-        marginBottom: `${spacing}px`,
-        contentVisibility: "auto",
+        contentVisibility: masonry ? "visible" : "auto",
         containIntrinsicSize:
-          Number(photo.width) > 0 && Number(photo.height) > 0
+          !masonry && Number(photo.width) > 0 && Number(photo.height) > 0
             ? `auto ${Math.max(
                 180,
                 Math.round((320 * Number(photo.height)) / Number(photo.width)),
               )}px`
-            : "auto 300px",
+            : masonry ? undefined : "auto 300px",
       }}
     >
       <button
@@ -2405,38 +2398,6 @@ function GalleryTile({
           {displayFilename(photo)}
         </p>
       )}
-      <div className="pointer-events-none absolute right-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1.5 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 sm:right-3 sm:top-3 sm:gap-2">
-        {canFavorite && isPersistedImageId(photo._id) && (
-          <button className="polished-icon-button size-9 sm:size-10" onClick={() => onFavorite(photo)} disabled={favoriteBusy} aria-label={favorited ? "Remove star" : "Star photo"} title={favorited ? "Remove star" : "Star photo"} type="button">
-            <Star className={cn("size-4", favorited && "fill-amber-400 text-amber-500")} />
-          </button>
-        )}
-        {isPersistedImageId(photo._id) && (
-          <button
-            className="polished-icon-button size-9 sm:size-10"
-            onClick={() => onPrivate(photo)}
-            disabled={privateBusy}
-            aria-label={privatePhoto ? "Hide request pending" : "Request hide"}
-            title={privatePhoto ? "Hide request pending" : "Request hide"}
-            type="button"
-          >
-            <EyeOff className={cn("size-4", privatePhoto && "text-[#6337d8]")} />
-          </button>
-        )}
-        <button className="polished-icon-button size-9 sm:size-10" onClick={() => onPreview(photo)} aria-label="View image" title="View">
-          <Eye className="size-4" />
-        </button>
-        {canShare && (
-          <button className="polished-icon-button size-9 sm:size-10" onClick={() => onShare(photo)} aria-label="Share image" title="Share" type="button">
-            <Share2 className="size-4" />
-          </button>
-        )}
-        {canDownload && (
-          <button className="polished-icon-button size-9 sm:size-10" onClick={() => onDownload(photo)} aria-label="Download image" title="Download" type="button">
-            <Download className="size-4" />
-          </button>
-        )}
-      </div>
     </div>
   );
 }

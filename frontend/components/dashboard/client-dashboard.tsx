@@ -14,6 +14,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Masonry from "react-responsive-masonry";
 import { useQuery } from "@tanstack/react-query";
 import { format, isValid, parse, parseISO } from "date-fns";
 import LinkExtension from "@tiptap/extension-link";
@@ -7350,7 +7351,7 @@ function PresetDesignPanel({
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs leading-5 text-[#777]">Regular photos are smaller, with up to 6 columns on desktop. Large uses up to 4 columns, and Extra Large uses 2. Custom layout lets you choose an exact desktop column count.</p>
+            <p className="mt-2 text-xs leading-5 text-[#777]">Regular masonry uses up to 5 columns on desktop. Large uses up to 4 columns, and Extra Large uses 2. Custom layout lets you choose an exact desktop column count.</p>
           </OptionSection>
           {design.gridStyle === "Custom" && (
             <OptionSection title="Custom Layout Controls">
@@ -7496,7 +7497,7 @@ function CollectionDesignLivePreview({
     ? Math.min(40, Math.max(0, Number(design.gridSpacingPx ?? 4)))
     : design.gridSpacing === "Large" ? 20 : 4;
   const photoGridDensity = galleryGridDensity(design.thumbnailSize);
-  const masonryColumns = photoGridDensity.editorMasonry;
+  const masonryColumns = photoGridDensity.editorMasonryColumns;
   const customColumns = design.gridColumns === 2 ? "grid-cols-2"
     : design.gridColumns === 3 ? "grid-cols-3"
       : design.gridColumns === 5 ? "grid-cols-5"
@@ -7529,6 +7530,46 @@ function CollectionDesignLivePreview({
   const isMobilePreview = previewDevice === "mobile";
   const navigationWithText = design.navigationStyle === "Icon & Text";
   const previewScrollRef = useRef<HTMLElement | null>(null);
+  const previewTiles = previewImages.length
+    ? previewImages.map((image, index) => (
+        <div
+          key={image._id}
+          className={cn(
+            "overflow-hidden bg-[#ececec]",
+            design.gridStyle === "Art" && !isMobilePreview && index % 7 === 0 && "col-span-2 row-span-2",
+            design.gridStyle === "Custom" && customAspect,
+          )}
+          style={design.gridStyle === "Vertical" ? {
+            aspectRatio: Number(image.width) > 0 && Number(image.height) > 0
+              ? `${image.width} / ${image.height}`
+              : index % 3 === 0 ? "4 / 5" : index % 3 === 1 ? "3 / 2" : "1 / 1",
+          } : undefined}
+        >
+          {image.mediaType === "video" ? (
+            <video src={imageSrc(image.url)} className={cn("h-full w-full object-cover", design.gridStyle !== "Vertical" && "aspect-square")} muted autoPlay loop playsInline />
+          ) : (
+            <CollectionPreviewParallaxImage
+              src={imageSrc(image.thumbnailUrl || image.url)}
+              fallbackSrc={imageSrc(image.url)}
+              enabled={Boolean(design.galleryParallaxEnabled)}
+              strength={design.galleryParallaxStrength ?? 36}
+              scrollRoot={previewScrollRef}
+              className={cn(
+                "block w-full object-cover",
+                design.gridStyle === "Vertical"
+                  ? "h-full"
+                  : design.gridStyle === "Custom" && !customAspect ? "h-auto" : "h-full",
+              )}
+            />
+          )}
+        </div>
+      ))
+    : Array.from({ length: 12 }).map((_, index) => (
+        <div
+          key={index}
+          className={cn("bg-[#e8e8e8]", index % 2 ? "aspect-[1.25]" : "aspect-square")}
+        />
+      ));
 
   return (
     <aside ref={previewScrollRef} className="sticky top-0 hidden h-[calc(100dvh-2rem)] self-start overflow-y-auto bg-[#f4f4f4] px-8 py-6 xl:block">
@@ -7655,64 +7696,23 @@ function CollectionDesignLivePreview({
                 <span>Featured</span>
               )}
             </div>
-            <div
-              className={cn(
-                design.gridStyle === "Vertical"
-                  ? isMobilePreview ? "columns-2" : masonryColumns
-                  : "grid grid-cols-2",
-                design.gridStyle === "Art" && !isMobilePreview && "grid-cols-4",
-                design.gridStyle === "Horizontal" && !isMobilePreview && photoGridDensity.editorClassic,
-                design.gridStyle === "Custom" && !isMobilePreview && customColumns,
-              )}
-              style={{ gap: `${masonryGapPx}px`, columnGap: `${masonryGapPx}px` }}
-            >
-              {previewImages.length
-                ? previewImages.map((image, index) => (
-                    <div
-                      key={image._id}
-                      className={cn(
-                        "break-inside-avoid overflow-hidden bg-[#ececec]",
-                        design.gridStyle === "Art" && !isMobilePreview && index % 7 === 0 && "col-span-2 row-span-2",
-                        design.gridStyle === "Custom" && customAspect,
-                      )}
-                      style={{ marginBottom: design.gridStyle === "Vertical" ? `${masonryGapPx}px` : undefined }}
-                    >
-                      {image.mediaType === "video" ? (
-                        <video src={imageSrc(image.url)} className="aspect-square h-full w-full object-cover" muted autoPlay loop playsInline />
-                      ) : (
-                        <CollectionPreviewParallaxImage
-                          src={imageSrc(image.thumbnailUrl || image.url)}
-                          fallbackSrc={imageSrc(image.url)}
-                          enabled={Boolean(design.galleryParallaxEnabled)}
-                          strength={design.galleryParallaxStrength ?? 36}
-                          scrollRoot={previewScrollRef}
-                          className={cn(
-                            "block w-full object-cover",
-                            design.gridStyle === "Vertical"
-                              ? index % 3 === 0
-                                ? "aspect-[0.82]"
-                                : index % 3 === 1
-                                  ? "aspect-[1.3]"
-                                  : "aspect-square"
-                              : design.gridStyle === "Custom" && !customAspect
-                                ? "h-auto"
-                                : "h-full",
-                          )}
-                        />
-                      )}
-                    </div>
-                  ))
-                : Array.from({ length: 12 }).map((_, index) => (
-                    <div
-                      key={index}
-                      className={cn(
-                        "break-inside-avoid bg-[#e8e8e8]",
-                        index % 2 ? "aspect-[1.25]" : "aspect-square",
-                      )}
-                      style={{ marginBottom: `${masonryGapPx}px` }}
-                    />
-                  ))}
-            </div>
+            {design.gridStyle === "Vertical" ? (
+              <Masonry columnsCount={isMobilePreview ? 2 : masonryColumns} gutter={`${masonryGapPx}px`}>
+                {previewTiles}
+              </Masonry>
+            ) : (
+              <div
+                className={cn(
+                  "grid grid-cols-2",
+                  design.gridStyle === "Art" && !isMobilePreview && "grid-cols-4",
+                  design.gridStyle === "Horizontal" && !isMobilePreview && photoGridDensity.editorClassic,
+                  design.gridStyle === "Custom" && !isMobilePreview && customColumns,
+                )}
+                style={{ gap: `${masonryGapPx}px` }}
+              >
+                {previewTiles}
+              </div>
+            )}
           </div>
         </div>
       </div>
