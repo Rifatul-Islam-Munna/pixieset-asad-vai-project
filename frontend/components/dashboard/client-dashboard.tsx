@@ -7535,7 +7535,7 @@ function CollectionDesignLivePreview({
         <div
           key={image._id}
           className={cn(
-            "overflow-hidden bg-[#ececec]",
+            "w-full min-w-0 overflow-hidden bg-[#ececec]",
             design.gridStyle === "Art" && !isMobilePreview && index % 7 === 0 && "col-span-2 row-span-2",
             design.gridStyle === "Custom" && customAspect,
           )}
@@ -7567,7 +7567,7 @@ function CollectionDesignLivePreview({
     : Array.from({ length: 12 }).map((_, index) => (
         <div
           key={index}
-          className={cn("bg-[#e8e8e8]", index % 2 ? "aspect-[1.25]" : "aspect-square")}
+          className={cn("w-full min-w-0 bg-[#e8e8e8]", index % 2 ? "aspect-[1.25]" : "aspect-square")}
         />
       ));
 

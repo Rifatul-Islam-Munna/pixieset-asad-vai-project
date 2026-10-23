@@ -1416,7 +1416,7 @@ export function PublicGallery({
     <div
       key={photo._id}
       className={cn(
-        "min-w-0",
+        "w-full min-w-0",
         galleryLayout === "classic" && "aspect-square",
         galleryLayout === "art" && index % 7 === 0 && "col-span-2 row-span-2",
         galleryLayout === "custom" && customAspectClass,
