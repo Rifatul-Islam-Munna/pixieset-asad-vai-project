@@ -1,30 +1,55 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gallerista/core/network/api_error.dart';
+import 'package:gallerista/pages/home_page.dart';
+import 'package:gallerista/theme/app_theme.dart';
 
-import 'package:gallerista/main.dart';
+DioException _errorWithBody(Object? body) {
+  final options = RequestOptions(path: '/test');
+  return DioException(
+    requestOptions: options,
+    response: Response(requestOptions: options, statusCode: 400, data: body),
+    type: DioExceptionType.badResponse,
+  );
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('ApiError.message', () {
+    test('reads a plain NestJS message', () {
+      final error = _errorWithBody({'message': 'Invalid credentials'});
+      expect(ApiError.message(error), 'Invalid credentials');
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('joins validation messages', () {
+      final error = _errorWithBody({
+        'message': ['email must be an email', 'password is too short'],
+      });
+      expect(
+        ApiError.message(error),
+        'email must be an email\npassword is too short',
+      );
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('falls back on connection errors', () {
+      final error = DioException(
+        requestOptions: RequestOptions(path: '/test'),
+        type: DioExceptionType.connectionError,
+      );
+      expect(ApiError.message(error), contains('Could not connect'));
+    });
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('home page renders with the editorial theme', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const HomePage()),
+    );
+
+    expect(find.text('Gallerista'), findsWidgets);
+    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+    expect(scaffold.backgroundColor, isNull); // comes from the theme
+    final theme = Theme.of(tester.element(find.byType(Scaffold)));
+    expect(theme.scaffoldBackgroundColor, AppColors.galleryBackground);
+    expect(theme.colorScheme.primary, AppColors.galleryPrimary);
   });
 }
