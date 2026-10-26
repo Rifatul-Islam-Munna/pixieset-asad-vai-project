@@ -7,6 +7,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gallerista/api-hooks/dio_helper.dart';
 import 'package:gallerista/core/navigation/app_router_instance.dart';
 import 'package:gallerista/core/utils/app_toast.dart';
+import 'package:gallerista/gallery/scan_history.dart';
+import 'package:gallerista/gallery/upload_queue.dart';
 import 'package:gallerista/router/app_router.dart';
 import 'package:gallerista/theme/app_theme.dart';
 import 'package:get_it/get_it.dart';
@@ -31,6 +33,9 @@ Future<void> setupLocator() async {
   if (!getIt.isRegistered<FlutterSecureStorage>()) {
     getIt.registerSingleton<FlutterSecureStorage>(const FlutterSecureStorage());
   }
+  if (!getIt.isRegistered<UploadQueue>()) {
+    getIt.registerSingleton<UploadQueue>(UploadQueue());
+  }
 }
 
 Future<void> main() async {
@@ -42,10 +47,10 @@ Future<void> main() async {
   imageCache.maximumSizeBytes = 50 * 1024 * 1024;
 
   await setupLocator();
+  await ScanHistory.load();
   await dotenv.load(fileName: '.env');
   DioHelper.init(
-    // TODO: switch to LoginRoute once the login page exists.
-    onUnauthorized: () => appRouter.replaceAll([const HomeRoute()]),
+    onUnauthorized: () => appRouter.replaceAll([const LoginRoute()]),
   );
   CachedQuery.instance.configFlutter(
     config: GlobalQueryConfig(refetchOnConnection: true, refetchOnResume: true),

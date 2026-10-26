@@ -1,9 +1,12 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
+import * as mobileCrypto from 'crypto';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
@@ -580,6 +583,71 @@ export class CollectionsService implements OnModuleInit {
       images: imagesPage.items,
       imagesPage,
     };
+  }
+
+  /**
+   * Key that lets the Gallerista app open a "Mobile only" gallery. It is an
+   * HMAC of the gallery id, so it cannot be guessed and differs per gallery.
+   * Set MOBILE_GALLERY_SECRET in the backend .env (falls back to JWT_SECRET).
+   */
+  mobileGalleryKey(collectionId: string): string {
+    const secret = process.env.MOBILE_GALLERY_SECRET || process.env.JWT_SECRET;
+    if (!secret) {
+      throw new InternalServerErrorException(
+        'MOBILE_GALLERY_SECRET is not configured',
+      );
+    }
+    return mobileCrypto
+      .createHmac('sha256', secret)
+      .update(`mobile-gallery:${collectionId}`)
+      .digest('base64url')
+      .slice(0, 32);
+  }
+
+  /** Owner-only: returns the app key for one of the user's galleries. */
+  async getMobileGalleryKey(userId: string, id: string) {
+    const collection: any = await this.findOne(userId, id, '1', '0');
+    const collectionId = String(collection?._id ?? id);
+    return { key: this.mobileGalleryKey(collectionId) };
+  }
+
+  /**
+   * Used by MobileOnlyGalleryGuard on every public gallery route. Galleries
+   * with settings.general.mobileOnly need the app key; fails closed when the
+   * secret is missing. Unknown galleries fall through to the normal 404.
+   */
+  async assertPublicMobileAccess(
+    identifier: string,
+    siteSlug?: string,
+    mobileKey?: string,
+  ) {
+    let collection: any;
+    try {
+      collection = await this.findCollectionByIdentifier(identifier, siteSlug);
+    } catch {
+      return;
+    }
+    if (!this.boolSetting((collection?.settings as any)?.general?.mobileOnly)) {
+      return;
+    }
+    let expected = '';
+    try {
+      expected = this.mobileGalleryKey(collection._id.toString());
+    } catch {
+      expected = '';
+    }
+    const given = String(mobileKey ?? '').trim();
+    const allowed =
+      expected.length > 0 &&
+      given.length === expected.length &&
+      mobileCrypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+    if (!allowed) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'MOBILE_ONLY',
+        message: 'This gallery can only be viewed in the Gallerista app.',
+      });
+    }
   }
 
   async findPublic(

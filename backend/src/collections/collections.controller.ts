@@ -27,6 +27,7 @@ import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { FaceSearchService } from 'src/face-search/face-search.service';
 import { CollectionDownloadDeliveryService } from './collection-download-delivery.service';
 import { CollectionsService } from './collections.service';
+import { MobileOnlyGalleryGuard } from './mobile-only.guard';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 
@@ -47,6 +48,7 @@ const uploadOptions = {
 };
 
 @Controller('public/collections')
+@UseGuards(MobileOnlyGalleryGuard)
 export class PublicCollectionsController {
   constructor(
     private readonly collectionsService: CollectionsService,
@@ -571,6 +573,15 @@ export class CollectionsController {
       id,
       limit,
       offset,
+    );
+    return { data };
+  }
+
+  @Get(':id/mobile-key')
+  async mobileKey(@Param('id') id: string, @Req() req: ExpressRequest) {
+    const data = await this.collectionsService.getMobileGalleryKey(
+      req.user.id,
+      id,
     );
     return { data };
   }

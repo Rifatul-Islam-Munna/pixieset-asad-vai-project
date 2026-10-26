@@ -4,6 +4,14 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Gallerista needs access to your photos so you can upload them to your client galleries.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Gallerista saves gallery QR codes to your photos so you can print or send them.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Gallerista uses the camera so you can take photos and add them to a gallery.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Gallerista needs the microphone when you record a video for a gallery.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

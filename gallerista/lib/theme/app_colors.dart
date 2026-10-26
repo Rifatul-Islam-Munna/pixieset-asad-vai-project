@@ -123,6 +123,20 @@ class AppColors {
   static const galleryLavenderTint = Color(0xFFEFEBFF);
   static const galleryGold = Color(0xFFC89F65); // .luxury-accent
   static const galleryMutedText = Color(0xFF5F5A54);
+  static const galleryCoverPlaceholder = Color(0xFFF3F0EA);
+  static const galleryMeta = Color(0xFF777777);
+  static const galleryTitle = Color(0xFF333333);
+
+  // Login / register screens (components/auth/auth-pages.tsx)
+  static const authBackground = Color(0xFFF7F6F3);
+  static const authPurple = Color(0xFF5F35C8);
+  static const authFocus = Color(0xFF6F43D6);
+  static const authBorder = Color(0xFFDEDDE1);
+  static const authMuted = Color(0xFF77767B);
+  static const authBody = Color(0xFF69686D);
+  static const authGradientStart = Color(0xFF4F24BD);
+  static const authGradientEnd = Color(0xFF823BD9);
+  static const authGold = Color(0xFFB69B69);
 
   // Semantic aliases
   static const primary = galleryPrimary;

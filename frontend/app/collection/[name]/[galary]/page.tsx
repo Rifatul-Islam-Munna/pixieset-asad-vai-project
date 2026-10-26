@@ -28,6 +28,11 @@ async function getCollection(identifier: string, siteSlug: string) {
       signal: AbortSignal.timeout(8000),
     },
   ).catch(() => null);
+  if (response?.status === 403) {
+    const blocked = await response.json().catch(() => null);
+    // "Mobile only" galleries are served to the Gallerista app only.
+    if (blocked?.code === "MOBILE_ONLY") return { mobileOnly: true } as any;
+  }
   const payload = response?.ok ? await response.json() : null;
   return payload?.data ?? null;
 }
@@ -158,7 +163,7 @@ export async function generateMetadata({
     autoText,
   });
   const visibility = collection?.preferences?.searchEngineVisibility;
-  if (visibility === "hidden" || visibility === "homepage") {
+  if (collection?.mobileOnly || visibility === "hidden" || visibility === "homepage") {
     metadata.robots = {
       index: false,
       follow: false,
@@ -166,6 +171,25 @@ export async function generateMetadata({
     };
   }
   return metadata;
+}
+
+function MobileOnlyNotice({ studio }: { studio: string }) {
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-[#f8f7f4] px-6 text-center text-[#151515]">
+      <div className="max-w-md">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6f57d9]">
+          {studio}
+        </p>
+        <h1 className="mt-4 font-serif text-3xl leading-tight">
+          This gallery is available in the Gallerista app
+        </h1>
+        <p className="mt-4 text-[15px] leading-7 text-[#5f5a54]">
+          Open the Gallerista app on your phone, tap â€œScan gallery QRâ€ and scan
+          the QR code you received from your photographer.
+        </p>
+      </div>
+    </main>
+  );
 }
 
 function gaIdFrom(data: any) {
@@ -190,6 +214,9 @@ export default async function CollectionGalleryPage({
     visitorWatermarkCode(),
   ]);
   if (!collection) notFound();
+  if (collection?.mobileOnly === true) {
+    return <MobileOnlyNotice studio={decodeURIComponent(name)} />;
+  }
   const isOwnerPreview = collection?.ownerPreview === true;
   const gaId = isOwnerPreview ? "" : gaIdFrom(collection);
   const viewToken = randomUUID();
