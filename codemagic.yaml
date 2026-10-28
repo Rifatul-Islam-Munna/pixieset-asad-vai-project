@@ -12,10 +12,10 @@ workflows:
       app_store_connect: gallerista
 
     environment:
-      # Create this group in Codemagic app settings > Environment variables.
-      # Set API_URL and WEB_URL to the deployed HTTPS endpoints.
-      groups:
-        - gallerista_env
+      # Public endpoints from gallerista/.env. Never store credentials here.
+      vars:
+        API_URL: "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host"
+        WEB_URL: "https://gallerista.app"
       flutter: stable
       xcode: 26.5
       cocoapods: default
@@ -32,8 +32,8 @@ workflows:
       - name: Create app environment file
         script: |
           set -eu
-          : "${API_URL:?Set API_URL in the gallerista_env variable group}"
-          : "${WEB_URL:?Set WEB_URL in the gallerista_env variable group}"
+          : "${API_URL:?API_URL is missing}"
+          : "${WEB_URL:?WEB_URL is missing}"
           # Flutter bundles .env as an asset; do not put private secrets in it.
           printf 'API_URL=%s\nWEB_URL=%s\nSAMPLE_IMAGES=false\n' "$API_URL" "$WEB_URL" > .env
 
