@@ -1,0 +1,70 @@
+# Codemagic configuration for the Gallerista Flutter app in this monorepo.
+# Keep this file at the Git repository root (next to backend/, frontend/, gallerista/).
+workflows:
+  gallerista-ios-testflight:
+    name: Gallerista iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    working_directory: gallerista
+
+    # Exact reference name under Codemagic > Team settings > Developer Portal.
+    integrations:
+      app_store_connect: gallerista
+
+    environment:
+      # Create this group in Codemagic app settings > Environment variables.
+      # Set API_URL and WEB_URL to the deployed HTTPS endpoints.
+      groups:
+        - gallerista_env
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.example.gallerista
+
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+        - ~/Library/Caches/CocoaPods
+
+    scripts:
+      - name: Create app environment file
+        script: |
+          set -eu
+          : "${API_URL:?Set API_URL in the gallerista_env variable group}"
+          : "${WEB_URL:?Set WEB_URL in the gallerista_env variable group}"
+          # Flutter bundles .env as an asset; do not put private secrets in it.
+          printf 'API_URL=%s\nWEB_URL=%s\nSAMPLE_IMAGES=false\n' "$API_URL" "$WEB_URL" > .env
+
+      - name: Install Flutter dependencies
+        script: flutter pub get
+
+      - name: Install iOS pods if a Podfile exists
+        script: |
+          if [ -f ios/Podfile ]; then
+            (cd ios && pod install)
+          else
+            echo "No ios/Podfile; skipping separate pod install."
+          fi
+
+      - name: Configure iOS signing
+        script: xcode-project use-profiles
+
+      - name: Build signed IPA
+        script: |
+          flutter build ipa --release \
+            --build-number="$PROJECT_BUILD_NUMBER" \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    # Artifact paths are relative to the cloned Git repository root.
+    artifacts:
+      - gallerista/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # TestFlight only: never submit automatically for App Store review.
+        submit_to_app_store: false
