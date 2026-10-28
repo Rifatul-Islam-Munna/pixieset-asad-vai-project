@@ -25,7 +25,8 @@ class _SplashPageState extends State<SplashPage> {
     final loggedIn = await SessionStorage.isLoggedIn;
     if (!mounted) return;
     await context.router.replaceAll([
-      if (loggedIn) const HomeShellRoute() else const LoginRoute(),
+      // Logged out: the public home page (products, scan, log in).
+      if (loggedIn) const HomeShellRoute() else const WelcomeRoute(),
     ]);
   }
 

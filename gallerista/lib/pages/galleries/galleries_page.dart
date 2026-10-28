@@ -173,7 +173,7 @@ class _GalleriesPageState extends State<GalleriesPage> {
     );
     if (logout != true || !mounted) return;
     await AuthApi.logout();
-    if (mounted) await context.router.replaceAll([const LoginRoute()]);
+    if (mounted) await context.router.replaceAll([const WelcomeRoute()]);
   }
 
   void _scan() => Navigator.of(context).push(

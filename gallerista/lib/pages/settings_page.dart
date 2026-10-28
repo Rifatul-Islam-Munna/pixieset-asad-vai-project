@@ -45,7 +45,7 @@ class SettingsPage extends StatelessWidget {
 
   Future<void> _logout(BuildContext context) async {
     await AuthApi.logout();
-    if (context.mounted) await context.router.replaceAll([const LoginRoute()]);
+    if (context.mounted) await context.router.replaceAll([const WelcomeRoute()]);
   }
 
   void _open(BuildContext context, Widget page) =>

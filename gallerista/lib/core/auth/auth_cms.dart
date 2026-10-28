@@ -1,4 +1,4 @@
-import 'package:gallerista/api-hooks/dio_helper.dart';
+import 'package:gallerista/core/cms/home_cms.dart';
 
 /// Login / register headings from the public CMS (`GET /home-cms`,
 /// `data.auth`), with the web defaults from `frontend/lib/home-cms.ts`.
@@ -39,15 +39,11 @@ class AuthCopy {
   static Future<AuthCopy> load() async {
     final cached = _cached;
     if (cached != null) return cached;
-    try {
-      final res = await DioHelper.dio.get('/home-cms');
-      final data = (res.data as Map)['data'];
-      final auth = data is Map ? data['auth'] : null;
-      return _cached = auth is Map
-          ? AuthCopy.fromJson(Map<String, dynamic>.from(auth))
-          : const AuthCopy();
-    } catch (_) {
-      return const AuthCopy();
-    }
+    final data = await HomeCms.fetch();
+    if (data == null) return const AuthCopy(); // Offline: retry next time.
+    final auth = data['auth'];
+    return _cached = auth is Map
+        ? AuthCopy.fromJson(Map<String, dynamic>.from(auth))
+        : const AuthCopy();
   }
 }

@@ -12,6 +12,7 @@ import 'package:gallerista/pages/galleries/cover_preview.dart';
 import 'package:gallerista/pages/galleries/photo_viewer_page.dart';
 import 'package:gallerista/pages/library_page.dart';
 import 'package:gallerista/theme/app_theme.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 // ─────────────────────────── Scanner ───────────────────────────
@@ -31,11 +32,43 @@ class _ScanGalleryPageState extends State<ScanGalleryPage> {
     formats: const [BarcodeFormat.qrCode],
   );
   var _handled = false;
+  var _readingPhoto = false;
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Reads a gallery QR code from a photo or screenshot already on the
+  /// phone, for when the code was sent rather than shown in person.
+  Future<void> _scanFromPhoto() async {
+    final XFile? photo;
+    try {
+      photo = await ImagePicker().pickImage(source: ImageSource.gallery);
+    } catch (_) {
+      AppToast.error('Could not open your photos. Check photo access.');
+      return;
+    }
+    if (photo == null || !mounted) return;
+    setState(() => _readingPhoto = true);
+    try {
+      final capture = await _controller.analyzeImage(photo.path);
+      final raw = capture?.barcodes
+          .map((code) => code.rawValue)
+          .nonNulls
+          .firstOrNull;
+      if (!mounted) return;
+      if (raw == null) {
+        AppToast.error('No QR code found in that photo. Try a clearer one.');
+        return;
+      }
+      _open(raw);
+    } catch (_) {
+      AppToast.error('Could not read that photo. Try another one.');
+    } finally {
+      if (mounted) setState(() => _readingPhoto = false);
+    }
   }
 
   void _open(String? raw) {
@@ -127,6 +160,27 @@ class _ScanGalleryPageState extends State<ScanGalleryPage> {
                     'photographer.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: _readingPhoto ? null : _scanFromPhoto,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      disabledBackgroundColor: Colors.white70,
+                      disabledForegroundColor: Colors.black54,
+                      minimumSize: const Size(0, 46),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    ),
+                    icon: _readingPhoto
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.photo_library_outlined, size: 18),
+                    label: Text(
+                      _readingPhoto ? 'Reading photo…' : 'Choose from gallery',
+                    ),
                   ),
                   TextButton(
                     onPressed: _enterLink,

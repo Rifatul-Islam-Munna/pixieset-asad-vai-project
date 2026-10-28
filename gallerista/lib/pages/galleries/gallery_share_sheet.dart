@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -88,12 +89,23 @@ class _ShareSheetState extends State<_ShareSheet> {
   String? _url;
   String? _error;
   var _publishing = false;
-  var _savingQr = false;
+
+  /// Progress of the latest "Download QR", shown on the button and in a
+  /// line under it. (Toasts would appear behind this open sheet.)
+  var _qrSave = _QrSave.idle;
+  String? _qrSaveMessage;
+  Timer? _qrSaveReset;
 
   @override
   void initState() {
     super.initState();
     _resolve();
+  }
+
+  @override
+  void dispose() {
+    _qrSaveReset?.cancel();
+    super.dispose();
   }
 
   Future<void> _resolve() async {
@@ -175,21 +187,47 @@ class _ShareSheetState extends State<_ShareSheet> {
   /// Saves the QR code PNG straight into the phone's photo gallery.
   /// The first save asks for photo permission on its own.
   Future<void> _saveQr(String url) async {
-    setState(() => _savingQr = true);
+    _qrSaveReset?.cancel();
+    setState(() {
+      _qrSave = _QrSave.saving;
+      _qrSaveMessage = null;
+    });
     try {
       await Gal.putImageBytes(await _qrPng(url), name: _qrFileName);
-      AppToast.success('QR code saved to your gallery');
+      unawaited(HapticFeedback.lightImpact());
+      _finishQrSave(
+        _QrSave.saved,
+        'Downloaded to your gallery as $_qrFileName.png',
+      );
     } on GalException catch (e, s) {
       logger.e('Saving the gallery QR code failed', error: e, stackTrace: s);
-      AppToast.error(e.type == GalExceptionType.accessDenied
-          ? 'Allow photo access for Gallerista in Settings, then try again.'
-          : e.type.message);
+      _finishQrSave(
+        _QrSave.failed,
+        e.type == GalExceptionType.accessDenied
+            ? 'Allow photo access for Gallerista in Settings, then try again.'
+            : e.type.message,
+      );
     } catch (e, s) {
       logger.e('Saving the gallery QR code failed', error: e, stackTrace: s);
-      AppToast.error('Could not save the QR code.');
-    } finally {
-      if (mounted) setState(() => _savingQr = false);
+      _finishQrSave(_QrSave.failed, 'Could not save the QR code. Try again.');
     }
+  }
+
+  /// Shows the result on the button and under it, then resets the button
+  /// after a few seconds so another copy can be saved.
+  void _finishQrSave(_QrSave result, String message) {
+    if (!mounted) return;
+    setState(() {
+      _qrSave = result;
+      _qrSaveMessage = message;
+    });
+    _qrSaveReset = Timer(const Duration(seconds: 6), () {
+      if (!mounted) return;
+      setState(() {
+        _qrSave = _QrSave.idle;
+        _qrSaveMessage = null;
+      });
+    });
   }
 
   Future<void> _share(String url) => SharePlus.instance.share(
@@ -319,9 +357,10 @@ class _ShareSheetState extends State<_ShareSheet> {
               ),
               const SizedBox(height: 10),
               _DownloadQrButton(
-                saving: _savingQr,
+                state: _qrSave,
                 onPressed: _published ? () => _saveQr(url) : null,
               ),
+              _QrSaveStatus(state: _qrSave, message: _qrSaveMessage),
             ] else ...[
             FilledButton.icon(
               onPressed: _published ? () => _share(url) : null,
@@ -341,12 +380,13 @@ class _ShareSheetState extends State<_ShareSheet> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: _DownloadQrButton(
-                    saving: _savingQr,
+                    state: _qrSave,
                     onPressed: _published ? () => _saveQr(url) : null,
                   ),
                 ),
               ],
             ),
+            _QrSaveStatus(state: _qrSave, message: _qrSaveMessage),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -377,19 +417,122 @@ class _ShareSheetState extends State<_ShareSheet> {
   }
 }
 
-/// Saves the gallery QR code to the phone's photos; shows progress while saving.
-class _DownloadQrButton extends StatelessWidget {
-  const _DownloadQrButton({required this.saving, required this.onPressed});
+/// Where the latest "Download QR" stands.
+enum _QrSave { idle, saving, saved, failed }
 
-  final bool saving;
+/// Saves the gallery QR code to the phone's photos. The button itself shows
+/// the progress: Download QR → Saving… → ✓ Saved (or Try again).
+class _DownloadQrButton extends StatelessWidget {
+  const _DownloadQrButton({required this.state, required this.onPressed});
+
+  final _QrSave state;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final (icon, label, color) = switch (state) {
+      _QrSave.idle => (
+          const Icon(Icons.download_rounded, size: 18),
+          'Download QR',
+          null,
+        ),
+      _QrSave.saving => (
+          const SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          'Saving…',
+          null,
+        ),
+      _QrSave.saved => (
+          const Icon(Icons.check_circle_rounded, size: 18),
+          'Saved',
+          AppColors.success,
+        ),
+      _QrSave.failed => (
+          const Icon(Icons.refresh_rounded, size: 18),
+          'Try again',
+          AppColors.error,
+        ),
+    };
     return OutlinedButton.icon(
-      onPressed: saving ? null : onPressed,
-      icon: const Icon(Icons.download_rounded, size: 18),
-      label: Text(saving ? 'Saving…' : 'Download QR'),
+      // Saving or just saved: hold off so one tap never makes two copies.
+      onPressed: state == _QrSave.saving || state == _QrSave.saved
+          ? null
+          : onPressed,
+      style: color == null
+          ? null
+          : OutlinedButton.styleFrom(
+              foregroundColor: color,
+              disabledForegroundColor: color,
+              side: BorderSide(color: color),
+            ),
+      icon: icon,
+      label: Text(label),
+    );
+  }
+}
+
+/// The result of the latest download, under the buttons inside the sheet,
+/// with a shortcut to the phone's gallery app after a successful save.
+class _QrSaveStatus extends StatelessWidget {
+  const _QrSaveStatus({required this.state, required this.message});
+
+  final _QrSave state;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = this.message;
+    final saved = state == _QrSave.saved;
+    final color = saved ? AppColors.success : AppColors.error;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      alignment: AlignmentDirectional.topStart,
+      child: message == null
+          ? const SizedBox(width: double.infinity)
+          : Semantics(
+              liveRegion: true,
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsetsDirectional.fromSTEB(12, 6, 4, 6),
+                decoration: BoxDecoration(
+                  color: Color.lerp(AppColors.white, color, .08),
+                  border: Border.all(color: Color.lerp(AppColors.white, color, .3)!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      saved ? Icons.check_circle_rounded : Icons.error_rounded,
+                      color: color,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        message,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                    if (saved)
+                      TextButton(
+                        onPressed: Gal.open,
+                        style: TextButton.styleFrom(foregroundColor: color),
+                        child: const Text('View'),
+                      )
+                    else
+                      const SizedBox(height: 36),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

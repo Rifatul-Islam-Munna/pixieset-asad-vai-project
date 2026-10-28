@@ -5,8 +5,6 @@ import 'package:gallerista/core/auth/auth_cms.dart';
 import 'package:gallerista/core/network/api_error.dart';
 import 'package:gallerista/core/utils/app_toast.dart';
 import 'package:gallerista/pages/auth/auth_widgets.dart';
-import 'package:gallerista/pages/public_gallery_page.dart';
-import 'package:gallerista/pages/scan_widgets.dart';
 import 'package:gallerista/router/app_router.dart';
 import 'package:gallerista/theme/app_theme.dart';
 
@@ -110,7 +108,21 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const AuthBrand(),
+                  Row(
+                    children: [
+                      // Back to the public home page it was opened from.
+                      if (context.router.canPop())
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(end: 4),
+                          child: IconButton(
+                            tooltip: 'Back',
+                            onPressed: () => context.router.maybePop(),
+                            icon: const Icon(Icons.arrow_back_rounded),
+                          ),
+                        ),
+                      const Expanded(child: AuthBrand()),
+                    ],
+                  ),
                   const SizedBox(height: 40),
                   const Text(
                     'Welcome back!',
@@ -239,25 +251,6 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ScanGalleryPage(),
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                      foregroundColor: AppColors.authPurple,
-                      side: const BorderSide(color: AppColors.authBorder),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    icon: const Icon(Icons.qr_code_scanner_rounded),
-                    label: const Text('Got a gallery QR code? Scan it'),
-                  ),
-                  const RecentScansRow(padding: 0),
                   const SizedBox(height: 32),
                   const AuthBenefits(),
                 ],

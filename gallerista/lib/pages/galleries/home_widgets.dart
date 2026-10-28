@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gallerista/core/cms/site_logo.dart';
 import 'package:gallerista/core/utils/app_network_image.dart';
 import 'package:gallerista/gallery/collection_models.dart';
 import 'package:gallerista/gallery/gallery_filters.dart';
@@ -38,13 +39,18 @@ class HomeGreeting extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text(
-                'GALLERISTA',
-                style: TextStyle(
-                  fontSize: 12,
-                  letterSpacing: 3,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.galleryPurple,
+              // The website's logo from the admin; the text until it loads.
+              const SiteLogo(
+                height: 22,
+                maxWidth: 170,
+                fallback: Text(
+                  'GALLERISTA',
+                  style: TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.galleryPurple,
+                  ),
                 ),
               ),
               const Spacer(),

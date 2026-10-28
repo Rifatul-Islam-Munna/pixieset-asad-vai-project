@@ -12,6 +12,7 @@ import 'package:gallerista/pages/galleries/gallery_settings_page.dart';
 import 'package:gallerista/pages/galleries/photo_viewer_page.dart';
 import 'package:gallerista/pages/home_shell_page.dart';
 import 'package:gallerista/pages/splash_page.dart';
+import 'package:gallerista/pages/welcome_page.dart';
 
 part 'app_router.gr.dart';
 
@@ -20,6 +21,8 @@ class AppRouter extends RootStackRouter {
   @override
   List<AutoRoute> get routes => [
     AutoRoute(page: SplashRoute.page, initial: true),
+    // Public home page: products, QR scan, log in. No account needed.
+    AutoRoute(page: WelcomeRoute.page, path: '/welcome'),
     AutoRoute(page: LoginRoute.page, path: '/login'),
     AutoRoute(page: RegisterRoute.page, path: '/register'),
     AutoRoute(page: HomeShellRoute.page, path: '/home'),

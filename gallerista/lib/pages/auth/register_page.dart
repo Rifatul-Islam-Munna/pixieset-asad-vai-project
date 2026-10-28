@@ -223,7 +223,8 @@ class _RegisterPageState extends State<RegisterPage> {
                               style: TextStyle(color: AppColors.authMuted)),
                           TextButton(
                             onPressed: () => context.router.replaceAll(
-                              [const LoginRoute()],
+                              // Keep the public home page under Log in.
+                              [const WelcomeRoute(), const LoginRoute()],
                             ),
                             style: TextButton.styleFrom(
                               foregroundColor: AppColors.authPurple,

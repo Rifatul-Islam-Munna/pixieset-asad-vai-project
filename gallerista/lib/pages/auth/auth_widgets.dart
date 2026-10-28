@@ -1,32 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gallerista/core/cms/site_brand.dart';
+import 'package:gallerista/core/cms/site_logo.dart';
 import 'package:gallerista/theme/app_theme.dart';
 
 /// Shared pieces of the login screen, styled after
 /// `frontend/components/auth/auth-pages.tsx`.
+///
+/// The brand is the website's own, uploaded by the admin: its logo when one
+/// is set, else its icon and name, else the built-in Gallerista mark.
 class AuthBrand extends StatelessWidget {
   const AuthBrand({super.key});
 
   @override
   Widget build(BuildContext context) {
+    return const Align(
+      alignment: AlignmentDirectional.centerStart,
+      // Shrink to the logo, so it stays centered where a parent centers it
+      // (splash) and left-aligned where it gets the full width (login).
+      widthFactor: 1,
+      child: SiteLogo(height: 34, fallback: _IconAndName()),
+    );
+  }
+}
+
+class _IconAndName extends StatelessWidget {
+  const _IconAndName();
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(9),
-            gradient: const LinearGradient(
-              colors: [AppColors.authGradientStart, AppColors.authGradientEnd],
+        SiteIcon(
+          size: 36,
+          fallback: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(9),
+              gradient: const LinearGradient(
+                colors: [AppColors.authGradientStart, AppColors.authGradientEnd],
+              ),
             ),
+            child: const Icon(Icons.photo_library_outlined,
+                color: AppColors.white, size: 20),
           ),
-          child: const Icon(Icons.photo_library_outlined,
-              color: AppColors.white, size: 20),
         ),
         const SizedBox(width: 10),
-        const Text(
-          'Gallerista',
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+        ValueListenableBuilder<SiteBrand>(
+          valueListenable: SiteBrand.current,
+          builder: (_, brand, _) => Text(
+            brand.name,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     );

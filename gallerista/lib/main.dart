@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_query_flutter/cached_query_flutter.dart';
 import 'package:cached_storage/cached_storage.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:gallerista/api-hooks/dio_helper.dart';
+import 'package:gallerista/core/cms/site_brand.dart';
 import 'package:gallerista/core/navigation/app_router_instance.dart';
 import 'package:gallerista/core/utils/app_toast.dart';
 import 'package:gallerista/gallery/scan_history.dart';
@@ -50,8 +53,13 @@ Future<void> main() async {
   await ScanHistory.load();
   await dotenv.load(fileName: '.env');
   DioHelper.init(
-    onUnauthorized: () => appRouter.replaceAll([const LoginRoute()]),
+    // Session expired: log in again, with the public home page behind it.
+    onUnauthorized: () =>
+        appRouter.replaceAll([const WelcomeRoute(), const LoginRoute()]),
   );
+  // The website's logo/icon from the admin: saved copy at once, then
+  // refreshed in the background (never blocks startup).
+  unawaited(SiteBrand.load());
   CachedQuery.instance.configFlutter(
     config: GlobalQueryConfig(refetchOnConnection: true, refetchOnResume: true),
     storage: await CachedStorage.ensureInitialized(),
