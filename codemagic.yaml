@@ -51,15 +51,41 @@ workflows:
       - name: Configure iOS signing
         script: xcode-project use-profiles
 
-      - name: Build signed IPA
+      - name: Build signed IPA and verify TestFlight artifact
         script: |
+          set -euo pipefail
+          echo "Flutter project directory: $(pwd)"
           flutter build ipa --release \
             --build-number="$PROJECT_BUILD_NUMBER" \
             --export-options-plist=/Users/builder/export_options.plist
 
-    # Artifact paths are relative to the cloned Git repository root.
+          # Flutter exports the signed .ipa into build/ios/ipa relative to the app.
+          IPA_DIR="$(pwd)/build/ios/ipa"
+          echo "Checking for exported IPA in: $IPA_DIR"
+          IPA_PATH=""
+          if [ -d "$IPA_DIR" ]; then
+            IPA_PATH=$(find "$IPA_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)
+          fi
+
+          if [ -z "$IPA_PATH" ]; then
+            echo "ERROR: No IPA was exported. TestFlight publishing cannot continue."
+            echo "iOS build output files:"
+            find "$(pwd)/build/ios" -maxdepth 4 -type f -print 2>/dev/null | head -n 80 || true
+            exit 1
+          fi
+
+          # Use a known absolute artifact directory to avoid monorepo path ambiguity.
+          ARTIFACT_DIR="$CM_BUILD_DIR/codemagic_artifacts"
+          mkdir -p "$ARTIFACT_DIR"
+          cp "$IPA_PATH" "$ARTIFACT_DIR/Gallerista.ipa"
+          test -s "$ARTIFACT_DIR/Gallerista.ipa"
+          echo "IPA ready for Codemagic artifact collection and TestFlight:"
+          ls -lh "$ARTIFACT_DIR/Gallerista.ipa"
+
+    # Absolute path is intentional: scripts run in gallerista/, but Codemagic
+    # collects artifacts independently of the script working directory.
     artifacts:
-      - gallerista/build/ios/ipa/*.ipa
+      - $CM_BUILD_DIR/codemagic_artifacts/*.ipa
       - /tmp/xcodebuild_logs/*.log
 
     publishing:
