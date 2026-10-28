@@ -17,7 +17,7 @@ workflows:
       groups:
         - gallerista_env
       flutter: stable
-      xcode: latest
+      xcode: 26.5
       cocoapods: default
       ios_signing:
         distribution_type: app_store
