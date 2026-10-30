@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:gallerista/api-hooks/dio_helper.dart';
 import 'package:gallerista/gallery/collection_models.dart';
 
@@ -70,15 +71,25 @@ class PublicGallery {
   bool get locked => pinRequired || emailRequired;
 }
 
-/// Public gallery endpoints (`/public/collections/:identifier`), sending
-/// the app key header for mobile-only galleries.
+/// Public gallery endpoints (`/public/collections/:identifier`). Every call
+/// identifies the app, so "Mobile only" galleries open from any QR code or
+/// link; older QR codes may also carry a per-gallery key.
 class PublicGalleryApi {
   PublicGalleryApi._();
 
   static const pageSize = 60;
 
+  /// Must match the backend's MOBILE_APP_KEY (same built-in default).
+  static const _defaultAppKey = 'gallerista-app-7f3c9b21e4d84a6c';
+
+  static String get _appKey {
+    final configured = dotenv.env['MOBILE_APP_KEY']?.trim() ?? '';
+    return configured.isEmpty ? _defaultAppKey : configured;
+  }
+
   static Options _options(GalleryLink link) => Options(
     headers: {
+      'x-gallerista-app': _appKey,
       if (link.key != null) 'x-gallerista-mobile-key': link.key,
     },
   );

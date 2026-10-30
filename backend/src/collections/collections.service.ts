@@ -604,6 +604,25 @@ export class CollectionsService implements OnModuleInit {
       .slice(0, 32);
   }
 
+  /**
+   * Shared key the Gallerista app sends as `x-gallerista-app` on public
+   * gallery requests. Set MOBILE_APP_KEY in the backend .env and the same
+   * value in the app's .env; both fall back to the same built-in default.
+   */
+  private mobileAppKey(): string {
+    const configured = String(process.env.MOBILE_APP_KEY ?? '').trim();
+    return configured || 'gallerista-app-7f3c9b21e4d84a6c';
+  }
+
+  /** Constant-time compare; an empty expected value never matches. */
+  private safeKeyEquals(given: unknown, expected: string): boolean {
+    const a = Buffer.from(String(given ?? '').trim());
+    const b = Buffer.from(expected);
+    return (
+      b.length > 0 && a.length === b.length && mobileCrypto.timingSafeEqual(a, b)
+    );
+  }
+
   /** Owner-only: returns the app key for one of the user's galleries. */
   async getMobileGalleryKey(userId: string, id: string) {
     const collection: any = await this.findOne(userId, id, '1', '0');
@@ -620,6 +639,7 @@ export class CollectionsService implements OnModuleInit {
     identifier: string,
     siteSlug?: string,
     mobileKey?: string,
+    appKey?: string,
   ) {
     let collection: any;
     try {
@@ -630,17 +650,18 @@ export class CollectionsService implements OnModuleInit {
     if (!this.boolSetting((collection?.settings as any)?.general?.mobileOnly)) {
       return;
     }
+    // The Gallerista app sends its app key on every public gallery request,
+    // so any QR code / link for this gallery opens in the app — including
+    // ones made before "Mobile only" was switched on. Browsers never send it.
+    if (this.safeKeyEquals(appKey, this.mobileAppKey())) return;
+    // Older QR codes carry a per-gallery key in the URL fragment.
     let expected = '';
     try {
       expected = this.mobileGalleryKey(collection._id.toString());
     } catch {
       expected = '';
     }
-    const given = String(mobileKey ?? '').trim();
-    const allowed =
-      expected.length > 0 &&
-      given.length === expected.length &&
-      mobileCrypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+    const allowed = this.safeKeyEquals(mobileKey, expected);
     if (!allowed) {
       throw new ForbiddenException({
         statusCode: 403,

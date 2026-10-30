@@ -12,10 +12,9 @@ workflows:
       app_store_connect: gallerista
 
     environment:
-      # Public endpoints from gallerista/.env. Never store credentials here.
-      vars:
-        API_URL: "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host"
-        WEB_URL: "https://gallerista.app"
+      # No vars here: the app uses everything from gallerista/.env, which
+      # must be committed to the repo (it is bundled into the app, so never
+      # put private secrets in it).
       flutter: stable
       xcode: 26.5
       cocoapods: default
@@ -29,13 +28,25 @@ workflows:
         - ~/Library/Caches/CocoaPods
 
     scripts:
-      - name: Create app environment file
+      - name: Check app environment file (gallerista/.env)
         script: |
           set -eu
-          : "${API_URL:?API_URL is missing}"
-          : "${WEB_URL:?WEB_URL is missing}"
-          # Flutter bundles .env as an asset; do not put private secrets in it.
-          printf 'API_URL=%s\nWEB_URL=%s\nSAMPLE_IMAGES=false\n' "$API_URL" "$WEB_URL" > .env
+          if [ ! -f .env ]; then
+            echo "ERROR: gallerista/.env is missing. Commit it to the repo:"
+            echo "  git add gallerista/.env && git commit -m 'Add app env' && git push"
+            exit 1
+          fi
+          for key in API_URL WEB_URL; do
+            if ! grep -Eq "^[[:space:]]*${key}=[^[:space:]]" .env; then
+              echo "ERROR: ${key} is missing or empty in gallerista/.env"
+              exit 1
+            fi
+          done
+          if grep -Eiq '^[[:space:]]*SAMPLE_IMAGES=true' .env; then
+            echo "WARNING: SAMPLE_IMAGES=true in gallerista/.env (dev-only stock photos)."
+          fi
+          echo "Using gallerista/.env:"
+          grep -E '^[[:space:]]*[A-Z_]+=' .env | sed -E 's/=.*/=…/'
 
       - name: Install Flutter dependencies
         script: flutter pub get

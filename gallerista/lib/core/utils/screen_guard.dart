@@ -7,16 +7,20 @@ import 'package:screen_protector/screen_protector.dart';
 
 /// App-wide screen capture protection for client galleries.
 ///
-/// - Android: FLAG_SECURE. Screenshots and screen recordings come out black
-///   and the recent-apps preview is hidden.
-/// - iOS: screenshots come out blank (secure-layer technique), the
-///   app-switcher preview is blurred, and while the screen is being
-///   recorded or mirrored [recording] is true so the UI can cover itself.
+/// - Android: FLAG_SECURE. Screenshots are refused and screen recordings come
+///   out black; the OS does not let an app put anything else in them.
+/// - iOS: screenshots and screen recordings show the Gallerista logo
+///   ([iosShieldImage] in Runner/Assets.xcassets) instead of the photos, the
+///   app-switcher preview is blurred, and while the screen is being recorded
+///   or mirrored [recording] is true so the UI covers itself with the logo.
 ///
 /// Reference-counted, so nested protected screens (gallery → photo viewer)
 /// keep protection on until the last one closes.
 class ScreenGuard {
   ScreenGuard._();
+
+  /// Image set in ios/Runner/Assets.xcassets shown in iOS captures.
+  static const iosShieldImage = 'GalleristaShield';
 
   static int _count = 0;
 
@@ -36,7 +40,10 @@ class ScreenGuard {
         () => AppToast.warning('Screenshots are not allowed in this gallery.'),
         (captured) => recording.value = captured,
       );
-      await ScreenProtector.preventScreenshotOn();
+      await ScreenProtector.preventScreenshotOn(
+        iosPlaceholderImage: iosShieldImage,
+        iosPlaceholderText: 'Protected by Gallerista',
+      );
       await ScreenProtector.protectDataLeakageWithBlur();
       recording.value = await ScreenProtector.isRecording();
     } catch (e) {
@@ -98,43 +105,53 @@ class _ProtectedScreenState extends State<ProtectedScreen> {
   }
 }
 
+/// Shown over a protected screen while it is being recorded or mirrored:
+/// the Gallerista logo on white instead of a black screen.
 class _RecordingCover extends StatelessWidget {
   const _RecordingCover();
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: Colors.black,
+    return ColoredBox(
+      color: Colors.white,
       child: Center(
         child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.videocam_off_outlined, color: Colors.white, size: 48),
-              SizedBox(height: 16),
-              Text(
-                'Screen recording is not allowed',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  decoration: TextDecoration.none,
+          padding: const EdgeInsets.all(32),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/brand/gallerista_logo.png',
+                  semanticLabel: 'Gallerista',
+                  fit: BoxFit.contain,
                 ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Stop recording or screen mirroring to keep viewing this '
-                'gallery.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                  decoration: TextDecoration.none,
+                const SizedBox(height: 28),
+                const Text(
+                  'Screen recording is not allowed',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF151515),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.none,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                const Text(
+                  'Stop recording or screen mirroring to keep viewing this '
+                  'gallery.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF5F5A54),
+                    fontSize: 14,
+                    height: 1.4,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -11,9 +11,9 @@ import 'package:gallerista/core/storage/session_storage.dart';
 import 'package:gallerista/core/utils/app_toast.dart';
 import 'package:gallerista/core/utils/share_origin.dart';
 import 'package:gallerista/gallery/collection_models.dart';
-import 'package:gallerista/gallery/collections_api.dart';
 import 'package:gallerista/gallery/public_gallery_api.dart';
 import 'package:gallerista/main.dart' show logger;
+import 'package:gallerista/pages/public_gallery_page.dart';
 import 'package:gallerista/theme/app_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -112,12 +112,10 @@ class _ShareSheetState extends State<_ShareSheet> {
     try {
       final slug = await homepageSlug();
       final c = widget.collection;
-      var url = publicCollectionUrl(slug, c.slug ?? c.id);
-      if (c.isMobileOnly) {
-        // The key goes in the fragment: browsers never send it to the server.
-        final key = await CollectionsApi.mobileKey(c.id);
-        url = '$url#${GalleryLink.keyParam}=${Uri.encodeComponent(key)}';
-      }
+      // Same link and QR code whether "Mobile only" is on or off: the app
+      // identifies itself to the backend, so it opens the gallery either
+      // way, while the website refuses mobile-only galleries.
+      final url = publicCollectionUrl(slug, c.slug ?? c.id);
       if (mounted) setState(() => _url = url);
     } catch (e) {
       if (mounted) setState(() => _error = ApiError.message(e));
@@ -230,8 +228,20 @@ class _ShareSheetState extends State<_ShareSheet> {
     });
   }
 
+  /// Mobile-only galleries open in the app, never in the browser, so the
+  /// shared text tells the client how to open the link there.
+  String _shareText(String url) => widget.collection.isMobileOnly
+      ? 'Open "${widget.collection.name}" in the Gallerista app: tap '
+          '"Scan gallery QR" and scan the gallery QR code, or tap '
+          '"Enter link instead" and paste this link:\n$url'
+      : url;
+
   Future<void> _share(String url) => SharePlus.instance.share(
-    ShareParams(text: url, subject: widget.collection.name, sharePositionOrigin: shareOrigin(context)),
+    ShareParams(
+      text: _shareText(url),
+      subject: widget.collection.name,
+      sharePositionOrigin: shareOrigin(context),
+    ),
   );
 
   Future<void> _email(String url) async {
@@ -240,13 +250,22 @@ class _ShareSheetState extends State<_ShareSheet> {
       path: widget.clientEmails.join(','),
       query: _query({
         'subject': 'Your gallery is ready: ${widget.collection.name}',
-        'body': 'Hi,\n\nYour photos are ready to view:\n$url\n\nEnjoy!',
+        'body': 'Hi,\n\nYour photos are ready to view:\n'
+            '${_shareText(url)}\n\nEnjoy!',
       }),
     );
     if (!await launchUrl(uri)) AppToast.error('No email app found.');
   }
 
   Future<void> _open(String url) async {
+    final link = GalleryLink.tryParse(url);
+    if (widget.collection.isMobileOnly && link != null) {
+      // The website refuses mobile-only galleries; preview it in the app.
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => PublicGalleryPage(link: link)),
+      );
+      return;
+    }
     final ok = await launchUrl(
       Uri.parse(url),
       mode: LaunchMode.externalApplication,
@@ -344,24 +363,13 @@ class _ShareSheetState extends State<_ShareSheet> {
             const SizedBox(height: 16),
             if (widget.collection.isMobileOnly) ...[
               const Text(
-                'Mobile only: clients open this gallery by scanning this QR '
-                'code with the Gallerista app ("Scan gallery QR"). The '
-                'website will not show it.',
+                'Mobile only: clients open this gallery in the Gallerista '
+                'app — scan this QR code ("Scan gallery QR") or paste the '
+                'link ("Enter link instead"). The website will not show it.',
                 style: TextStyle(fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _published ? () => _shareQr(url) : null,
-                icon: const Icon(Icons.qr_code_2_rounded, size: 18),
-                label: const Text('Share QR code'),
-              ),
-              const SizedBox(height: 10),
-              _DownloadQrButton(
-                state: _qrSave,
-                onPressed: _published ? () => _saveQr(url) : null,
-              ),
-              _QrSaveStatus(state: _qrSave, message: _qrSaveMessage),
-            ] else ...[
+            ],
             FilledButton.icon(
               onPressed: _published ? () => _share(url) : null,
               icon: const Icon(Icons.ios_share_rounded, size: 18),
@@ -402,14 +410,16 @@ class _ShareSheetState extends State<_ShareSheet> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _open(url),
+                    // Mobile-only previews in the app, which needs it published.
+                    onPressed: _published || !widget.collection.isMobileOnly
+                        ? () => _open(url)
+                        : null,
                     icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     label: const Text('Preview'),
                   ),
                 ),
               ],
             ),
-            ],
           ],
         ],
       ),

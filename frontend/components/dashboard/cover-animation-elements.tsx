@@ -1,7 +1,8 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { motion, useReducedMotion, type MotionProps } from "motion/react";
 import {
   coverAnimationFingerprint,
   resolveCoverAnimationSpec,
@@ -137,6 +138,104 @@ export function AnimatedCoverMedia({
   );
 }
 
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/** Smallest size a cover text may shrink to while fitting. */
+const FIT_MIN_PX: Partial<Record<CoverAnimationTarget, number>> = { title: 14 };
+/** Most lines a cover text may take before it shrinks (default 2). */
+const FIT_MAX_LINES: Partial<Record<CoverAnimationTarget, number>> = { title: 3 };
+
+/**
+ * Shrinks cover text until it fits its box on every screen: no word wider
+ * than the box, at most a few lines, and inside the box height when the box
+ * clips (custom templates). It measures a hidden copy without animations, so
+ * entrance motion never skews the result, and refits when the cover resizes
+ * or web fonts finish loading. It always starts from the designed size, so
+ * text never grows past what the photographer chose.
+ */
+function useFitCoverText(
+  ref: RefObject<HTMLElement | null>,
+  text: string,
+  target: CoverAnimationTarget,
+  baseFontSize: CSSProperties["fontSize"],
+  fingerprint: string,
+) {
+  const base = typeof baseFontSize === "number" ? `${baseFontSize}px` : baseFontSize ?? "";
+  useIsomorphicLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let frame = 0;
+
+    const fit = () => {
+      frame = 0;
+      const host = el.parentElement;
+      if (!host || !el.isConnected || !text.trim()) return;
+      el.style.fontSize = base;
+      const width = el.offsetWidth;
+      if (width <= 0) return;
+      const clips = /hidden|clip/.test(getComputedStyle(el).overflow);
+      const probe = el.cloneNode(false) as HTMLElement;
+      probe.removeAttribute("id");
+      probe.setAttribute("aria-hidden", "true");
+      probe.textContent = text;
+      Object.assign(probe.style, {
+        position: "absolute",
+        left: "0",
+        top: "0",
+        visibility: "hidden",
+        pointerEvents: "none",
+        transform: "none",
+        opacity: "0",
+        width: `${width}px`,
+        maxWidth: "none",
+        height: clips ? `${el.offsetHeight}px` : "auto",
+        minHeight: "0",
+        maxHeight: "none",
+        overflowWrap: "normal",
+        wordBreak: "normal",
+      });
+      host.appendChild(probe);
+      const maxLines = FIT_MAX_LINES[target] ?? 2;
+      const overflows = () => {
+        if (probe.scrollWidth > probe.clientWidth + 1) return true;
+        if (clips) return probe.scrollHeight > probe.clientHeight + 1;
+        const style = getComputedStyle(probe);
+        const fontPx = Number.parseFloat(style.fontSize) || 16;
+        const linePx = Number.parseFloat(style.lineHeight) || fontPx * 1.2;
+        const padding = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
+        return Math.round((probe.scrollHeight - padding) / linePx) > maxLines;
+      };
+      let size = Number.parseFloat(getComputedStyle(probe).fontSize) || 16;
+      const min = Math.min(size, FIT_MIN_PX[target] ?? 9);
+      let shrunk = false;
+      for (let guard = 0; guard < 48 && size > min && overflows(); guard += 1) {
+        size = Math.max(min, Math.floor(size * 0.93 * 10) / 10);
+        probe.style.fontSize = `${size}px`;
+        shrunk = true;
+      }
+      probe.remove();
+      if (shrunk) el.style.fontSize = `${size}px`;
+    };
+
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(fit);
+    };
+    fit();
+    // Watch the cover, not the text's own box, so shrinking never re-triggers.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    const root = el.closest(".cover-preview-root") ?? el.parentElement;
+    if (root) observer?.observe(root);
+    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+    fonts?.ready.then(schedule).catch(() => undefined);
+    fonts?.addEventListener?.("loadingdone", schedule);
+    return () => {
+      observer?.disconnect();
+      fonts?.removeEventListener?.("loadingdone", schedule);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [base, text, target, fingerprint]);
+}
+
 export function AnimatedCoverText({
   as = "span",
   target,
@@ -155,11 +254,14 @@ export function AnimatedCoverText({
   disabled?: boolean;
 }) {
   const animation = useAnimation(design, target, disabled);
+  const ref = useRef<HTMLElement | null>(null);
+  useFitCoverText(ref, text, target, style?.fontSize, animation.fingerprint);
   const MotionTag: any = as === "h3" ? motion.h3 : as === "p" ? motion.p : motion.span;
   const split = animation.disabledMotion ? "none" : animation.spec.split;
   if (split === "none") {
     return (
       <MotionTag
+        ref={ref}
         key={animation.fingerprint}
         className={className}
         style={style}
@@ -172,23 +274,47 @@ export function AnimatedCoverText({
     );
   }
 
-  const tokens = split === "characters" ? Array.from(text) : text.split(/(\s+)/);
+  // Letters animate one by one, but each word stays one unbreakable unit,
+  // so lines only ever wrap between words (never mid-word on phones).
+  const parts = text.split(/(\s+)/);
+  const lengths = parts.map((part) => (split === "characters" ? Array.from(part).length : 1));
+  const starts = lengths.map((_, index) => lengths.slice(0, index).reduce((sum, n) => sum + n, 0));
+  const tokenState = animationState(animation.spec);
+  const tokenMotion = {
+    initial: tokenState.initial,
+    animate: tokenState.animate,
+  } as unknown as Pick<MotionProps, "initial" | "animate">;
   return (
-    <MotionTag key={animation.fingerprint} className={className} style={style} aria-label={text}>
-      {tokens.map((token, index) => {
-        const whitespace = /^\s+$/.test(token);
-        if (whitespace) return <span key={`${index}-space`} aria-hidden>{token}</span>;
-        const tokenState = animationState(animation.spec);
+    <MotionTag ref={ref} key={animation.fingerprint} className={className} style={style} aria-label={text}>
+      {parts.map((part, index) => {
+        const start = starts[index];
+        if (!part) return null;
+        if (/^\s+$/.test(part)) return <span key={`${index}-space`} aria-hidden>{part}</span>;
+        if (split === "characters") {
+          return (
+            <span key={`${part}-${index}`} aria-hidden className="inline-block whitespace-nowrap">
+              {Array.from(part).map((char, offset) => (
+                <motion.span
+                  key={`${char}-${offset}`}
+                  className="inline-block will-change-transform"
+                  {...tokenMotion}
+                  transition={transitionFor(animation.spec, animation.speed, start + offset)}
+                >
+                  {char}
+                </motion.span>
+              ))}
+            </span>
+          );
+        }
         return (
           <motion.span
-            key={`${token}-${index}`}
+            key={`${part}-${index}`}
             aria-hidden
             className="inline-block will-change-transform"
-            initial={tokenState.initial as any}
-            animate={tokenState.animate as any}
-            transition={transitionFor(animation.spec, animation.speed, index)}
+            {...tokenMotion}
+            transition={transitionFor(animation.spec, animation.speed, start)}
           >
-            {token}
+            {part}
           </motion.span>
         );
       })}

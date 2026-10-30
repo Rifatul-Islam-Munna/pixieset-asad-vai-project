@@ -312,9 +312,9 @@ class _PublicGalleryPageState extends State<PublicGalleryPage> {
     if (_blocked) {
       return const _Message(
         icon: Icons.phonelink_lock_outlined,
-        title: 'This QR code can’t open the gallery',
-        text: 'This gallery is mobile only. Ask your photographer for a new '
-            'QR code and scan it with the Gallerista app.',
+        title: 'This gallery couldn’t be opened',
+        text: 'This gallery is mobile only. Update the Gallerista app to '
+            'the latest version and scan the QR code again.',
       );
     }
     if (gallery == null) {

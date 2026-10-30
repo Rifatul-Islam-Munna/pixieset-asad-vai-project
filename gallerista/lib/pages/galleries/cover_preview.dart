@@ -1,6 +1,103 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:gallerista/core/utils/app_network_image.dart';
 import 'package:gallerista/gallery/gallery_design.dart';
+
+/// Lays [child] out at the full available width, then scales it down (never
+/// up) when it is taller than the space it has, so cover text never spills
+/// out of short covers or the text half of split / paper layouts.
+class _ScaleDownToFit extends StatelessWidget {
+  const _ScaleDownToFit({required this.alignment, required this.child});
+
+  final AlignmentGeometry alignment;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) => FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: alignment,
+        child: SizedBox(width: box.maxWidth, child: child),
+      ),
+    );
+  }
+}
+
+/// Cover title that shrinks from [maxFontSize] towards [minFontSize] until
+/// every word fits on one line and the whole title fits in [maxLines] lines,
+/// so it never looks oversized or breaks mid-word on any screen. Measured
+/// with the device text scale, so accessibility font sizes still apply.
+class _FitTitle extends StatelessWidget {
+  const _FitTitle({
+    required this.text,
+    required this.style,
+    required this.textAlign,
+    required this.maxFontSize,
+    required this.minFontSize,
+  });
+
+  static const maxLines = 3;
+
+  final String text;
+  final TextStyle style;
+  final TextAlign textAlign;
+  final double maxFontSize;
+  final double minFontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    return LayoutBuilder(builder: (context, box) {
+      final size = _fittedSize(box.maxWidth, scaler, direction);
+      return Text(
+        text,
+        textAlign: textAlign,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: style.copyWith(fontSize: size),
+      );
+    });
+  }
+
+  double _fittedSize(double width, TextScaler scaler, TextDirection direction) {
+    if (!width.isFinite || width <= 0) return maxFontSize;
+    final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    var size = maxFontSize;
+    while (size > minFontSize && !_fits(size, width, words, scaler, direction)) {
+      size = math.max(minFontSize, size - 1);
+    }
+    return size;
+  }
+
+  bool _fits(
+    double size,
+    double width,
+    Iterable<String> words,
+    TextScaler scaler,
+    TextDirection direction,
+  ) {
+    TextPainter measure(String value, {int? lines}) => TextPainter(
+          text: TextSpan(text: value, style: style.copyWith(fontSize: size)),
+          textDirection: direction,
+          textScaler: scaler,
+          maxLines: lines,
+        )..layout(maxWidth: lines == null ? double.infinity : width);
+
+    for (final word in words) {
+      final painter = measure(word);
+      final tooWide = painter.width > width;
+      painter.dispose();
+      if (tooWide) return false;
+    }
+    final whole = measure(text, lines: maxLines);
+    final fits = !whole.didExceedMaxLines;
+    whole.dispose();
+    return fits;
+  }
+}
 
 /// Phone-sized preview of a gallery cover with the chosen layout,
 /// typography, colors and focal point. Tapping sets the focal point when
@@ -38,23 +135,36 @@ class CoverPreview extends StatelessWidget {
     final alignment = Alignment(fx / 50 - 1, fy / 50 - 1);
 
     return LayoutBuilder(builder: (context, box) {
-      final s = box.maxWidth / 360;
+      // Spacing follows the cover width, within limits so tablets and wide
+      // screens don't get giant padding.
+      final s = (box.maxWidth / 360).clamp(0.85, 1.6).toDouble();
+      // Text follows the width it actually gets (half the cover in split
+      // layouts), also within limits; the title then shrinks to fit.
+      final textWidth =
+          family == CoverFamily.split ? box.maxWidth / 2 : box.maxWidth;
+      final t = (textWidth / 360).clamp(0.8, 1.25).toDouble();
       final onImage = family != CoverFamily.split && family != CoverFamily.paper;
       final textColor = onImage
           ? hexColor(design['coverTitleColor'], Colors.white)
           : ink;
-      final texts = _CoverTexts(
-        smallTitle: _v<bool>('showCoverSmallTitle') ? smallTitle : '',
-        title: _v<bool>('showCoverTitle') ? title : '',
-        date: _v<bool>('showCoverDate') ? date : '',
-        button: _v<bool>('showCoverButton')
-            ? '${design['coverButtonText'] ?? GalleryDesign.defaults['coverButtonText']}'
-            : '',
-        font: font,
-        color: textColor,
-        accent: onImage ? textColor : accent,
-        scale: s,
-        alignStart: family == CoverFamily.bottomLeft,
+      final fitAlignment = family == CoverFamily.bottomLeft
+          ? AlignmentDirectional.bottomStart
+          : AlignmentDirectional.center;
+      final texts = _ScaleDownToFit(
+        alignment: fitAlignment,
+        child: _CoverTexts(
+          smallTitle: _v<bool>('showCoverSmallTitle') ? smallTitle : '',
+          title: _v<bool>('showCoverTitle') ? title : '',
+          date: _v<bool>('showCoverDate') ? date : '',
+          button: _v<bool>('showCoverButton')
+              ? '${design['coverButtonText'] ?? GalleryDesign.defaults['coverButtonText']}'
+              : '',
+          font: font,
+          color: textColor,
+          accent: onImage ? textColor : accent,
+          scale: t,
+          alignStart: family == CoverFamily.bottomLeft,
+        ),
       );
       final image = LayoutBuilder(builder: (_, imageBox) => GestureDetector(
         onTapDown: onFocalTap == null
@@ -191,12 +301,13 @@ class _CoverTexts extends StatelessWidget {
                     color: color, fontSize: 11 * scale, letterSpacing: 3 * scale)),
           if (title.isNotEmpty) ...[
             SizedBox(height: 10 * scale),
-            Text(title,
-                textAlign: align,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: font.copyWith(
-                    color: color, fontSize: 34 * scale, height: 1.1)),
+            _FitTitle(
+              text: title,
+              textAlign: align,
+              style: font.copyWith(color: color, height: 1.1),
+              maxFontSize: 34 * scale,
+              minFontSize: 16,
+            ),
           ],
           if (date.isNotEmpty) ...[
             SizedBox(height: 10 * scale),
