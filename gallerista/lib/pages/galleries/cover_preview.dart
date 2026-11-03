@@ -36,10 +36,10 @@ class _FitTitle extends StatelessWidget {
     required this.textAlign,
     required this.maxFontSize,
     required this.minFontSize,
+    this.maxLines,
   });
 
-  static const maxLines = 3;
-
+  final int? maxLines;
   final String text;
   final TextStyle style;
   final TextAlign textAlign;
@@ -50,23 +50,29 @@ class _FitTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final scaler = MediaQuery.textScalerOf(context);
     final direction = Directionality.of(context);
-    return LayoutBuilder(builder: (context, box) {
-      final size = _fittedSize(box.maxWidth, scaler, direction);
-      return Text(
-        text,
-        textAlign: textAlign,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
-        style: style.copyWith(fontSize: size),
-      );
-    });
+    return LayoutBuilder(
+      builder: (context, box) {
+        final size = _fittedSize(box.maxWidth, scaler, direction);
+        return Text(
+          text,
+          textAlign: textAlign,
+          maxLines: maxLines,
+          softWrap: true,
+          overflow: maxLines == null
+              ? TextOverflow.visible
+              : TextOverflow.ellipsis,
+          style: style.copyWith(fontSize: size),
+        );
+      },
+    );
   }
 
   double _fittedSize(double width, TextScaler scaler, TextDirection direction) {
     if (!width.isFinite || width <= 0) return maxFontSize;
     final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
     var size = maxFontSize;
-    while (size > minFontSize && !_fits(size, width, words, scaler, direction)) {
+    while (size > minFontSize &&
+        !_fits(size, width, words, scaler, direction)) {
       size = math.max(minFontSize, size - 1);
     }
     return size;
@@ -80,11 +86,14 @@ class _FitTitle extends StatelessWidget {
     TextDirection direction,
   ) {
     TextPainter measure(String value, {int? lines}) => TextPainter(
-          text: TextSpan(text: value, style: style.copyWith(fontSize: size)),
-          textDirection: direction,
-          textScaler: scaler,
-          maxLines: lines,
-        )..layout(maxWidth: lines == null ? double.infinity : width);
+      text: TextSpan(
+        text: value,
+        style: style.copyWith(fontSize: size),
+      ),
+      textDirection: direction,
+      textScaler: scaler,
+      maxLines: lines,
+    )..layout(maxWidth: lines == null ? double.infinity : width);
 
     for (final word in words) {
       final painter = measure(word);
@@ -128,92 +137,102 @@ class CoverPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final cover = '${_v<Object>('cover')}';
     final family = coverFamily(cover);
-    final (bg, ink, accent) = GalleryDesign.paletteFor('${_v<Object>('color')}');
+    final (bg, ink, accent) = GalleryDesign.paletteFor(
+      '${_v<Object>('color')}',
+    );
     final font = GalleryDesign.fontFor('${_v<Object>('typography')}');
     final fx = (num.tryParse('${_v<Object>('coverFocalX')}') ?? 50).toDouble();
     final fy = (num.tryParse('${_v<Object>('coverFocalY')}') ?? 50).toDouble();
     final alignment = Alignment(fx / 50 - 1, fy / 50 - 1);
 
-    return LayoutBuilder(builder: (context, box) {
-      // Spacing follows the cover width, within limits so tablets and wide
-      // screens don't get giant padding.
-      final s = (box.maxWidth / 360).clamp(0.85, 1.6).toDouble();
-      // Text follows the width it actually gets (half the cover in split
-      // layouts), also within limits; the title then shrinks to fit.
-      final textWidth =
-          family == CoverFamily.split ? box.maxWidth / 2 : box.maxWidth;
-      final t = (textWidth / 360).clamp(0.8, 1.25).toDouble();
-      final onImage = family != CoverFamily.split && family != CoverFamily.paper;
-      final textColor = onImage
-          ? hexColor(design['coverTitleColor'], Colors.white)
-          : ink;
-      final fitAlignment = family == CoverFamily.bottomLeft
-          ? AlignmentDirectional.bottomStart
-          : AlignmentDirectional.center;
-      final texts = _ScaleDownToFit(
-        alignment: fitAlignment,
-        child: _CoverTexts(
-          smallTitle: _v<bool>('showCoverSmallTitle') ? smallTitle : '',
-          title: _v<bool>('showCoverTitle') ? title : '',
-          date: _v<bool>('showCoverDate') ? date : '',
-          button: _v<bool>('showCoverButton')
-              ? '${design['coverButtonText'] ?? GalleryDesign.defaults['coverButtonText']}'
-              : '',
-          font: font,
-          color: textColor,
-          accent: onImage ? textColor : accent,
-          scale: t,
-          alignStart: family == CoverFamily.bottomLeft,
-        ),
-      );
-      final image = LayoutBuilder(builder: (_, imageBox) => GestureDetector(
-        onTapDown: onFocalTap == null
-            ? null
-            : (d) {
-                final size = imageBox.biggest;
-                onFocalTap!(
-                  (d.localPosition.dx / size.width * 100).clamp(0, 100),
-                  (d.localPosition.dy / size.height * 100).clamp(0, 100),
-                );
-              },
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            AppNetworkImage(url: imageUrl, alignment: alignment),
-            if (showFocalMarker)
-              Align(
-                alignment: alignment,
-                child: Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 6)],
+    return LayoutBuilder(
+      builder: (context, box) {
+        // Spacing follows the cover width, within limits so tablets and wide
+        // screens don't get giant padding.
+        final s = (box.maxWidth / 360).clamp(0.85, 1.6).toDouble();
+        // Text follows the width it actually gets (half the cover in split
+        // layouts), also within limits; the title then shrinks to fit.
+        final textWidth = family == CoverFamily.split
+            ? box.maxWidth / 2
+            : box.maxWidth;
+        final t = (textWidth / 360).clamp(0.8, 1.25).toDouble();
+        final onImage =
+            family != CoverFamily.split && family != CoverFamily.paper;
+        final textColor = onImage
+            ? hexColor(design['coverTitleColor'], Colors.white)
+            : ink;
+        final fitAlignment = family == CoverFamily.bottomLeft
+            ? AlignmentDirectional.bottomStart
+            : AlignmentDirectional.center;
+        final texts = _ScaleDownToFit(
+          alignment: fitAlignment,
+          child: _CoverTexts(
+            smallTitle: _v<bool>('showCoverSmallTitle') ? smallTitle : '',
+            title: _v<bool>('showCoverTitle') ? title : '',
+            date: _v<bool>('showCoverDate') ? date : '',
+            button: _v<bool>('showCoverButton')
+                ? '${design['coverButtonText'] ?? GalleryDesign.defaults['coverButtonText']}'
+                : '',
+            font: font,
+            color: textColor,
+            accent: onImage ? textColor : accent,
+            scale: t,
+            compactTitle: textWidth < 600,
+            alignStart: family == CoverFamily.bottomLeft,
+          ),
+        );
+        final image = LayoutBuilder(
+          builder: (_, imageBox) => GestureDetector(
+            onTapDown: onFocalTap == null
+                ? null
+                : (d) {
+                    final size = imageBox.biggest;
+                    onFocalTap!(
+                      (d.localPosition.dx / size.width * 100).clamp(0, 100),
+                      (d.localPosition.dy / size.height * 100).clamp(0, 100),
+                    );
+                  },
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AppNetworkImage(url: imageUrl, alignment: alignment),
+                if (showFocalMarker)
+                  Align(
+                    alignment: alignment,
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x66000000), blurRadius: 6),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
-          ],
-        ),
-      ));
+              ],
+            ),
+          ),
+        );
 
-      return ClipRect(
-        child: ColoredBox(
-          color: bg,
-          child: switch (family) {
-            CoverFamily.split => Row(
+        return ClipRect(
+          child: ColoredBox(
+            color: bg,
+            child: switch (family) {
+              CoverFamily.split => Row(
                 children: [
                   Expanded(child: Center(child: texts)),
                   Expanded(child: image),
                 ],
               ),
-            CoverFamily.paper => Column(
+              CoverFamily.paper => Column(
                 children: [
                   Expanded(flex: 62, child: image),
                   Expanded(flex: 38, child: Center(child: texts)),
                 ],
               ),
-            _ => Stack(
+              _ => Stack(
                 fit: StackFit.expand,
                 children: [
                   image,
@@ -254,10 +273,11 @@ class CoverPreview extends StatelessWidget {
                   ),
                 ],
               ),
-          },
-        ),
-      );
-    });
+            },
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -271,6 +291,7 @@ class _CoverTexts extends StatelessWidget {
     required this.color,
     required this.accent,
     required this.scale,
+    required this.compactTitle,
     required this.alignStart,
   });
 
@@ -282,6 +303,7 @@ class _CoverTexts extends StatelessWidget {
   final Color color;
   final Color accent;
   final double scale;
+  final bool compactTitle;
   final bool alignStart;
 
   @override
@@ -291,41 +313,56 @@ class _CoverTexts extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 12 * scale),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment:
-            alignStart ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        crossAxisAlignment: alignStart
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
         children: [
           if (smallTitle.isNotEmpty)
-            Text(smallTitle.toUpperCase(),
-                textAlign: align,
-                style: font.copyWith(
-                    color: color, fontSize: 11 * scale, letterSpacing: 3 * scale)),
+            Text(
+              smallTitle.toUpperCase(),
+              textAlign: align,
+              style: font.copyWith(
+                color: color,
+                fontSize: 11 * scale,
+                letterSpacing: 3 * scale,
+              ),
+            ),
           if (title.isNotEmpty) ...[
             SizedBox(height: 10 * scale),
             _FitTitle(
               text: title,
               textAlign: align,
               style: font.copyWith(color: color, height: 1.1),
-              maxFontSize: 34 * scale,
-              minFontSize: 16,
+              maxFontSize: compactTitle ? 14 : 34 * scale,
+              minFontSize: compactTitle ? 12 : 16,
+              // Mobile titles must wrap instead of cutting off the last words.
+              maxLines: compactTitle ? null : 3,
             ),
           ],
           if (date.isNotEmpty) ...[
             SizedBox(height: 10 * scale),
-            Text(date,
-                textAlign: align,
-                style: font.copyWith(color: color, fontSize: 13 * scale)),
+            Text(
+              date,
+              textAlign: align,
+              style: font.copyWith(color: color, fontSize: 13 * scale),
+            ),
           ],
           if (button.isNotEmpty) ...[
             SizedBox(height: 18 * scale),
             Container(
               padding: EdgeInsets.symmetric(
-                  horizontal: 18 * scale, vertical: 8 * scale),
+                horizontal: 18 * scale,
+                vertical: 8 * scale,
+              ),
               decoration: BoxDecoration(border: Border.all(color: accent)),
-              child: Text(button.toUpperCase(),
-                  style: font.copyWith(
-                      color: accent,
-                      fontSize: 10 * scale,
-                      letterSpacing: 2 * scale)),
+              child: Text(
+                button.toUpperCase(),
+                style: font.copyWith(
+                  color: accent,
+                  fontSize: 10 * scale,
+                  letterSpacing: 2 * scale,
+                ),
+              ),
             ),
           ],
         ],

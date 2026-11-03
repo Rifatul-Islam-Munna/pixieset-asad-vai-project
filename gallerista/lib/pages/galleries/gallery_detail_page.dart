@@ -157,7 +157,8 @@ class _GalleryDetailPageState extends State<GalleryDetailPage> {
     final ok = await confirmAction(
       context,
       title: 'Delete gallery?',
-      message: '"${c.name}" and all of its photos will be permanently '
+      message:
+          '"${c.name}" and all of its photos will be permanently '
           'deleted. This cannot be undone.',
     );
     if (!ok || !mounted) return;
@@ -259,7 +260,11 @@ class _GalleryDetailPageState extends State<GalleryDetailPage> {
     final c = _collection;
     final selecting = _selected.isNotEmpty;
     final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 900 ? 5 : width >= 600 ? 4 : 3;
+    final columns = width >= 900
+        ? 5
+        : width >= 600
+        ? 4
+        : 3;
     final thumbPx = (width / columns * MediaQuery.devicePixelRatioOf(context))
         .round();
     return PopScope(
@@ -276,8 +281,10 @@ class _GalleryDetailPageState extends State<GalleryDetailPage> {
                 foregroundColor: AppColors.white,
                 shape: const RoundedRectangleBorder(),
                 icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: const Text('Add Photos',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
+                label: const Text(
+                  'Add Photos',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
         body: RefreshIndicator(
           color: AppColors.galleryPrimary,
@@ -381,9 +388,11 @@ class _GalleryDetailPageState extends State<GalleryDetailPage> {
         IconButton(
           tooltip: c?.isPublished == true ? 'Move to draft' : 'Publish',
           onPressed: _togglePublish,
-          icon: Icon(c?.isPublished == true
-              ? Icons.public_rounded
-              : Icons.public_off_rounded),
+          icon: Icon(
+            c?.isPublished == true
+                ? Icons.public_rounded
+                : Icons.public_off_rounded,
+          ),
         ),
         PopupMenuButton<String>(
           tooltip: 'More',
@@ -396,10 +405,12 @@ class _GalleryDetailPageState extends State<GalleryDetailPage> {
             if (v == 'edit') return _quickEdit();
             if (v == 'delete') return _deleteGallery();
             if (v == 'activity') {
-              await context.router.push(GalleryActivityRoute(
-                collectionId: _id,
-                galleryName: c?.name ?? '',
-              ));
+              await context.router.push(
+                GalleryActivityRoute(
+                  collectionId: _id,
+                  galleryName: c?.name ?? '',
+                ),
+              );
               if (mounted) await _refresh();
               return;
             }
@@ -408,9 +419,7 @@ class _GalleryDetailPageState extends State<GalleryDetailPage> {
               if (mounted) await _refresh();
               return;
             }
-            await context.router.push(
-              GallerySettingsRoute(collectionId: _id),
-            );
+            await context.router.push(GallerySettingsRoute(collectionId: _id));
             if (mounted) await _refresh();
           },
           itemBuilder: (_) => const [
@@ -445,39 +454,59 @@ class _GalleryDetailPageState extends State<GalleryDetailPage> {
           ],
         ),
       ],
-      flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsetsDirectional.only(start: 56, bottom: 16),
-        title: Text(
-          c?.name ?? '',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AppColors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            Hero(
-              tag: 'cover-$_id',
-              child: AppNetworkImage(url: c?.coverUrl ?? ''),
+      flexibleSpace: LayoutBuilder(
+        builder: (context, constraints) {
+          // Keep the expanded cover title small and fully wrapped on phones.
+          // Only the collapsed toolbar uses a single-line truncated label,
+          // where the action buttons leave very little horizontal space.
+          final collapsed =
+              constraints.maxHeight <=
+              MediaQuery.paddingOf(context).top + kToolbarHeight + 8;
+          return FlexibleSpaceBar(
+            expandedTitleScale: 1,
+            titlePadding: EdgeInsetsDirectional.only(
+              start: collapsed ? 56 : 20,
+              end: collapsed ? 152 : 20,
+              bottom: 16,
             ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x55000000),
-                    Color(0x00000000),
-                    Color(0xAA000000),
-                  ],
-                ),
+            title: Text(
+              c?.name ?? '',
+              softWrap: true,
+              maxLines: collapsed ? 1 : null,
+              overflow: collapsed
+                  ? TextOverflow.ellipsis
+                  : TextOverflow.visible,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 13,
+                height: 1.2,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ],
-        ),
+            background: Stack(
+              fit: StackFit.expand,
+              children: [
+                Hero(
+                  tag: 'cover-$_id',
+                  child: AppNetworkImage(url: c?.coverUrl ?? ''),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x55000000),
+                        Color(0x00000000),
+                        Color(0xAA000000),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -591,8 +620,11 @@ class _PhotoTile extends StatelessWidget {
             ),
             if (image.isVideo)
               const Center(
-                child: Icon(Icons.play_circle_fill_rounded,
-                    color: Color(0xDDFFFFFF), size: 34),
+                child: Icon(
+                  Icons.play_circle_fill_rounded,
+                  color: Color(0xDDFFFFFF),
+                  size: 34,
+                ),
               ),
             if (selecting)
               PositionedDirectional(
@@ -623,11 +655,16 @@ class _NoPhotos extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.add_photo_alternate_outlined,
-              size: 44, color: Color(0xFF999999)),
+          Icon(
+            Icons.add_photo_alternate_outlined,
+            size: 44,
+            color: Color(0xFF999999),
+          ),
           SizedBox(height: 16),
-          Text('No photos here yet',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+          Text(
+            'No photos here yet',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
           SizedBox(height: 6),
           Text(
             'Photos you upload to this gallery will appear here.',
