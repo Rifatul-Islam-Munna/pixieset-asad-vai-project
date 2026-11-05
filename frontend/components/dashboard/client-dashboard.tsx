@@ -23,6 +23,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { toast } from "sonner";
 import { customerFacingStorageMessage } from "@/lib/customer-facing-storage-message";
+import { resolveCoverSmallTitle } from "@/lib/cover-small-title";
 import { ReactSortable } from "react-sortablejs";
 import {
   ArrowLeft,
@@ -3410,11 +3411,15 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
   };
 
   const saveAsMyTemplate = async () => {
+    if (!campaignSubject.trim()) {
+      toast.error("Enter an email subject before saving this template");
+      return;
+    }
     addEmailTemplateDraft();
     const id = useDashboardStore.getState().activeEmailTemplateId;
     updateEmailTemplate({
       name: campaignTemplate.trim() || "Untitled Template",
-      subject: campaignSubject,
+      subject: campaignSubject.trim(),
       previewText: campaignPreviewText,
       title: campaignTemplate.trim() || "Untitled Template",
       message: campaignMessage,
@@ -3427,11 +3432,15 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
       showImage: campaignShowImage,
       blockOrder: campaignOrder,
     });
-    saveEmailTemplate();
     const saved = useDashboardStore.getState().emailTemplates.find((item) => item.id === id);
     if (!saved) return;
-    await saveSetting.mutateAsync({ localId: id, name: saved.name, data: { ...saved, source: "user" } });
-    toast.success("Saved to My Templates");
+    try {
+      await saveSetting.mutateAsync({ localId: id, name: saved.name, data: { ...saved, source: "user" } });
+      saveEmailTemplate();
+      toast.success("Saved to My Templates with your subject");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save email template");
+    }
   };
 
   const createNewTemplate = () => {
@@ -3619,6 +3628,8 @@ function CampaignBuilder({ section, onClose }: { section: DashboardSection; onCl
                   <Input
                     className="h-12 rounded-none"
                     value={campaignSubject}
+                    maxLength={180}
+                    placeholder="Subject the recipient sees in their inbox"
                     onChange={(event) => setCampaignSubject(event.target.value)}
                   />
                 </Field>
@@ -5401,8 +5412,12 @@ function EmailTemplatesPanel({
     selectEmailTemplate(editorId);
     setEditorOpen(true);
   }, [addEmailTemplateDraft, editorId, selectEmailTemplate]);
-  const saveActiveTemplate = () => {
-    if (!activeTemplate) return;
+  const saveActiveTemplate = async () => {
+    if (!activeTemplate || saveSetting.isPending) return;
+    if (!activeTemplate.subject?.trim()) {
+      toast.error("Enter an email subject before saving this template");
+      return;
+    }
     if (activeTemplate.source !== "user") {
       updateEmailTemplate({});
     }
@@ -5417,16 +5432,21 @@ function EmailTemplatesPanel({
       year: "numeric",
     });
 
-    saveEmailTemplate();
-    saveSetting.mutate({
-      localId: templateToSave.id,
-      name: templateToSave.name,
-      data: { ...templateToSave, source: "user", updatedAt },
-    });
-    if (editorId === "new" || editorId !== templateToSave.id) {
-      router.replace(
-        `/dashboard/${section}/settings/email-templates/${encodeURIComponent(templateToSave.id)}`,
-      );
+    try {
+      await saveSetting.mutateAsync({
+        localId: templateToSave.id,
+        name: templateToSave.name,
+        data: { ...templateToSave, subject: templateToSave.subject.trim(), source: "user", updatedAt },
+      });
+      saveEmailTemplate();
+      toast.success("Email template and subject saved");
+      if (editorId === "new" || editorId !== templateToSave.id) {
+        router.replace(
+          `/dashboard/${section}/settings/email-templates/${encodeURIComponent(templateToSave.id)}`,
+        );
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Email template could not be saved");
     }
   };
   const deleteActiveTemplate = () => {
@@ -5611,7 +5631,8 @@ function EmailTemplatesPanel({
           </Button>
           <Button
             className="h-10 rounded-none bg-[#111] px-7 text-sm font-bold text-white hover:bg-[#222]"
-            onClick={saveActiveTemplate}
+            onClick={() => void saveActiveTemplate()}
+            disabled={saveSetting.isPending}
           >
             <Save className="size-4" />
             {activeTemplate.source === "user" ? "Save Template" : "Save as My Template"}
@@ -5675,6 +5696,8 @@ function EmailTemplatesPanel({
               <Input
                 className="h-12 rounded-none border-[#ddd] bg-[#fbfbfa]"
                 value={activeTemplate.subject}
+                maxLength={180}
+                placeholder="Subject recipients see in their inbox"
                 onChange={(event) =>
                   updateEmailTemplate({ subject: event.target.value })
                 }
@@ -13911,6 +13934,12 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
   const presetSettings = useDashboardSettings("preset").query;
   const preferenceSettings =
     useDashboardSettings<PreferenceSettings>("preference").query;
+  const brandingSettings = useDashboardSettings<BrandSettings>("branding").query;
+  const homepageSettings = useHomepageSettings().query;
+  const studioName =
+    (brandingSettings.data?.data?.[0]?.data as BrandSettings | undefined)?.brandText?.trim() ||
+    homepageSettings.data?.data?.brandName?.trim() ||
+    "Your Studio";
   const { hydrateDashboardSettings, presetItems } = useDashboardStore();
   const { createCollection } = useCollections();
   const [form, setForm] = useState({
@@ -13945,10 +13974,7 @@ function CollectionNewPanel({ section }: { section: DashboardSection }) {
       .filter((item) => item.includes("@")))];
     const design = {
       ...(preset?.design ?? collectionDefaultDesign),
-      coverSmallTitle: coverTextOrDefault(
-        preset?.design.coverSmallTitle,
-        preset?.name || "Your Studio",
-      ),
+      coverSmallTitle: resolveCoverSmallTitle(preset?.design.coverSmallTitle, studioName),
       coverTitle: coverTextOrDefault(preset?.design.coverTitle, name),
       coverDate: coverTextOrDefault(preset?.design.coverDate, eventLabel),
       coverButtonText: coverTextOrDefault(
@@ -14215,8 +14241,9 @@ function collectionUploadSessionKey(collectionId: string, setId: string) {
 function collectionFormWithUniqueSets(
   collection?: CollectionRecord,
   globalPreferences?: Partial<PreferenceSettings>,
+  studioName = "Your Studio",
 ) {
-  const next = collectionForm(collection, globalPreferences);
+  const next = collectionForm(collection, globalPreferences, studioName);
   return { ...next, sets: uniqueCollectionSets(next.sets) };
 }
 
@@ -14272,6 +14299,10 @@ function CollectionDetailView({
   const collection =
     collectionQuery.data?.data ??
     collections.find((item) => item._id === collectionId);
+  const studioCoverName =
+    (brandingSettings.data?.data?.[0]?.data as BrandSettings | undefined)?.brandText?.trim() ||
+    homepageQuery.data?.data?.brandName?.trim() ||
+    "Your Studio";
   const homepageSites = homepageQuery.data?.data?.sites?.length
     ? homepageQuery.data.data.sites
     : [{
@@ -14492,7 +14523,7 @@ function CollectionDetailView({
   const [imageShareAllowDownload, setImageShareAllowDownload] = useState(false);
   const [imageMenuId, setImageMenuId] = useState("");
   const [form, setForm] = useState(() =>
-    collectionFormWithUniqueSets(collection, savedPreferences),
+    collectionFormWithUniqueSets(collection, savedPreferences, studioCoverName),
   );
   const [collectionStatus, setCollectionStatus] = useState<
     "draft" | "published"
@@ -14991,7 +15022,7 @@ function CollectionDetailView({
 
   useEffect(() => {
     if (!collection || updateCollection.isPending) return;
-    const nextForm = collectionFormWithUniqueSets(collection, savedPreferences);
+    const nextForm = collectionFormWithUniqueSets(collection, savedPreferences, studioCoverName);
     const nextFormKey = collectionFormKey(nextForm);
     if (syncedCollectionFormKeyRef.current === nextFormKey) return;
     syncedCollectionFormKeyRef.current = nextFormKey;
@@ -15008,6 +15039,7 @@ function CollectionDetailView({
     savedPreferences.rawPhotoSupport,
     savedPreferences.termsOfService,
     savedPreferences.privacyPolicy,
+    studioCoverName,
     updateCollection.isPending,
   ]);
 
@@ -15118,6 +15150,7 @@ function CollectionDetailView({
           const nextForm = collectionFormWithUniqueSets(
             response.data,
             savedPreferences,
+            studioCoverName,
           );
           syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
           setForm(nextForm);
@@ -15203,6 +15236,7 @@ function CollectionDetailView({
           const nextForm = collectionFormWithUniqueSets(
             response.data,
             savedPreferences,
+            studioCoverName,
           );
           syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
           setForm(nextForm);
@@ -15239,6 +15273,7 @@ function CollectionDetailView({
             const nextForm = collectionFormWithUniqueSets(
               response.data,
               savedPreferences,
+              studioCoverName,
             );
             syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
             setForm(nextForm);
@@ -15269,6 +15304,7 @@ function CollectionDetailView({
             const nextForm = collectionFormWithUniqueSets(
               response.data,
               savedPreferences,
+              studioCoverName,
             );
             syncedCollectionFormKeyRef.current = collectionFormKey(nextForm);
             setForm(nextForm);
@@ -18457,9 +18493,9 @@ function CollectionDetailView({
                         design: preset
                           ? {
                               ...preset.design,
-                              coverSmallTitle: coverTextOrDefault(
+                              coverSmallTitle: resolveCoverSmallTitle(
                                 preset.design.coverSmallTitle,
-                                preset.name,
+                                studioCoverName,
                               ),
                               coverTitle: coverTextOrDefault(
                                 preset.design.coverTitle,
@@ -20791,6 +20827,7 @@ function coverTextOrDefault(value: string | undefined, fallback: string) {
 function collectionForm(
   collection?: CollectionRecord,
   globalPreferences?: Partial<PreferenceSettings>,
+  studioName = "Your Studio",
 ): CollectionFormState {
   const preferenceDefaults = collectionPreferencesFromGlobal(globalPreferences);
   const savedDesign = (collection?.design ??
@@ -20801,6 +20838,7 @@ function collectionForm(
   const design = {
     ...collectionDefaultDesign,
     ...savedDesign,
+    coverSmallTitle: resolveCoverSmallTitle(savedDesign.coverSmallTitle, studioName),
     coverTitle: coverTextOrDefault(
       savedDesign.coverTitle,
       collection?.name ?? collectionDefaultDesign.coverTitle,

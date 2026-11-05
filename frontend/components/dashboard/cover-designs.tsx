@@ -6,6 +6,7 @@ import type { CoverAnimationDesign, CoverAnimationTarget } from "@/lib/cover-ani
 import { cn } from "@/lib/utils";
 import type { BrandSettings, CustomCoverTemplate } from "@/lib/home-cms";
 import { coverFocalStyle } from "@/lib/cover-focal";
+import { resolveCoverSmallTitle } from "@/lib/cover-small-title";
 import { resolveGalleryFontFamily } from "@/lib/gallery-fonts";
 
 export const coverOptions = [
@@ -230,7 +231,7 @@ export function CoverPreview({
         compact={compact}
         className={className}
         title={design.coverTitle}
-        subtitle={design.coverSmallTitle}
+        subtitle={resolveCoverSmallTitle(design.coverSmallTitle, design.branding?.brandText)}
         date={design.coverDate}
         buttonText={design.coverButtonText}
         focalX={focalX}
@@ -256,7 +257,7 @@ export function CoverPreview({
   const showTitle = design.showCoverTitle !== false;
   const showDate = design.showCoverDate !== false;
   const showButton = design.showCoverButton !== false;
-  const smallTitle = design.coverSmallTitle || "Avery Studio";
+  const smallTitle = resolveCoverSmallTitle(design.coverSmallTitle, design.branding?.brandText);
   const title = design.coverTitle || "Sarah & Daniel";
   const date = design.coverDate || "June 14, 2026";
   const buttonText = design.coverButtonText || "View Gallery";

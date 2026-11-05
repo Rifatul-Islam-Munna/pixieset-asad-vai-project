@@ -48,6 +48,7 @@ import {
   HomepageDocument,
 } from 'src/homepage/entities/homepage.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
+import { applyStudioCoverTitle, needsStudioCoverTitle } from './collection-cover-small-title';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { Collection, CollectionDocument } from './entities/collection.entity';
 import {
@@ -230,6 +231,19 @@ export class CollectionsService implements OnModuleInit {
       }
     }
     const safeDto = await this.sanitizeCollectionCapabilities(userId, dto);
+    // Old collection presets sometimes contain a demo label. Default only those
+    // labels to the actual photographer studio; never replace custom cover text.
+    const studioBranding = needsStudioCoverTitle(safeDto.design?.coverSmallTitle)
+      ? await this.settingModel
+          .findOne({ userId, type: DashboardSettingType.BRANDING, localId: 'branding' })
+          .select('data.brandText')
+          .lean()
+      : null;
+    const studioName = String(
+      (studioBranding?.data as Record<string, unknown> | undefined)?.brandText ||
+      owner?.businessName || owner?.name || 'Your Studio',
+    ).trim();
+    const design = applyStudioCoverTitle(safeDto.design, studioName);
     const publishRecipients = this.cleanEmailList(safeDto.clientEmails);
     const incomingSettings = ((safeDto.settings ?? {}) as Record<string, any>);
     const incomingAccess = ((incomingSettings.access ?? {}) as Record<string, any>);
@@ -242,7 +256,7 @@ export class CollectionsService implements OnModuleInit {
       tags: [...new Set((safeDto.tags ?? []).map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 20),
       clientEmails: publishRecipients,
       status: safeDto.status ?? 'draft',
-      design: safeDto.design ?? {},
+      design,
       settings: {
         ...incomingSettings,
         access: {

@@ -464,6 +464,7 @@ export function CollectionSharePage({
               <Field className="border-b border-[#ececec] py-8">
                 <Input
                   value={subject}
+                  maxLength={180}
                   onChange={(event) => setSubject(event.target.value)}
                   placeholder="Email subject"
                   className="h-auto rounded-none border-0 px-0 py-0 text-[17px] font-semibold shadow-none focus-visible:ring-0"

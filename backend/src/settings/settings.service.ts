@@ -40,6 +40,18 @@ export class SettingsService {
         throw new BadRequestException('Current plan does not allow Advanced Branding.');
       }
     }
+    let data = dto.data;
+    if (type === DashboardSettingType.EMAIL_TEMPLATE) {
+      const subject = typeof data.subject === 'string'
+        ? data.subject.replace(/[\r\n]+/g, ' ').trim()
+        : '';
+      if (!subject) throw new BadRequestException('Email subject is required');
+      if (subject.length > 180) {
+        throw new BadRequestException('Email subject cannot exceed 180 characters');
+      }
+      data = { ...data, subject };
+    }
+
     const setting = await this.settingModel
       .findOneAndUpdate(
         { userId, type, localId: dto.localId },
@@ -47,7 +59,7 @@ export class SettingsService {
           $set: {
             name: dto.name,
             collectionId: dto.collectionId,
-            data: dto.data,
+            data,
           },
         },
         { returnDocument: 'after', upsert: true },

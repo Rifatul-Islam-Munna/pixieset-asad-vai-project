@@ -17,6 +17,7 @@ import { useDashboardStore, type PresetDesignSettings, type PresetDownloadSettin
 import { galleryLanguageCode } from "@/lib/gallery-language";
 import { resolveGalleryFontFamily } from "@/lib/gallery-fonts";
 import { galleryGridDensity } from "@/lib/gallery-grid-density";
+import { resolveCoverSmallTitle } from "@/lib/cover-small-title";
 import type { BrandSettings } from "@/lib/home-cms";
 import { cn } from "@/lib/utils";
 import { imageDisplayName } from "@/lib/image-display-name";
@@ -307,6 +308,10 @@ export function PublicGallery({
   const advancedFaceSearchEnabled = collection?.planCapabilities?.advancedFaceSearch === true;
   const title = collection?.name ?? decodeRouteText(galary);
   design.coverTitle = coverTextOrDefault(design.coverTitle, title);
+  design.coverSmallTitle = resolveCoverSmallTitle(
+    design.coverSmallTitle,
+    collection?.branding?.brandText || studioName,
+  );
   design.coverDate = coverTextOrDefault(
     design.coverDate,
     collection?.eventDate ? formatPublicDate(collection.eventDate) : defaultDesign.coverDate

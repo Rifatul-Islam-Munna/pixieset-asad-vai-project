@@ -49,4 +49,40 @@ describe('mime message building', () => {
     expect(message).toContain('Content-Disposition: inline; filename="gallery-logo"');
     expect(message).toContain('Content-Type: image/png; name="gallery-logo"');
   });
+
+  it("puts the custom template subject into the actual recipient inbox header", () => {
+    const subject = "Your custom wedding gallery is here";
+    const raw = buildMimeMessage({
+      from: "Studio <studio@test.dev>",
+      to: ["client@test.dev"],
+      cc: [],
+      subject,
+      text: "Hello",
+      messageId: "<test@test.dev>",
+    });
+    expect(raw).toContain(`Subject: ${subject}\r\n`);
+  });
+
+  it("safely encodes international subjects and removes line breaks", () => {
+    const subject = "Your gallery — ready";
+    const raw = buildMimeMessage({
+      from: "Studio <studio@test.dev>",
+      to: ["client@test.dev"],
+      cc: [],
+      subject,
+      text: "Hello",
+      messageId: "<test@test.dev>",
+    });
+    expect(raw).toContain(`Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`);
+    const safe = buildMimeMessage({
+      from: "Studio <studio@test.dev>",
+      to: ["client@test.dev"],
+      cc: [],
+      subject: "Gallery\r\nX-Injected: fake",
+      text: "Hello",
+      messageId: "<test@test.dev>",
+    });
+    expect(safe).toContain("Subject: Gallery X-Injected: fake\r\n");
+    expect(safe).not.toContain("\r\nX-Injected: fake\r\n");
+  });
 });

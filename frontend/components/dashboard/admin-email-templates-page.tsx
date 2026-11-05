@@ -192,8 +192,13 @@ export function AdminEmailTemplatesPage({
       toast.error("Email subject is required");
       return;
     }
+    if (draft.subject.trim().length > 180) {
+      toast.error("Email subject must be 180 characters or fewer");
+      return;
+    }
     const savedDraft = {
       ...draft,
+      subject: draft.subject.trim(),
       source: "admin" as const,
       showBranding: draft.showBranding !== false,
       showImage: draft.showImage !== false,
@@ -468,6 +473,8 @@ export function AdminEmailTemplatesPage({
                     <Field label="Subject">
                       <Input
                         value={draft.subject}
+                        maxLength={180}
+                        placeholder="Subject displayed in the recipient inbox"
                         onChange={(event) =>
                           update({ subject: event.target.value })
                         }

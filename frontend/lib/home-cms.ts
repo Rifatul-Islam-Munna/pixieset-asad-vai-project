@@ -213,12 +213,19 @@ const legacyEmailCategory: Record<string, CoreEmailTemplateCategory> = {
 };
 
 function mergeCmsEmailTemplates(value: EmailTemplateItem[] | undefined) {
-  const saved = (Array.isArray(value) ? value : []).map((template) => ({
-    ...template,
-    category: template.category || legacyEmailCategory[template.id] || "Gallery Delivery",
-    language: template.language || "English",
-    source: "admin" as const,
-  }));
+  const defaultSubjects = new Map(defaultEmailTemplates.map((item) => [
+    `${item.language || "English"}::${item.category || "Gallery Delivery"}::${item.galleryCategory || ""}`,
+    item.subject,
+  ]));
+  const saved = (Array.isArray(value) ? value : []).map((template) => {
+    const category = template.category || legacyEmailCategory[template.id] || "Gallery Delivery";
+    const language = template.language || "English";
+    const subject = template.subject?.trim() ||
+      defaultSubjects.get(`${language}::${category}::${template.galleryCategory || ""}`) ||
+      defaultSubjects.get(`${language}::${category}::`) ||
+      "Your photos are ready";
+    return { ...template, category, language, subject, source: "admin" as const };
+  });
   const templateKey = (template: EmailTemplateItem) =>
     `${template.language || "English"}::${template.category || "Gallery Delivery"}::${template.galleryCategory || ""}`;
   const covered = new Set(saved.map(templateKey));
