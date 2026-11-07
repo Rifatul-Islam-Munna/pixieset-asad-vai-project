@@ -535,7 +535,7 @@ class _GalleryDetailPageState extends State<GalleryDetailPage> {
           icon: const Icon(Icons.drive_file_move_outline),
         ),
         IconButton(
-          tooltip: 'Delete',
+          tooltip: 'Delete selected photos',
           onPressed: _deleteSelected,
           icon: const Icon(Icons.delete_outline_rounded),
         ),

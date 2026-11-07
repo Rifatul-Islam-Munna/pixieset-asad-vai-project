@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:gallerista/core/auth/auth_api.dart';
+import 'package:gallerista/core/network/api_error.dart';
+import 'package:gallerista/core/utils/app_toast.dart';
 import 'package:gallerista/core/storage/session_storage.dart';
 import 'package:gallerista/core/utils/app_network_image.dart';
 import 'package:gallerista/gallery/collection_models.dart';
@@ -46,6 +48,69 @@ class SettingsPage extends StatelessWidget {
   Future<void> _logout(BuildContext context) async {
     await AuthApi.logout();
     if (context.mounted) await context.router.replaceAll([const WelcomeRoute()]);
+  }
+
+  Future<void> _deleteAccount(BuildContext context) async {
+    final controller = TextEditingController();
+    bool confirmed = false;
+    try {
+      confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, refresh) => AlertDialog(
+            title: const Text('Delete account permanently?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'This permanently deletes your Gallerista account, galleries, '
+                  'photos and associated data. This cannot be undone. '
+                  'Logging out does not delete your account.',
+                ),
+                const SizedBox(height: 16),
+                const Text('Type DELETE to confirm:',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  autocorrect: false,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(hintText: 'DELETE'),
+                  onChanged: (_) => refresh(() {}),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Keep account'),
+              ),
+              FilledButton(
+                onPressed: controller.text.trim() == 'DELETE'
+                    ? () => Navigator.pop(dialogContext, true)
+                    : null,
+                style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                child: const Text('Delete account permanently'),
+              ),
+            ],
+          ),
+        ),
+      ) ?? false;
+    } finally {
+      // Delay disposal until the dialog exit animation is complete.
+      WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
+    }
+    if (!confirmed || !context.mounted) return;
+    try {
+      await AuthApi.deleteAccount();
+      if (context.mounted) {
+        AppToast.success('Your account has been deleted');
+        await context.router.replaceAll([const WelcomeRoute()]);
+      }
+    } catch (error) {
+      AppToast.error('Could not delete account: ${ApiError.message(error)}');
+    }
   }
 
   void _open(BuildContext context, Widget page) =>
@@ -148,6 +213,14 @@ class SettingsPage extends StatelessWidget {
             subtitle: 'Google Analytics',
             onTap: () => _open(context, const IntegrationsPage()),
           ),
+          const _Header('Account actions'),
+          if (user?.role != 'admin')
+            _Tile(
+              icon: Icons.person_remove_outlined,
+              title: 'Delete account',
+              subtitle: 'Permanently remove your account and galleries',
+              onTap: () => _deleteAccount(context),
+            ),
           const SizedBox(height: 24),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),

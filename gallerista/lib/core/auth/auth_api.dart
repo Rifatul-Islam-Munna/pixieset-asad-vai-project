@@ -33,6 +33,12 @@ class AuthApi {
 
   static Future<void> logout() => SessionStorage.clear();
 
+  /// Irreversibly removes the signed-in account after explicit confirmation.
+  static Future<void> deleteAccount() async {
+    await DioHelper.dio.delete('/user/account', data: {'confirmation': 'DELETE'});
+    await SessionStorage.clear();
+  }
+
   /// Creates an account (`POST /user`, like the web `registerUser`) and
   /// signs in. Empty optional fields are left out, as on the web.
   static Future<AppUser> register({

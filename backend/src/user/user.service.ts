@@ -1,10 +1,10 @@
 import { HttpException, HttpStatus, Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
-import { Model } from 'mongoose';
+import { Connection, Model } from 'mongoose';
 import { createHash, randomBytes } from 'node:crypto';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { MobileGalleryImage, MobileGalleryImageDocument } from 'src/mobile-gallery/entities/mobile-gallery-image.entity';
@@ -15,6 +15,7 @@ import { FreePlanSettingService } from 'src/admin/free-plan-setting.service';
 import { HomepageService } from 'src/homepage/homepage.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { MailService } from 'src/mail/mail.service';
+import { MinioService } from 'src/lib/minio.service';
 import {
   buildSystemNotificationEmail,
   describeUserAgent,
@@ -38,6 +39,8 @@ export class UserService implements OnModuleInit {
     private readonly freePlanSettings: FreePlanSettingService,
     private readonly homepageService: HomepageService,
     private readonly mailService: MailService,
+    @InjectConnection() private readonly connection: Connection,
+    private readonly minioService: MinioService,
   ) {}
 
   async onModuleInit() {
@@ -389,6 +392,71 @@ export class UserService implements OnModuleInit {
     }
     const { password: _password, ...safe } = user.toObject();
     return { message: 'Account updated', data: safe };
+  }
+
+
+  /**
+   * Authenticated, explicit account deletion. Only documents scoped to the
+   * signed-in owner's userId (or to their own galleries) are deleted.
+   */
+  async deleteOwnAccount(id: string, confirmation?: string) {
+    if (confirmation !== 'DELETE') {
+      throw new HttpException('Type DELETE to confirm account deletion', HttpStatus.BAD_REQUEST);
+    }
+    const account = await this.userModel.findById(id).select('role').lean();
+    if (!account) throw new HttpException('Account not found', HttpStatus.NOT_FOUND);
+    if (account.role === UserType.ADMIN) {
+      throw new HttpException('Administrator accounts cannot be deleted here', HttpStatus.FORBIDDEN);
+    }
+
+    const collections = this.connection.models.Collection;
+    const ownedGalleries = collections
+      ? await collections.find({ userId: id }).select('_id').lean()
+      : [];
+    const collectionIds = ownedGalleries.map((item: any) => String(item._id));
+
+    // Capture files before removing their database records.
+    const [images, mobileImages] = await Promise.all([
+      this.collectionImageModel.find({ userId: id }).select('url thumbnailUrl originalObjectKey metadata').lean(),
+      this.mobileGalleryImageModel.find({ userId: id }).select('url thumbnailUrl filename').lean(),
+    ]);
+    const refs = new Set<string>();
+    for (const image of [...images, ...mobileImages] as any[]) {
+      for (const key of ['url', 'thumbnailUrl', 'originalObjectKey']) {
+        const ref = String(image[key] ?? '').trim();
+        if (ref) refs.add(ref);
+      }
+      const uploadKey = String(image.metadata?.directUploadObjectKey ?? '').trim();
+      if (uploadKey) refs.add(uploadKey);
+    }
+
+    // All registered owner-scoped models are cleaned, including gallery,
+    // settings, store, booking and support records.
+    for (const model of Object.values(this.connection.models)) {
+      if (model.modelName === User.name) continue;
+      const hasOwner = Boolean(model.schema.path('userId'));
+      const hasGallery = Boolean(collectionIds.length && model.schema.path('collectionId'));
+      if (hasOwner && hasGallery) {
+        await model.deleteMany({
+          $or: [{ userId: id }, { collectionId: { $in: collectionIds } }],
+        });
+      } else if (hasOwner) {
+        await model.deleteMany({ userId: id });
+      } else if (hasGallery) {
+        await model.deleteMany({ collectionId: { $in: collectionIds } });
+      }
+    }
+
+    // Remove stored gallery media using the existing storage adapter.
+    // A storage outage must not prevent the user from deleting their identity.
+    const references = [...refs];
+    for (let offset = 0; offset < references.length; offset += 12) {
+      await Promise.allSettled(
+        references.slice(offset, offset + 12).map((ref) => this.minioService.deleteService(ref)),
+      );
+    }
+    await this.userModel.deleteOne({ _id: id });
+    return { message: 'Account deleted' };
   }
 
   private normalizeUsername(value: string) {

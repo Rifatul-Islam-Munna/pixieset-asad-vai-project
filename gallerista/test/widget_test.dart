@@ -1,3 +1,4 @@
+import 'package:auto_route/auto_route.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,12 +14,15 @@ import 'package:gallerista/gallery/preset_defaults.dart';
 import 'package:gallerista/gallery/public_gallery_api.dart';
 import 'package:gallerista/gallery/scan_history.dart';
 import 'package:gallerista/pages/account_settings_pages.dart';
-import 'package:gallerista/pages/auth/login_page.dart';
 import 'package:gallerista/pages/auth/register_page.dart';
 import 'package:gallerista/pages/galleries/home_widgets.dart';
 import 'package:gallerista/pages/library_page.dart';
 import 'package:gallerista/pages/settings_part2_pages.dart';
+import 'package:gallerista/pages/settings_page.dart';
+import 'package:gallerista/main.dart' show getIt;
+import 'package:gallerista/router/app_router.dart';
 import 'package:gallerista/theme/app_theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 DioException _errorWithBody(Object? body) {
   final options = RequestOptions(path: '/test');
@@ -361,10 +365,54 @@ void main() {
     expect(tpl['source'], 'user');
   });
 
+
+  testWidgets('account deletion is specific and requires explicit confirmation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    if (getIt.isRegistered<SharedPreferences>()) {
+      getIt.unregister<SharedPreferences>();
+    }
+    getIt.registerSingleton<SharedPreferences>(prefs);
+    await prefs.setString('current_user',
+        '{"_id":"owner-1","name":"Studio Owner","role":"user","email":"studio@example.com"}');
+
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      home: const SettingsPage(),
+    ));
+    await tester.scrollUntilVisible(find.text('Delete account'), 300);
+    expect(find.text('Delete account'), findsOneWidget);
+    await tester.tap(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete account permanently?'), findsOneWidget);
+    expect(find.textContaining('Logging out does not delete'), findsOneWidget);
+
+    final button = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Delete account permanently'));
+    expect(button.onPressed, isNull);
+    await tester.enterText(find.byType(TextField).last, 'DELETE');
+    await tester.pump();
+    final enabled = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Delete account permanently'));
+    expect(enabled.onPressed, isNotNull);
+    await tester.tap(find.text('Keep account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete account permanently?'), findsNothing);
+    getIt.unregister<SharedPreferences>();
+  });
+
   testWidgets('login screen shows password and PIN modes', (tester) async {
+    final router = AppRouter();
     await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light, home: const LoginPage()),
+      MaterialApp.router(
+        theme: AppTheme.light,
+        routerConfig: router.config(
+          deepLinkBuilder: (_) => DeepLink([const LoginRoute()]),
+        ),
+      ),
     );
+    await tester.pumpAndSettle();
 
     expect(find.text('Welcome back!'), findsOneWidget);
     expect(find.text('Password'), findsWidgets);

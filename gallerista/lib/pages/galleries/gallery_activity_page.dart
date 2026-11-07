@@ -341,7 +341,7 @@ class _GalleryActivityPageState extends State<GalleryActivityPage> {
                   const PopupMenuItem(value: 'declined', child: Text('Decline')),
                 const PopupMenuItem(
                   value: 'delete',
-                  child: Text('Delete', style: TextStyle(color: AppColors.error)),
+                  child: Text('Delete request', style: TextStyle(color: AppColors.error)),
                 ),
               ],
             ),

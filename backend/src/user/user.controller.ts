@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -62,6 +62,12 @@ export class UserController {
   @UseGuards(AuthGuard)
   updateProfile(@Req() req: ExpressRequest, @Body() dto: UpdateProfileDto) {
     return this.userService.updateProfile(req.user.id, dto);
+  }
+
+  @Delete('account')
+  @UseGuards(AuthGuard)
+  deleteAccount(@Req() req: ExpressRequest, @Body() body: { confirmation?: string }) {
+    return this.userService.deleteOwnAccount(req.user.id, body?.confirmation);
   }
 
   private loginContext(req: Request) {

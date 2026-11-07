@@ -37,6 +37,8 @@ jest.mock(
   { virtual: true },
 );
 
+jest.mock('src/lib/minio.service', () => ({ MinioService: class MinioService {} }), { virtual: true });
+
 import { UserService } from './user.service';
 
 describe('login IP security notification', () => {
@@ -64,6 +66,8 @@ describe('login IP security notification', () => {
       {} as any,
       {} as any,
       mail,
+      {} as any,
+      {} as any,
     );
     return { service, userModel, mail };
   }
@@ -132,6 +136,8 @@ describe('login IP security notification', () => {
       {} as any,
       {} as any,
       { send: jest.fn() } as any,
+      {} as any,
+      {} as any,
     );
 
     await expect(

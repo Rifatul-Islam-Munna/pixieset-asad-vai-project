@@ -265,7 +265,7 @@ class _PresetEditorPageState extends State<PresetEditorPage> {
           actions: [
             if (!_builtIn)
               IconButton(
-                tooltip: 'Delete',
+                tooltip: 'Delete preset',
                 onPressed: _delete,
                 icon: const Icon(Icons.delete_outline_rounded),
               ),
@@ -606,7 +606,7 @@ class _EmailTemplateEditorPageState extends State<EmailTemplateEditorPage> {
         actions: [
           if (_isUser && !_isNew)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: 'Delete email template',
               onPressed: _delete,
               icon: const Icon(Icons.delete_outline_rounded),
             ),

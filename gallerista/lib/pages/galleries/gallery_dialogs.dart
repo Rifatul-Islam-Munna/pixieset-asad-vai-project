@@ -143,7 +143,7 @@ Future<bool> confirmAction(
   BuildContext context, {
   required String title,
   required String message,
-  String confirmLabel = 'Delete',
+  String? confirmLabel,
   bool destructive = true,
 }) async {
   final result = await showDialog<bool>(
@@ -162,7 +162,7 @@ Future<bool> confirmAction(
           style: destructive
               ? FilledButton.styleFrom(backgroundColor: AppColors.error)
               : null,
-          child: Text(confirmLabel),
+          child: Text(confirmLabel ?? (destructive ? title.replaceFirst(RegExp(r'[?]+$'), '') : 'Confirm')),
         ),
       ],
     ),

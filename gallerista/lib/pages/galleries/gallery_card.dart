@@ -265,7 +265,7 @@ class GalleryMenuButton extends StatelessWidget {
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: GalleryAction.delete,
-          child: _MenuRow(Icons.delete_outline_rounded, 'Delete',
+          child: _MenuRow(Icons.delete_outline_rounded, 'Delete gallery',
               color: AppColors.error),
         ),
       ],

@@ -22,7 +22,17 @@ class SiteLogo extends StatelessWidget {
     return ValueListenableBuilder<SiteBrand>(
       valueListenable: SiteBrand.current,
       builder: (context, brand, _) {
-        if (brand.logoUrl.isEmpty) return fallback;
+        if (brand.logoUrl.isEmpty) {
+          return Image.asset(
+            'assets/brand/gallerista_logo.png',
+            height: height,
+            width: maxWidth,
+            fit: BoxFit.contain,
+            alignment: Alignment.centerLeft,
+            semanticLabel: 'Gallerista logo',
+            errorBuilder: (_, _, _) => fallback,
+          );
+        }
         return _BrandImage(
           url: brand.logoUrl,
           label: brand.name,
@@ -49,7 +59,16 @@ class SiteIcon extends StatelessWidget {
     return ValueListenableBuilder<SiteBrand>(
       valueListenable: SiteBrand.current,
       builder: (context, brand, _) {
-        if (brand.iconUrl.isEmpty) return fallback;
+        if (brand.iconUrl.isEmpty) {
+          return Image.asset(
+            'assets/logo.png',
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+            semanticLabel: 'Gallerista icon',
+            errorBuilder: (_, _, _) => fallback,
+          );
+        }
         return _BrandImage(
           url: brand.iconUrl,
           label: brand.name,

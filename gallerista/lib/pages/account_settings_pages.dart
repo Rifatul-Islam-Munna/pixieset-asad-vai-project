@@ -594,7 +594,7 @@ class _WatermarkEditorPageState extends State<WatermarkEditorPage> {
         actions: [
           if (!widget.isNew)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: 'Delete watermark',
               onPressed: _delete,
               icon: const Icon(Icons.delete_outline_rounded),
             ),

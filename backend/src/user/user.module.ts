@@ -5,6 +5,7 @@ import { MobileGalleryImage, MobileGalleryImageSchema } from 'src/mobile-gallery
 import { HomepageModule } from 'src/homepage/homepage.module';
 import { User, UserSchema } from './entities/user.entity';
 import { UserController } from './user.controller';
+import { MinioService } from 'src/lib/minio.service';
 import { UserService } from './user.service';
 
 @Module({
@@ -17,6 +18,6 @@ import { UserService } from './user.service';
     ]),
   ],
   controllers: [UserController],
-  providers: [UserService],
+  providers: [UserService, MinioService],
 })
 export class UserModule {}
