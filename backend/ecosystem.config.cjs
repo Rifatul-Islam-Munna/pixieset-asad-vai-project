@@ -3,18 +3,18 @@ module.exports = {
     {
       name: "gallerista-backend",
       script: "dist/main.js",
-      exec_mode: "cluster",
-      instances: Math.max(
-        1,
-        Math.min(3, Number(process.env.BACKEND_WEB_CONCURRENCY || 3) || 3),
-      ),
+      // A single process keeps native image memory and background work bounded.
+      exec_mode: "fork",
+      instances: 1,
       autorestart: true,
       max_memory_restart: process.env.BACKEND_MAX_MEMORY_RESTART || "1200M",
       kill_timeout: 10000,
       listen_timeout: 10000,
       exp_backoff_restart_delay: 100,
+      node_args: "--max-old-space-size=768",
       env: {
         NODE_ENV: "production",
+        MALLOC_ARENA_MAX: "2",
       },
     },
   ],

@@ -58,15 +58,26 @@ export class PublicCollectionsController {
   @Get('download-deliveries/:token')
   async openDownloadDelivery(
     @Param('token') token: string,
+    @Query('page') page: string,
     @Res() response: Response,
   ) {
-    const file = await this.downloadDeliveryService.open(token);
-    response.setHeader('Content-Type', file.contentType || 'application/zip');
-    if (file.contentLength > 0) response.setHeader('Content-Length', String(file.contentLength));
+    const html = await this.downloadDeliveryService.open(token, Number(page));
     response.setHeader('Cache-Control', 'private, no-store');
-    response.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`);
-    file.body.on('error', () => response.destroy());
-    file.body.pipe(response);
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    response.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+    response.type('html').send(html);
+  }
+
+  @Get('download-deliveries/:token/files/:imageId')
+  async downloadDeliveryFile(
+    @Param('token') token: string,
+    @Param('imageId') imageId: string,
+    @Res() response: Response,
+  ) {
+    const url = await this.downloadDeliveryService.fileLink(token, imageId);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    response.redirect(302, url);
   }
 
   @Get(':identifier')

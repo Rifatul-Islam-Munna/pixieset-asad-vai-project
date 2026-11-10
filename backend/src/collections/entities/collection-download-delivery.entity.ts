@@ -24,6 +24,9 @@ export class CollectionDownloadDelivery {
   @Prop({ required: true, index: true }) expiresAt: Date;
   @Prop({ default: '', maxlength: 2000 }) lastError: string;
   @Prop() readyAt?: Date;
+  @Prop({ default: 0 }) emailAttempts: number;
+  @Prop() emailSentAt?: Date;
+  @Prop() emailNextAttemptAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -31,4 +34,5 @@ export class CollectionDownloadDelivery {
 export const CollectionDownloadDeliverySchema = SchemaFactory.createForClass(CollectionDownloadDelivery);
 CollectionDownloadDeliverySchema.index({ status: 1, createdAt: 1 });
 CollectionDownloadDeliverySchema.index({ status: 1, expiresAt: 1 });
+CollectionDownloadDeliverySchema.index({ status: 1, emailSentAt: 1, emailNextAttemptAt: 1 });
 CollectionDownloadDeliverySchema.index({ collectionId: 1, email: 1, createdAt: -1 });

@@ -1,21 +1,12 @@
+import { randomBytes } from 'crypto';
 import { BadRequestException, GoneException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Interval } from '@nestjs/schedule';
-import { ZipArchive } from 'archiver';
-import { randomBytes, randomUUID } from 'crypto';
-import { createReadStream, createWriteStream } from 'fs';
-import { mkdir, open, rm, stat } from 'fs/promises';
 import { Model, Types } from 'mongoose';
-import { basename, extname, join } from 'path';
-import { cwd } from 'process';
-import { Readable } from 'stream';
-import { finished, pipeline } from 'stream/promises';
 import { MinioService } from 'src/lib/minio.service';
 import { backgroundWorkerEnabled } from 'src/lib/runtime-role';
-import { MailService } from 'src/mail/mail.service';
 import { BrandingEmailService } from 'src/mail/branding-email.service';
-import { MarketingScheduleService } from 'src/marketing-schedule/marketing-schedule.service';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { Homepage, HomepageDocument } from 'src/homepage/entities/homepage.entity';
@@ -26,7 +17,9 @@ import { CollectionPrivatePhoto, CollectionPrivatePhotoDocument } from './entiti
 import { CollectionDownloadActivity, CollectionDownloadActivityDocument } from './entities/collection-download-activity.entity';
 import { CollectionDownloadDelivery, CollectionDownloadDeliveryDocument, type CollectionDownloadScope } from './entities/collection-download-delivery.entity';
 
-const LINK_LIFETIME_MS = 30 * 60 * 60 * 1000;
+const IMAGE_FIELDS = '_id originalName filename url thumbnailUrl mediaType';
+
+const LINK_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 type DownloadRequest = {
   email?: string;
@@ -52,8 +45,6 @@ export class CollectionDownloadDeliveryService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(Homepage.name) private readonly homepageModel: Model<HomepageDocument>,
     private readonly minioService: MinioService,
-    private readonly marketingScheduleService: MarketingScheduleService,
-    private readonly mailService: MailService,
     private readonly brandingEmailService: BrandingEmailService,
     private readonly configService: ConfigService,
   ) {}
@@ -73,9 +64,8 @@ export class CollectionDownloadDeliveryService {
     if (!images.length) throw new BadRequestException('No downloadable files matched this request');
 
     const token = randomBytes(32).toString('hex');
-    // Reject broken email links before queuing a time-consuming archive job.
-    this.deliveryLink(token);
-    const fileName = this.archiveName(collection.name, scope, body.setId);
+    const downloadUrl = this.deliveryLink(token);
+    const fileName = this.downloadName(collection.name, scope, body.setId);
     const job = await this.deliveryModel.create({
       userId: String(collection.userId),
       collectionId: String(collection._id),
@@ -86,7 +76,10 @@ export class CollectionDownloadDeliveryService {
       imageIds: images.map((image) => String(image._id)),
       preferThumbnails: scope === 'single' && this.bool(settings.download.restrictedSinglePhotoDownloadSize),
       token,
-      status: 'queued',
+      status: 'ready',
+      readyAt: new Date(),
+      emailAttempts: 0,
+      emailNextAttemptAt: new Date(),
       fileName,
       fileCount: images.length,
       expiresAt: new Date(Date.now() + LINK_LIFETIME_MS),
@@ -96,229 +89,133 @@ export class CollectionDownloadDeliveryService {
     setTimeout(() => void this.processQueue(), 25);
     return {
       requestId: String(job._id),
-      status: 'queued',
+      status: 'ready',
+      downloadUrl,
       fileCount: images.length,
-      expiresInHours: 30,
-      message: 'Your files are being prepared. A secure 30-hour download link will be emailed when ready.',
+      expiresInHours: 24,
+      message: 'Your photos are ready. Open the download link now; we will also email it. The link expires in 24 hours.',
     };
   }
 
-  async open(token: string) {
+  private async activeDelivery(token: string) {
     const cleanToken = String(token || '').trim();
     if (!/^[a-f0-9]{64}$/i.test(cleanToken)) throw new NotFoundException('Download link not found');
     const job = await this.deliveryModel.findOne({ token: cleanToken }).lean();
     if (!job) throw new NotFoundException('Download link not found');
-    if (new Date(job.expiresAt).getTime() <= Date.now()) {
-      await this.expireJob(job);
-      throw new GoneException('This download link expired after 30 hours');
+    if (job.status === 'expired' || new Date(job.expiresAt).getTime() <= Date.now()) {
+      throw new GoneException('This download link expired after 24 hours');
     }
-    if (job.status === 'failed') throw new GoneException('This download could not be prepared. Please request it again.');
-    if (job.status !== 'ready' || !job.fileUrl) throw new BadRequestException('Your download is still being prepared. Please try the email link again shortly.');
-    return {
-      ...await this.minioService.openReadStream(job.fileUrl),
-      fileName: job.fileName,
-    };
+    if (job.status !== 'ready') throw new BadRequestException('Please request a new download link');
+    return job;
+  }
+
+  async open(token: string, page = 0) {
+    const job = await this.activeDelivery(token);
+    const pageIndex = Number.isFinite(page) ? Math.max(0, Math.floor(page)) : 0;
+    const ids = job.imageIds.slice(pageIndex * 100, (pageIndex + 1) * 100);
+    const images = await this.imageModel.find({ collectionId: job.collectionId, _id: { $in: ids } })
+      .select(IMAGE_FIELDS).lean();
+    const byId = new Map(images.map((image) => [String(image._id), image]));
+    const base = this.deliveryLink(job.token);
+    const links = ids.flatMap((id) => {
+      const image = byId.get(id);
+      return image ? [`<li><a href="${escapeHtml(base)}/files/${id}" rel="noreferrer">${escapeHtml(image.originalName || image.filename || 'Photo')}</a></li>`] : [];
+    }).join('');
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Download photos</title><style>body{font:17px system-ui;max-width:760px;margin:48px auto;padding:0 24px;color:#222}a{color:#087b68}li{padding:12px 0;overflow-wrap:anywhere}nav{display:flex;gap:24px}</style></head><body><h1>${escapeHtml(job.collectionName)}</h1><p>Your photos are ready. Choose a photo to download directly from storage.</p><p>Link expires ${escapeHtml(new Date(job.expiresAt).toISOString())}. No ZIP needed.</p><ul>${links || '<li>No photos on this page.</li>'}</ul><nav>${pageIndex > 0 ? `<a href="${escapeHtml(base)}?page=${pageIndex - 1}">Previous</a>` : ''}${(pageIndex + 1) * 100 < job.imageIds.length ? `<a href="${escapeHtml(base)}?page=${pageIndex + 1}">Next</a>` : ''}</nav></body></html>`;
+  }
+
+  async fileLink(token: string, imageId: string) {
+    const job = await this.activeDelivery(token);
+    if (!Types.ObjectId.isValid(imageId) || !job.imageIds.includes(imageId)) throw new NotFoundException('Photo not found');
+    const hidden = await this.privatePhotoModel.exists({ collectionId: job.collectionId, imageId, status: 'approved' });
+    if (hidden) throw new NotFoundException('Photo not found');
+    const image = await this.imageModel.findOne({ _id: imageId, collectionId: job.collectionId })
+      .select(`${IMAGE_FIELDS} +originalObjectKey +originalFilename metadata.imageCache.urls.small`).lean();
+    if (!image) throw new NotFoundException('Photo not found');
+    const expiresIn = Math.floor((new Date(job.expiresAt).getTime() - Date.now()) / 1000);
+    if (expiresIn < 1) throw new GoneException('This download link expired');
+    const filename = image.originalFilename || image.originalName || image.filename || 'photo';
+    if (!job.preferThumbnails && image.originalObjectKey) {
+      return this.minioService.createDownloadUrl(image.originalObjectKey, filename, expiresIn, !image.originalObjectKey.startsWith('direct/'));
+    }
+    const cachedSmall = (image.metadata?.imageCache as { urls?: { small?: string } } | undefined)?.urls?.small;
+    const source = job.preferThumbnails ? cachedSmall || image.thumbnailUrl || image.url : image.url;
+    // Cached variants can be AVIF even when the original was JPEG.
+    const extension = String(source).split(/[?#]/)[0].match(/\.(avif|webp|png|jpe?g)$/i)?.[0];
+    const downloadName = job.preferThumbnails && extension ? filename.replace(/\.[^.]+$/, '') + extension : filename;
+    return this.minioService.createDownloadUrl(source, downloadName, expiresIn);
   }
 
   @Interval(3000)
   async processQueue() {
-    if (!backgroundWorkerEnabled()) return;
-    if (this.processing) return;
+    if (!backgroundWorkerEnabled() || this.processing) return;
     this.processing = true;
     try {
       if (Date.now() - this.lastCleanupAt > 10 * 60 * 1000) {
         this.lastCleanupAt = Date.now();
         await this.cleanupExpired();
       }
-      const job = await this.deliveryModel.findOneAndUpdate(
-        { status: 'queued' },
-        { $set: { status: 'processing', lastError: '' } },
-        { returnDocument: 'after', sort: { createdAt: 1 } },
+      // Migrate interrupted ZIP requests to immediate direct-download pages.
+      await this.deliveryModel.updateMany(
+        { status: { $in: ['queued', 'processing', 'failed'] }, expiresAt: { $gt: new Date() } },
+        { $set: { status: 'ready', readyAt: new Date(), expiresAt: new Date(Date.now() + LINK_LIFETIME_MS), emailNextAttemptAt: new Date(), emailAttempts: 0, lastError: '' } },
       );
-      if (job) await this.prepare(job);
+      for (let count = 0; count < 10; count++) {
+        const now = new Date();
+        const job = await this.deliveryModel.findOneAndUpdate(
+          { status: 'ready', expiresAt: { $gt: now }, emailSentAt: null, emailNextAttemptAt: { $lte: now }, emailAttempts: { $lt: 5 } },
+          { $set: { emailNextAttemptAt: new Date(Date.now() + 5 * 60 * 1000) }, $inc: { emailAttempts: 1 } },
+          { returnDocument: 'after', sort: { emailNextAttemptAt: 1 } },
+        );
+        if (!job) break;
+        await this.sendReadyEmail(job);
+      }
+    } catch (error) {
+      this.logger.error(`Download email queue failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.processing = false;
     }
   }
 
-  private async prepare(job: CollectionDownloadDeliveryDocument) {
-    const tempDir = join(cwd(), 'uploads', 'download-jobs', String(job._id));
-    const sourceDir = join(tempDir, 'files');
-    const zipPath = join(tempDir, job.fileName);
+  private async sendReadyEmail(job: CollectionDownloadDeliveryDocument) {
     try {
-      await mkdir(sourceDir, { recursive: true });
-      const rawImages = await this.imageModel
-        .find({
-          collectionId: job.collectionId,
-          _id: { $in: job.imageIds.filter((id) => Types.ObjectId.isValid(id)) },
-        })
-        .select(
-          '+originalObjectKey +originalFilename +originalMimeType +originalSizeBytes',
-        )
-        .lean();
-      const byId = new Map(
-        rawImages.map((image) => [String(image._id), image]),
-      );
-      const images = job.imageIds.map((id) => byId.get(id)).filter(Boolean) as any[];
-      if (!images.length) throw new Error('Requested photos are no longer available');
-
-      const localFiles: Array<{ path: string; name: string }> = [];
-      const usedNames = new Set<string>();
-      for (const [index, image] of images.entries()) {
-        const rawName = String(image.originalName || image.filename || `photo-${index + 1}`);
-        const name = this.uniqueArchiveName(rawName, index, usedNames);
-        const extension = extname(name) || extname(String(image.url || '')) || '.jpg';
-        const localPath = join(sourceDir, `${String(index + 1).padStart(5, '0')}${extension}`);
-        const originalObjectKey = String(
-          image.originalObjectKey ?? '',
-        ).trim();
-        if (!job.preferThumbnails && originalObjectKey) {
-          const original =
-            await this.minioService.openPrivateReadStream(originalObjectKey);
-          await pipeline(original.body, createWriteStream(localPath));
-        } else {
-          const source =
-            job.preferThumbnails && image.thumbnailUrl
-              ? String(image.thumbnailUrl)
-              : String(image.url || '');
-          if (!source) continue;
-          await this.downloadToDisk(source, localPath);
-        }
-        await this.assertValidDownloadedFile(localPath, name);
-        localFiles.push({ path: localPath, name });
-      }
-      if (!localFiles.length) throw new Error('Requested files could not be read from storage');
-
-      const output = createWriteStream(zipPath);
-      const outputDone = finished(output);
-      const archive = new ZipArchive({ store: true });
-      archive.on('warning', (warning) => this.logger.warn(`Download ZIP warning: ${warning.message}`));
-      archive.pipe(output);
-      for (const file of localFiles) archive.file(file.path, { name: file.name });
-      await archive.finalize();
-      await outputDone;
-
-      const zipStat = await stat(zipPath);
-      const fileUrl = await this.minioService.uploadFile({
-        path: zipPath,
-        filename: `download-deliveries/${randomUUID()}.zip`,
-        originalname: job.fileName,
-        mimetype: 'application/zip',
-        size: zipStat.size,
-      } as Express.Multer.File);
-      const readyAt = new Date();
-      const expiresAt = new Date(readyAt.getTime() + LINK_LIFETIME_MS);
-      await this.deliveryModel.updateOne(
-        { _id: job._id, status: 'processing' },
-        { $set: { status: 'ready', fileUrl, fileCount: localFiles.length, readyAt, expiresAt, lastError: '' } },
-      );
-      await this.sendReadyEmail(job, expiresAt);
+      const buttonLink = this.deliveryLink(job.token);
+      const result = await this.brandingEmailService.sendBranded({
+        userId: String(job.userId), to: job.email,
+        subject: `Your photos from ${job.collectionName} are ready`,
+        text: `Your photos are ready.\n\nDownload: ${buttonLink}\n\nThis link expires in 24 hours (${new Date(job.expiresAt).toISOString()}).`,
+        previewText: 'Download your photos directly from storage.',
+        eyebrowText: 'Photos ready', title: 'Your photos are ready',
+        message: `Your requested photos from ${job.collectionName} are ready. Open the link to download each photo directly from storage.`,
+        buttonText: 'Download photos', buttonLink,
+        footerText: 'This secure link expires in 24 hours.',
+      });
+      if (!result.sent) throw new Error(result.reason || 'SMTP_SEND_FAILED');
+      await this.deliveryModel.updateOne({ _id: job._id }, { $set: { emailSentAt: new Date(), lastError: '' }, $unset: { emailNextAttemptAt: 1 } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Download delivery ${job._id} failed: ${message}`);
-      await this.deliveryModel.updateOne(
-        { _id: job._id },
-        { $set: { status: 'failed', lastError: message.slice(0, 2000) } },
-      );
-    } finally {
-      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+      this.logger.error(`Download email ${job._id} failed (attempt ${job.emailAttempts}/5): ${message}`);
+      await this.deliveryModel.updateOne({ _id: job._id }, { $set: {
+        lastError: message.slice(0, 2000),
+        emailNextAttemptAt: new Date(Date.now() + Math.min(15 * 60_000, 30_000 * 2 ** Math.max(0, job.emailAttempts - 1))),
+      } });
     }
-  }
-
-  private async sendReadyEmail(job: CollectionDownloadDeliveryDocument, expiresAt: Date) {
-    const buttonLink = this.deliveryLink(job.token);
-    const expiresText = expiresAt.toLocaleString();
-    const text = `Your download from ${job.collectionName} is ready.\n\nDownload: ${buttonLink}\n\nThis secure link expires in 30 hours (${expiresText}).`;
-    const brand = await this.brandingEmailService.loadBrandData(String(job.userId));
-    const result = await this.brandingEmailService.sendBranded({
-      userId: String(job.userId),
-      to: job.email,
-      subject: `Your download from ${job.collectionName} is ready`,
-      text,
-      previewText: 'Your requested files are ready to download.',
-      eyebrowText: 'Download Ready',
-      title: brandText(brand, 'Your photos are ready'),
-      message: `Your requested files from ${job.collectionName} are ready. Use the button below to download them.`,
-      buttonText: 'Download photos',
-      buttonLink,
-      footerText: 'This secure link expires in 30 hours.',
-    });
-    if (!result.sent) {
-      const reason = result.reason === 'SMTP_NOT_CONFIGURED'
-        ? 'Archive is ready, but SMTP is not configured'
-        : `Archive is ready, but email delivery failed (${result.reason || 'unknown error'})`;
-      this.logger.error(`Download delivery ${job._id}: ${reason}`);
-      await this.deliveryModel.updateOne({ _id: job._id }, { $set: { lastError: reason } });
-    }
-  }
-  private async assertValidDownloadedFile(path: string, name: string) {
-    const handle = await open(path, 'r');
-    let bytesRead = 0;
-    const header = Buffer.alloc(32);
-    try {
-      ({ bytesRead } = await handle.read(header, 0, header.length, 0));
-    } finally {
-      await handle.close();
-    }
-    if (bytesRead < 8) throw new Error(`Downloaded file is empty or incomplete: ${name}`);
-    const extension = extname(name).toLowerCase();
-    const jpeg = header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
-    const png = header.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-    const webp = header.toString('ascii', 0, 4) === 'RIFF' && header.toString('ascii', 8, 12) === 'WEBP';
-    const gif = header.toString('ascii', 0, 3) === 'GIF';
-    const tiff = ['II*\\0', 'MM\\0*'].includes(header.toString('binary', 0, 4));
-    const iso = header.toString('ascii', 4, 8) === 'ftyp';
-    const accepted = extension === '.jpg' || extension === '.jpeg' ? jpeg
-      : extension === '.png' ? png
-      : extension === '.webp' ? webp
-      : extension === '.gif' ? gif
-      : extension === '.tif' || extension === '.tiff' ? tiff
-      : extension === '.heic' || extension === '.heif' || extension === '.avif' ? iso
-      : true;
-    if (!accepted) {
-      throw new Error(`Invalid ${extension || 'image'} data for ${name}; source may be a transformed image or an error response`);
-    }
-  }
-
-  private async downloadToDisk(source: string, destination: string) {
-    if (source.startsWith('/uploads/')) {
-      const localPath = join(cwd(), source.split(/[?#]/)[0].replace(/^\/+/, ''));
-      await pipeline(createReadStream(localPath), createWriteStream(destination));
-      return;
-    }
-    try {
-      const object = await this.minioService.openReadStream(source);
-      await pipeline(object.body, createWriteStream(destination));
-      return;
-    } catch {
-      // Non-MinIO legacy/external URLs are streamed over HTTP below.
-    }
-    const response = await fetch(source, { signal: AbortSignal.timeout(60_000), cache: 'no-store' });
-    if (!response.ok || !response.body) throw new Error(`Could not read ${basename(source.split(/[?#]/)[0]) || 'photo'}`);
-    await pipeline(Readable.fromWeb(response.body as any), createWriteStream(destination));
   }
 
   private async cleanupExpired() {
-    await this.deliveryModel.updateMany(
-      {
-        status: 'processing',
-        updatedAt: { $lte: new Date(Date.now() - 30 * 60 * 1000) },
-      },
-      { $set: { status: 'queued', lastError: 'Recovered after an interrupted download worker' } },
-    );
-    const rows = await this.deliveryModel.find({
-      status: 'ready',
-      expiresAt: { $lte: new Date() },
-    }).sort({ expiresAt: 1 }).limit(50).lean();
-    for (const row of rows) await this.expireJob(row);
-  }
-
-  private async expireJob(job: { _id: unknown; fileUrl?: string }) {
-    if (job.fileUrl) await this.minioService.deleteService(job.fileUrl).catch(() => undefined);
-    await this.deliveryModel.updateOne(
-      { _id: job._id as any },
-      { $set: { status: 'expired', fileUrl: '', lastError: 'Secure download link expired after 30 hours' } },
-    );
+    // Retry legacy archives whose email failed before retry metadata existed.
+    await this.deliveryModel.updateMany({
+      status: 'ready', expiresAt: { $gt: new Date() },
+      emailNextAttemptAt: { $exists: false }, emailSentAt: { $exists: false },
+      lastError: { $regex: 'SMTP|email delivery', $options: 'i' },
+    }, { $set: { emailAttempts: 0, emailNextAttemptAt: new Date() } });
+    const rows = await this.deliveryModel.find({ status: 'ready', expiresAt: { $lte: new Date() } })
+      .select('_id fileUrl').limit(50).lean();
+    for (const row of rows) {
+      // Only legacy jobs have an archive. Never delete original photos.
+      if (row.fileUrl) await this.minioService.deleteService(row.fileUrl);
+      await this.deliveryModel.updateOne({ _id: row._id }, { $set: { status: 'expired', fileUrl: '' } });
+    }
   }
 
   private deliveryLink(token: string) {
@@ -431,7 +328,7 @@ export class CollectionDownloadDeliveryService {
       const image = await this.imageModel.findOne({
         _id: validRequestedIds[0], collectionId,
         ...(hiddenIds.length ? { _id: { $eq: validRequestedIds[0], $nin: hiddenIds } } : {}),
-      }).lean();
+      }).select(IMAGE_FIELDS).lean();
       if (!image) throw new NotFoundException('Photo not found');
       const allowed = image.mediaType === 'video'
         ? this.bool(download.videoDownload)
@@ -466,7 +363,7 @@ export class CollectionDownloadDeliveryService {
       query._id = hiddenIds.length ? { $in: requested, $nin: hiddenIds } : { $in: requested };
     }
 
-    const images = await this.imageModel.find(query).sort({ order: 1, createdAt: -1 }).lean();
+    const images = await this.imageModel.find(query).select(IMAGE_FIELDS).sort({ order: 1, createdAt: -1 }).lean();
     if (scope === 'favorites' && validRequestedIds.length) {
       const byId = new Map(images.map((image) => [String(image._id), image]));
       return validRequestedIds.map((id) => byId.get(id)).filter(Boolean) as any[];
@@ -522,21 +419,10 @@ export class CollectionDownloadDeliveryService {
       await this.activityModel.bulkWrite(operations.slice(offset, offset + 200), { ordered: false });
     }
   }
-  private archiveName(collectionName: string, scope: CollectionDownloadScope, setId?: string) {
+  private downloadName(collectionName: string, scope: CollectionDownloadScope, setId?: string) {
     const base = this.safeName(collectionName) || 'gallery';
     const suffix = scope === 'single' ? 'photo' : scope === 'favorites' ? 'favorites' : scope === 'set' ? this.safeName(setId || 'set') : 'gallery';
-    return `${base}-${suffix}.zip`;
-  }
-
-  private uniqueArchiveName(raw: string, index: number, used: Set<string>) {
-    const cleaned = this.safeName(basename(raw)) || `photo-${index + 1}`;
-    const extension = extname(cleaned);
-    const stem = extension ? cleaned.slice(0, -extension.length) : cleaned;
-    let candidate = cleaned;
-    let counter = 2;
-    while (used.has(candidate.toLowerCase())) candidate = `${stem}-${counter++}${extension}`;
-    used.add(candidate.toLowerCase());
-    return candidate;
+    return `${base}-${suffix}`;
   }
 
   private safeName(value: string) {
@@ -570,6 +456,6 @@ export class CollectionDownloadDeliveryService {
   }
 }
 
-function brandText(brand: Record<string, any>, fallback: string) {
-  return String(brand?.brandText || brand?.brandName || brand?.name || '').trim() || fallback;
+function escapeHtml(value: unknown) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 }

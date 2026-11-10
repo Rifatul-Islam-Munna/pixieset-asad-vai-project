@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { HomeCms, HomeCmsDocument } from '../home-cms/entities/home-cms.entity';
+import { readLimitedBody } from '../lib/read-limited-body';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { createConnection, type Socket } from 'node:net';
@@ -117,6 +118,7 @@ export class MailService implements OnModuleInit {
     if (/^data:image\//i.test(value)) {
       const match = value.match(/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i);
       if (!match) return undefined;
+      if (match[2].length > 12 * 1024 * 1024) return undefined;
       const content = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
       if (!content.length || content.length > 8 * 1024 * 1024) return undefined;
       return {
@@ -136,8 +138,11 @@ export class MailService implements OnModuleInit {
       const contentType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
       if (!contentType.startsWith('image/')) return undefined;
       const contentLength = Number(response.headers.get('content-length') || 0);
-      if (contentLength > 8 * 1024 * 1024) return undefined;
-      const buffer = Buffer.from(await response.arrayBuffer());
+      if (contentLength > 8 * 1024 * 1024) {
+        await response.body?.cancel();
+        return undefined;
+      }
+      const buffer = await readLimitedBody(response, 8 * 1024 * 1024);
       if (!buffer.length || buffer.length > 8 * 1024 * 1024) return undefined;
       return { filename, content: buffer, contentType, contentId, disposition: 'inline' };
     } catch {

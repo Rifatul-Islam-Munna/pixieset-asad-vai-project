@@ -72,6 +72,8 @@ export class ImagorService {
     const running = this.dimensionInFlight.get(key);
     if (running) return running;
 
+    if (this.dimensionInFlight.size >= 8) return undefined;
+
     const task = this.fetchSourceDimensions(key).finally(() => {
       this.dimensionInFlight.delete(key);
     });

@@ -439,6 +439,7 @@ export function PublicGallery({
   const [faceFailedImages, setFaceFailedImages] = useState(0);
   const [faceSheetOpen, setFaceSheetOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
+  const [readyDownloadUrl, setReadyDownloadUrl] = useState("");
   const [shareTarget, setShareTarget] = useState<{
     title: string;
     text?: string;
@@ -709,8 +710,9 @@ export function PublicGallery({
       return;
     }
     try {
-      await requestDownloadDelivery(email, "single", [photo._id]);
-      setShareNotice("Request received. We’ll email a secure download link when the file is ready. The link stays valid for 30 hours.");
+      const result = await requestDownloadDelivery(email, "single", [photo._id]);
+      setReadyDownloadUrl(result?.downloadUrl || "");
+      setShareNotice("Photos ready. Download now or use the emailed link. Link expires in 24 hours.");
       onDownload();
     } catch (error) {
       setShareNotice(error instanceof Error ? error.message : "Download request failed");
@@ -729,11 +731,12 @@ export function PublicGallery({
         return;
       }
       setZipDownloading(true);
-      setZipStage("Queuing your secure download");
+      setZipStage("Getting your download link");
       try {
         const result = await requestDownloadDelivery(email, scope, favoriteIds);
+        setReadyDownloadUrl(result?.downloadUrl || "");
         setDownloadCount((count) => count + Number(result?.fileCount ?? 0));
-        setShareNotice(`Request received for ${Number(result?.fileCount ?? 0)} file${Number(result?.fileCount ?? 0) === 1 ? "" : "s"}. We’ll email the secure download link when it is ready; it expires 30 hours after preparation.`);
+        setShareNotice(`Photos ready: ${Number(result?.fileCount ?? 0)} files. Download now or use the emailed link. Link expires in 24 hours.`);
       } catch (error) {
         setShareNotice(error instanceof Error ? error.message : "Download request failed");
       } finally {
@@ -1796,6 +1799,12 @@ export function PublicGallery({
           </p>
         )}
 
+        {readyDownloadUrl && (
+          <div className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl bg-white px-5 py-3 text-black shadow-xl">
+            <a href={readyDownloadUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Download photos (valid 24 hours)</a>
+            <button type="button" onClick={() => setReadyDownloadUrl("")} aria-label="Dismiss download link"><X className="size-4" /></button>
+          </div>
+        )}
         {shareNotice && (
           <p className="mx-4 mt-5 inline-flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white md:mx-8">
             <Check className="size-4" />

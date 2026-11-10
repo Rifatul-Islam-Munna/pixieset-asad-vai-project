@@ -724,6 +724,30 @@ export class MinioService implements OnModuleInit {
     };
   }
 
+  async createDownloadUrl(reference: string, filename: string, expiresIn: number, privateObject = false) {
+    if (!this.s3) throw new HttpException('Object storage is not configured', HttpStatus.SERVICE_UNAVAILABLE);
+    if (!Number.isFinite(expiresIn) || expiresIn < 1 || expiresIn > 86400) {
+      throw new HttpException('Download link expired', HttpStatus.GONE);
+    }
+    if (!privateObject && /^https?:\/\//i.test(reference)) {
+      const url = new URL(reference);
+      if (![this.endpointUrl, this.publicBaseUrl].some((base) => base && url.origin === new URL(base).origin)) {
+        throw new HttpException('This legacy photo must be moved to object storage before direct download', HttpStatus.BAD_REQUEST);
+      }
+    }
+    const key = privateObject ? String(reference || '').trim().replace(/^\/+/, '') : this.objectKey(reference);
+    if (!key || key.includes('..') || reference.startsWith('/uploads/')) {
+      throw new HttpException('Photo is unavailable in object storage', HttpStatus.NOT_FOUND);
+    }
+    const safeFilename = String(filename || 'photo').replace(/[\r\n\x00-\x1f]/g, '').slice(0, 220);
+    return getSignedUrl(this.s3, new GetObjectCommand({
+      Bucket: privateObject ? this.privateBucketName : this.bucketName,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
+      ResponseCacheControl: 'private, no-store',
+    }), { expiresIn });
+  }
+
   async openPrivateReadStream(objectKey: string) {
     const key = String(objectKey || '').trim().replace(/^\/+/, '');
     if (!key || key.includes('..'))

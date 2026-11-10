@@ -11,13 +11,14 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import { existsSync } from 'fs';
-import { readFile, unlink } from 'fs/promises';
+import { readFile, stat, unlink } from 'fs/promises';
 import { Model, Types } from 'mongoose';
 import { extname, join } from 'path';
 import { cwd } from 'process';
 import sharp, { type Metadata, type Sharp } from 'sharp';
 import * as exifr from 'exifr';
 import { setTimeout as delay } from 'timers/promises';
+import { readLimitedBody } from 'src/lib/read-limited-body';
 import { MinioService } from 'src/lib/minio.service';
 import { backgroundWorkerEnabled } from 'src/lib/runtime-role';
 import {
@@ -181,6 +182,7 @@ export class CollectionsService implements OnModuleInit {
     private readonly configService: ConfigService,
   ) {}
 
+  private previewWorkerRunning = false;
   private directImageWorkerRunning = false;
   private readonly directImagorSaveLocks = new Map<string, Promise<any>>();
   private lastDirectImageRecoveryAt = 0;
@@ -203,18 +205,18 @@ export class CollectionsService implements OnModuleInit {
     );
 
     const cacheMemoryMb = Number(
-      this.configService.get<string>('SHARP_CACHE_MEMORY_MB') ?? 32,
+      this.configService.get<string>('SHARP_CACHE_MEMORY_MB') ?? 0,
     );
     sharp.cache({
       memory: Math.max(
         0,
         Math.min(
           128,
-          Number.isFinite(cacheMemoryMb) ? Math.floor(cacheMemoryMb) : 32,
+          Number.isFinite(cacheMemoryMb) ? Math.floor(cacheMemoryMb) : 0,
         ),
       ),
-      files: 20,
-      items: 50,
+      files: 0,
+      items: 0,
     });
   }
 
@@ -1660,7 +1662,7 @@ export class CollectionsService implements OnModuleInit {
       if (image.mediaType === 'video' || remainingBytes <= 0) continue;
       const declaredSize = Math.max(0, Number(image.sizeBytes ?? 0));
       if (declaredSize && declaredSize > remainingBytes) continue;
-      const attachment = await this.loadPrintShopAttachment(image).catch(() => null);
+      const attachment = await this.loadPrintShopAttachment(image, remainingBytes).catch(() => null);
       if (!attachment || attachment.content.byteLength > remainingBytes) continue;
       attachments.push(attachment);
       remainingBytes -= attachment.content.byteLength;
@@ -1741,14 +1743,16 @@ export class CollectionsService implements OnModuleInit {
     } as Record<string, any>;
   }
 
-  private async loadPrintShopAttachment(image: any): Promise<GlobalMailAttachment | null> {
+  private async loadPrintShopAttachment(image: any, maxBytes: number): Promise<GlobalMailAttachment | null> {
     const rawUrl = String(image?.url ?? '').trim();
     if (!rawUrl) return null;
     const filename = String(image?.originalName || image?.filename || `photo-${image?._id || 'file'}`);
     const contentType = String(image?.mimetype || '').trim() || undefined;
     if (rawUrl.startsWith('/uploads/')) {
       const relative = rawUrl.split(/[?#]/)[0].replace(/^\/+/, '');
-      const content = await readFile(join(cwd(), relative));
+      const path = join(cwd(), relative);
+      if ((await stat(path)).size > maxBytes) return null;
+      const content = await readFile(path);
       return { filename, content, contentType };
     }
     let parsed: URL;
@@ -1763,7 +1767,7 @@ export class CollectionsService implements OnModuleInit {
       cache: 'no-store',
     }).catch(() => null);
     if (!response?.ok) return null;
-    const content = new Uint8Array(await response.arrayBuffer());
+    const content = await readLimitedBody(response, maxBytes);
     return {
       filename,
       content,
@@ -3732,13 +3736,13 @@ export class CollectionsService implements OnModuleInit {
     const configured = Number(
       this.configService.get<string>(
         'IMAGE_BACKGROUND_PROCESSING_CONCURRENCY',
-      ) ?? 6,
+      ) ?? 1,
     );
     return Math.max(
       1,
       Math.min(
-        8,
-        Number.isFinite(configured) ? Math.floor(configured) : 6,
+        2,
+        Number.isFinite(configured) ? Math.floor(configured) : 1,
       ),
     );
   }
@@ -6686,6 +6690,19 @@ export class CollectionsService implements OnModuleInit {
   }
 
   private async ensureCollectionPreviews(collectionId: string) {
+    // Gallery requests must not start overlapping full-image decodes.
+    if (this.previewWorkerRunning) return;
+    this.previewWorkerRunning = true;
+    try {
+      await this.prepareCollectionPreviews(collectionId);
+    } catch {
+      // Missing previews can retry on the next gallery visit.
+    } finally {
+      this.previewWorkerRunning = false;
+    }
+  }
+
+  private async prepareCollectionPreviews(collectionId: string) {
     const images = await this.imageModel
       .find({
         collectionId,
@@ -6736,11 +6753,11 @@ export class CollectionsService implements OnModuleInit {
   private async readImageBuffer(url: string) {
     if (url.startsWith('/uploads/')) {
       const localPath = join(cwd(), url.replace(/^\/uploads\//, 'uploads/'));
-      return existsSync(localPath) ? readFile(localPath) : null;
+      return existsSync(localPath) && (await stat(localPath)).size <= 32 * 1024 * 1024 ? readFile(localPath) : null;
     }
-    const response = await fetch(url).catch(() => null);
+    const response = await fetch(url, { signal: AbortSignal.timeout(15_000) }).catch(() => null);
     if (!response?.ok) return null;
-    return Buffer.from(await response.arrayBuffer());
+    return readLimitedBody(response, 32 * 1024 * 1024);
   }
 
   private async extractMetadata(file: Express.Multer.File) {
@@ -7032,7 +7049,7 @@ export class CollectionsService implements OnModuleInit {
     if (image.startsWith('http')) {
       const response = await fetch(image).catch(() => null);
       if (!response?.ok) return null;
-      return Buffer.from(await response.arrayBuffer());
+      return readLimitedBody(response, 32 * 1024 * 1024);
     }
     return existsSync(image) ? image : null;
   }
