@@ -77,6 +77,7 @@ COPY --from=build --chown=nestjs:nodejs /app/dist ./dist
 # Copy package information
 COPY --chown=nestjs:nodejs package*.json ./
 COPY --chown=nestjs:nodejs ecosystem.config.cjs ./
+COPY --chown=nestjs:nodejs scripts/inspect-download-job.cjs ./scripts/inspect-download-job.cjs
 
 # Run as non-root
 USER nestjs

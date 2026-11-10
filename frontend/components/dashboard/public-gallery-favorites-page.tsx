@@ -1,5 +1,6 @@
 "use client";
 
+import { startGalleryDownload, galleryDownloadNotice } from "@/lib/gallery-download";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -177,7 +178,8 @@ export function PublicGalleryFavoritesPage({
       const data = await requestDownload("single", [image._id]);
       if (!data) return;
       setReadyDownloadUrl(data.downloadUrl || "");
-      setNotice("Photo ready. Download now or use the emailed link. Link expires in 24 hours.");
+      startGalleryDownload(data.downloadUrl);
+      setNotice(galleryDownloadNotice(data.emailStatus));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Download request failed");
     } finally {
@@ -194,7 +196,8 @@ export function PublicGalleryFavoritesPage({
       const data = await requestDownload("favorites", selected.map((image) => image._id));
       if (!data) return;
       setReadyDownloadUrl(data.downloadUrl || "");
-      setNotice(`Photos ready: ${Number(data?.fileCount ?? selected.length)} favorites. Download now or use the emailed link. Link expires in 24 hours.`);
+      startGalleryDownload(data.downloadUrl);
+      setNotice(galleryDownloadNotice(data.emailStatus));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Download request failed");
     } finally {
@@ -341,7 +344,7 @@ export function PublicGalleryFavoritesPage({
         )}
       </section>
 
-      {readyDownloadUrl && <div className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl bg-white px-5 py-3 text-black shadow-xl"><a href={readyDownloadUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Download photos (valid 24 hours)</a><button type="button" onClick={() => setReadyDownloadUrl("")} aria-label="Dismiss download link">&times;</button></div>}
+      {readyDownloadUrl && <div className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl bg-white px-5 py-3 text-black shadow-xl"><a href={readyDownloadUrl} rel="noreferrer" className="font-semibold underline">Download again (valid 24 hours)</a><button type="button" onClick={() => setReadyDownloadUrl("")} aria-label="Dismiss download link">&times;</button></div>}
       {notice && <div className="fixed bottom-5 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-black px-5 py-3 text-center text-sm font-semibold text-white shadow-xl">{notice}</div>}
     </main>
   );

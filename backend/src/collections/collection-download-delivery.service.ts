@@ -1,3 +1,6 @@
+import type { Response } from 'express';
+import { Readable } from 'node:stream';
+import { streamPhotoZip, type PhotoZipEntry } from 'src/lib/stream-photo-zip';
 import { randomBytes } from 'crypto';
 import { BadRequestException, GoneException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -5,7 +8,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Interval } from '@nestjs/schedule';
 import { Model, Types } from 'mongoose';
 import { MinioService } from 'src/lib/minio.service';
-import { backgroundWorkerEnabled } from 'src/lib/runtime-role';
 import { BrandingEmailService } from 'src/mail/branding-email.service';
 import { DashboardSetting, DashboardSettingDocument, DashboardSettingType } from 'src/settings/entities/dashboard-setting.entity';
 import { User, UserDocument } from 'src/user/entities/user.entity';
@@ -33,6 +35,8 @@ type DownloadRequest = {
 export class CollectionDownloadDeliveryService {
   private readonly logger = new Logger(CollectionDownloadDeliveryService.name);
   private processing = false;
+  private emailTasks = 0;
+  private activeDownloads = 0;
   private lastCleanupAt = 0;
   constructor(
     @InjectModel(CollectionDownloadDelivery.name) private readonly deliveryModel: Model<CollectionDownloadDeliveryDocument>,
@@ -76,6 +80,7 @@ export class CollectionDownloadDeliveryService {
       imageIds: images.map((image) => String(image._id)),
       preferThumbnails: scope === 'single' && this.bool(settings.download.restrictedSinglePhotoDownloadSize),
       token,
+      downloadUrl,
       status: 'ready',
       readyAt: new Date(),
       emailAttempts: 0,
@@ -86,14 +91,19 @@ export class CollectionDownloadDeliveryService {
       lastError: '',
     });
     await this.recordActivity(collection, email, images, scope);
-    setTimeout(() => void this.processQueue(), 25);
+    const emailStatus = await this.sendRequestedEmail(String(job._id));
     return {
       requestId: String(job._id),
       status: 'ready',
       downloadUrl,
+      emailStatus,
       fileCount: images.length,
       expiresInHours: 24,
-      message: 'Your photos are ready. Open the download link now; we will also email it. The link expires in 24 hours.',
+      message: emailStatus === 'sent'
+        ? 'Your download is ready. The same 24-hour download link was sent by email.'
+        : emailStatus === 'failed'
+          ? 'Your download is ready, but email delivery failed. Use this link now; we will retry the email.'
+          : 'Your download is ready. The same 24-hour download link is queued for email.',
     };
   }
 
@@ -109,19 +119,109 @@ export class CollectionDownloadDeliveryService {
     return job;
   }
 
-  async open(token: string, page = 0) {
+  async download(token: string, response: Response) {
     const job = await this.activeDelivery(token);
-    const pageIndex = Number.isFinite(page) ? Math.max(0, Math.floor(page)) : 0;
-    const ids = job.imageIds.slice(pageIndex * 100, (pageIndex + 1) * 100);
-    const images = await this.imageModel.find({ collectionId: job.collectionId, _id: { $in: ids } })
-      .select(IMAGE_FIELDS).lean();
-    const byId = new Map(images.map((image) => [String(image._id), image]));
-    const base = this.deliveryLink(job.token);
-    const links = ids.flatMap((id) => {
-      const image = byId.get(id);
-      return image ? [`<li><a href="${escapeHtml(base)}/files/${id}" rel="noreferrer">${escapeHtml(image.originalName || image.filename || 'Photo')}</a></li>`] : [];
-    }).join('');
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Download photos</title><style>body{font:17px system-ui;max-width:760px;margin:48px auto;padding:0 24px;color:#222}a{color:#087b68}li{padding:12px 0;overflow-wrap:anywhere}nav{display:flex;gap:24px}</style></head><body><h1>${escapeHtml(job.collectionName)}</h1><p>Your photos are ready. Choose a photo to download directly from storage.</p><p>Link expires ${escapeHtml(new Date(job.expiresAt).toISOString())}. No ZIP needed.</p><ul>${links || '<li>No photos on this page.</li>'}</ul><nav>${pageIndex > 0 ? `<a href="${escapeHtml(base)}?page=${pageIndex - 1}">Previous</a>` : ''}${(pageIndex + 1) * 100 < job.imageIds.length ? `<a href="${escapeHtml(base)}?page=${pageIndex + 1}">Next</a>` : ''}</nav></body></html>`;
+    response.setHeader('Cache-Control', 'private, no-store, no-transform');
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    if (job.scope === 'single' && job.imageIds.length === 1) {
+      response.redirect(302, await this.fileLink(token, job.imageIds[0]));
+      return;
+    }
+    // A bounded number of live archives; never queue photo buffers in memory.
+    if (this.activeDownloads >= 2) {
+      response.setHeader('Retry-After', '10');
+      throw new ServiceUnavailableException('Downloads are busy. Please try this link again in a few seconds.');
+    }
+    this.activeDownloads++;
+    const controller = new AbortController();
+    const disconnected = () => { if (!response.writableFinished) controller.abort(new Error('Client disconnected')); };
+    response.once('close', disconnected);
+    response.once('error', disconnected);
+    if (response.destroyed) disconnected();
+    try {
+      const folder = this.safeName(job.collectionName) || 'gallery';
+      const entries = this.archiveEntries(job, folder, controller.signal);
+      // Validate the first entry before committing response headers.
+      const first = await entries.next();
+      if (first.done) throw new NotFoundException('No downloadable photos remain in this request');
+      const allEntries = (async function* () {
+        yield first.value;
+        yield* entries;
+      })();
+      const filename = (this.safeName(job.fileName || folder).replace(/\.zip$/i, '') || 'gallery') + '.zip';
+      response.setHeader('Content-Type', 'application/zip');
+      response.setHeader('Content-Disposition', `attachment; filename="gallery.zip"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      response.setHeader('X-Accel-Buffering', 'no');
+      response.setHeader('Accept-Ranges', 'none');
+      await streamPhotoZip(allEntries, response, controller.signal);
+    } catch (error) {
+      if (response.headersSent || response.destroyed) {
+        if (!controller.signal.aborted) this.logger.error(`Gallery ZIP stream failed: ${error instanceof Error ? error.message : String(error)}`);
+        response.destroy();
+      } else {
+        throw error;
+      }
+    } finally {
+      controller.abort();
+      response.off('close', disconnected);
+      response.off('error', disconnected);
+      this.activeDownloads--;
+    }
+  }
+
+  private async *archiveEntries(job: any, folder: string, signal: AbortSignal): AsyncGenerator<PhotoZipEntry> {
+    const usedNames = new Set<string>();
+    for (let offset = 0; offset < job.imageIds.length; offset += 100) {
+      signal.throwIfAborted();
+      const ids: string[] = job.imageIds.slice(offset, offset + 100);
+      const hidden = await this.privatePhotoModel.find({ collectionId: job.collectionId, imageId: { $in: ids }, status: 'approved' })
+        .select('imageId').lean();
+      const hiddenIds = new Set(hidden.map((row) => String(row.imageId)));
+      const images = await this.imageModel.find({ collectionId: job.collectionId, _id: { $in: ids } })
+        .select(`${IMAGE_FIELDS} +originalObjectKey +originalFilename metadata.imageCache.urls.small`).lean();
+      const byId = new Map(images.map((image) => [String(image._id), image]));
+      for (const id of ids) {
+        signal.throwIfAborted();
+        if (hiddenIds.has(id)) continue;
+        const image = byId.get(id);
+        if (!image) throw new NotFoundException('A requested photo was removed. Please request a new download.');
+        const { reference, filename, privateObject } = this.imageSource(image, job.preferThumbnails);
+        const raw = filename.split(/[\\/]/).pop() || 'photo';
+        const safe = this.safeName(raw) || 'photo';
+        const dot = safe.lastIndexOf('.');
+        const stem = dot > 0 ? safe.slice(0, dot) : safe;
+        const extension = dot > 0 ? safe.slice(dot) : '';
+        let name = safe;
+        let suffix = 2;
+        while (usedNames.has(name.toLowerCase())) name = `${stem}-${suffix++}${extension}`;
+        usedNames.add(name.toLowerCase());
+        // A download already in progress can finish; new clicks still expire at 24h.
+        const url = await this.minioService.createDownloadUrl(reference, filename, 24 * 60 * 60, privateObject);
+        yield {
+          name: `${folder}/${name}`,
+          open: async (entrySignal) => {
+            const result = await fetch(url, { signal: entrySignal, cache: 'no-store' });
+            if (!result.ok || !result.body) {
+              await result.body?.cancel();
+              throw new Error(`A requested photo could not be read from storage (${result.status})`);
+            }
+            return Readable.fromWeb(result.body as any);
+          },
+        };
+      }
+    }
+  }
+
+  private imageSource(image: any, preferThumbnails: boolean) {
+    const filename = image.originalFilename || image.originalName || image.filename || 'photo';
+    if (!preferThumbnails && image.originalObjectKey) {
+      return { reference: image.originalObjectKey, filename, privateObject: !image.originalObjectKey.startsWith('direct/') };
+    }
+    const cachedSmall = image.metadata?.imageCache?.urls?.small;
+    const reference = preferThumbnails ? cachedSmall || image.thumbnailUrl || image.url : image.url;
+    const extension = String(reference).split(/[?#]/)[0].match(/\.(avif|webp|png|jpe?g)$/i)?.[0];
+    const downloadName = extension ? filename.replace(/\.[^.]+$/, '') + extension : filename;
+    return { reference, filename: downloadName, privateObject: false };
   }
 
   async fileLink(token: string, imageId: string) {
@@ -134,41 +234,27 @@ export class CollectionDownloadDeliveryService {
     if (!image) throw new NotFoundException('Photo not found');
     const expiresIn = Math.floor((new Date(job.expiresAt).getTime() - Date.now()) / 1000);
     if (expiresIn < 1) throw new GoneException('This download link expired');
-    const filename = image.originalFilename || image.originalName || image.filename || 'photo';
-    if (!job.preferThumbnails && image.originalObjectKey) {
-      return this.minioService.createDownloadUrl(image.originalObjectKey, filename, expiresIn, !image.originalObjectKey.startsWith('direct/'));
-    }
-    const cachedSmall = (image.metadata?.imageCache as { urls?: { small?: string } } | undefined)?.urls?.small;
-    const source = job.preferThumbnails ? cachedSmall || image.thumbnailUrl || image.url : image.url;
-    // Cached variants can be AVIF even when the original was JPEG.
-    const extension = String(source).split(/[?#]/)[0].match(/\.(avif|webp|png|jpe?g)$/i)?.[0];
-    const downloadName = job.preferThumbnails && extension ? filename.replace(/\.[^.]+$/, '') + extension : filename;
-    return this.minioService.createDownloadUrl(source, downloadName, expiresIn);
+    const source = this.imageSource(image, job.preferThumbnails);
+    return this.minioService.createDownloadUrl(source.reference, source.filename, expiresIn, source.privateObject);
   }
 
   @Interval(3000)
   async processQueue() {
-    if (!backgroundWorkerEnabled() || this.processing) return;
+    if (this.processing) return;
     this.processing = true;
     try {
       if (Date.now() - this.lastCleanupAt > 10 * 60 * 1000) {
         this.lastCleanupAt = Date.now();
         await this.cleanupExpired();
       }
-      // Migrate interrupted ZIP requests to immediate direct-download pages.
+      // Recover legacy jobs; archives are streamed only when the download link opens.
       await this.deliveryModel.updateMany(
         { status: { $in: ['queued', 'processing', 'failed'] }, expiresAt: { $gt: new Date() } },
         { $set: { status: 'ready', readyAt: new Date(), expiresAt: new Date(Date.now() + LINK_LIFETIME_MS), emailNextAttemptAt: new Date(), emailAttempts: 0, lastError: '' } },
       );
       for (let count = 0; count < 10; count++) {
-        const now = new Date();
-        const job = await this.deliveryModel.findOneAndUpdate(
-          { status: 'ready', expiresAt: { $gt: now }, emailSentAt: null, emailNextAttemptAt: { $lte: now }, emailAttempts: { $lt: 5 } },
-          { $set: { emailNextAttemptAt: new Date(Date.now() + 5 * 60 * 1000) }, $inc: { emailAttempts: 1 } },
-          { returnDocument: 'after', sort: { emailNextAttemptAt: 1 } },
-        );
-        if (!job) break;
-        await this.sendReadyEmail(job);
+        const result = await this.sendRequestedEmail();
+        if (result === 'queued') break;
       }
     } catch (error) {
       this.logger.error(`Download email queue failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -177,21 +263,45 @@ export class CollectionDownloadDeliveryService {
     }
   }
 
+  private async sendRequestedEmail(id?: string): Promise<'sent' | 'failed' | 'queued'> {
+    if (this.emailTasks >= 2) return 'queued';
+    this.emailTasks++;
+    try {
+      const now = new Date();
+      const job = await this.deliveryModel.findOneAndUpdate(
+        { ...(id ? { _id: id } : {}), status: 'ready', expiresAt: { $gt: now }, emailSentAt: null,
+          emailNextAttemptAt: { $lte: now }, emailAttempts: { $lt: 5 } },
+        { $set: { emailNextAttemptAt: new Date(Date.now() + 5 * 60 * 1000) }, $inc: { emailAttempts: 1 } },
+        { returnDocument: 'after', sort: { emailNextAttemptAt: 1 } },
+      );
+      if (!job) return 'queued';
+      return await this.sendReadyEmail(job);
+    } catch (error) {
+      this.logger.error(`Download email attempt failed: ${error instanceof Error ? error.message : String(error)}`);
+      return 'failed';
+    } finally {
+      this.emailTasks--;
+    }
+  }
+
   private async sendReadyEmail(job: CollectionDownloadDeliveryDocument) {
     try {
-      const buttonLink = this.deliveryLink(job.token);
+      const buttonLink = job.downloadUrl || this.deliveryLink(job.token);
+      const single = job.scope === 'single';
       const result = await this.brandingEmailService.sendBranded({
         userId: String(job.userId), to: job.email,
         subject: `Your photos from ${job.collectionName} are ready`,
         text: `Your photos are ready.\n\nDownload: ${buttonLink}\n\nThis link expires in 24 hours (${new Date(job.expiresAt).toISOString()}).`,
-        previewText: 'Download your photos directly from storage.',
+        previewText: single ? 'Your requested photo is ready to download.' : 'One click downloads all your requested photos in one ZIP folder.',
         eyebrowText: 'Photos ready', title: 'Your photos are ready',
-        message: `Your requested photos from ${job.collectionName} are ready. Open the link to download each photo directly from storage.`,
-        buttonText: 'Download photos', buttonLink,
+        message: single ? `Your requested photo from ${job.collectionName} is ready. Use the button below to download it.`
+          : `Your requested photos from ${job.collectionName} are ready. Use this link to download all requested photos together in one ZIP folder.`,
+        buttonText: single ? 'Download photo' : 'Download all photos', buttonLink,
         footerText: 'This secure link expires in 24 hours.',
       });
       if (!result.sent) throw new Error(result.reason || 'SMTP_SEND_FAILED');
       await this.deliveryModel.updateOne({ _id: job._id }, { $set: { emailSentAt: new Date(), lastError: '' }, $unset: { emailNextAttemptAt: 1 } });
+      return 'sent' as const;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Download email ${job._id} failed (attempt ${job.emailAttempts}/5): ${message}`);
@@ -199,10 +309,24 @@ export class CollectionDownloadDeliveryService {
         lastError: message.slice(0, 2000),
         emailNextAttemptAt: new Date(Date.now() + Math.min(15 * 60_000, 30_000 * 2 ** Math.max(0, job.emailAttempts - 1))),
       } });
+      return 'failed' as const;
     }
   }
 
   private async cleanupExpired() {
+    // Persist the exact URL and revive unsent requests made before immediate email
+    // delivery existed. downloadUrl is the one-time migration marker.
+    const unsent = await this.deliveryModel.find({
+      status: 'ready', expiresAt: { $gt: new Date() }, emailSentAt: null,
+      downloadUrl: { $in: ['', null] },
+    }).select('_id token').limit(50).lean();
+    for (const row of unsent) {
+      await this.deliveryModel.updateOne({
+        _id: row._id, emailSentAt: null, downloadUrl: { $in: ['', null] },
+      }, { $set: {
+        downloadUrl: this.deliveryLink(row.token), emailAttempts: 0, emailNextAttemptAt: new Date(),
+      } });
+    }
     // Retry legacy archives whose email failed before retry metadata existed.
     await this.deliveryModel.updateMany({
       status: 'ready', expiresAt: { $gt: new Date() },
@@ -454,8 +578,4 @@ export class CollectionDownloadDeliveryService {
     const list = Array.isArray(values) ? values : [];
     return [...new Set(list.map((value) => this.cleanEmail(value)).filter(Boolean))];
   }
-}
-
-function escapeHtml(value: unknown) {
-  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 }

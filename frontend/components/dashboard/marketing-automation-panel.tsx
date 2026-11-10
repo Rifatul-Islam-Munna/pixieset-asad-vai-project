@@ -27,7 +27,7 @@ const AUTOMATION_TRIGGERS: Array<{ value: MarketingAutomationTrigger; label: str
   { value: "new-subscriber", label: "New subscriber", description: "When a client opts in to marketing." },
   { value: "gallery-published", label: "Gallery published", description: "When a draft gallery is published, send only to that gallery's selected Publish Recipients." },
   { value: "gallery-updated", label: "Gallery updated", description: "When an already-published gallery is intentionally saved with content or design changes, notify its selected Publish Recipients." },
-  { value: "client-download", label: "Download ready", description: "When the requested photos are ready, email the client their secure download button. The link expires 24 hours after preparation." },
+  { value: "client-download", label: "Download ready", description: "Email the same download link shown to the client. One click downloads all requested photos as a ZIP folder. The link expires 24 hours after the request." },
   { value: "client-favorite", label: "Client favorite", description: "The first time that client adds a favorite in a gallery for this automation." },
 ];
 
@@ -250,7 +250,7 @@ function AutomationDialog({ open, onOpenChange, categories, contactsCount, colle
           </section>
 
           <section className="border p-5">
-            <div className="flex items-center gap-3"><Clock3 className="size-5 text-[#6337d8]" /><div><p className="font-bold">{trigger === "client-download" ? "Delivery timing" : "Send delay"}</p><p className="mt-1 text-xs text-[#777]">{trigger === "client-download" ? "The email sends as soon as the download link is ready, so the 24-hour link does not waste time waiting in a queue." : "Wait after the selected trigger happens before sending."}</p></div></div>
+            <div className="flex items-center gap-3"><Clock3 className="size-5 text-[#6337d8]" /><div><p className="font-bold">{trigger === "client-download" ? "Delivery timing" : "Send delay"}</p><p className="mt-1 text-xs text-[#777]">{trigger === "client-download" ? "The download link is emailed immediately, with retries if email delivery fails. It expires 24 hours after the request." : "Wait after the selected trigger happens before sending."}</p></div></div>
             {trigger !== "client-download" && <div className="mt-5 grid grid-cols-[minmax(0,1fr)_160px] gap-3"><Input type="number" min={0} max={365} value={delay} onChange={(event) => setDelay(Math.max(0, Number(event.target.value) || 0))} className="h-11 rounded-none" /><select value={unit} onChange={(event) => setUnit(event.target.value as typeof unit)} className="h-11 border bg-white px-3 text-sm">{DELAY_UNITS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>}
           </section>
           <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">{trigger === "new-subscriber" ? "Button opens collection (optional)" : "Gallery scope"}</span><select value={collectionId} onChange={(event) => setCollectionId(event.target.value)} className="h-11 border bg-white px-3 text-sm"><option value="">{trigger === "new-subscriber" ? "Use template link / no gallery link" : "All galleries · use event gallery link"}</option>{collections.map((collection) => <option key={collection._id} value={collection._id}>{collection.name}</option>)}</select></label>

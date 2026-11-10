@@ -58,14 +58,9 @@ export class PublicCollectionsController {
   @Get('download-deliveries/:token')
   async openDownloadDelivery(
     @Param('token') token: string,
-    @Query('page') page: string,
     @Res() response: Response,
   ) {
-    const html = await this.downloadDeliveryService.open(token, Number(page));
-    response.setHeader('Cache-Control', 'private, no-store');
-    response.setHeader('Referrer-Policy', 'no-referrer');
-    response.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
-    response.type('html').send(html);
+    await this.downloadDeliveryService.download(token, response);
   }
 
   @Get('download-deliveries/:token/files/:imageId')

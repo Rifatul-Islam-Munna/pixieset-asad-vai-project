@@ -1,5 +1,6 @@
 "use client";
 
+import { startGalleryDownload, galleryDownloadNotice } from "@/lib/gallery-download";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 import { Camera, Check, ChevronLeft, ChevronRight, Copy, Download, Ellipsis, EyeOff, Loader2, Lock, Play, Printer, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
@@ -712,7 +713,8 @@ export function PublicGallery({
     try {
       const result = await requestDownloadDelivery(email, "single", [photo._id]);
       setReadyDownloadUrl(result?.downloadUrl || "");
-      setShareNotice("Photos ready. Download now or use the emailed link. Link expires in 24 hours.");
+      startGalleryDownload(result?.downloadUrl);
+      setShareNotice(galleryDownloadNotice(result?.emailStatus));
       onDownload();
     } catch (error) {
       setShareNotice(error instanceof Error ? error.message : "Download request failed");
@@ -736,7 +738,8 @@ export function PublicGallery({
         const result = await requestDownloadDelivery(email, scope, favoriteIds);
         setReadyDownloadUrl(result?.downloadUrl || "");
         setDownloadCount((count) => count + Number(result?.fileCount ?? 0));
-        setShareNotice(`Photos ready: ${Number(result?.fileCount ?? 0)} files. Download now or use the emailed link. Link expires in 24 hours.`);
+        startGalleryDownload(result?.downloadUrl);
+        setShareNotice(galleryDownloadNotice(result?.emailStatus));
       } catch (error) {
         setShareNotice(error instanceof Error ? error.message : "Download request failed");
       } finally {
@@ -1801,7 +1804,7 @@ export function PublicGallery({
 
         {readyDownloadUrl && (
           <div className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl bg-white px-5 py-3 text-black shadow-xl">
-            <a href={readyDownloadUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Download photos (valid 24 hours)</a>
+            <a href={readyDownloadUrl} rel="noreferrer" className="font-semibold underline">Download again (valid 24 hours)</a>
             <button type="button" onClick={() => setReadyDownloadUrl("")} aria-label="Dismiss download link"><X className="size-4" /></button>
           </div>
         )}

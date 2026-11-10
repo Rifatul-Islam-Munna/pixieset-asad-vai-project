@@ -16,6 +16,7 @@ export class CollectionDownloadDelivery {
   @Prop({ type: [String], default: [] }) imageIds: string[];
   @Prop({ default: false }) preferThumbnails: boolean;
   @Prop({ required: true, unique: true, index: true }) token: string;
+  @Prop({ default: '', maxlength: 2000 }) downloadUrl: string;
   @Prop({ required: true, enum: ['queued', 'processing', 'ready', 'failed', 'expired'], default: 'queued', index: true })
   status: CollectionDownloadDeliveryStatus;
   @Prop({ default: '', maxlength: 1600 }) fileUrl: string;
