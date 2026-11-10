@@ -85,14 +85,20 @@ export async function POST(request: Request) {
     if (!response?.ok) return null;
 
     const contentType = response.headers.get("content-type") || "application/octet-stream";
-    const extension = extensionFromContentType(contentType) || extensionFromPath(new URL(parsed).pathname);
+    if (contentType.includes("text/html") || contentType.includes("application/json") || contentType.includes("text/plain")) return null;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const detectedExtension = detectImageExtension(bytes);
+    if (!detectedExtension) return null;
+    const extension = detectedExtension;
     const filename = safeZipEntryName(String(image.name || `photo-${index + 1}`), extension, usedNames);
     usedNames.add(filename);
-    return { name: filename, data: new Uint8Array(await response.arrayBuffer()) };
+    return { name: filename, data: bytes };
   })).filter((file): file is { name: string; data: Uint8Array<ArrayBuffer> } => Boolean(file));
 
-  if (!files.length) {
-    return NextResponse.json({ message: "Image download failed" }, { status: 502 });
+  if (files.length !== images.length) {
+    return NextResponse.json({
+      message: `ZIP not created: ${images.length - files.length} image(s) could not be fetched as valid original media. Please retry or restore missing originals.`,
+    }, { status: 502 });
   }
 
   return new NextResponse(await createZip(files), {
@@ -102,6 +108,24 @@ export async function POST(request: Request) {
       "cache-control": "no-store",
     },
   });
+}
+
+function detectImageExtension(bytes: Uint8Array): string | null {
+  if (bytes.length < 12) return null;
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return ".jpg";
+  if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71 &&
+      bytes[4] === 13 && bytes[5] === 10 && bytes[6] === 26 && bytes[7] === 10) return ".png";
+  const text = (offset: number, size: number) => String.fromCharCode(...bytes.subarray(offset, offset + size));
+  if (text(0, 4) === "RIFF" && text(8, 4) === "WEBP") return ".webp";
+  if (text(0, 3) === "GIF") return ".gif";
+  if ((text(0, 2) === "II" && bytes[2] === 42 && bytes[3] === 0) ||
+      (text(0, 2) === "MM" && bytes[2] === 0 && bytes[3] === 42)) return ".tif";
+  if (text(4, 4) === "ftyp") {
+    const brand = text(8, 4);
+    if (brand === "avif" || brand === "avis") return ".avif";
+    if (/^(heic|heix|hevc|hevx|mif1|msf1)$/.test(brand)) return ".heic";
+  }
+  return null;
 }
 
 function resolveDownloadUrl(rawUrl: string) {

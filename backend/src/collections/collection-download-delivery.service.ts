@@ -5,7 +5,7 @@ import { Interval } from '@nestjs/schedule';
 import { ZipArchive } from 'archiver';
 import { randomBytes, randomUUID } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';
-import { mkdir, rm, stat } from 'fs/promises';
+import { mkdir, open, rm, stat } from 'fs/promises';
 import { Model, Types } from 'mongoose';
 import { basename, extname, join } from 'path';
 import { cwd } from 'process';
@@ -182,6 +182,7 @@ export class CollectionDownloadDeliveryService {
           if (!source) continue;
           await this.downloadToDisk(source, localPath);
         }
+        await this.assertValidDownloadedFile(localPath, name);
         localFiles.push({ path: localPath, name });
       }
       if (!localFiles.length) throw new Error('Requested files could not be read from storage');
@@ -224,17 +225,6 @@ export class CollectionDownloadDeliveryService {
 
   private async sendReadyEmail(job: CollectionDownloadDeliveryDocument, expiresAt: Date) {
     const buttonLink = this.deliveryLink(job.token);
-    const queued = await this.marketingScheduleService.queueLifecycleEvent({
-      userId: job.userId,
-      trigger: 'client-download',
-      recipientEmails: [job.email],
-      collectionId: job.collectionId,
-      collectionName: job.collectionName,
-      buttonLink,
-      eventId: String(job._id),
-    }).catch(() => ({ queued: 0 }));
-    if (queued.queued > 0) return;
-
     const expiresText = expiresAt.toLocaleString();
     const text = `Your download from ${job.collectionName} is ready.\n\nDownload: ${buttonLink}\n\nThis secure link expires in 30 hours (${expiresText}).`;
     const brand = await this.brandingEmailService.loadBrandData(String(job.userId));
@@ -252,9 +242,42 @@ export class CollectionDownloadDeliveryService {
       footerText: 'This secure link expires in 30 hours.',
     });
     if (!result.sent) {
-      await this.deliveryModel.updateOne({ _id: job._id }, { $set: { lastError: result.reason === 'SMTP_NOT_CONFIGURED' ? 'Archive is ready, but SMTP is not configured' : 'Archive is ready, but email delivery failed' } });
+      const reason = result.reason === 'SMTP_NOT_CONFIGURED'
+        ? 'Archive is ready, but SMTP is not configured'
+        : `Archive is ready, but email delivery failed (${result.reason || 'unknown error'})`;
+      this.logger.error(`Download delivery ${job._id}: ${reason}`);
+      await this.deliveryModel.updateOne({ _id: job._id }, { $set: { lastError: reason } });
     }
   }
+  private async assertValidDownloadedFile(path: string, name: string) {
+    const handle = await open(path, 'r');
+    let bytesRead = 0;
+    const header = Buffer.alloc(32);
+    try {
+      ({ bytesRead } = await handle.read(header, 0, header.length, 0));
+    } finally {
+      await handle.close();
+    }
+    if (bytesRead < 8) throw new Error(`Downloaded file is empty or incomplete: ${name}`);
+    const extension = extname(name).toLowerCase();
+    const jpeg = header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
+    const png = header.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    const webp = header.toString('ascii', 0, 4) === 'RIFF' && header.toString('ascii', 8, 12) === 'WEBP';
+    const gif = header.toString('ascii', 0, 3) === 'GIF';
+    const tiff = ['II*\\0', 'MM\\0*'].includes(header.toString('binary', 0, 4));
+    const iso = header.toString('ascii', 4, 8) === 'ftyp';
+    const accepted = extension === '.jpg' || extension === '.jpeg' ? jpeg
+      : extension === '.png' ? png
+      : extension === '.webp' ? webp
+      : extension === '.gif' ? gif
+      : extension === '.tif' || extension === '.tiff' ? tiff
+      : extension === '.heic' || extension === '.heif' || extension === '.avif' ? iso
+      : true;
+    if (!accepted) {
+      throw new Error(`Invalid ${extension || 'image'} data for ${name}; source may be a transformed image or an error response`);
+    }
+  }
+
   private async downloadToDisk(source: string, destination: string) {
     if (source.startsWith('/uploads/')) {
       const localPath = join(cwd(), source.split(/[?#]/)[0].replace(/^\/+/, ''));
