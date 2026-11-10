@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { mergeHomeCms, type HomeCmsData } from "@/lib/home-cms";
 import { apiBaseUrl } from "@/lib/api-base-url";
+import { BackendRequestError, fetchBackendJson } from "@/lib/backend-request";
 
 export type AdminUser = {
   _id: string;
@@ -166,19 +167,17 @@ export type AdminDashboardData = {
 
 async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = (await cookies()).get("access_token")?.value;
-  const response = await fetch(`${apiBaseUrl()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      access_token: token ?? "",
-    },
-    cache: "no-store",
-  });
-
-  if (response.status === 401 || response.status === 403) redirect("/login");
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.message ?? "Request failed");
-  return payload?.data as T;
+  try {
+    const payload = await fetchBackendJson<{ data?: T }>(`${apiBaseUrl()}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", access_token: token || "" },
+      cache: "no-store",
+    });
+    return payload?.data as T;
+  } catch (error) {
+    if (error instanceof BackendRequestError && (error.statusCode === 401 || error.statusCode === 403)) redirect("/login");
+    throw error;
+  }
 }
 
 async function adminOptionalRequest<T>(path: string, fallback: T): Promise<T> {

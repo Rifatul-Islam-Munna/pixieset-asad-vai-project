@@ -2,6 +2,8 @@
 
 
 import { customerFacingStorageMessage } from "@/lib/customer-facing-storage-message"
+import { apiBaseUrl } from "@/lib/api-base-url"
+import { BackendRequestError, fetchBackendJson } from "@/lib/backend-request"
 import axios from "axios"
 import { AxiosError } from "axios"
 import { isRedirectError } from "next/dist/client/components/redirect-error"
@@ -16,7 +18,7 @@ export const getToken = async ()=>{
     return {access_token}
 }
 
-const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000"
+const baseUrl = apiBaseUrl()
 
 function parseAxiosError(error: AxiosError): { message: string, statusCode: number } {
   const res = error?.response?.data as { statusCode?: number; message?: unknown } | undefined;
@@ -57,7 +59,6 @@ export const PostRequestAxios = async <T>(
                 throw redirect('/login')
                 
                 }
-                console.log("error->",error.response?.data)
                
              const meg = parseAxiosError(error as any);
              
@@ -87,7 +88,6 @@ export const PatchRequestAxios = async <TResponse, TPayload = unknown>(url: stri
                 throw redirect('/login')
                 
                 }
-                console.log("error->",error.response?.data)
                
              const meg = parseAxiosError(error as any);
              
@@ -115,43 +115,20 @@ export const GetRequestAxios = async <T>(url: string, ) : Promise<[T | null, Axi
 export const GetRequestNormal = async <T>(url: string,revalidate=0 ,revalidateTags="stumaps") : Promise<T> => {
     const {access_token} = await getToken()
     
-    try{
-        const response = await fetch(`${baseUrl}${url}`,{next:{revalidate:revalidate,tags:[revalidateTags]},headers:{
-               
-                access_token:access_token ? access_token : '',
-                
-               
-
-        }})
-       if (response.ok) {
-      const data = await response.json()
-       console.log("data",data)
-      return data
-    } else {
-        console.log("response",response.status)
-      if (response.status === 401 || response.status === 403) {
-       throw redirect('/login')
+    try {
+      return await fetchBackendJson<T>(`${apiBaseUrl()}${url}`, {
+        next: { revalidate, tags: [revalidateTags] },
+        headers: { access_token: access_token || '' },
+      });
+    } catch (error) {
+      if (isRedirectError(error)) throw error;
+      if (error instanceof BackendRequestError && (error.statusCode === 401 || error.statusCode === 403)) {
+        redirect('/login');
       }
-   
-      const errorPayload = await response.json()
-      console.log("error",errorPayload)
-     throw new Error(customerFacingStorageMessage(errorPayload?.message, "Request could not be completed. Please try again."))
-    }
-
-    }catch(error ){
-          if (isRedirectError(error)) throw error;
-       if (error instanceof Error) {
-      throw new Error(customerFacingStorageMessage(error.message, "Request could not be completed. Please try again."))
-    }
-    throw new Error("Unknown error")
-     
-           
-            
-         
-         
-        
-       
-      
+      throw new Error(customerFacingStorageMessage(
+        error instanceof Error ? error.message : '',
+        'Request could not be completed. Please try again.',
+      ));
     }
 }
 
@@ -178,7 +155,6 @@ export const DeleteRequestAxios = async <T>(url: string):
                 throw redirect('/login');
             }
 
-            console.log("error->", error.response?.data);
 
             const meg = parseAxiosError(error as any);
 
