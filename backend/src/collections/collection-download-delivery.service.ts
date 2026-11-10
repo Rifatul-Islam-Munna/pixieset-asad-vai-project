@@ -1,4 +1,4 @@
-import { BadRequestException, GoneException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, GoneException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Interval } from '@nestjs/schedule';
@@ -73,6 +73,8 @@ export class CollectionDownloadDeliveryService {
     if (!images.length) throw new BadRequestException('No downloadable files matched this request');
 
     const token = randomBytes(32).toString('hex');
+    // Reject broken email links before queuing a time-consuming archive job.
+    this.deliveryLink(token);
     const fileName = this.archiveName(collection.name, scope, body.setId);
     const job = await this.deliveryModel.create({
       userId: String(collection.userId),
@@ -325,7 +327,18 @@ export class CollectionDownloadDeliveryService {
       this.configService.get<string>('PUBLIC_BASE_URL') ||
       this.configService.get<string>('BASE_URL') ||
       `http://localhost:${this.configService.get<string>('PORT') || '4000'}`,
-    ).replace(/\/$/, '');
+    ).trim().replace(/\/$/, '');
+    let parsed: URL;
+    try {
+      parsed = new URL(base);
+    } catch {
+      throw new ServiceUnavailableException('Gallery download links require a valid PUBLIC_API_URL in the backend environment');
+    }
+    const localHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'];
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password ||
+        (this.configService.get<string>('NODE_ENV') === 'production' && localHosts.includes(parsed.hostname.toLowerCase()))) {
+      throw new ServiceUnavailableException('Gallery download links require PUBLIC_API_URL set to the accessible public backend URL');
+    }
     return `${base}/public/collections/download-deliveries/${encodeURIComponent(token)}`;
   }
   private async findPublicCollection(identifier: string, siteSlug?: string) {
