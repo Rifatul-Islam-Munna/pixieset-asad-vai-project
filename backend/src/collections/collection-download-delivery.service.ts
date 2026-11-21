@@ -19,7 +19,7 @@ import { CollectionPrivatePhoto, CollectionPrivatePhotoDocument } from './entiti
 import { CollectionDownloadActivity, CollectionDownloadActivityDocument } from './entities/collection-download-activity.entity';
 import { CollectionDownloadDelivery, CollectionDownloadDeliveryDocument, type CollectionDownloadScope } from './entities/collection-download-delivery.entity';
 
-const IMAGE_FIELDS = '_id originalName filename url thumbnailUrl mediaType';
+const IMAGE_FIELDS = '_id originalName filename url thumbnailUrl mediaType sizeBytes mimetype';
 
 const LINK_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
@@ -120,6 +120,15 @@ export class CollectionDownloadDeliveryService {
   }
 
   async download(token: string, response: Response) {
+    await this.activeDelivery(token);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    // Keep old backend URLs working, but all ZIP creation now happens in the
+    // client's browser. The backend only authorizes and signs each photo URL.
+    response.redirect(302, this.deliveryLink(token));
+  }
+
+  async downloadArchive(token: string, response: Response) {
     const job = await this.activeDelivery(token);
     response.setHeader('Cache-Control', 'private, no-store, no-transform');
     response.setHeader('Referrer-Policy', 'no-referrer');
@@ -224,6 +233,91 @@ export class CollectionDownloadDeliveryService {
     return { reference, filename: downloadName, privateObject: false };
   }
 
+  async manifest(token: string, offsetValue = 0, limitValue = 50) {
+    const job = await this.activeDelivery(token);
+    const offset = Math.max(0, Math.floor(Number(offsetValue) || 0));
+    const limit = Math.min(100, Math.max(1, Math.floor(Number(limitValue) || 50)));
+    if (offset > job.imageIds.length) throw new BadRequestException('Invalid download page');
+
+    const ids: string[] = job.imageIds.slice(offset, offset + limit);
+    const [hidden, images] = await Promise.all([
+      this.privatePhotoModel.find({
+        collectionId: job.collectionId,
+        imageId: { $in: ids },
+        status: 'approved',
+      }).select('imageId').lean(),
+      this.imageModel.find({ collectionId: job.collectionId, _id: { $in: ids } })
+        .select(`${IMAGE_FIELDS} +originalObjectKey +originalFilename +originalMimeType +originalSizeBytes metadata.imageCache.urls.small`)
+        .lean(),
+    ]);
+    const hiddenIds = new Set(hidden.map((row) => String(row.imageId)));
+    const byId = new Map(images.map((image) => [String(image._id), image]));
+    const expiresIn = Math.floor((new Date(job.expiresAt).getTime() - Date.now()) / 1000);
+    if (expiresIn < 1) throw new GoneException('This download link expired');
+
+    const folder = this.safeName(job.collectionName) || 'gallery';
+    const files: Array<{ id: string; name: string; url: string; contentType: string; sizeBytes: number }> = [];
+    for (const id of ids) {
+      if (hiddenIds.has(id)) continue;
+      const image = byId.get(id);
+      if (!image) throw new NotFoundException('A requested photo was removed. Please request a new download.');
+      const source = this.imageSource(image, job.preferThumbnails);
+      if (!source.reference) throw new NotFoundException('A requested photo is no longer available.');
+      const url = await this.minioService.createBrowserDownloadUrl(
+        source.reference,
+        source.filename,
+        expiresIn,
+        source.privateObject,
+      );
+      const rawName = String(source.filename || 'photo').split(/[\\/]/).pop() || 'photo';
+      const safeName = this.safeName(rawName) || `photo-${offset + files.length + 1}`;
+      files.push({
+        id,
+        name: `${folder}/${safeName}`,
+        url,
+        contentType: String(image.originalMimeType || image.mimetype || 'application/octet-stream'),
+        sizeBytes: Math.max(0, Number(image.originalSizeBytes || image.sizeBytes || 0)),
+      });
+    }
+
+    let totalSizeBytes = 0;
+    if (offset === 0 && job.imageIds.length) {
+      const objectIds = job.imageIds
+        .filter((id: string) => Types.ObjectId.isValid(id))
+        .map((id: string) => new Types.ObjectId(id));
+      const totals = await this.imageModel.aggregate([
+        { $match: { collectionId: job.collectionId, _id: { $in: objectIds } } },
+        {
+          $group: {
+            _id: null,
+            totalSizeBytes: {
+              $sum: {
+                $cond: [
+                  { $gt: [{ $ifNull: ['$originalSizeBytes', 0] }, 0] },
+                  '$originalSizeBytes',
+                  { $ifNull: ['$sizeBytes', 0] },
+                ],
+              },
+            },
+          },
+        },
+      ]);
+      totalSizeBytes = Math.max(0, Number(totals?.[0]?.totalSizeBytes || 0));
+    }
+
+    return {
+      fileName: (this.safeName(job.fileName || folder).replace(/\.zip$/i, '') || 'gallery') + '.zip',
+      scope: job.scope,
+      totalCount: job.imageIds.length,
+      totalSizeBytes: offset === 0 ? totalSizeBytes : undefined,
+      offset,
+      limit,
+      nextOffset: Math.min(offset + limit, job.imageIds.length),
+      expiresAt: job.expiresAt,
+      files,
+    };
+  }
+
   async fileLink(token: string, imageId: string) {
     const job = await this.activeDelivery(token);
     if (!Types.ObjectId.isValid(imageId) || !job.imageIds.includes(imageId)) throw new NotFoundException('Photo not found');
@@ -235,7 +329,7 @@ export class CollectionDownloadDeliveryService {
     const expiresIn = Math.floor((new Date(job.expiresAt).getTime() - Date.now()) / 1000);
     if (expiresIn < 1) throw new GoneException('This download link expired');
     const source = this.imageSource(image, job.preferThumbnails);
-    return this.minioService.createDownloadUrl(source.reference, source.filename, expiresIn, source.privateObject);
+    return this.minioService.createBrowserDownloadUrl(source.reference, source.filename, expiresIn, source.privateObject);
   }
 
   @Interval(3000)
@@ -247,7 +341,7 @@ export class CollectionDownloadDeliveryService {
         this.lastCleanupAt = Date.now();
         await this.cleanupExpired();
       }
-      // Recover legacy jobs; archives are streamed only when the download link opens.
+      // Recover legacy delivery records; browser pages fetch photo manifests on demand.
       await this.deliveryModel.updateMany(
         { status: { $in: ['queued', 'processing', 'failed'] }, expiresAt: { $gt: new Date() } },
         { $set: { status: 'ready', readyAt: new Date(), expiresAt: new Date(Date.now() + LINK_LIFETIME_MS), emailNextAttemptAt: new Date(), emailAttempts: 0, lastError: '' } },
@@ -344,23 +438,25 @@ export class CollectionDownloadDeliveryService {
 
   private deliveryLink(token: string) {
     const base = String(
-      this.configService.get<string>('PUBLIC_API_URL') ||
-      this.configService.get<string>('PUBLIC_BASE_URL') ||
-      this.configService.get<string>('BASE_URL') ||
-      `http://localhost:${this.configService.get<string>('PORT') || '4000'}`,
+      this.configService.get<string>('FRONTEND_URL') ||
+      this.configService.get<string>('PUBLIC_FRONTEND_URL') ||
+      (this.configService.get<string>('NODE_ENV') === 'production'
+        ? 'https://gallerista.app'
+        : 'http://localhost:3000'),
     ).trim().replace(/\/$/, '');
     let parsed: URL;
     try {
       parsed = new URL(base);
     } catch {
-      throw new ServiceUnavailableException('Gallery download links require a valid PUBLIC_API_URL in the backend environment');
+      throw new ServiceUnavailableException('Gallery download links require a valid FRONTEND_URL in the backend environment');
     }
     const localHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'];
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password ||
-        (this.configService.get<string>('NODE_ENV') === 'production' && localHosts.includes(parsed.hostname.toLowerCase()))) {
-      throw new ServiceUnavailableException('Gallery download links require PUBLIC_API_URL set to the accessible public backend URL');
+        (this.configService.get<string>('NODE_ENV') === 'production' &&
+          (parsed.protocol !== 'https:' || localHosts.includes(parsed.hostname.toLowerCase())))) {
+      throw new ServiceUnavailableException('Gallery download links require FRONTEND_URL set to the accessible HTTPS frontend URL');
     }
-    return `${base}/public/collections/download-deliveries/${encodeURIComponent(token)}`;
+    return `${base}/download/${encodeURIComponent(token)}`;
   }
   private async findPublicCollection(identifier: string, siteSlug?: string) {
     const query: Record<string, string>[] = [{ slug: identifier }, { name: identifier }];

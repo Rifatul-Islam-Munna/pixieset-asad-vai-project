@@ -54,6 +54,14 @@ const nextConfig: NextConfig = {
       { source: "/(login|register)", headers: noCacheHeaders },
       { source: "/home/:path*", headers: noCacheHeaders },
       {
+        source: "/download/:path*",
+        headers: [
+          ...noCacheHeaders,
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+      {
         source: "/collection/:path*",
         headers: [
           ...noCacheHeaders,

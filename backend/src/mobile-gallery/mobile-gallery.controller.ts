@@ -8,12 +8,14 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiConsumes } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { existsSync, mkdirSync } from 'fs';
 import { diskStorage } from 'multer';
@@ -49,6 +51,27 @@ export class PublicMobileGalleryController {
   @Get(':identifier/images')
   async findPublicImages(@Param('identifier') identifier: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
     return { data: await this.service.findPublicImages(identifier, limit, offset) };
+  }
+
+  @Get(':identifier/archive')
+  async downloadPublicArchive(
+    @Param('identifier') identifier: string,
+    @Query('ids') ids: string | undefined,
+    @Res() response: Response,
+  ) {
+    await this.service.downloadPublicArchive(identifier, ids, response);
+  }
+
+  @Get(':identifier/files/:imageId')
+  async downloadPublicPhoto(
+    @Param('identifier') identifier: string,
+    @Param('imageId') imageId: string,
+    @Res() response: Response,
+  ) {
+    const url = await this.service.publicPhotoFile(identifier, imageId);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    response.redirect(302, url);
   }
 }
 

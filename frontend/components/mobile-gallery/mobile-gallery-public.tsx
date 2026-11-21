@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { MobileGalleryApp, MobileGalleryImage, MobileGalleryProfile } from "@/api-hooks/use-mobile-gallery";
 import { ScreenCaptureGuard } from "@/components/privacy/screen-capture-guard";
+import { downloadClientZip, reserveClientZipDestination } from "@/lib/client-zip-download";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { MobileGalleryCover, mobileGalleryThemes } from "./mobile-gallery-cover";
 
@@ -201,10 +202,24 @@ export function MobileGalleryPublic({
     );
   };
 
+  const canSaveZipToDisk = () =>
+    typeof (window as Window & { showSaveFilePicker?: unknown }).showSaveFilePicker === "function";
+
   const downloadImage = (image: MobileGalleryImage) => {
+    if (!canSaveZipToDisk()) {
+      // Native attachment navigation works on Safari where cross-origin
+      // image links otherwise open a preview instead of downloading.
+      const apiBase = process.env.NEXT_PUBLIC_BASE_URL || "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host";
+      window.location.assign(
+        apiBase.replace(/\/+$/, "") + "/public/mobile-gallery/apps/" + encodeURIComponent(app.slug)
+          + "/files/" + encodeURIComponent(image._id),
+      );
+      return;
+    }
     const link = document.createElement("a");
-    link.href = `/api/public-download?url=${encodeURIComponent(image.url)}&name=${encodeURIComponent(image.originalName || "photo")}`;
-    link.download = "";
+    link.href = image.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -212,14 +227,31 @@ export function MobileGalleryPublic({
 
   const downloadZip = async (items: MobileGalleryImage[], suffix: string) => {
     if (!items.length || busy) return;
+    if (!canSaveZipToDisk()) {
+      // A real browser navigation avoids both Safari popup restrictions
+      // and the 96 MB Blob fallback limit for published mobile galleries.
+      const apiBase = process.env.NEXT_PUBLIC_BASE_URL || "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host";
+      const ids = suffix === "all-photos" ? "" : items.map((image) => image._id).join(",");
+      window.location.assign(
+        apiBase.replace(/\/+$/, "") + "/public/mobile-gallery/apps/" + encodeURIComponent(app.slug)
+          + "/archive" + (ids ? "?ids=" + encodeURIComponent(ids) : ""),
+      );
+      return;
+    }
     setBusy(true);
+    // Reserve the disk destination before pagination so the browser still sees
+    // the original download-button gesture when opening its save dialog.
+    const destinationPromise = reserveClientZipDestination(`${app.slug}-${suffix}`).then(
+      (value) => ({ value, error: null as unknown }),
+      (error) => ({ value: null, error }),
+    );
     try {
       let zipItems = items;
       if (suffix === "all-photos" && imagesHasMore) {
         const loaded: MobileGalleryImage[] = [];
         let offset = images.length;
         let hasMore: boolean = imagesHasMore;
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host";
         while (hasMore) {
           const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(app.slug)}/images?limit=120&offset=${offset}`).catch(() => null);
           const payload = response?.ok ? await response.json().catch(() => null) : null;
@@ -239,30 +271,19 @@ export function MobileGalleryPublic({
           setImagesHasMore(false);
         }
       }
-      const response = await fetch("/api/public-download", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: `${app.slug}-${suffix}`,
-          images: zipItems.map((image, index) => ({
-            url: image.url,
-            name: image.originalName || `photo-${index + 1}`,
-          })),
-        }),
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.message || "Download failed");
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${app.slug}-${suffix}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      const destinationResult = await destinationPromise;
+      if (destinationResult.error) throw destinationResult.error;
+      const destination = destinationResult.value;
+      const zipFiles = zipItems.map((image, index) => ({
+        url: image.url,
+        name: image.originalName || `photo-${index + 1}`,
+        sizeBytes: image.sizeBytes,
+      }));
+      const estimatedSizeBytes = zipFiles.reduce((sum, file) => sum + Math.max(0, Number(file.sizeBytes || 0)), 0);
+      await downloadClientZip(zipFiles, `${app.slug}-${suffix}`, {
+        estimatedSizeBytes,
+        totalFiles: zipFiles.length,
+      }, destination);
       setNotice("ZIP download started");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Download failed");
@@ -307,7 +328,7 @@ export function MobileGalleryPublic({
   const loadMoreImages = async () => {
     if (imagesLoadingMore || !imagesHasMore) return;
     setImagesLoadingMore(true);
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host";
     const response = await fetch(`${baseUrl}/public/mobile-gallery/apps/${encodeURIComponent(app.slug)}/images?limit=48&offset=${images.length}`).catch(() => null);
     const payload = response?.ok ? await response.json().catch(() => null) : null;
     const page = payload?.data;

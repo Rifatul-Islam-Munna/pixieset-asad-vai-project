@@ -221,9 +221,12 @@ export class MinioService implements OnModuleInit {
             CORSRules: [
               {
                 AllowedHeaders: ['*'],
-                AllowedMethods: ['PUT'],
+                // Private originals are fetched directly by the authorized
+                // browser using short-lived presigned GET URLs. PUT remains for
+                // direct uploads; no credentials/cookies are sent cross-origin.
+                AllowedMethods: ['GET', 'HEAD', 'PUT'],
                 AllowedOrigins: ['*'],
-                ExposeHeaders: ['ETag'],
+                ExposeHeaders: ['ETag', 'Content-Length', 'Content-Type', 'Content-Disposition'],
                 MaxAgeSeconds: 86400,
               },
             ],
@@ -746,6 +749,45 @@ export class MinioService implements OnModuleInit {
       ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
       ResponseCacheControl: 'private, no-store',
     }), { expiresIn });
+  }
+
+  /**
+   * Returns a URL that the browser can fetch directly. Object-storage keys
+   * become short-lived presigned URLs; legacy public URLs remain where they
+   * already live, so photo bytes are never copied or migrated by the backend.
+   */
+  async createBrowserDownloadUrl(reference: string, filename: string, expiresIn: number, privateObject = false) {
+    const value = String(reference || '').trim();
+    if (!privateObject) {
+      if (value.startsWith('/uploads/') || value.startsWith('uploads/')) {
+        const apiBase = String(
+          this.configService.get<string>('PUBLIC_API_URL') ||
+          (this.configService.get<string>('NODE_ENV') === 'production'
+            ? 'https://ai-photo-book-moment-backend.wrtsxa.easypanel.host'
+            : `http://localhost:${this.configService.get<string>('PORT') || '4000'}`),
+        ).trim().replace(/\/+$/, '');
+        const path = value.startsWith('/') ? value : `/${value}`;
+        return new URL(path, `${apiBase}/`).toString();
+      }
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        const url = new URL(value);
+        if (url.pathname.startsWith('/uploads/')) {
+          const apiBase = String(
+            this.configService.get<string>('PUBLIC_API_URL') ||
+            this.configService.get<string>('PUBLIC_BASE_URL') ||
+            (this.configService.get<string>('NODE_ENV') === 'production'
+              ? 'https://ai-photo-book-moment-backend.wrtsxa.easypanel.host'
+              : `http://localhost:${this.configService.get<string>('PORT') || '4000'}`),
+          ).trim().replace(/\/$/, '');
+          return new URL(url.pathname + url.search, `${apiBase}/`).toString();
+        }
+        const storageOrigins = new Set<string>();
+        if (this.endpointUrl) storageOrigins.add(new URL(this.endpointUrl).origin);
+        if (this.publicBaseUrl) storageOrigins.add(new URL(this.publicBaseUrl).origin);
+        if (!storageOrigins.has(url.origin)) return url.toString();
+      }
+    }
+    return this.createDownloadUrl(value, filename, expiresIn, privateObject);
   }
 
   async openPrivateReadStream(objectKey: string) {

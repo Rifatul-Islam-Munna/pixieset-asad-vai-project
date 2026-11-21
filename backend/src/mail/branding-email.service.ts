@@ -62,17 +62,33 @@ export class BrandingEmailService {
     return ((setting?.data ?? {}) as BrandingEmailData) || {};
   }
 
-  /** Uploaded assets are stored as `/uploads/...` and must become absolute. */
+  /** Resolve stored public assets against the host that actually serves them. */
   private absoluteAssetUrl(value: string) {
     if (!value) return '';
-    if (/^(https?:\/\/|data:image\/)/i.test(value)) return value;
-    if (!value.startsWith('/')) return '';
-    const base = String(
-      this.configService.get<string>('PUBLIC_BASE_URL') ||
-        this.configService.get<string>('NEXT_PUBLIC_BASE_URL') ||
-        this.configService.get<string>('FRONTEND_URL') ||
+    if (value.startsWith('data:image/')) return value;
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      const parsed = new URL(value);
+      if (!parsed.pathname.startsWith('/uploads/')) return value;
+      const apiBase = String(
         this.configService.get<string>('PUBLIC_API_URL') ||
-        '',
+        (this.configService.get<string>('NODE_ENV') === 'production'
+          ? 'https://ai-photo-book-moment-backend.wrtsxa.easypanel.host'
+          : 'http://localhost:4000'),
+      ).trim();
+      return apiBase.replace(/\/$/, '') + parsed.pathname + parsed.search;
+    }
+    if (!value.startsWith('/')) return '';
+    const backendUpload = value.startsWith('/uploads/');
+    const base = String(
+      backendUpload
+        ? this.configService.get<string>('PUBLIC_API_URL') ||
+          (this.configService.get<string>('NODE_ENV') === 'production'
+            ? 'https://ai-photo-book-moment-backend.wrtsxa.easypanel.host'
+            : 'http://localhost:4000')
+        : this.configService.get<string>('FRONTEND_URL') ||
+          this.configService.get<string>('PUBLIC_BASE_URL') ||
+          this.configService.get<string>('NEXT_PUBLIC_BASE_URL') ||
+          '',
     ).replace(/\/$/, '');
     return base ? `${base}${value}` : '';
   }
@@ -82,9 +98,9 @@ export class BrandingEmailService {
   }
 
   /**
-   * Attaches the studio logo and hero image as CID parts and rewrites the HTML
-   * to `cid:` sources. Email clients block `data:` images, and shipping base64
-   * inside the body is what broke previously delivered emails.
+   * Keeps public HTTPS studio logos as normal image URLs, which Gmail renders
+   * more reliably than a CID logo. Data-URI logos and cover images can still
+   * use CID attachments; base64 is never embedded directly in the HTML body.
    */
   async renderWithInlineAssets(payload: BrandingEmailPayload, brand: BrandingEmailData) {
     const attachments: GlobalMailAttachment[] = [];
@@ -99,7 +115,10 @@ export class BrandingEmailService {
       return `cid:${cid}`;
     };
 
-    const logoSrc = await resolve(String(brand.logoUrl || brand.logo || ''), LOGO_CID);
+    const logoUrl = this.absoluteAssetUrl(String(brand.logoUrl || brand.logo || brand.brandImageUrl || '').trim());
+    // Gmail is more reliable with a public HTTPS logo URL than a CID image part.
+    // Keep CID handling only for data-URI logos, which email clients cannot load directly.
+    const logoSrc = logoUrl.startsWith('data:image/') ? await resolve(logoUrl, LOGO_CID) : logoUrl;
     const imageSrc = await resolve(payload.imageUrl, COVER_CID);
     const html = buildBrandedGalleryEmailHtml(
       { ...payload, ...(imageSrc ? { imageUrl: imageSrc } : {}) },

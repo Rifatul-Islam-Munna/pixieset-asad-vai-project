@@ -2,72 +2,68 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Download, ImageDown, Loader2, PackageCheck, Sparkles } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
+import { downloadClientZip, type ClientZipFile } from "@/lib/client-zip-download";
 
 type DownloadPayload = {
   collectionName: string;
   listName: string;
   email: string;
-  images: Array<{ url: string; name: string }>;
+  images: Array<{ url: string; name: string; sizeBytes?: number }>;
 };
 
 export default function FavoriteDownloadPage() {
   const [payload, setPayload] = useState<DownloadPayload | null>(null);
-  const [percent, setPercent] = useState(3);
-  const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
-  const [message, setMessage] = useState("Preparing secure image package");
+  const [percent, setPercent] = useState(0);
+  const [status, setStatus] = useState<"loading" | "ready" | "working" | "done" | "error">("loading");
+  const [message, setMessage] = useState("Preparing your secure download");
+
   const imageCount = payload?.images.length ?? 0;
 
   useEffect(() => {
-    const raw = window.sessionStorage.getItem("gallerista-favorite-download");
-    const parsed = raw ? JSON.parse(raw) as DownloadPayload : null;
-    setPayload(parsed);
-    if (!parsed?.images?.length) {
+    try {
+      const raw = window.sessionStorage.getItem("gallerista-favorite-download");
+      const parsed = raw ? JSON.parse(raw) as DownloadPayload : null;
+      setPayload(parsed);
+      if (!parsed?.images?.length) {
+        setStatus("error");
+        setMessage("No collection images found");
+      } else {
+        setStatus("ready");
+        setMessage("Your photo archive is ready to create on this device");
+      }
+    } catch {
       setStatus("error");
-      setMessage("No collection images found");
+      setMessage("The saved download request could not be read");
     }
   }, []);
 
-  useEffect(() => {
-    if (!payload?.images.length) return;
-    let value = 3;
-    const timer = window.setInterval(() => {
-      value = Math.min(91, value + Math.max(2, Math.round((96 - value) / 11)));
-      setPercent(value);
-      setMessage(value < 30 ? "Reading collection files" : value < 62 ? "Compressing full-resolution photos" : "Sealing ZIP archive");
-    }, 260);
-
-    const downloadZip = async () => {
-      const response = await fetch("/api/public-download", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: payload.collectionName, images: payload.images }),
-      }).catch(() => null);
-      window.clearInterval(timer);
-      if (!response?.ok) {
-        setStatus("error");
-        setPercent(100);
-        setMessage("Download failed");
-        return;
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${safeName(payload.collectionName)}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+  const downloadZip = async () => {
+    if (!payload?.images.length || status === "working") return;
+    setStatus("working");
+    setPercent(3);
+    setMessage("Saving ZIP directly from your browser");
+    try {
+      const files: ClientZipFile[] = payload.images.map((image) => ({
+        url: image.url,
+        name: image.name,
+        sizeBytes: image.sizeBytes,
+      }));
+      const estimatedSizeBytes = files.reduce((sum, file) => sum + Math.max(0, Number(file.sizeBytes || 0)), 0);
+      await downloadClientZip(files, safeName(payload.collectionName), {
+        estimatedSizeBytes,
+        totalFiles: files.length,
+        onProgress: (completed, total) => setPercent(Math.min(96, 3 + completed / Math.max(1, total) * 93)),
+      });
       setPercent(100);
       setStatus("done");
       setMessage("Download started");
-    };
-
-    void downloadZip();
-    return () => window.clearInterval(timer);
-  }, [payload]);
+    } catch (error) {
+      setStatus("error");
+      setPercent(100);
+      setMessage(error instanceof Error ? error.message : "Download failed");
+    }
+  };
 
   const ring = useMemo(() => ({
     background: `conic-gradient(#111 0deg, #111 ${percent * 3.6}deg, #d9e7df ${percent * 3.6}deg)`,
@@ -92,14 +88,14 @@ export default function FavoriteDownloadPage() {
               {payload?.collectionName ?? "Collection"}
             </h1>
             <p className="mt-5 text-lg font-semibold text-[#59635c]">
-              Full collection archive, built from {imageCount} image{imageCount === 1 ? "" : "s"}.
+              Full collection archive, built from {imageCount} image{imageCount === 1 ? "" : "s"} in your browser.
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 text-sm">
             <Stat label="Files" value={String(imageCount)} />
-            <Stat label="Type" value="ZIP" />
-            <Stat label="Status" value={status === "done" ? "Ready" : status === "error" ? "Failed" : "Working"} />
+            <Stat label="Type" value="ZIP64" />
+            <Stat label="Status" value={status === "done" ? "Ready" : status === "error" ? "Failed" : status === "working" ? "Working" : status === "ready" ? "Waiting" : "Loading"} />
           </div>
         </aside>
 
@@ -110,7 +106,7 @@ export default function FavoriteDownloadPage() {
               <div className="relative mx-auto flex size-56 items-center justify-center rounded-full p-3" style={ring}>
                 <div className="absolute inset-8 rounded-full border border-black/10" />
                 <div className="relative flex h-full w-full flex-col items-center justify-center rounded-full bg-[#fbfcf8]">
-                  {status === "done" ? <Check className="size-12 text-[#008f78]" /> : status === "error" ? <Download className="size-12 text-red-500" /> : <Loader2 className="size-12 animate-spin text-[#111]" />}
+                  {status === "done" ? <Check className="size-12 text-[#008f78]" /> : status === "error" ? <Download className="size-12 text-red-500" /> : status === "ready" ? <Download className="size-12 text-[#111]" /> : <Loader2 className="size-12 animate-spin text-[#111]" />}
                   <span className="mt-3 text-5xl font-black">{percent}%</span>
                 </div>
               </div>
@@ -133,8 +129,14 @@ export default function FavoriteDownloadPage() {
                     </div>
                   ))}
                 </div>
+                {status === "ready" && (
+                  <Button className="mt-8 h-11 w-fit rounded-none bg-[#111] px-6 text-white" onClick={() => void downloadZip()}>
+                    <Download className="mr-2 size-4" />
+                    Download ZIP
+                  </Button>
+                )}
                 {status === "error" && (
-                  <Button className="mt-8 h-11 w-fit rounded-none bg-[#111] px-6 text-white" onClick={() => location.reload()}>
+                  <Button className="mt-8 h-11 w-fit rounded-none bg-[#111] px-6 text-white" onClick={() => void downloadZip()}>
                     Try Again
                   </Button>
                 )}

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Headers,
   Param,
   Patch,
@@ -54,6 +55,28 @@ export class PublicCollectionsController {
     private readonly collectionsService: CollectionsService,
     private readonly downloadDeliveryService: CollectionDownloadDeliveryService,
   ) {}
+
+  @Get('download-deliveries/:token/manifest')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async downloadDeliveryManifest(
+    @Param('token') token: string,
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const data = await this.downloadDeliveryService.manifest(token, Number(offset || 0), Number(limit || 50));
+    return { data };
+  }
+
+  // Native attachment response for Safari/Firefox, which cannot stream ZIPs
+  // directly to a user-selected file with showSaveFilePicker.
+  @Get('download-deliveries/:token/archive')
+  async downloadDeliveryArchive(
+    @Param('token') token: string,
+    @Res() response: Response,
+  ) {
+    await this.downloadDeliveryService.downloadArchive(token, response);
+  }
 
   @Get('download-deliveries/:token')
   async openDownloadDelivery(

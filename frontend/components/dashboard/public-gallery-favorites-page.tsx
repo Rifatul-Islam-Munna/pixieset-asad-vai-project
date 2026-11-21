@@ -1,6 +1,6 @@
 "use client";
 
-import { startGalleryDownload, galleryDownloadNotice } from "@/lib/gallery-download";
+import { startGalleryDownload, galleryDownloadNotice, openGalleryDownloadTab, closeGalleryDownloadTab } from "@/lib/gallery-download";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -157,7 +157,7 @@ export function PublicGalleryFavoritesPage({
   const requestDownload = async (scope: "single" | "favorites", imageIds: string[]) => {
     const clientEmail = ensureDownloadEmail();
     if (!clientEmail) return null;
-    const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+    const apiBase = process.env.NEXT_PUBLIC_BASE_URL || "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host";
     const pin = window.sessionStorage.getItem(`collection-access-pin:${galary}`) || "";
     const response = await fetch(`${apiBase}/public/collections/${encodeURIComponent(collection.slug || galary)}/download-request?siteSlug=${encodeURIComponent(name)}`, {
       method: "POST",
@@ -174,13 +174,18 @@ export function PublicGalleryFavoritesPage({
     void _index;
     if (zipBusy) return;
     setZipBusy(true);
+    const downloadTab = openGalleryDownloadTab();
     try {
       const data = await requestDownload("single", [image._id]);
-      if (!data) return;
+      if (!data) {
+        closeGalleryDownloadTab(downloadTab);
+        return;
+      }
       setReadyDownloadUrl(data.downloadUrl || "");
-      startGalleryDownload(data.downloadUrl);
+      startGalleryDownload(data.downloadUrl, downloadTab);
       setNotice(galleryDownloadNotice(data.emailStatus));
     } catch (error) {
+      closeGalleryDownloadTab(downloadTab);
       setNotice(error instanceof Error ? error.message : "Download request failed");
     } finally {
       setZipBusy(false);
@@ -192,13 +197,18 @@ export function PublicGalleryFavoritesPage({
     const selected = images.filter((image) => favoriteIds.has(image._id) && selectedIdSnapshot.has(image._id));
     if (!selected.length || zipBusy) return;
     setZipBusy(true);
+    const downloadTab = openGalleryDownloadTab();
     try {
       const data = await requestDownload("favorites", selected.map((image) => image._id));
-      if (!data) return;
+      if (!data) {
+        closeGalleryDownloadTab(downloadTab);
+        return;
+      }
       setReadyDownloadUrl(data.downloadUrl || "");
-      startGalleryDownload(data.downloadUrl);
+      startGalleryDownload(data.downloadUrl, downloadTab);
       setNotice(galleryDownloadNotice(data.emailStatus));
     } catch (error) {
+      closeGalleryDownloadTab(downloadTab);
       setNotice(error instanceof Error ? error.message : "Download request failed");
     } finally {
       setZipBusy(false);

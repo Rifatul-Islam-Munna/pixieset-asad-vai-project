@@ -20,6 +20,7 @@ export type MobileGalleryImage = {
   url: string;
   thumbnailUrl?: string;
   originalName?: string;
+  sizeBytes?: number;
   mimetype?: string;
   mediaType?: "image" | "video";
   durationSeconds?: number;

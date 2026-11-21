@@ -1,10 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import type { Response } from 'express';
+import { Readable } from 'node:stream';
 import { unlink } from 'fs/promises';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { extname } from 'path';
 import { CollectionImage, CollectionImageDocument } from 'src/collections/entities/collection-image.entity';
 import { MinioService } from 'src/lib/minio.service';
+import { streamPhotoZip, type PhotoZipEntry } from 'src/lib/stream-photo-zip';
 import { User, UserDocument } from 'src/user/entities/user.entity';
 import { MobileGalleryApp, MobileGalleryAppDocument } from './entities/mobile-gallery-app.entity';
 import { MobileGalleryImage, MobileGalleryImageDocument } from './entities/mobile-gallery-image.entity';
@@ -41,6 +44,7 @@ type DirectUploadFile = {
 
 @Injectable()
 export class MobileGalleryService {
+  private activeArchiveDownloads = 0;
   constructor(
     @InjectModel(MobileGalleryApp.name) private readonly appModel: Model<MobileGalleryAppDocument>,
     @InjectModel(MobileGalleryImage.name) private readonly imageModel: Model<MobileGalleryImageDocument>,
@@ -140,6 +144,131 @@ export class MobileGalleryService {
     }).select('_id').lean();
     if (!app) throw new NotFoundException('Mobile gallery app not found');
     return this.findImagesPage({ appId: app._id.toString() }, limit, offset);
+  }
+
+  private async publishedApp(identifier: string) {
+    const app = await this.appModel.findOne({
+      $or: [{ slug: identifier }, ...(Types.ObjectId.isValid(identifier) ? [{ _id: identifier }] : [])],
+      status: 'published',
+    }).select('_id slug').lean();
+    if (!app) throw new NotFoundException('Mobile gallery app not found');
+    return app;
+  }
+
+  /** Native Safari single-file download with an attachment Content-Disposition. */
+  async publicPhotoFile(identifier: string, imageId: string) {
+    const app = await this.publishedApp(identifier);
+    if (!Types.ObjectId.isValid(imageId)) throw new NotFoundException('Photo not found');
+    const photo = await this.imageModel.findOne({
+      appId: String(app._id),
+      _id: imageId,
+    }).select('url originalName filename').lean();
+    if (!photo) throw new NotFoundException('Photo not found');
+    return this.minioService.createDownloadUrl(
+      String(photo.url),
+      String(photo.originalName || photo.filename || 'photo'),
+      86400,
+      false,
+    );
+  }
+
+  /**
+   * Serve a bounded, native ZIP attachment for browsers without a file picker.
+   * Photo URLs are taken from published app records, never supplied by clients.
+   */
+  async downloadPublicArchive(identifier: string, selectedValue: string | undefined, response: Response) {
+    const app = await this.publishedApp(identifier);
+    const rawIds = String(selectedValue || '').trim();
+    const selectedIds = rawIds
+      ? [...new Set(rawIds.split(',').map((id) => id.trim()).filter(Boolean))]
+      : [];
+    if (selectedValue !== undefined && (!selectedIds.length || selectedIds.length > 250 ||
+        selectedIds.some((id) => !Types.ObjectId.isValid(id)))) {
+      throw new BadRequestException('Invalid selected photos for download');
+    }
+    if (this.activeArchiveDownloads >= 2) {
+      response.setHeader('Retry-After', '10');
+      throw new ServiceUnavailableException('Downloads are busy. Try again shortly.');
+    }
+    this.activeArchiveDownloads++;
+    const controller = new AbortController();
+    const disconnected = () => {
+      if (!response.writableFinished) controller.abort(new Error('Client disconnected'));
+    };
+    response.once('close', disconnected);
+    response.once('error', disconnected);
+    if (response.destroyed) disconnected();
+    try {
+      const folder = String(app.slug || 'mobile-gallery').replace(/[^a-z0-9_-]/gi, '-').slice(0, 100);
+      const entries = this.mobileZipEntries(String(app._id), folder, selectedIds, controller.signal);
+      const first = await entries.next();
+      if (first.done) throw new NotFoundException('No downloadable photos found');
+      const allEntries = (async function* () {
+        yield first.value;
+        yield* entries;
+      })();
+      const zipName = folder + (selectedIds.length ? '-selected' : '-all-photos') + '.zip';
+      response.setHeader('Cache-Control', 'private, no-store, no-transform');
+      response.setHeader('Referrer-Policy', 'no-referrer');
+      response.setHeader('Content-Type', 'application/zip');
+      response.setHeader('Content-Disposition', 'attachment; filename="' + zipName + '"');
+      response.setHeader('X-Accel-Buffering', 'no');
+      await streamPhotoZip(allEntries, response, controller.signal);
+    } catch (error) {
+      if (response.headersSent || response.destroyed) {
+        if (!controller.signal.aborted) {
+          // Headers may already be sent; terminate the interrupted archive.
+          response.destroy(error instanceof Error ? error : undefined);
+        }
+      } else {
+        throw error;
+      }
+    } finally {
+      controller.abort();
+      response.off('close', disconnected);
+      response.off('error', disconnected);
+      this.activeArchiveDownloads--;
+    }
+  }
+
+  private async *mobileZipEntries(
+    appId: string,
+    folder: string,
+    selectedIds: string[],
+    signal: AbortSignal,
+  ): AsyncGenerator<PhotoZipEntry> {
+    const filter: Record<string, unknown> = { appId };
+    if (selectedIds.length) filter._id = { $in: selectedIds };
+    const cursor = this.imageModel.find(filter)
+      .sort({ order: 1, _id: 1 })
+      .select('url originalName filename')
+      .lean()
+      .cursor();
+    const usedNames = new Set<string>();
+    for await (const photo of cursor) {
+      signal.throwIfAborted();
+      const raw = String(photo.originalName || photo.filename || 'photo').split(/[\\/]/).pop() || 'photo';
+      const base = raw.replace(/[<>:"|?*\x00-\x1f]+/g, '-').replace(/^\.+$/, '-').slice(0, 160) || 'photo';
+      const dot = base.lastIndexOf('.');
+      const stem = dot > 0 ? base.slice(0, dot) : base;
+      const ext = dot > 0 ? base.slice(dot) : '';
+      let name = base;
+      let index = 2;
+      while (usedNames.has(name.toLowerCase())) name = stem + '-' + index++ + ext;
+      usedNames.add(name.toLowerCase());
+      const url = await this.minioService.createDownloadUrl(String(photo.url), raw, 86400, false);
+      yield {
+        name: folder + '/' + name,
+        open: async (entrySignal) => {
+          const result = await fetch(url, { signal: entrySignal, cache: 'no-store' });
+          if (!result.ok || !result.body) {
+            await result.body?.cancel();
+            throw new Error('Photo download failed from object storage (' + result.status + ')');
+          }
+          return Readable.fromWeb(result.body as any);
+        },
+      };
+    }
   }
 
   async update(userId: string, id: string, body: Record<string, any>) {

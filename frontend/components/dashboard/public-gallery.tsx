@@ -1,6 +1,7 @@
 "use client";
 
-import { startGalleryDownload, galleryDownloadNotice } from "@/lib/gallery-download";
+import { startGalleryDownload, galleryDownloadNotice, openGalleryDownloadTab, closeGalleryDownloadTab } from "@/lib/gallery-download";
+import { downloadClientFile, downloadClientZip, reserveClientZipDestination } from "@/lib/client-zip-download";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 import { Camera, Check, ChevronLeft, ChevronRight, Copy, Download, Ellipsis, EyeOff, Loader2, Lock, Play, Printer, Search, Share2, ShoppingBag, Star, X } from "lucide-react";
@@ -44,6 +45,7 @@ type PublicImage = {
   };
   blurDataUrl?: string;
   originalName?: string;
+  sizeBytes?: number;
   mimetype?: string;
   mediaType?: "image" | "video";
   faceScore?: number;
@@ -694,13 +696,11 @@ export function PublicGallery({
       const downloadSource = restrictedSinglePhotoDownloadSize
         ? imageSrc(photo.thumbnailUrl || photo.url)
         : imageSrc(photo.url);
-      const url = `/api/public-download?url=${encodeURIComponent(downloadSource)}&name=${encodeURIComponent(photo.originalName || `photo-${index + 1}`)}`;
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      void downloadClientFile({
+        url: downloadSource,
+        name: photo.originalName || `photo-${index + 1}`,
+        sizeBytes: photo.sizeBytes,
+      }).catch((error) => setShareNotice(error instanceof Error ? error.message : "Download failed"));
       onDownload();
       return;
     }
@@ -710,13 +710,15 @@ export function PublicGallery({
       setShareNotice("This photo is not ready for download yet");
       return;
     }
+    const downloadTab = openGalleryDownloadTab();
     try {
       const result = await requestDownloadDelivery(email, "single", [photo._id]);
       setReadyDownloadUrl(result?.downloadUrl || "");
-      startGalleryDownload(result?.downloadUrl);
+      startGalleryDownload(result?.downloadUrl, downloadTab);
       setShareNotice(galleryDownloadNotice(result?.emailStatus));
       onDownload();
     } catch (error) {
+      closeGalleryDownloadTab(downloadTab);
       setShareNotice(error instanceof Error ? error.message : "Download request failed");
     }
   };
@@ -724,6 +726,16 @@ export function PublicGallery({
     if (!canDownloadAll || zipDownloading) return;
     const email = ownerPreview ? "" : ensureDownloadEmail({ type: "all", scope }, emailOverride);
     if (!ownerPreview && !email) return;
+    const ownerZipSuffix = scope === "set"
+      ? `-${safeDownloadName(gallerySets.find((set) => set.id === activeSetId)?.name || "set")}`
+      : scope === "favorites" ? "-favorites" : "";
+    const ownerZipName = `${safeDownloadName(title)}${ownerZipSuffix}`;
+    const ownerDestinationPromise = ownerPreview
+      ? reserveClientZipDestination(ownerZipName).then(
+          (value) => ({ value, error: null as unknown }),
+          (error) => ({ value: null, error }),
+        )
+      : null;
     if (!ownerPreview) {
       const favoriteIds = scope === "favorites"
         ? Array.from(favoriteImageIds).filter(isPersistedImageId)
@@ -734,13 +746,15 @@ export function PublicGallery({
       }
       setZipDownloading(true);
       setZipStage("Getting your download link");
+      const downloadTab = openGalleryDownloadTab();
       try {
         const result = await requestDownloadDelivery(email, scope, favoriteIds);
         setReadyDownloadUrl(result?.downloadUrl || "");
         setDownloadCount((count) => count + Number(result?.fileCount ?? 0));
-        startGalleryDownload(result?.downloadUrl);
+        startGalleryDownload(result?.downloadUrl, downloadTab);
         setShareNotice(galleryDownloadNotice(result?.emailStatus));
       } catch (error) {
+        closeGalleryDownloadTab(downloadTab);
         setShareNotice(error instanceof Error ? error.message : "Download request failed");
       } finally {
         setZipDownloading(false);
@@ -792,48 +806,27 @@ export function PublicGallery({
     const downloadable = allImages.slice(0, remaining || allImages.length);
     if (!downloadable.length) return;
     setZipDownloading(true);
-    setZipStage("Creating ZIP archive");
-    const response = await fetch("/api/public-download", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: title,
-        scope,
-        selectedImageIds: scope === "favorites"
-          ? downloadable.map((photo) => photo._id)
-          : undefined,
-        images: downloadable.map((photo, index) => ({
-          id: photo._id,
-          url: imageSrc(photo.url),
-          name: photo.originalName || `photo-${index + 1}`,
-        })),
-      }),
-      cache: "no-store",
-    }).catch(() => null);
-
-    if (!response?.ok) {
-      setZipDownloading(false);
-      const payload = response ? await response.json().catch(() => null) : null;
-      setShareNotice(payload?.message ?? "Download failed");
-      return;
-    }
-
+    setZipStage("Preparing ZIP in your browser");
     try {
-      setZipStage("Starting download");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const suffix = scope === "set" ? `-${safeDownloadName(gallerySets.find((set) => set.id === activeSetId)?.name || "set")}` : scope === "favorites" ? "-favorites" : "";
-      link.download = `${safeDownloadName(title)}${suffix}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      const destinationResult = ownerDestinationPromise
+        ? await ownerDestinationPromise
+        : { value: null, error: null };
+      if (destinationResult.error) throw destinationResult.error;
+      const destination = destinationResult.value;
+      const zipFiles = downloadable.map((photo, index) => ({
+        url: imageSrc(photo.url),
+        name: photo.originalName || `photo-${index + 1}`,
+        sizeBytes: photo.sizeBytes,
+      }));
+      const estimatedSizeBytes = zipFiles.reduce((sum, file) => sum + Math.max(0, Number(file.sizeBytes || 0)), 0);
+      await downloadClientZip(zipFiles, ownerZipName, {
+        estimatedSizeBytes,
+        totalFiles: zipFiles.length,
+      }, destination);
       setDownloadCount((count) => count + downloadable.length);
       setShareNotice("ZIP download started");
-    } catch {
-      setShareNotice("Download failed");
+    } catch (error) {
+      setShareNotice(error instanceof Error ? error.message : "Download failed");
     } finally {
       setZipDownloading(false);
       setZipStage("Preparing your photos");
@@ -855,7 +848,7 @@ export function PublicGallery({
     setFaceResults(null);
     setSlideshowIndex(null);
   }, [activeSetId]);
-  const apiBase = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  const apiBase = process.env.NEXT_PUBLIC_BASE_URL || "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host";
   const loadMoreImages = async (setId = activeSetId) => {
     if (!collection || pageLoadingRef.current) return;
 
@@ -2259,7 +2252,7 @@ export function PublicGallery({
 function imageSrc(url?: string) {
   if (!url) return "";
   if (/^(https?:|data:|blob:)/i.test(url)) return url;
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host";
   return url.startsWith("/") ? `${baseUrl}${url}` : url;
 }
 
