@@ -1,6 +1,8 @@
 ﻿import { NextResponse } from "next/server";
 
-const baseUrl = process.env.BASE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:4000";
+import { apiBaseUrl } from "@/lib/api-base-url";
+
+const baseUrl = apiBaseUrl();
 
 export async function POST(request: Request, { params }: { params: Promise<{ identifier: string }> }) {
   const { identifier } = await params;

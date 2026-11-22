@@ -14,6 +14,51 @@ export class BookingService {
   @Prop({ trim: true, maxlength: 1600, default: '' })
   description: string;
 
+  @Prop({ enum: ['full', 'mini'], default: 'full' })
+  sessionStyle: 'full' | 'mini';
+
+  @Prop({ trim: true, maxlength: 500, default: '' })
+  coverImageUrl: string;
+
+  @Prop({ type: String, enum: ['public', 'private'], default: 'public' })
+  bookingVisibility: 'public' | 'private';
+
+  @Prop({ type: String, enum: ['draft', 'published'], default: 'published', index: true })
+  status: 'draft' | 'published';
+
+  @Prop({ trim: true, default: '#16bfa5' })
+  sessionColor: string;
+
+  @Prop({ trim: true, default: 'UTC' })
+  timezone: string;
+
+  @Prop({ default: true })
+  createProjectOnBooking: boolean;
+
+  @Prop({ trim: true, default: 'inquiry' })
+  projectStage: string;
+
+  @Prop({ trim: true, default: 'portrait' })
+  projectType: string;
+
+  @Prop({ type: [Object], default: [] })
+  availability: Array<{ day: number; enabled: boolean; start: string; end: string }>;
+
+  @Prop({ type: [Object], default: [] })
+  sessionDates: Array<{ date: string; start: string; end: string }>;
+
+  @Prop({ type: [Object], default: [] })
+  intakeFields: Array<{ name: string; label: string; type: string; required: boolean; options?: string }>;
+
+  @Prop({ type: String, enum: ['manual', 'none'], default: 'none' })
+  paymentPolicy: 'manual' | 'none';
+
+  @Prop({ type: Object, default: {} })
+  bookingRules: { minNoticeHours?: number; maxAdvanceDays?: number; slotIntervalMinutes?: number; autoConfirm?: boolean };
+
+  @Prop({ trim: true, maxlength: 1000, default: '' })
+  confirmationMessage: string;
+
   @Prop({ default: 60, min: 15, max: 1440 })
   durationMinutes: number;
 

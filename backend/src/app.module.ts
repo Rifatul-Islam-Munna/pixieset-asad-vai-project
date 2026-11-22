@@ -20,6 +20,7 @@ import { BlogModule } from './blog/blog.module';
 import { SupportModule } from './support/support.module';
 import { MarketingScheduleModule } from './marketing-schedule/marketing-schedule.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { StudioModule } from './studio/studio.module';
 import { DynamicPageModule } from './dynamic-pages/dynamic-page.module';
 
 @Module({
@@ -53,6 +54,7 @@ import { DynamicPageModule } from './dynamic-pages/dynamic-page.module';
     SupportModule,
     MarketingScheduleModule,
     BookingsModule,
+    StudioModule,
     DynamicPageModule,
   ],
   controllers: [AppController],

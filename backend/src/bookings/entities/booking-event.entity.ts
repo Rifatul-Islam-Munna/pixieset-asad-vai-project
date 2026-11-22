@@ -1,5 +1,5 @@
 ﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Schema as MongooseSchema } from 'mongoose';
 
 export type BookingEventDocument = HydratedDocument<BookingEvent>;
 
@@ -14,8 +14,8 @@ export class BookingEvent {
   @Prop({ enum: ['booking', 'event'], default: 'event', index: true })
   kind: 'booking' | 'event';
 
-  @Prop({ enum: ['pending', 'confirmed', 'completed', 'cancelled'], default: 'confirmed', index: true })
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  @Prop({ enum: ['pending', 'awaiting-client', 'confirmed', 'completed', 'cancelled'], default: 'confirmed', index: true })
+  status: 'pending' | 'awaiting-client' | 'confirmed' | 'completed' | 'cancelled';
 
   @Prop({ required: true, index: true })
   startAt: Date;
@@ -32,11 +32,20 @@ export class BookingEvent {
   @Prop({ trim: true, maxlength: 2000, default: '' })
   notes: string;
 
+  @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
+  intakeResponses: Record<string, string>;
+
   @Prop({ trim: true, maxlength: 120, default: '' })
   clientName: string;
 
   @Prop({ trim: true, lowercase: true, maxlength: 180, default: '' })
   clientEmail: string;
+
+  @Prop({ trim: true, default: '', index: true })
+  contactId: string;
+
+  @Prop({ trim: true, default: '', index: true })
+  projectId: string;
 
   @Prop({ trim: true, maxlength: 60, default: '' })
   clientPhone: string;

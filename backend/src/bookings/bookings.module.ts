@@ -8,6 +8,8 @@ import { BookingSetting, BookingSettingSchema } from './entities/booking-setting
 import { BookingShareLink, BookingShareLinkSchema } from './entities/booking-share-link.entity';
 import { BookingsController, PublicBookingsController } from './bookings.controller';
 import { BookingsService } from './bookings.service';
+import { StudioRecord, StudioRecordSchema } from '../studio/studio-record.entity';
+import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity';
 
 @Module({
   imports: [
@@ -17,7 +19,9 @@ import { BookingsService } from './bookings.service';
       { name: BookingCoworker.name, schema: BookingCoworkerSchema },
       { name: BookingEvent.name, schema: BookingEventSchema },
       { name: BookingShareLink.name, schema: BookingShareLinkSchema },
+      { name: StudioRecord.name, schema: StudioRecordSchema },
       { name: User.name, schema: UserSchema },
+      { name: Homepage.name, schema: HomepageSchema },
     ]),
   ],
   controllers: [BookingsController, PublicBookingsController],

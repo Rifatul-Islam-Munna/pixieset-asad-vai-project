@@ -367,6 +367,15 @@ const switcherItems = [
     mark: "bg-[#6337d8]",
     accent: "from-[#5527c9] to-[#8a5cf0]",
   },
+  {
+    key: "studio-management",
+    title: "Studio Manager",
+    text: "Projects, contacts, payments, bookings and documents",
+    href: "/dashboard/studio-management/home",
+    icon: CalendarDays,
+    mark: "bg-[#6337d8]",
+    accent: "from-[#5527c9] to-[#8a5cf0]",
+  },
 ] as const;
 
 const sidebarItems = {

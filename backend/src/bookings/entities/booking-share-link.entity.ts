@@ -17,6 +17,9 @@ export class BookingShareLink {
   @Prop({ trim: true, lowercase: true, maxlength: 180, default: '' })
   recipientEmail: string;
 
+  @Prop({ trim: true, default: '', index: true })
+  contactId: string;
+
   @Prop({ trim: true, default: '' })
   serviceId: string;
 

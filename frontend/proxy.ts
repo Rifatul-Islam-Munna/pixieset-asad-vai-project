@@ -92,6 +92,14 @@ export function proxy(request: NextRequest) {
   }
 
   const destination = request.nextUrl.clone();
+
+  // The customer's booking site is served from their username subdomain at /booking/.
+  // Keep /book/:identifier working as a legacy alias on tenant subdomains.
+  const legacyBookPath = path.startsWith("/book/") && path.slice(6).length > 0 && !path.slice(6).includes("/");
+  if (path === "/booking" || path === "/booking/" || legacyBookPath) {
+    destination.pathname = "/booking/" + encodeURIComponent(slug);
+    return NextResponse.rewrite(destination);
+  }
   if (path === "/") {
     destination.pathname = `/home/${encodeURIComponent(slug)}`;
     return NextResponse.rewrite(destination);
@@ -107,6 +115,24 @@ export function proxy(request: NextRequest) {
   // Fallback direct app routes used in localhost development already carry the homepage slug.
   if (path.startsWith("/home/")) {
     return withGeoLanguage(request, NextResponse.next());
+  }
+
+  // Public studio documents live on the customer's enabled website subdomain.
+  // The API verifies that the document belongs to this host's actual owner.
+  // Draft links are view-only; only sent documents allow signing or checkout.
+  const studioDocument=/^\/studio\/(form|invoice|contract|questionnaire|quote)\/([a-f0-9]{64})$/i.exec(path);
+  if(studioDocument){
+    destination.pathname="/studio/site/"+encodeURIComponent(slug)+"/"+
+      studioDocument[1].toLowerCase()+"/"+encodeURIComponent(studioDocument[2]);
+    return NextResponse.rewrite(destination);
+  }
+
+  // Use the verified owner site as the public payment-link namespace.
+  const paymentPath = /^\/payment\/([a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?)$/.exec(path);
+  if (paymentPath) {
+    destination.pathname = '/studio/payment-site/' +
+      encodeURIComponent(slug) + '/' + encodeURIComponent(paymentPath[1]);
+    return NextResponse.rewrite(destination);
   }
 
   const segments = path.split("/").filter(Boolean);

@@ -4,9 +4,9 @@ import { redirect } from "next/navigation";
 import {
   ArrowRight,
   BadgeDollarSign,
-  Camera,
   CircleUserRound,
   CreditCard,
+  ChevronDown,
   Crown,
   Images,
   LayoutGrid,
@@ -97,6 +97,18 @@ const products = [
     ],
   },
   {
+    title: "Studio Manager",
+    icon: LayoutGrid,
+    color: "bg-[#6337d8]",
+    links: [
+      ["Studio Dashboard", "/dashboard/studio-management/home"],
+      ["Projects", "/dashboard/studio-management/projects"],
+      ["Contacts", "/dashboard/studio-management/contacts"],
+      ["Invoices", "/dashboard/studio-management/invoices"],
+      ["Calendar", "/dashboard/studio-management/calendar"],
+    ],
+  },
+  {
     title: "Profile & Account",
     icon: CircleUserRound,
     color: "bg-[#6337d8]",
@@ -139,6 +151,8 @@ export default async function DashboardOverviewPage() {
   const brandText = cms.brand.brandText?.trim() || "";
   const recentCollections = collections.slice(0, 4);
   const recentOrders = orders.slice(0, 4);
+  // This is a server-rendered request-time entitlement check.
+  // eslint-disable-next-line react-hooks/purity
   const planNotExpired = !user.planExpiresAt || new Date(user.planExpiresAt).getTime() > Date.now();
   const hasAssignedPaidPlan = Boolean(user.planId) || Boolean(user.planName && !/^free$/i.test(user.planName.trim()));
   const hasPaidPurchase = purchases.some((purchase) => purchase.amount > 0 && (purchase.status === "active" || purchase.status === "paid"));
@@ -160,6 +174,14 @@ export default async function DashboardOverviewPage() {
             <Link href="/dashboard/client-gallery" className="flex h-12 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><Images className="size-5" />Client Gallery</Link>
             <Link href="/dashboard/store-gallery" className="flex h-12 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><Store className="size-5" />Store</Link>
             <Link href="/dashboard/mobile-gallery" className="flex h-12 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><Smartphone className="size-5" />Mobile Gallery App</Link>
+            <details className="group rounded-[8px]">
+              <summary className="flex h-12 cursor-pointer list-none items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa] [&::-webkit-details-marker]:hidden">
+                <LayoutGrid className="size-5 shrink-0"/><span className="flex-1">Studio Manager</span><ChevronDown className="size-4 text-[#8b8792] transition-transform group-open:rotate-180"/>
+              </summary>
+              <div className="ml-5 grid gap-1 border-l border-[#e8e4ef] py-2 pl-4">
+                {[["Overview","home"],["Projects","projects"],["Contacts","contacts"],["Documents","documents"],["Session Types","session-types"],["Sessions","sessions"],["Calendar","calendar"],["Settings","settings"]].map(([label,section])=><Link key={section} href={"/dashboard/studio-management/"+section} className="flex min-h-9 items-center rounded-[6px] px-3 text-xs text-[#77717f] hover:bg-[#f7f5fb] hover:text-[#6337d8]">{label}</Link>)}
+              </div>
+            </details>
             <Link href="/dashboard/client-gallery/account" className="flex h-12 items-center gap-4 rounded-[8px] px-4 hover:bg-[#f7f7fa]"><CircleUserRound className="size-5" />Profile & Account</Link>
           </div>
           <div className="my-6 border-t border-[#eeeeef]" />

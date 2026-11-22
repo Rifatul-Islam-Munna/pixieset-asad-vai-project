@@ -22,6 +22,11 @@ export class BookingsController {
     return { data: await this.bookings.createShareLink(req.user.id, body), message: 'Booking link created' };
   }
 
+  @Post('share-links/:id/send')
+  async sendShareLinkEmail(@Req() req: ExpressRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return { data: await this.bookings.sendShareLinkEmail(req.user.id, id, body.frontendOrigin as string | undefined), message: 'Invitation email sent' };
+  }
+
   @Delete('share-links/:id')
   async deleteShareLink(@Req() req: ExpressRequest, @Param('id') id: string) {
     return { data: await this.bookings.deleteShareLink(req.user.id, id), message: 'Booking link deleted' };
@@ -78,8 +83,12 @@ export class PublicBookingsController {
   constructor(private readonly bookings: BookingsService) {}
 
   @Get(':identifier')
-  async details(@Param('identifier') identifier: string, @Query('invite') invite?: string) {
-    return { data: await this.bookings.publicDetails(identifier, invite) };
+  async details(
+    @Param('identifier') identifier: string,
+    @Query('invite') invite?: string,
+    @Query('service') serviceId?: string,
+  ) {
+    return { data: await this.bookings.publicDetails(identifier, invite, serviceId) };
   }
 
   @Get(':identifier/availability')

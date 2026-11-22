@@ -46,6 +46,24 @@ export class BookingSetting {
   @Prop({ default: 'Thanks! Your booking request has been received.' })
   confirmationMessage: string;
 
+  @Prop({ trim: true, maxlength: 500, default: 'Welcome to my booking site. Please follow the instructions to book a session.' })
+  welcomeMessage: string;
+
+  @Prop({ default: true })
+  showSocialLinks: boolean;
+
+  @Prop({ default: false })
+  showWebsite: boolean;
+
+  @Prop({ default: false })
+  showContactEmail: boolean;
+
+  @Prop({ default: false })
+  showPhoneNumber: boolean;
+
+  @Prop({ default: false })
+  showBusinessAddress: boolean;
+
   @Prop({ type: Array, default: DEFAULT_HOURS })
   businessHours: BookingBusinessHour[];
 }
