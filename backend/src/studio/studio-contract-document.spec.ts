@@ -31,7 +31,7 @@ function fixture(){
   const model:any={
     findOne:jest.fn().mockResolvedValue(record),
     findOneAndUpdate:jest.fn().mockReturnValue(query({...record,status:'completed'})),
-    create:jest.fn(async(v:any)=>({toObject:()=>({_id:recordId,...v})})),
+    create:jest.fn(async(v:any)=>({ ...v, save:jest.fn().mockResolvedValue(undefined), toObject:()=>({_id:recordId,...v}) })),
     exists:jest.fn().mockResolvedValue({_id:projectId}),
   };
   const service=new StudioService(model as any,mail as any,{

@@ -155,7 +155,7 @@ export async function studioDelete(kind: StudioKind, id: string) {
   return request<{ deleted: boolean }>("/studio/" + kind + "/" + encodeURIComponent(id), "DELETE");
 }
 export async function studioSendInvoice(id: string) {
-  return request<{ record: StudioRecord; url: string; emailSent: boolean }>("/studio/invoices/" + encodeURIComponent(id) + "/send", "POST");
+  return request<{ record: StudioRecord; url: string; emailSent: boolean; messageId?: string; emailLog?: StudioRecord }>("/studio/invoices/" + encodeURIComponent(id) + "/send", "POST");
 }
 export async function studioUseTemplate(id: string, payload: Record<string, unknown> = {}) {
   return request<StudioRecord>("/studio/templates/" + encodeURIComponent(id) + "/use", "POST", payload);
@@ -185,7 +185,7 @@ export async function studioSendEmail(payload: { contactId?: string; projectId?:
   return request<StudioRecord>("/studio/messages/send", "POST", payload);
 }
 export async function studioSendContract(id: string) {
-  return request<{ record: StudioRecord; url: string; emailSent: boolean }>("/studio/documents/" + encodeURIComponent(id) + "/send", "POST");
+  return request<{ record: StudioRecord; url: string; emailSent: boolean; messageId?: string; emailLog?: StudioRecord }>("/studio/documents/" + encodeURIComponent(id) + "/send", "POST");
 }
 export async function studioRecordPayment(id: string, method: string, note = "") {
   return request<{ invoice: StudioRecord }>("/studio/invoices/" + encodeURIComponent(id) + "/record-payment", "POST", { method, note });

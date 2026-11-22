@@ -67,7 +67,7 @@ export function StudioInvoiceDesigner({
       setSaved(record);
       if(send){
         try{const result=await studioSendInvoice(record._id);record=result.record;setSaved(record);
-          toast.success("Invoice emailed to the client with a Pay Now button");}
+          toast.success("SMTP accepted the invoice email. Check Inbox for its send log.");}
         catch(e){toast.error("Invoice saved, but email could not be sent");throw e;}
       }else toast.success(record.status==="draft"?"Invoice saved as a draft":"Invoice changes saved");
       await onSaved();
@@ -83,7 +83,7 @@ export function StudioInvoiceDesigner({
   };
   const clientPreviewData={
     title,description,status:saved?.status||"draft",
-    number:String(saved?.details?.number||"Draft"),clientName:client?.title||email||"Client",
+    number:String(saved?.details?.number||"Draft"),clientName:client?.title||"Client",clientEmail:email||client?.email||"",
     amount:total.total,currency,dueDate:dueDate||undefined,notes,businessName,
     brandColor,footerText,lines,
     subtotal:total.subtotal,discount:total.discountAmount,tax:total.taxAmount,
@@ -196,7 +196,7 @@ export function StudioInvoiceDesigner({
       <aside className="self-start lg:sticky lg:top-28">
         <h3 className="mb-4 text-xs font-semibold uppercase tracking-[.15em] text-[#928b99]">Live preview</h3>
         <div className="pointer-events-none origin-top scale-[.93] border border-[#e4e0ea] bg-white shadow-sm">
-          <InvoicePreview title={title} clientName={client?.title||email||"Client"} number={saved?.details?.number||"Draft"} businessName={businessName}
+          <InvoicePreview title={title} clientName={client?.title||"Client"} clientEmail={email||client?.email||""} number={saved?.details?.number||"Draft"} businessName={businessName}
             currency={currency} color={brandColor} notes={notes} footerText={footerText} dueDate={dueDate}
             lines={lines} subtotal={total.subtotal} discount={total.discountAmount} tax={total.taxAmount} total={total.total} compact/>
         </div>
@@ -205,9 +205,9 @@ export function StudioInvoiceDesigner({
   </main>;
 }
 function InvoicePreview({
-  title,clientName,number,businessName,currency,color,notes,footerText,dueDate,lines,subtotal,discount,tax,total,compact,
+  title,clientName,clientEmail,number,businessName,currency,color,notes,footerText,dueDate,lines,subtotal,discount,tax,total,compact,
 }:{
-  title:string;clientName:string;number:string;businessName:string;currency:string;color:string;notes:string;footerText:string;dueDate:string;
+  title:string;clientName:string;clientEmail?:string;number:string;businessName:string;currency:string;color:string;notes:string;footerText:string;dueDate:string;
   lines:Line[];subtotal:number;discount:number;tax:number;total:number;compact?:boolean;
 }) {
   return <article className={"bg-white shadow-sm "+(compact?"p-5 text-[10px]":"p-9 text-sm sm:p-14")} aria-label="Invoice preview">
@@ -215,7 +215,7 @@ function InvoicePreview({
       <div><p className="font-bold" style={{color}}>{businessName}</p><h1 className={"mt-4 font-semibold "+(compact?"text-lg":"text-3xl")}>{title}</h1></div>
       <div className="text-right text-[#888]"><p className="font-bold uppercase">Invoice</p><p className="mt-2">#{number}</p></div>
     </div>
-    <div className="mt-9 flex justify-between gap-5"><div><p className="text-[#999]">Bill to</p><p className="mt-2 font-bold">{clientName}</p></div><div className="text-right"><p className="text-[#999]">Due date</p><p className="mt-2 font-semibold">{dueDate||"Upon receipt"}</p></div></div>
+    <div className="mt-9 flex justify-between gap-5"><div><p className="text-[#999]">Bill to</p><p className="mt-2 font-bold">{clientName}</p>{clientEmail&&<p className="mt-1 break-all text-[10px] text-[#888]">{clientEmail}</p>}</div><div className="text-right"><p className="text-[#999]">Due date</p><p className="mt-2 font-semibold">{dueDate||"Upon receipt"}</p></div></div>
     <div className="mt-12 border-t text-left"><div className="grid grid-cols-[1fr_45px_90px] border-b py-4 font-semibold"><span>Item</span><span>Qty</span><span className="text-right">Total</span></div>
       {lines.map((line,i)=><div key={i} className="grid grid-cols-[1fr_45px_90px] gap-2 border-b py-4"><span>{line.name||"Service"}</span><span>{line.quantity}</span><span className="text-right">{money(line.quantity*line.unitPrice,currency)}</span></div>)}
     </div>

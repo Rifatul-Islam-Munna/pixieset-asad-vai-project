@@ -24,7 +24,8 @@ export class BookingsController {
 
   @Post('share-links/:id/send')
   async sendShareLinkEmail(@Req() req: ExpressRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return { data: await this.bookings.sendShareLinkEmail(req.user.id, id, body.frontendOrigin as string | undefined), message: 'Invitation email sent' };
+    const data = await this.bookings.sendShareLinkEmail(req.user.id, id, body.frontendOrigin as string | undefined);
+    return { data, message: data.emailSent ? 'SMTP accepted the invitation email' : 'Invitation created, but SMTP did not accept the email' };
   }
 
   @Delete('share-links/:id')

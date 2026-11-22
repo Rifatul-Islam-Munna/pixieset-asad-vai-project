@@ -40,7 +40,7 @@ export function StudioEmailComposer({
     event.preventDefault();setError("");setBusy(true);
     try{
       await studioSendEmail({contactId,projectId,email,subject,content:message});
-      toast.success("Email sent");
+      toast.success("SMTP accepted the email. Check Inbox for its send log.");
       await onSent();
     }catch(e){setError(e instanceof Error?e.message:"Could not send email");}
     finally{setBusy(false);}

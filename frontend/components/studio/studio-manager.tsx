@@ -109,7 +109,7 @@ const stagesDefault = ["inquiry", "booked", "post-production", "completed"];
 const stageColor: Record<string,string> = {
   inquiry: "bg-[#fff8dd] text-[#a77300]", booked: "bg-[#f1edff] text-[#6950b6]",
   "post-production": "bg-[#e8f7fe] text-[#3181a4]", completed: "bg-[#e9f8ec] text-[#40834e]",
-  cancelled: "bg-[#fceef1] text-[#c04f63]",
+  cancelled: "bg-[#fceef1] text-[#c04f63]", sending: "bg-[#fff8e6] text-[#9a6b13]", failed: "bg-[#fff0f0] text-[#bf3f4d]",
 };
 function badge(status: string) {
   return "inline-flex items-center gap-2 whitespace-nowrap px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.05em] " +
@@ -267,7 +267,7 @@ export function StudioManager({ page: requestedPage = "home", projectId, session
   const send=async(item:StudioRecord)=>{
     try{
       const result=item.kind==="invoices"?await studioSendInvoice(item._id):await studioSendContract(item._id);
-      notify(result.emailSent?"Email sent to client":"Record ready");
+      notify(result.emailSent?"SMTP accepted the email. Check Inbox for its send log.":"Record ready");
       await refresh();
     }catch(e){toast.error(e instanceof Error?e.message:"Could not send email");}
   };
@@ -628,7 +628,7 @@ function RecordsPage(props:RecordProps) {
     page==="contracts"?["All Contracts","Draft","In Progress","Completed","Canceled"]:
     page==="contact-forms"?["All Forms","Draft","Published"]:
     page==="sessions"?["All Sessions","Upcoming","Inquiry","Past"]:
-    page==="inbox"?["All Messages","Unread","Read","Sent"]:
+    page==="inbox"?["All Messages","Unread","Read","Sending","Sent","Failed"]:
     [];
   const effectiveTab=tab||tabs[0]||"";
   const invoiceCurrencies=Array.from(new Set(["EUR",...all.map(x=>x.currency||"EUR")])).sort((a,b)=>a==="EUR"?-1:b==="EUR"?1:a.localeCompare(b));
@@ -831,7 +831,7 @@ function RecordsPage(props:RecordProps) {
                 {invoice&&<span className="ml-3 align-middle text-[10px] text-[#98939d]">{item.status==="sent"?"IN PROGRESS · SENT":item.status.toUpperCase()}</span>}</td>
               <td className="pr-5">{invoice?money(item.amount,item.currency):projects||kind==="documents"?<span className="inline-flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-[#f3edf8] text-[10px]">{initials(array(records,"contacts").find(x=>x._id===item.contactId)?.title||"Client")}</span>{array(records,"contacts").find(x=>x._id===item.contactId)?.title||item.email||"—"}</span>:
                 contacts?<span className={badge(item.status)}>{nice(item.status)}</span>:
-                messages?(item.status==="sent"?"To: ":"From: ")+(item.email||"—"):
+                messages?((item.type==="outbound"||["sending","sent","failed"].includes(item.status))?"To: ":"From: ")+(item.email||"—"):
                 kind==="transactions"?money(item.amount,item.currency):
                 kind==="payment-links"?(item.details?.fixedAmount?money(item.amount,item.currency):"Flexible · "+item.currency):
                 nice(item.type||item.status)}</td>
@@ -874,7 +874,7 @@ function RecordsPage(props:RecordProps) {
                       }
                     }}>Cancel {kind==="invoices"?"invoice":"document"}</button>}
                   {kind==="forms"&&<button className="block w-full px-4 py-2 text-left hover:bg-[#f7f5fa]" onClick={()=>{void onUpdate(kind,item,{status:item.status==="published"?"draft":"published"});setShowActions(null);}}>{item.status==="published"?"Unpublish":"Publish"}</button>}
-                  {kind==="messages"&&item.status!=="sent"&&<button className="block w-full px-4 py-2 text-left hover:bg-[#f7f5fa]" onClick={()=>{void onUpdate(kind,item,{status:item.status==="read"?"unread":"read"});setShowActions(null);}}>{item.status==="read"?"Mark unread":"Mark read"}</button>}
+                  {kind==="messages"&&item.type!=="outbound"&&item.status!=="sent"&&<button className="block w-full px-4 py-2 text-left hover:bg-[#f7f5fa]" onClick={()=>{void onUpdate(kind,item,{status:item.status==="read"?"unread":"read"});setShowActions(null);}}>{item.status==="read"?"Mark unread":"Mark read"}</button>}
                   {kind==="projects"&&<button className="block w-full px-4 py-2 text-left hover:bg-[#f7f5fa]" onClick={()=>{void onUpdate(kind,item,{archived:!item.archived});setShowActions(null);}}>{item.archived?"Restore project":"Archive"}</button>}
                   {!readonly&&!(kind==="documents"&&["in-progress","completed"].includes(item.status))&&
                     <button className="block w-full px-4 py-2 text-left text-red-600 hover:bg-red-50" onClick={()=>{void onDelete(kind,item);setShowActions(null);}}>Delete</button>}
@@ -933,8 +933,7 @@ function RecordDetail({record,onClose,onEdit,onSend,onCopy,onCompose}:{
       {record.kind==="invoices"&&<div className="mt-8 border-t pt-6"><h3 className="font-semibold">Invoice items</h3>
         {(record.details?.lines||[]).map((line:{name:string;quantity:number;unitPrice:number},i:number)=><div className="flex justify-between border-b py-3 text-sm" key={i}><span>{line.name} × {line.quantity}</span><span>{money(line.unitPrice*line.quantity,record.currency)}</span></div>)}
         <p className="mt-5 text-right text-lg font-bold">Total: {money(record.amount,record.currency)}</p></div>}
-      {record.kind==="messages"&&<div className="mt-8 border-t pt-6"><h3 className="font-semibold">Form responses</h3>
-        {Object.entries(record.details?.responses||{}).map(([key,value])=><div className="mt-3 text-sm" key={key}><span className="text-[#aaa]">{nice(key)}</span><p>{String(value)}</p></div>)}</div>}
+      {record.kind==="messages"&&<div className="mt-8 border-t pt-6">{record.type==="outbound"?<><h3 className="font-semibold">Email activity</h3><p className="mt-2 text-xs leading-5 text-[#8b8492]">Sent through your configured Studio SMTP connection. “Sent” means the SMTP server accepted the message; it does not confirm inbox delivery.</p><dl className="mt-4 divide-y text-xs">{[["Recipient",record.email||"—"],["Source",nice(record.details?.sourceKind||"email")],["Related item",record.details?.sourceTitle||"—"],["SMTP status",nice(record.details?.smtpStatus||record.status)],["Attempted",record.details?.attemptedAt?dateLabel(record.details.attemptedAt):dateLabel(record.createdAt)],["Accepted",record.details?.sentAt?dateLabel(record.details.sentAt):"—"],["Message ID",record.details?.messageId||"—"],["Failure reason",record.details?.error||"—"]].map(([label,value])=><div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-3"><dt className="text-[#999]">{label}</dt><dd className="break-words font-medium">{value}</dd></div>)}</dl></>:<><h3 className="font-semibold">Form responses</h3>{Object.entries(record.details?.responses||{}).map(([key,value])=><div className="mt-3 text-sm" key={key}><span className="text-[#aaa]">{nice(key)}</span><p>{String(value)}</p></div>)}</>}</div>}
       {record.kind==="transactions"&&<div className="mt-8 border-t pt-6">
         <h3 className="text-sm font-semibold">Payment details</h3>
         <dl className="mt-3 divide-y text-xs">{[

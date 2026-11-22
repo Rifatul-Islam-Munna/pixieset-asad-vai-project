@@ -21,7 +21,7 @@ const validStatuses: Partial<Record<StudioKind, string[]>> = {
   documents: ['draft', 'in-progress', 'completed', 'cancelled'],
   templates: ['active', 'archived'],
   forms: ['draft', 'published', 'archived'],
-  messages: ['unread', 'read', 'sent', 'archived'],
+  messages: ['unread', 'read', 'sending', 'sent', 'failed', 'archived'],
   discounts: ['active', 'inactive'],
 };
 const defaults: Partial<Record<StudioKind, string>> = {
@@ -535,6 +535,43 @@ export class StudioService {
     });
   }
 
+  private async sendStudioEmail(userId: string, payload: { to: string; subject: string; text: string; html?: string }, meta: { sourceKind: string; sourceId?: string; sourceTitle?: string; contactId?: string; projectId?: string }) {
+    const recipient = email(payload.to);
+    const attemptedAt = new Date().toISOString();
+    const log = await this.model.create({
+      userId, kind: 'messages', title: payload.subject, status: 'sending', type: 'outbound',
+      email: recipient, contactId: meta.contactId || '', projectId: meta.projectId || '',
+      description: payload.text || payload.subject,
+      details: { channel: 'smtp', sourceKind: meta.sourceKind, sourceId: meta.sourceId || '',
+        sourceTitle: meta.sourceTitle || '', attemptedAt, smtpStatus: 'sending' },
+    });
+    let outcome: Awaited<ReturnType<MailService['send']>>;
+    try {
+      outcome = await this.mail.send({ ...payload, to: recipient });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'SMTP_SEND_FAILED';
+      log.status = 'failed';
+      log.details = { ...log.details, smtpStatus: 'failed', error: reason, failedAt: new Date().toISOString() };
+      await log.save().catch(() => undefined);
+      throw new ServiceUnavailableException('SMTP could not send this email: ' + reason);
+    }
+    if (!outcome.sent) {
+      const reason = outcome.reason || 'SMTP_SEND_FAILED';
+      log.status = 'failed';
+      log.details = { ...log.details, smtpStatus: 'failed', error: reason, failedAt: new Date().toISOString() };
+      await log.save().catch(() => undefined);
+      throw new ServiceUnavailableException(reason === 'SMTP_NOT_CONFIGURED'
+        ? 'Email was not sent: SMTP is not configured on the backend.'
+        : 'Email was not sent: the SMTP server rejected the message. Check the backend mail log.');
+    }
+    const sentAt = new Date().toISOString();
+    log.status = 'sent';
+    log.details = { ...log.details, smtpStatus: 'accepted', acceptedBySmtp: true,
+      messageId: outcome.messageId || '', sentAt };
+    await log.save().catch(() => undefined);
+    return { ...outcome, log: log.toObject() };
+  }
+
   async sendEmail(userId: string, body: Payload) {
     const contactId = await this.relation(userId, 'contacts', clean(body.contactId, 50));
     const projectId = await this.relation(userId, 'projects', clean(body.projectId, 50));
@@ -546,14 +583,9 @@ export class StudioService {
     const content = clean(body.content, 12000);
     if (!recipient || !subject || !content)
       throw new BadRequestException('Recipient, subject, and message are required');
-    const outcome = await this.mail.send({ to: recipient, subject, text: content });
-    if (!outcome.sent) throw new ServiceUnavailableException('SMTP did not accept this email');
-    const record = await this.model.create({
-      userId, kind: 'messages', title: subject, status: 'sent', type: 'outbound',
-      email: recipient, contactId, projectId, description: content,
-      details: { sentAt: new Date().toISOString() },
-    });
-    return record.toObject();
+    const outcome = await this.sendStudioEmail(userId, { to: recipient, subject, text: content },
+      { sourceKind: 'manual-message', sourceTitle: subject, contactId, projectId });
+    return outcome.log;
   }
 
   private frontendUrl(path: string) {
@@ -648,15 +680,14 @@ export class StudioService {
       'text-decoration:none;font-weight:bold;font-size:14px;">'+escapeMailHtml(buttonText)+'</a></p>'+
       '<p style="font-size:12px;color:#888;">Or copy this link: <a href="'+safeUrl+'">'+safeUrl+'</a></p>'+
       '<p style="font-size:12px;color:#999;margin-top:35px;">Please contact your studio directly if you did not expect this email.</p></div>';
-    const accepted = await this.mail.send({
-      to, subject: message,
-      html,
+    const accepted = await this.sendStudioEmail(userId, {
+      to, subject: message, html,
       text: 'Hello,\n\n' + message + '\n\n'+buttonText+':\n' + url + '\n\nThank you.',
-    });
-    if (!accepted.sent) throw new ServiceUnavailableException('SMTP did not accept the email. Check mail settings and retry.');
+    }, { sourceKind: kind === 'invoices' ? 'invoice' : record.type, sourceId: recordId,
+      sourceTitle: record.title, contactId: record.contactId, projectId: record.projectId });
     record.status = kind === 'invoices' ? 'sent' : 'in-progress';
     await record.save();
-    return { record: record.toObject(), url, emailSent: true };
+    return { record: record.toObject(), url, emailSent: true, messageId: accepted.messageId || '', emailLog: accepted.log };
   }
 
   sendInvoice(userId: string, recordId: string) { return this.sendRecord(userId, 'invoices', recordId); }
@@ -755,10 +786,10 @@ export class StudioService {
     const record = await this.publicRecord('invoices', token);
     if(record.status==='draft'&&!allowDraft)throw new NotFoundException('Invoice is not yet sent');
     const client = record.contactId
-      ? await this.model.findOne({ userId: record.userId, kind: 'contacts', _id: record.contactId }).select('title').lean()
+      ? await this.model.findOne({ userId: record.userId, kind: 'contacts', _id: record.contactId }).select('title email').lean()
       : null;
     return { title: record.title, status: record.status, number: record.details?.number || '',
-      clientName: client?.title || '', amount: record.amount, currency: record.currency,
+      clientName: client?.title || '', clientEmail: record.email || client?.email || '', amount: record.amount, currency: record.currency,
       dueDate: record.dueDate, description: record.description,
       lines: record.details?.lines || [], subtotal: record.details?.subtotal || 0,
       discount: record.details?.discount || 0, tax: record.details?.tax || 0, notes: record.details?.notes || '',

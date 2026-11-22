@@ -160,6 +160,8 @@ export class MailService implements OnModuleInit {
         );
         this.warnedNotConfigured = true;
       }
+      const skippedRecipients = normalizeAddresses(payload.to).map((address) => maskEmail(extractAddress(address))).filter(Boolean).join(', ');
+      this.logger.error('SMTP email not sent: SMTP_NOT_CONFIGURED for ' + (skippedRecipients || 'recipient') + ' (subject: ' + sanitizeHeader(payload.subject).slice(0, 120) + ')');
       return { sent: false, skipped: true, reason: 'SMTP_NOT_CONFIGURED' };
     }
 
@@ -229,6 +231,8 @@ export class MailService implements OnModuleInit {
       await session.sendMessage(rawMessage);
       await session.command('QUIT', [221]).catch(() => '');
       session.close();
+      const safeRecipients = recipients.map((address) => maskEmail(extractAddress(address))).filter(Boolean).join(', ');
+      this.logger.log('SMTP accepted message ' + messageId + ' for ' + (safeRecipients || 'recipient') + ' (subject: ' + sanitizeHeader(payload.subject).slice(0, 120) + ')');
       return { sent: true, messageId };
     } catch (error) {
       session.close();
@@ -432,6 +436,14 @@ class SmtpSession {
 function normalizeAddresses(value?: string | string[]) {
   const entries = Array.isArray(value) ? value : value ? [value] : [];
   return entries.flatMap((entry) => String(entry).split(',')).map((entry) => sanitizeHeader(entry.trim())).filter(Boolean);
+}
+
+function maskEmail(value: string) {
+  const address = String(value || '').trim();
+  const at = address.lastIndexOf('@');
+  if (at <= 0) return address ? '[invalid-address]' : '';
+  const local = address.slice(0, at);
+  return local.slice(0, 1) + '***@' + address.slice(at + 1);
 }
 
 function extractAddress(value: string) {

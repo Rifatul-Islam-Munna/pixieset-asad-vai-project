@@ -129,10 +129,16 @@ describe('Studio email workflow and payment status',()=>{
       if(query._id&&query.userId===record.userId&&query.kind===record.kind)return document;
       return wrap(record);
     });
-    return {studio,model,mail,document};
+    const logs:any[]=[];
+    model.create=jest.fn(async(payload:any)=>{
+      const entry:any={...payload,save:jest.fn().mockResolvedValue(true),toObject(){return {...this};}};
+      logs.push(entry);
+      return entry;
+    });
+    return {studio,model,mail,document,logs};
   }
   it('emails a studio-subdomain invoice payment button, then marks the invoice sent',async()=>{
-    const {studio,mail,document}=sentFixture(invoice);
+    const {studio,mail,document,logs}=sentFixture(invoice);
     const result=await studio.sendInvoice('owner-A',id);
     expect(result.emailSent).toBe(true);
     expect(result.url).toBe('https://rifat39.gallerista.app/studio/invoice/'+token);
@@ -144,6 +150,16 @@ describe('Studio email workflow and payment status',()=>{
     expect(mail.send.mock.calls[0][0].html).toContain('href="https://rifat39.gallerista.app/studio/invoice/');
     expect(document.status).toBe('sent');
     expect(document.save).toHaveBeenCalledTimes(1);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({kind:'messages',type:'outbound',status:'sent',email:'jane@example.com'});
+    expect(logs[0].details).toMatchObject({sourceKind:'invoice',smtpStatus:'accepted',acceptedBySmtp:true});
+  });
+  it('sends a manually composed email to a direct address and stores its SMTP activity',async()=>{
+    const {studio,mail,logs}=sentFixture(invoice);
+    const result=await studio.sendEmail('owner-A',{email:'jane@example.com',subject:'Session details',content:'Your session is confirmed.'});
+    expect(mail.send).toHaveBeenCalledWith(expect.objectContaining({to:'jane@example.com',subject:'Session details'}));
+    expect(result).toMatchObject({kind:'messages',type:'outbound',status:'sent',email:'jane@example.com'});
+    expect(logs[0].details).toMatchObject({sourceKind:'manual-message',smtpStatus:'accepted'});
   });
   it('sends contract links through the studio subdomain and moves to in-progress',async()=>{
     const {studio,mail,document}=sentFixture(contract);
@@ -153,12 +169,21 @@ describe('Studio email workflow and payment status',()=>{
     expect(mail.send.mock.calls[0][0].html).toContain('Review &amp; Sign Contract');
   });
   it('never changes draft status if SMTP refuses the message',async()=>{
-    const {studio,mail,document}=sentFixture(invoice);
+    const {studio,mail,document,logs}=sentFixture(invoice);
     mail.send.mockResolvedValue({sent:false});
     await expect(studio.sendInvoice('owner-A',id))
       .rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(document.status).toBe('draft');
     expect(document.save).not.toHaveBeenCalled();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({kind:'messages',type:'outbound',status:'failed'});
+    expect(logs[0].details.smtpStatus).toBe('failed');
+  });
+  it('keeps a direct email address visible on a public invoice when no contact is linked',async()=>{
+    const {studio}=fixture(invoice);
+    const result=await studio.publicInvoice(token,true);
+    expect(result.clientName).toBe('');
+    expect(result.clientEmail).toBe('jane@example.com');
   });
   it('shows sent documents as active instead of a preview',async()=>{
     const {studio}=fixture({...invoice,status:'sent'});

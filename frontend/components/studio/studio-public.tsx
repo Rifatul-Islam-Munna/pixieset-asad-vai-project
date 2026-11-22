@@ -17,7 +17,7 @@ const CTA = "inline-flex h-12 items-center justify-center gap-2 bg-[#6337d8] px-
 type FormField = { name: string; label: string; type: string; required?: boolean; options?: string; allowOther?:boolean };
 type PublicForm = { title:string; description:string; fields:FormField[]; buttonLabel:string; successMessage:string; showMessage?:boolean; accentColor?:string; backgroundColor?:string };
 type PublicInvoice = {
-  title:string;number:string;status:string;clientName:string;amount:number;currency:string;
+  title:string;number:string;status:string;clientName:string;clientEmail?:string;amount:number;currency:string;
   dueDate?:string;description?:string;lines:{name:string;description?:string;quantity:number;unitPrice:number}[];
   subtotal:number;discount:number;tax:number;notes?:string;businessName?:string;brandColor?:string;footerText?:string;
 };
@@ -195,7 +195,7 @@ export function StudioPublic({ kind, token, data, ownerPreview=false,publicDraft
             <span className={"px-3 py-2 text-xs font-bold uppercase "+(paid?"bg-green-50 text-green-700":"bg-[#f4efff] text-[#6337d8]")}>{paid?"paid":invoice.status}</span>
           </div>
           <div className="mt-12 grid gap-6 border-y border-[#eeebf0] py-6 text-sm sm:grid-cols-2">
-            <div><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#96919c]">Billed to</p><p className="mt-3 font-semibold">{invoice.clientName||"Client"}</p></div>
+            <div><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#96919c]">Billed to</p><p className="mt-3 font-semibold">{invoice.clientName||"Client"}</p>{invoice.clientEmail&&<p className="mt-1 break-all text-xs text-[#817b88]">{invoice.clientEmail}</p>}</div>
             <div><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#96919c]">Due on</p><p className="mt-3 font-semibold">{date(invoice.dueDate)}</p></div>
           </div>
           {invoice.description&&<p className="mt-6 text-sm leading-7 text-[#77717e]">{invoice.description}</p>}

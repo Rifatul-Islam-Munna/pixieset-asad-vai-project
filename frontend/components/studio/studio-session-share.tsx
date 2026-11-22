@@ -106,7 +106,7 @@ export function StudioSessionShare({
       });
       setLink(result.url);
       if(sendByEmail){
-        if(result.emailSent)toast.success("Private invitation emailed to "+email.trim());
+        if(result.emailSent)toast.success("SMTP accepted the invitation. Check Inbox for its send log.");
         else setError(result.emailError==="SMTP_NOT_CONFIGURED"?"The invitation link was created, but email is not configured on the backend. Set SMTP_HOST and SMTP_FROM, then restart the backend.":"The invitation link was created, but the mail server did not accept the email. Check SMTP settings and backend mail logs.");
       }else toast.success("Private booking link created");
       await onChanged();
@@ -117,7 +117,7 @@ export function StudioSessionShare({
     setBusy(true);setError("");
     try{
       const result=await studioSendBookingInviteEmail(id,window.location.origin);
-      if(result.emailSent)toast.success("Invitation email sent successfully");
+      if(result.emailSent)toast.success("SMTP accepted the invitation. Check Inbox for its send log.");
       else setError(result.emailError==="SMTP_NOT_CONFIGURED"?"Email is not configured on the backend. Set SMTP_HOST and SMTP_FROM, then restart the backend.":"The mail server did not accept the email. Check SMTP settings and backend mail logs.");
     }catch(e){setError(e instanceof Error?e.message:"Could not send invitation email");}
     finally{setBusy(false);}

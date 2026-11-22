@@ -81,6 +81,32 @@ export class BookingsService {
     return this.settingModel.findOneAndUpdate({ userId }, { $set: patch }, { returnDocument: 'after', upsert: true }).lean();
   }
 
+  private async sendStudioEmail(userId: string, payload: { to: string; subject: string; text: string; replyTo?: string }, meta: { sourceKind: string; sourceId?: string; sourceTitle?: string }) {
+    const attemptedAt = new Date().toISOString();
+    const log = await this.studioRecordModel.create({
+      userId, kind: 'messages', title: payload.subject, status: 'sending', type: 'outbound',
+      email: payload.to, description: payload.text,
+      details: { channel: 'smtp', sourceKind: meta.sourceKind, sourceId: meta.sourceId || '',
+        sourceTitle: meta.sourceTitle || '', attemptedAt, smtpStatus: 'sending' },
+    });
+    try {
+      const result = await this.mailService.send(payload);
+      log.status = result.sent ? 'sent' : 'failed';
+      log.details = { ...log.details, smtpStatus: result.sent ? 'accepted' : 'failed',
+        acceptedBySmtp: Boolean(result.sent), messageId: result.messageId || '',
+        ...(result.sent ? { sentAt: new Date().toISOString() } : { error: result.reason || 'SMTP_SEND_FAILED', failedAt: new Date().toISOString() }) };
+      await log.save().catch((error) => this.logger.error('Could not update Studio email log ' + String(log._id) + ': ' + (error instanceof Error ? error.message : String(error))));
+      return result;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'SMTP_SEND_FAILED';
+      log.status = 'failed';
+      log.details = { ...log.details, smtpStatus: 'failed', error: reason, failedAt: new Date().toISOString() };
+      await log.save().catch(() => undefined);
+      this.logger.error('Studio email failed for ' + payload.to + ': ' + reason);
+      return { sent: false, reason: 'SMTP_SEND_FAILED' as const };
+    }
+  }
+
   async createShareLink(userId: string, body: Record<string, unknown>) {
     const owner = await this.userModel
       .findById(userId)
@@ -147,12 +173,12 @@ export class BookingsService {
     if (shouldSendEmail && recipientEmail) {
       const business = owner.businessName || owner.name || 'Studio';
       const expiryText = expiresAt.toLocaleString();
-      const result = await this.mailService.send({
+      const result = await this.sendStudioEmail(userId, {
         to: recipientEmail,
         replyTo: this.email(owner.email) || undefined,
         subject: `${business}: booking invitation`,
         text: `${recipientName ? `Hi ${recipientName},\n\n` : ''}${business} invited you to book${serviceName ? ` ${serviceName}` : ' a session'}.\n\nBook here: ${url}\n\nThis private link expires ${expiryText} and can be used for one booking.`,
-      });
+      }, { sourceKind: 'booking-invitation', sourceId: String(link._id), sourceTitle: serviceName || 'Private booking invitation' });
       emailSent = Boolean(result.sent);
       emailError = result.sent ? '' : result.reason || 'SMTP_SEND_FAILED';
     }
@@ -174,7 +200,7 @@ export class BookingsService {
     const url = this.shareLinkUrl(identifier, link.token, requestedOrigin);
     const business = owner.businessName || owner.name || 'Studio';
     const expiryText = new Date(link.expiresAt).toLocaleString();
-    const result = await this.mailService.send({
+    const result = await this.sendStudioEmail(userId, {
       to: recipientEmail,
       replyTo: this.email(owner.email) || undefined,
       subject: `${business}: booking invitation`,
@@ -183,8 +209,8 @@ export class BookingsService {
         String.fromCharCode(10) + String.fromCharCode(10) + 'Book here: ' + url +
         String.fromCharCode(10) + String.fromCharCode(10) +
         'This private link expires ' + expiryText + ' and can be used for one booking.',
-    });
-    return { emailSent: Boolean(result.sent), emailError: result.sent ? '' : result.reason || 'SMTP_SEND_FAILED', url };
+    }, { sourceKind: 'booking-invitation', sourceId: id, sourceTitle: link.serviceName || 'Private booking invitation' });
+    return { emailSent: Boolean(result.sent), emailError: result.sent ? '' : result.reason || 'SMTP_SEND_FAILED', messageId: result.messageId || '', url };
   }
 
   async deleteShareLink(userId: string, id: string) {
@@ -466,7 +492,9 @@ export class BookingsService {
       this.logger.warn('Booking was saved, but Studio Manager contact/project sync failed: ' +
         (error instanceof Error ? error.message : 'unknown error'));
     }
-    void this.sendBookingEmails(owner, event.toObject(), service.timezone || settings.timezone).catch(() => undefined);
+    void this.sendBookingEmails(owner, event.toObject(), service.timezone || settings.timezone).catch((error) => {
+      this.logger.error('Booking email workflow failed: ' + (error instanceof Error ? error.message : String(error)));
+    });
     return {
       event: event.toObject(),
       status,
@@ -585,8 +613,16 @@ export class BookingsService {
       event.notes ? `Notes: ${event.notes}` : '',
     ].filter(Boolean).join('\n');
     const sends: Promise<unknown>[] = [];
-    if (ownerEmail) sends.push(this.mailService.send({ to: ownerEmail, replyTo: clientEmail, subject: `New booking - ${event.serviceName} - ${event.clientName}`, text }));
-    if (clientEmail) sends.push(this.mailService.send({ to: clientEmail, replyTo: ownerEmail || undefined, subject: `${business}: ${subject}`, text: `${business}\n\n${text}\n\n${event.status === 'confirmed' ? 'Your booking is confirmed.' : 'Your request is pending confirmation.'}` }));
+    const eventId = String(event._id || event.id || '');
+    if (ownerEmail) sends.push(this.sendStudioEmail(String(owner._id), {
+      to: ownerEmail, replyTo: clientEmail,
+      subject: `New booking - ${event.serviceName} - ${event.clientName}`, text,
+    }, { sourceKind: 'booking-notification', sourceId: eventId, sourceTitle: event.serviceName || 'New booking' }));
+    if (clientEmail) sends.push(this.sendStudioEmail(String(owner._id), {
+      to: clientEmail, replyTo: ownerEmail || undefined,
+      subject: `${business}: ${subject}`,
+      text: `${business}\n\n${text}\n\n${event.status === 'confirmed' ? 'Your booking is confirmed.' : 'Your request is pending confirmation.'}`,
+    }, { sourceKind: 'booking-confirmation', sourceId: eventId, sourceTitle: event.serviceName || 'Booking update' }));
     await Promise.all(sends);
   }
 
