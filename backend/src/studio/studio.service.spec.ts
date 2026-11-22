@@ -14,7 +14,7 @@ function fixture() {
   const created: any[] = [];
   const model = {
     create: jest.fn(async (record: Record<string, any>) => {
-      const stored: any = { _id: id, ...record, save: jest.fn(), toObject() { return { ...stored }; } };
+      const stored: any = { _id: id, ...record, save: jest.fn().mockResolvedValue(undefined), toObject() { return { ...stored }; } };
       created.push(stored);
       return stored;
     }),

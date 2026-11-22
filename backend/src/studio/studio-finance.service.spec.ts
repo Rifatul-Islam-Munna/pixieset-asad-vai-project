@@ -14,7 +14,10 @@ function fixture(){
     find:jest.fn().mockReturnValue({sort:jest.fn().mockReturnValue({limit:jest.fn().mockReturnValue(query([]))})}),
     findOne:jest.fn(),
     exists:jest.fn().mockResolvedValue({_id:id}),
-    create:jest.fn(async(data:any)=>({toObject:()=>({_id:id,...data})})),
+    create:jest.fn(async(data:any)=>({
+      _id:id,...data,save:jest.fn().mockResolvedValue(undefined),
+      toObject(){return {...this};},
+    })),
   };
   const mail={send:jest.fn().mockResolvedValue({sent:true})};
   const config={get:jest.fn()};
@@ -92,7 +95,10 @@ describe('Studio finance and linked workflows',()=>{
     await expect(service.sendEmail('studio-A',{
       email:'jane@example.com',subject:'Test',content:'Message',
     })).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(model.create).not.toHaveBeenCalled();
+    expect(model.create).toHaveBeenCalledTimes(1);
+    const failedLog=await model.create.mock.results[0].value;
+    expect(failedLog).toMatchObject({status:'failed',type:'outbound',email:'jane@example.com'});
+    expect(failedLog.details).toMatchObject({smtpStatus:'failed',sourceKind:'manual-message'});
   });
   it('rejects missing email when creating contacts',async()=>{
     const {service,model}=fixture();
