@@ -18,6 +18,13 @@ fi
 # instead of waiting for 169.254.169.254 / IMDS and timing out.
 export AWS_EC2_METADATA_DISABLED=true
 
+# The second backend URL is the only additional setting required.
+# Both source buckets inherit the existing S3 loader configuration.
+if [ -n "${PIUPHOTO_BACKEND_INTERNAL_URL:-}" ] && [ -z "${S3_LOADER_BUCKET_ROUTER_CONFIG:-}" ]; then
+  export S3_LOADER_BUCKET_ROUTER_CONFIG=/tmp/imagor-bucket-routing.yaml
+  /usr/local/bin/imagor-cache-worker --write-router "$S3_LOADER_BUCKET_ROUTER_CONFIG"
+fi
+
 /usr/local/bin/imagor &
 imagor_pid=$!
 

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -24,31 +25,34 @@ import (
 
 var variants = []string{"small", "view"}
 var workerLogEnabled bool
-var backendCursor atomic.Uint64
+var warmCursor atomic.Uint64
+var deleteCursor atomic.Uint64
 
-func nextBackend(cfg config) config {
- if cfg.secondaryBackendURL != "" && backendCursor.Add(1)%2 == 0 { cfg.backendURL = cfg.secondaryBackendURL }
- return cfg
+func nextBackend(cfg config, cursor *atomic.Uint64) config {
+	if cfg.secondaryBackendURL != "" && cursor.Add(1)%2 == 0 {
+		cfg.backendURL = cfg.secondaryBackendURL
+	}
+	return cfg
 }
 
 type config struct {
-	backendURL      string
+	backendURL          string
 	secondaryBackendURL string
-	imagorLocalURL  string
-	secret          string
-	logEnabled      bool
-	resultEndpoint  string
-	resultBucket    string
-	resultBaseDir   string
-	resultPublicURL string
-	resultRegion    string
-	accessKey       string
-	secretKey       string
-	interval        time.Duration
-	idlePoll        time.Duration
-	concurrency     int
-	cloudflareZone  string
-	cloudflareToken string
+	imagorLocalURL      string
+	secret              string
+	logEnabled          bool
+	resultEndpoint      string
+	resultBucket        string
+	resultBaseDir       string
+	resultPublicURL     string
+	resultRegion        string
+	accessKey           string
+	secretKey           string
+	interval            time.Duration
+	idlePoll            time.Duration
+	concurrency         int
+	cloudflareZone      string
+	cloudflareToken     string
 }
 
 type warmJob struct {
@@ -74,7 +78,42 @@ type warmComplete struct {
 	ObsoleteURLs []string `json:"obsoleteUrls"`
 }
 
+// Generate JSON (a valid YAML subset) without shell interpolation of secrets.
+// The original bucket remains the default for all existing Pixieset URLs.
+func writeRouterConfig(filename string) error {
+	get := func(k string) string { return strings.TrimSpace(os.Getenv(k)) }
+	primary := map[string]string{
+		"name":              get("S3_LOADER_BUCKET"),
+		"region":            env("AWS_LOADER_REGION", env("AWS_REGION", "auto")),
+		"endpoint":          env("S3_LOADER_ENDPOINT", get("S3_ENDPOINT")),
+		"access_key_id":     env("AWS_LOADER_ACCESS_KEY_ID", get("AWS_ACCESS_KEY_ID")),
+		"secret_access_key": env("AWS_LOADER_SECRET_ACCESS_KEY", get("AWS_SECRET_ACCESS_KEY")),
+	}
+	if primary["name"] == "" || primary["endpoint"] == "" || primary["access_key_id"] == "" || primary["secret_access_key"] == "" {
+		return errors.New("existing S3 loader requires bucket, endpoint and credentials")
+	}
+	// Both projects already share the same R2 account and loader credentials.
+	// Keep the original loader configuration; change only the source bucket.
+	airpix := maps.Clone(primary)
+	airpix["name"] = "airpix"
+	data, err := json.Marshal(map[string]any{
+		"routing_pattern": "^(?P<bucket>piuphoto)/(?P<path>.+)$",
+		"default_bucket":  primary,
+		"rules":           []map[string]any{{"match": "piuphoto", "bucket": airpix}},
+	})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, data, 0600)
+}
+
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "--write-router" {
+		if err := writeRouterConfig(os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	workerLogEnabled = envBool("IMAGOR_CACHE_WORKER_LOG_ENABLED", false)
 	if !envBool("IMAGOR_CACHE_WORKER_ENABLED", true) {
 		workerLogf("imagor cache worker disabled")
@@ -117,7 +156,7 @@ func main() {
 	// Keep delete cleanup independent from warming so removing images never has
 	// to wait behind a long gallery-cache backlog.
 	for {
-		deleted := processDelete(nextBackend(cfg))
+		deleted := processDelete(nextBackend(cfg, &deleteCursor))
 		if deleted {
 			time.Sleep(250 * time.Millisecond)
 		} else {
@@ -154,23 +193,23 @@ func waitForImagor(cfg config) {
 
 func loadConfig() (config, error) {
 	cfg := config{
-		backendURL:      strings.TrimRight(env("BACKEND_INTERNAL_URL", ""), "/"),
- secondaryBackendURL: strings.TrimRight(env("PIUPHOTO_BACKEND_INTERNAL_URL", ""), "/"),
-		imagorLocalURL:  strings.TrimRight(env("IMAGOR_LOCAL_URL", "http://127.0.0.1:8000"), "/"),
-		secret:          strings.TrimSpace(env("IMAGOR_SECRET", "")),
-		logEnabled:      envBool("IMAGOR_CACHE_WORKER_LOG_ENABLED", false),
-		resultEndpoint:  strings.TrimRight(env("S3_RESULT_STORAGE_ENDPOINT", ""), "/"),
-		resultBucket:    strings.TrimSpace(env("S3_RESULT_STORAGE_BUCKET", "")),
-		resultBaseDir:   strings.Trim(env("S3_RESULT_STORAGE_BASE_DIR", ""), "/"),
-		resultPublicURL: strings.TrimRight(env("S3_RESULT_STORAGE_PUBLIC_URL", ""), "/"),
-		resultRegion:    env("AWS_RESULT_STORAGE_REGION", "auto"),
-		accessKey:       strings.TrimSpace(env("AWS_RESULT_STORAGE_ACCESS_KEY_ID", "")),
-		secretKey:       strings.TrimSpace(env("AWS_RESULT_STORAGE_SECRET_ACCESS_KEY", "")),
-		interval:        envDuration("IMAGOR_CACHE_WORKER_INTERVAL", 250*time.Millisecond),
-		idlePoll:        envDuration("IMAGOR_CACHE_WORKER_IDLE_POLL", 2*time.Second),
-		concurrency:     envInt("IMAGOR_CACHE_WORKER_CONCURRENCY", 2),
-		cloudflareZone:  strings.TrimSpace(env("CLOUDFLARE_ZONE_ID", "")),
-		cloudflareToken: strings.TrimSpace(env("CLOUDFLARE_API_TOKEN", "")),
+		backendURL:          strings.TrimRight(env("BACKEND_INTERNAL_URL", ""), "/"),
+		secondaryBackendURL: strings.TrimRight(env("PIUPHOTO_BACKEND_INTERNAL_URL", ""), "/"),
+		imagorLocalURL:      strings.TrimRight(env("IMAGOR_LOCAL_URL", "http://127.0.0.1:8000"), "/"),
+		secret:              strings.TrimSpace(env("IMAGOR_SECRET", "")),
+		logEnabled:          envBool("IMAGOR_CACHE_WORKER_LOG_ENABLED", false),
+		resultEndpoint:      strings.TrimRight(env("S3_RESULT_STORAGE_ENDPOINT", ""), "/"),
+		resultBucket:        strings.TrimSpace(env("S3_RESULT_STORAGE_BUCKET", "")),
+		resultBaseDir:       strings.Trim(env("S3_RESULT_STORAGE_BASE_DIR", ""), "/"),
+		resultPublicURL:     strings.TrimRight(env("S3_RESULT_STORAGE_PUBLIC_URL", ""), "/"),
+		resultRegion:        env("AWS_RESULT_STORAGE_REGION", "auto"),
+		accessKey:           strings.TrimSpace(env("AWS_RESULT_STORAGE_ACCESS_KEY_ID", "")),
+		secretKey:           strings.TrimSpace(env("AWS_RESULT_STORAGE_SECRET_ACCESS_KEY", "")),
+		interval:            envDuration("IMAGOR_CACHE_WORKER_INTERVAL", 250*time.Millisecond),
+		idlePoll:            envDuration("IMAGOR_CACHE_WORKER_IDLE_POLL", 2*time.Second),
+		concurrency:         envInt("IMAGOR_CACHE_WORKER_CONCURRENCY", 2),
+		cloudflareZone:      strings.TrimSpace(env("CLOUDFLARE_ZONE_ID", "")),
+		cloudflareToken:     strings.TrimSpace(env("CLOUDFLARE_API_TOKEN", "")),
 	}
 
 	if style := strings.ToLower(env("IMAGOR_RESULT_STORAGE_PATH_STYLE", "digest")); style != "digest" {
@@ -213,7 +252,7 @@ func loadConfig() (config, error) {
 func warmLoop(cfg config, workerID int) {
 	for {
 		tracef(cfg, "warm worker poll started: worker=%d", workerID)
-		warmed := processWarm(nextBackend(cfg))
+		warmed := processWarm(nextBackend(cfg, &warmCursor))
 		tracef(cfg, "warm worker poll finished: worker=%d warmJob=%t", workerID, warmed)
 		if warmed {
 			time.Sleep(cfg.interval)

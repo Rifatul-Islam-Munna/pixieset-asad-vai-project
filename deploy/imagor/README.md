@@ -44,3 +44,41 @@ Important values:
 The Docker image runs `/usr/local/bin/imagor` and the tiny static `imagor-cache-worker` side-by-side in the same container. The worker consumes transformed bytes only over localhost, so backend CPU, RAM, disk, and network are not used for copying processed images to R2. Warm-job claiming is atomic in MongoDB, so multiple cache-worker goroutines safely claim different images and completed R2 results survive restarts.
 
 Do not apply a blanket expiration rule to this Result Storage bucket if small/view are your permanent delivery copies. The worker deletes obsolete versions when an image is rebuilt and deletes small/view plus any on-demand thumbnail when the image itself is deleted.
+
+## Shared PiuPhoto / AirPix integration
+
+Keep every existing environment variable. The Go worker now alternates between
+the original backend and an optional secondary backend. The entire stack still
+uses one Imagor process and the existing shared concurrency limit.
+
+Add just one environment variable to the **Imagor EasyPanel app**:
+
+```env
+PIUPHOTO_BACKEND_INTERNAL_URL=http://piuphoto-backend:4000
+```
+
+Both projects use the same R2 account and credentials. No additional S3
+endpoint, access key, secret key, region or result bucket configuration is
+needed. Keep the existing S3_LOADER_*, AWS_LOADER_* and
+S3_RESULT_STORAGE_* settings. The existing loader credentials must allow
+reading both gallarista-private and airpix.
+
+When the second backend is enabled and no custom router file is configured,
+startup generates the routing file automatically. Existing Pixieset paths
+keep the current default source bucket. Signed `piuphoto/<object-key>`
+paths use the existing airpix bucket with the same loader credentials and
+endpoint, with the routing prefix removed. Both projects share the existing
+result bucket and digest paths. HTTP loading remains disabled.
+If a custom S3_LOADER_BUCKET_ROUTER_CONFIG is already configured, it must
+also include the piuphoto rule. The deployed Imagor version must support
+S3 loader bucket routing.
+
+Both backends use the existing IMAGOR_SECRET for signing and worker
+authentication. PiuPhoto uses its existing IMAGOR_URL, IMAGOR_SECRET and
+matching signer settings. Source routing is fixed in code; the worker
+returns the shared result-storage URL. No new backend secrets or routing
+environment variables are needed. Pixieset's backend configuration is unchanged.
+
+Redeploy the engine and verify a signed PiuPhoto AVIF request returns HTTP 200
+with content-type image/avif before enabling optimization. The old Pixieset
+URLs and all original files remain unchanged.
