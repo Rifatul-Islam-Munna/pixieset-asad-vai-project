@@ -18,14 +18,22 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 var variants = []string{"small", "view"}
 var workerLogEnabled bool
+var backendCursor atomic.Uint64
+
+func nextBackend(cfg config) config {
+ if cfg.secondaryBackendURL != "" && backendCursor.Add(1)%2 == 0 { cfg.backendURL = cfg.secondaryBackendURL }
+ return cfg
+}
 
 type config struct {
 	backendURL      string
+	secondaryBackendURL string
 	imagorLocalURL  string
 	secret          string
 	logEnabled      bool
@@ -109,7 +117,7 @@ func main() {
 	// Keep delete cleanup independent from warming so removing images never has
 	// to wait behind a long gallery-cache backlog.
 	for {
-		deleted := processDelete(cfg)
+		deleted := processDelete(nextBackend(cfg))
 		if deleted {
 			time.Sleep(250 * time.Millisecond)
 		} else {
@@ -147,6 +155,7 @@ func waitForImagor(cfg config) {
 func loadConfig() (config, error) {
 	cfg := config{
 		backendURL:      strings.TrimRight(env("BACKEND_INTERNAL_URL", ""), "/"),
+ secondaryBackendURL: strings.TrimRight(env("PIUPHOTO_BACKEND_INTERNAL_URL", ""), "/"),
 		imagorLocalURL:  strings.TrimRight(env("IMAGOR_LOCAL_URL", "http://127.0.0.1:8000"), "/"),
 		secret:          strings.TrimSpace(env("IMAGOR_SECRET", "")),
 		logEnabled:      envBool("IMAGOR_CACHE_WORKER_LOG_ENABLED", false),
@@ -204,7 +213,7 @@ func loadConfig() (config, error) {
 func warmLoop(cfg config, workerID int) {
 	for {
 		tracef(cfg, "warm worker poll started: worker=%d", workerID)
-		warmed := processWarm(cfg)
+		warmed := processWarm(nextBackend(cfg))
 		tracef(cfg, "warm worker poll finished: worker=%d warmJob=%t", workerID, warmed)
 		if warmed {
 			time.Sleep(cfg.interval)
