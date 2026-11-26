@@ -16,10 +16,11 @@ from typing import Any
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("ORT_NUM_THREADS", "1")
+os.environ.setdefault("ORT_NUM_THREADS", "3")
 
 import cv2
 import numpy as np
+import onnxruntime as ort
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
 from PIL import Image, ImageOps
 from pydantic import BaseModel
@@ -33,9 +34,10 @@ class Settings:
     detection_size: int = int(os.getenv("DETECTION_SIZE", "960"))
     detection_threshold: float = float(os.getenv("DETECTION_THRESHOLD", "0.20"))
     worker_count: int = int(os.getenv("WORKER_COUNT", "1"))
+    ort_threads: int = max(1, min(3, int(os.getenv("ORT_NUM_THREADS", "3"))))
     request_concurrency: int = int(os.getenv("FACE_REQUEST_CONCURRENCY", "2"))
-    process_nice: int = int(os.getenv("PROCESS_NICE", "7"))
-    scan_yield_ms: float = float(os.getenv("SCAN_YIELD_MS", "5"))
+    process_nice: int = int(os.getenv("PROCESS_NICE", "5"))
+    scan_yield_ms: float = float(os.getenv("SCAN_YIELD_MS", "1"))
     group_scan: bool = os.getenv("GROUP_SCAN", "true").lower() in {"1", "true", "yes"}
     mirror_scan: bool = os.getenv("MIRROR_SCAN", "true").lower() in {"1", "true", "yes"}
     tile_size: int = int(os.getenv("TILE_SIZE", "896"))
@@ -350,7 +352,7 @@ async def analyze_content(content: bytes) -> dict[str, Any]:
             detail=f"Image exceeds {SETTINGS.max_upload_mb} MB limit",
         )
 
-    image, original_width, original_height, scale_x, scale_y = decode_image(content)
+    image, original_width, original_height, scale_x, scale_y = await asyncio.to_thread(decode_image, content)
     if worker_queue is None:
         raise HTTPException(status_code=503, detail="Face model is not ready")
 
@@ -366,6 +368,7 @@ async def analyze_content(content: bytes) -> dict[str, Any]:
     ]
     embedding_dimension = len(results[0]["embedding"]) if results else None
     return {
+        "model": SETTINGS.model_name,
         "faceCount": len(results),
         "embeddingDimension": embedding_dimension,
         "image": {"width": original_width, "height": original_height},
@@ -383,17 +386,29 @@ async def lifespan(_: FastAPI):
     except (AttributeError, OSError):
         # Nice is available in the Linux container; ignore unsupported hosts.
         pass
-    worker_total = max(1, min(4, SETTINGS.worker_count))
+    cpu_budget = max(1, min(3, os.cpu_count() or 1))
+    worker_total = max(1, min(cpu_budget, SETTINGS.worker_count))
     request_total = max(1, min(16, SETTINGS.request_concurrency))
     face_apps = []
     worker_queue = asyncio.Queue(maxsize=worker_total)
     request_gate = asyncio.Semaphore(request_total)
+    # Explicit ORT thread pools avoid competing with NestJS and MongoDB.
+    # Keep one model copy by default and share a maximum of three inference threads.
+    cv2.setNumThreads(1)
+    session_options = ort.SessionOptions()
+    session_options.intra_op_num_threads = min(SETTINGS.ort_threads, max(1, cpu_budget // worker_total))
+    session_options.inter_op_num_threads = 1
+    session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    session_options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    session_options.add_session_config_entry("session.inter_op.allow_spinning", "0")
     for _ in range(worker_total):
         app = FaceAnalysis(
             name=SETTINGS.model_name,
             root=SETTINGS.model_root,
             allowed_modules=["detection", "recognition"],
             providers=["CPUExecutionProvider"],
+            sess_options=session_options,
         )
         app.prepare(
             ctx_id=-1,
@@ -422,6 +437,7 @@ def health() -> dict[str, Any]:
         "model": SETTINGS.model_name,
         "provider": "CPUExecutionProvider",
         "workers": len(face_apps),
+        "ortThreads": SETTINGS.ort_threads,
         "requestConcurrency": SETTINGS.request_concurrency,
         "processNice": SETTINGS.process_nice,
         "scanYieldMs": SETTINGS.scan_yield_ms,

@@ -3,11 +3,11 @@
 This container exposes one private HTTP endpoint that receives an image and returns a detected face bounding box plus a normalized recognition embedding for every detected face.
 
 - Upload endpoint: `POST /v1/faces`
-- Background URL endpoint: `POST /v1/faces/url` (the model fetches the thumbnail directly; Nest never relays image bytes)
+- Background URL endpoint: `POST /v1/faces/url` (the model fetches the configured full-frame gallery derivative directly; Nest normally does not relay image bytes)
 - Health: `GET /health`
 - Default host URL: `http://127.0.0.1:8010`
 - Auth header: `x-api-key: <API_KEY>`
-- Default model: `buffalo_s` (better suited to a 2-core VPS than `buffalo_l`)
+- Default model: `buffalo_s` (keeps the existing embeddings compatible; changing model weights requires a separate index migration)
 - Default detector: `960x960`, tiled group scan, mirror scan for side-face recovery
 - Low-pressure defaults: one inference worker (no duplicate model RAM), OS nice priority, short CPU yields between scans
 - Large queues use the direct URL endpoint plus a shorter Nest background gap; opening Face Filter prioritizes that gallery without increasing inference concurrency
@@ -16,7 +16,7 @@ This container exposes one private HTTP endpoint that receives an image and retu
 
 ## Deploy
 
-If you deploy the Dockerfile directly in EasyPanel, copy the variables from `image-model/.env.example` into that service's Environment section. In particular, keep `PROCESS_NICE=7`, `SCAN_YIELD_MS=5`, `SOURCE_FETCH_TIMEOUT_SECONDS=20`, `WORKER_COUNT=1`, and `FACE_REQUEST_CONCURRENCY=2` unless you intentionally retune the model. The Dockerfile deliberately does not use Uvicorn `--limit-concurrency`; heavy face requests are gated inside FastAPI so `/health` remains responsive during indexing.
+If you deploy the Dockerfile directly in EasyPanel, copy the variables from `image-model/.env.example` into that service's Environment section. In particular, start with `PROCESS_NICE=5`, `SCAN_YIELD_MS=1`, `ORT_NUM_THREADS=3`, `SOURCE_FETCH_TIMEOUT_SECONDS=20`, `WORKER_COUNT=1`, and `FACE_REQUEST_CONCURRENCY=2`. For a shared 8-vCPU / 16 GB VPS, set the service's hard CPU limit to 3 cores and memory limit to 5 GB. Docker Compose enforces this quota; when deploying the Dockerfile directly, configure the same CPU limit in EasyPanel. The Python inference thread budget is also capped at three even if an old environment requests more. Measure latency and resource usage before increasing concurrency. The Dockerfile deliberately does not use Uvicorn `--limit-concurrency`; heavy face requests are gated inside FastAPI so `/health` remains responsive during indexing.
 
 For Compose deployments:
 
@@ -72,6 +72,7 @@ Set these in NestJS:
 IMAGE_MODEL_URL=http://127.0.0.1:8010
 IMAGE_MODEL_API_KEY=replace-with-your-api-key
 IMAGE_MODEL_QDRANT_COLLECTION=album_faces_insightface
+FACE_MODEL_EXPECTED_NAME=buffalo_s
 ```
 
 Use each returned `embedding` as the Qdrant vector and `boxPercent` as your payload box.
@@ -79,12 +80,32 @@ Use each returned `embedding` as the Qdrant vector and `boxPercent` as your payl
 For stricter same-person grouping in NestJS, these env vars are supported:
 
 ```env
-FACE_CLUSTER_SIMILARITY=0.58
-FACE_CLUSTER_PAIR_SIMILARITY=0.52
-FACE_MATCH_SIMILARITY=0.52
+FACE_CLUSTER_SIMILARITY=0.60
+FACE_CLUSTER_PAIR_SIMILARITY=0.55
+FACE_CLUSTER_CONFLICT_SIMILARITY=0.80
+FACE_PERSON_SIMILARITY=0.58
+FACE_GLOBAL_PERSON_SIMILARITY=0.62
+FACE_SIDEBAR_DUPLICATE_SIMILARITY=0.72
+FACE_SIDEBAR_CONFLICT_DUPLICATE_SIMILARITY=0.95
+FACE_MATCH_SIMILARITY=0.46
+FACE_MATCH_MARGIN=0.06
+FACE_SEARCH_EXACT=true
+FACE_SEARCH_SCAN_LIMIT=100000
+FACE_INDEX_USE_THUMBNAIL=false
+FACE_BACKGROUND_GAP_MS=150
+FACE_ACTIVE_BACKGROUND_GAP_MS=50
+FACE_MODEL_SCAN_TIMEOUT_MS=120000
 ```
 
-Higher values reduce person mixups but can split the same person into more than one avatar. Lower values merge more aggressively.
+These are conservative starting thresholds, not measured accuracy guarantees. The search threshold is slightly lower than the grouping thresholds to retain more genuine matches without allowing loose identity-group merging. Higher values reduce false matches but can split groups or miss genuine matches. Validate with consented, representative gallery examples before deployment.
+
+Selecting an existing face now searches the actual stored vector within its gallery instead of trusting old group membership. It returns the full-frame gallery images and includes the selected photo. Exact vector search avoids approximate-index misses, while the result window grows as needed up to the configured safety ceiling. A response with `truncated: true` has reached that ceiling.
+
+After updating the backend and model service, use the existing per-gallery face reindex action to rebuild old mixed groups and obtain higher-resolution embeddings. This rebuild changes derived face metadata only; do not delete gallery photos or R2 objects. During a rebuild, the face filter may temporarily be incomplete. This release deliberately does not initiate a mass rebuild of existing galleries.
+
+### Optional larger recognition model
+
+Do not change `MODEL_NAME` or `FACE_MODEL_EXPECTED_NAME` alone. A licensed `buffalo_l` or other compatible model requires a staged migration to a fresh, model-specific Qdrant collection and freshly rebuilt person/identity grouping data. Two models can both produce 512-dimensional embeddings but those embeddings are not interchangeable. Preserve the current index until validation and plan a rollback before switching. This release keeps the existing weights and does not perform that migration.
 
 ## Safety / exposure
 

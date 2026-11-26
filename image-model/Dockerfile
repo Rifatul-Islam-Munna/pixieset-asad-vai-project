@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OPENBLAS_NUM_THREADS=1 \
     MKL_NUM_THREADS=1 \
     NUMEXPR_NUM_THREADS=1 \
-    ORT_NUM_THREADS=1
+    ORT_NUM_THREADS=3
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

@@ -266,8 +266,6 @@ export class FaceSearchService implements OnModuleInit {
 
     const sourceUrl = this.faceIndexImageUrl(image);
 
-    await this.deleteImageFaces(collectionId, imageId);
-
     let faces: DetectedFace[] | undefined;
     try {
       // Fast path: the image-model downloads the thumbnail itself. This avoids
@@ -306,6 +304,8 @@ export class FaceSearchService implements OnModuleInit {
       }
     }
 
+    // A failed inference must not remove the existing searchable faces.
+    await this.deleteImageFaces(collectionId, imageId);
     if (!faces.length) {
       await this.markFaceIndexSuccess(imageId, 0);
       return 0;
@@ -619,6 +619,9 @@ export class FaceSearchService implements OnModuleInit {
     if (!faces.length) {
       throw new BadRequestException('No usable face found in uploaded image');
     }
+    if (faces.length !== 1) {
+      throw new BadRequestException('Upload a photo with just the person you want to find.');
+    }
 
     return this.searchByVectors(
       collection._id.toString(),
@@ -664,21 +667,16 @@ export class FaceSearchService implements OnModuleInit {
       const vector = this.normalizeVector(face.vector);
       if (!vector) continue;
 
-      const match = working
-        .map((person) => ({ person, score: this.cosine(vector, person.centroid) }))
-        .filter(({ person, score }) => score >= minSimilarity
-          && (!usedPersonIds.has(person.personKey) || score >= this.conflictMergeSimilarity()))
-        .sort((left, right) => right.score - left.score)[0]?.person;
+      const match = this.unambiguousMatch(
+        working.filter(person => !usedPersonIds.has(person.personKey)),
+        vector, minSimilarity,
+      );
 
       const personKey = match?.personKey ?? this.newPersonKey(collectionId, imageId, index);
-      const linkedGlobal = match?.identityKey
-        ? globalPeople.find((person) => person.identityKey === match.identityKey)
-        : undefined;
-      const globalMatch = linkedGlobal ?? globalPeople
-        .map((person) => ({ person, score: this.cosine(vector, person.centroid) }))
-        .filter(({ person, score }) => score >= this.globalPersonSimilarity()
-          && (!usedIdentityKeys.has(person.identityKey) || score >= this.conflictMergeSimilarity()))
-        .sort((left, right) => right.score - left.score)[0]?.person;
+      const globalMatch = this.unambiguousMatch(
+        globalPeople.filter(person => !usedIdentityKeys.has(person.identityKey)),
+        vector, this.globalPersonSimilarity(),
+      );
       const identityKey = globalMatch?.identityKey ?? this.newIdentityKey(userId, personKey);
       const area = this.boxArea(face.box);
       const oldRepresentativeArea = match?.representativeArea ?? 0;
@@ -1166,9 +1164,9 @@ export class FaceSearchService implements OnModuleInit {
     // keeps the same "one card per person" behavior without pairwise clustering.
     const sidebarByIdentity = new Map<string, any>();
     for (const person of people) {
-      const key =
-        String(person.identityKey ?? '').trim() ||
-        String(person.personKey ?? '').trim();
+      // Keep distinct collection groups visible even if an older global
+      // identity incorrectly linked them together.
+      const key = String(person.personKey ?? '').trim();
       if (!key) continue;
 
       const current = sidebarByIdentity.get(key);
@@ -1273,194 +1271,28 @@ export class FaceSearchService implements OnModuleInit {
 
   async searchCollectionByFaceId(collectionIdOrSlug: string, faceId: string) {
     const collection = await this.assertCollectionFeature(
-      collectionIdOrSlug,
-      'advancedFaceSearch',
-      'Advanced Face Search',
+      collectionIdOrSlug, 'advancedFaceSearch', 'Advanced Face Search',
     );
     const collectionId = collection._id.toString();
-
-    // Fast path: newly indexed people persist the exact photo membership in
-    // MongoDB. Clicking a face becomes one indexed Mongo lookup + one image
-    // query and never touches thousands of vectors.
-    const person = await this.facePersonModel
-      .findOne({ collectionId, representativeFaceId: faceId })
-      .select('personKey identityKey imageIds imageCount')
-      .lean();
-    const relatedPeople = person?.identityKey
-      ? await this.facePersonModel
-          .find({ collectionId, identityKey: person.identityKey })
-          .select('personKey imageIds imageCount')
-          .lean()
-      : person
-        ? [person]
-        : [];
-    const cachedImageIds = [
-      ...new Set(
-        relatedPeople
-          .flatMap((row) =>
-            Array.isArray(row.imageIds)
-              ? row.imageIds.map(String)
-              : [],
-          )
-          .filter(Boolean),
-      ),
-    ];
-
-    const cachedMembershipComplete =
-      cachedImageIds.length > 0 &&
-      relatedPeople.length > 0 &&
-      relatedPeople.every((row) => {
-        const ids = Array.isArray(row.imageIds)
-          ? new Set(row.imageIds.map(String).filter(Boolean))
-          : new Set<string>();
-        return ids.size >= Math.max(0, Number(row.imageCount || 0));
-      });
-
-    if (cachedMembershipComplete) {
-      const order = new Map(
-        cachedImageIds.map((imageId, index) => [imageId, index]),
-      );
-      const images = await this.imageModel
-        .find({ _id: { $in: cachedImageIds }, collectionId })
-        .select('+originalObjectKey userId collectionId setId url thumbnailUrl blurDataUrl originalName filename mimetype mediaType width height watermarked order metadata')
-        .lean();
-      return {
-        collectionId,
-        count: images.length,
-        cacheHit: true,
-        images: images
-          .map((image) => ({
-            ...this.publicFaceResultImage(image, collection),
-            faceScore: 1,
-          }))
-          .sort(
-            (left, right) =>
-              (order.get(left._id.toString()) ?? Number.MAX_SAFE_INTEGER) -
-              (order.get(right._id.toString()) ?? Number.MAX_SAFE_INTEGER),
-          ),
-      };
-    }
-
-    if (!this.ready || !this.qdrant) {
+    if (!(await this.ensureReady()) || !this.qdrant) {
       throw new BadRequestException('Face search is not ready');
     }
 
-    // Legacy FacePerson rows can be missing imageIds even though Qdrant already
-    // has personId payloads. Read only those tiny payloads first; this is much
-    // cheaper than fetching a vector and running a wide similarity search.
-    if (relatedPeople.length) {
-      const personKeys = [
-        ...new Set(
-          relatedPeople
-            .map((row) => String((row as any).personKey ?? '').trim())
-            .filter(Boolean),
-        ),
-      ];
-      if (personKeys.length) {
-        const payloadRows = await Promise.all(
-          personKeys.map(async (personKey) => {
-            const page = await this.qdrant!.scroll(this.vectorCollection(), {
-              limit: this.configNumber(
-                'FACE_SEARCH_PERSON_PAYLOAD_LIMIT',
-                10000,
-                100,
-                50000,
-              ),
-              with_payload: true,
-              with_vector: false,
-              filter: {
-                must: [
-                  { key: 'collectionId', match: { value: collectionId } },
-                  { key: 'personId', match: { value: personKey } },
-                ],
-              },
-            });
-            const imageIds = [
-              ...new Set(
-                (page.points ?? [])
-                  .map((point) =>
-                    String((point.payload as any)?.imageId ?? '').trim(),
-                  )
-                  .filter(Boolean),
-              ),
-            ];
-            return { personKey, imageIds };
-          }),
-        );
-
-        const payloadImageIds = [
-          ...new Set(payloadRows.flatMap((row) => row.imageIds)),
-        ];
-        if (payloadImageIds.length) {
-          await Promise.all(
-            payloadRows.map((row) =>
-              this.facePersonModel
-                .updateOne(
-                  { collectionId, personKey: row.personKey },
-                  {
-                    $set: {
-                      imageIds: row.imageIds,
-                      imageCount: row.imageIds.length,
-                    },
-                  },
-                )
-                .catch(() => undefined),
-            ),
-          );
-          const images = await this.imageModel
-            .find({ _id: { $in: payloadImageIds }, collectionId })
-            .select('+originalObjectKey userId collectionId setId url thumbnailUrl blurDataUrl originalName filename mimetype mediaType width height watermarked order metadata')
-            .lean();
-          return {
-            collectionId,
-            count: images.length,
-            cacheHit: 'qdrant-payload',
-            images: images.map((image) => ({
-              ...this.publicFaceResultImage(image, collection),
-              faceScore: 1,
-            })),
-          };
-        }
-      }
-    }
-
-    // Final compatibility fallback for very old vectors that do not carry a
-    // personId payload. Run one similarity search and persist the membership.
-    const retrievedPoints = await this.qdrant.retrieve(this.vectorCollection(), {
-      ids: [faceId],
-      with_vector: true,
-      with_payload: true,
+    // A cached person/identity membership is not proof of a face match.
+    // Always verify against the exact face selected in this gallery.
+    const points = await this.qdrant.retrieve(this.vectorCollection(), {
+      ids: [faceId], with_vector: true, with_payload: true,
     });
-    const targetPoint = retrievedPoints[0] as FacePoint | undefined;
-    const targetVector = targetPoint ? this.pointVector(targetPoint) : undefined;
-
-    if (!targetVector || targetPoint?.payload?.collectionId !== collectionId) {
-      throw new BadRequestException('Face not found');
+    const target = points[0] as FacePoint | undefined;
+    const vector = target ? this.pointVector(target) : undefined;
+    if (!target || target.payload?.collectionId !== collectionId ||
+        !vector || vector.length !== INSIGHT_VECTOR_SIZE || !this.normalizeVector(vector)) {
+      throw new BadRequestException('Face not found. Refresh the face list and try again.');
     }
 
     const result = await this.searchByVectors(
-      collectionId,
-      [targetVector],
-      collection,
+      collectionId, [vector], collection, target.payload?.imageId,
     );
-    if (person && result.images.length) {
-      const imageIds = result.images.map((image: any) =>
-        String(image._id ?? image.id ?? ''),
-      ).filter(Boolean);
-      await this.facePersonModel
-        .updateMany(
-          person.identityKey
-            ? { collectionId, identityKey: person.identityKey }
-            : { _id: person._id },
-          {
-            $set: {
-              imageIds,
-              imageCount: imageIds.length,
-            },
-          },
-        )
-        .catch(() => undefined);
-    }
     return { ...result, cacheHit: false };
   }
 
@@ -1593,82 +1425,62 @@ export class FaceSearchService implements OnModuleInit {
     };
   }
 
-  private async searchByVectors(collectionId: string, vectors: number[][], collection?: any) {
-    if (!this.qdrant) {
-      throw new BadRequestException('Face search is not ready');
-    }
-
-    const minSimilarity = this.faceThreshold(
-      'FACE_MATCH_SIMILARITY',
-      'FACE_MATCH_DISTANCE',
-      0.40,
-    );
-    const normalizedQueries = vectors
-      .map((vector) => this.normalizeVector(vector))
+  private async searchByVectors(
+    collectionId: string, vectors: number[][], collection?: any, selectedImageId?: string,
+  ) {
+    if (!this.qdrant) throw new BadRequestException('Face search is not ready');
+    const minSimilarity = this.faceThreshold('FACE_MATCH_SIMILARITY', 'FACE_MATCH_DISTANCE', 0.46);
+    const queries = vectors.filter(vector => vector.length === INSIGHT_VECTOR_SIZE)
+      .map(vector => this.normalizeVector(vector))
       .filter((vector): vector is number[] => Boolean(vector));
-    if (!normalizedQueries.length) {
-      return { collectionId, count: 0, images: [] };
-    }
+    if (!queries.length) return { collectionId, count: 0, images: [], truncated: false };
 
-    const limit = this.configNumber(
-      'FACE_SEARCH_SCAN_LIMIT',
-      10000,
-      1,
-      100000,
-    );
-
-    // Let Qdrant's HNSW index do the similarity work. The previous code
-    // downloaded every 512-d vector into Nest and compared them in JS, which
-    // caused huge CPU/RAM spikes on large wedding galleries.
-    const responses = await Promise.all(
-      normalizedQueries.map((vector) =>
-        this.qdrant!.search(this.vectorCollection(), {
-          vector,
-          limit,
-          score_threshold: minSimilarity,
-          with_payload: true,
-          with_vector: false,
-          filter: {
-            must: [{ key: 'collectionId', match: { value: collectionId } }],
-          },
-        }),
-      ),
-    );
-
+    const maxResults = Math.floor(this.configNumber('FACE_SEARCH_SCAN_LIMIT', 100000, 1, 100000));
+    const exact = !['false','0','off','no'].includes(String(
+      this.configService.get<string>('FACE_SEARCH_EXACT') ?? 'true',
+    ).trim().toLowerCase());
     const similarityMap = new Map<string, number>();
-    for (const item of responses.flat()) {
-      const imageId = String((item.payload as any)?.imageId ?? '');
-      if (!imageId) continue;
-      similarityMap.set(
-        imageId,
-        Math.max(
-          similarityMap.get(imageId) ?? Number.NEGATIVE_INFINITY,
-          Number(item.score ?? 0),
-        ),
-      );
+    let truncated = false;
+    // The selected point is itself a confirmed match. Never substitute a cached
+    // group member or a different reference face.
+    if (selectedImageId) similarityMap.set(String(selectedImageId), 1);
+
+    for (const vector of queries) {
+      // Most searches return far fewer than a full gallery. Grow the native
+      // Qdrant result window only when needed, instead of loading every vector.
+      let limit = Math.min(512, maxResults);
+      while (true) {
+        const results = await this.qdrant.search(this.vectorCollection(), {
+          vector, limit, score_threshold: minSimilarity,
+          params: exact ? { exact: true } : { hnsw_ef: 128 },
+          with_payload: ['collectionId', 'imageId'], with_vector: false,
+          filter: { must: [{ key: 'collectionId', match: { value: collectionId } }] },
+        });
+        for (const item of results) {
+          const payload = item.payload as FacePoint['payload'];
+          const imageId = String(payload?.imageId ?? '');
+          const score = Number(item.score);
+          if (!imageId || payload?.collectionId !== collectionId ||
+              !Number.isFinite(score) || score < minSimilarity) continue;
+          similarityMap.set(imageId, Math.max(similarityMap.get(imageId) ?? 0, Math.min(1, score)));
+        }
+        if (results.length < limit) break;
+        if (limit >= maxResults) { truncated = true; break; }
+        limit = Math.min(maxResults, limit * 4);
+      }
     }
-
     const imageIds = [...similarityMap.keys()];
-    const images = imageIds.length
-      ? await this.imageModel
-          .find({ _id: { $in: imageIds }, collectionId })
-          .select('+originalObjectKey userId collectionId setId url thumbnailUrl blurDataUrl originalName filename mimetype mediaType width height watermarked order metadata')
-          .lean()
-      : [];
+    const images = imageIds.length ? await this.imageModel
+      .find({ _id: { $in: imageIds }, collectionId })
+      .select('+originalObjectKey userId collectionId setId url thumbnailUrl blurDataUrl originalName filename mimetype mediaType width height watermarked order metadata')
+      .lean() : [];
     const resolvedCollection = collection ?? await this.findCollection(collectionId);
-
     return {
-      collectionId,
-      count: images.length,
-      images: images
-        .map((image) => ({
-          ...this.publicFaceResultImage(image, resolvedCollection),
-          faceScore: Math.max(
-            0,
-            similarityMap.get(image._id.toString()) ?? 0,
-          ),
-        }))
-        .sort((left, right) => right.faceScore - left.faceScore),
+      collectionId, count: images.length, truncated,
+      images: images.map(image => ({
+        ...this.publicFaceResultImage(image, resolvedCollection),
+        faceScore: similarityMap.get(image._id.toString()) ?? 0,
+      })).sort((left, right) => right.faceScore - left.faceScore),
     };
   }
 
@@ -1687,8 +1499,8 @@ export class FaceSearchService implements OnModuleInit {
    *   Pass 4: Final merge to catch groups that became similar after absorption
    */
   private clusterPoints(points: FacePoint[]): FaceGroup[] {
-    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.16);
-    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.16);
+    const minSimilarity = this.faceThreshold('FACE_CLUSTER_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.60);
+    const minPairSimilarity = this.faceThreshold('FACE_CLUSTER_PAIR_SIMILARITY', 'FACE_CLUSTER_DISTANCE', 0.55);
 
     const uniquePoints = this.dedupeSameImageFaces(points);
     let groups = this.personIdGroups(uniquePoints);
@@ -1723,8 +1535,8 @@ export class FaceSearchService implements OnModuleInit {
 
   private visibleFaceGroups(groups: FaceGroup[]) {
     const sortedGroups = [...groups].sort((a, b) => this.groupPhotoCount(b) - this.groupPhotoCount(a));
-    const duplicateSimilarity = this.configNumber('FACE_SIDEBAR_DUPLICATE_SIMILARITY', 0.22, 0.1, 0.99);
-    const conflictDuplicateSimilarity = this.configNumber('FACE_SIDEBAR_CONFLICT_DUPLICATE_SIMILARITY', 0.24, 0.1, 0.99);
+    const duplicateSimilarity = this.configNumber('FACE_SIDEBAR_DUPLICATE_SIMILARITY', 0.72, 0.1, 0.99);
+    const conflictDuplicateSimilarity = this.configNumber('FACE_SIDEBAR_CONFLICT_DUPLICATE_SIMILARITY', 0.95, 0.1, 0.99);
     const visible: FaceGroup[] = [];
 
     for (const group of sortedGroups) {
@@ -1797,7 +1609,7 @@ export class FaceSearchService implements OnModuleInit {
           const bestScore = this.bestGroupPairSimilarity(left, right);
           const conflict = this.groupsConflictInSameImage(left, right);
           if (bestScore < minPairSimilarity) continue;
-          if (conflict && bestScore < this.conflictMergeSimilarity()) continue;
+          if (conflict) continue;
           left.points.push(...right.points);
           left.centroid = this.centroid(left.points);
           left.representative = this.bestRepresentative(left.points);
@@ -1823,61 +1635,58 @@ export class FaceSearchService implements OnModuleInit {
     return best;
   }
 
+  private unambiguousMatch<T extends { centroid: number[] }>(candidates: T[], vector: number[], threshold: number): T | undefined {
+    const gap = this.configNumber('FACE_MATCH_MARGIN', 0.06, 0, 0.3);
+    const ranked = candidates.filter(candidate => candidate.centroid.length === vector.length)
+      .map(candidate => ({ candidate, score: this.cosine(vector, candidate.centroid) }))
+      .filter(entry => Number.isFinite(entry.score))
+      .sort((a,b) => b.score - a.score);
+    const best = ranked[0];
+    if (!best || best.score < threshold || (ranked[1] && best.score - ranked[1].score < gap)) return undefined;
+    return best.candidate;
+  }
+
   private conflictMergeSimilarity() {
-    return this.configNumber('FACE_CLUSTER_CONFLICT_SIMILARITY', 0.30, 0.1, 0.99);
+    return this.configNumber('FACE_CLUSTER_CONFLICT_SIMILARITY', 0.80, 0.1, 0.99);
   }
 
   private personSimilarity() {
-    return this.configNumber('FACE_PERSON_SIMILARITY', 0.16, 0.1, 0.99);
+    return this.configNumber('FACE_PERSON_SIMILARITY', 0.58, 0.1, 0.99);
   }
 
   private globalPersonSimilarity() {
-    return this.configNumber('FACE_GLOBAL_PERSON_SIMILARITY', 0.24, 0.1, 0.99);
+    return this.configNumber('FACE_GLOBAL_PERSON_SIMILARITY', 0.62, 0.1, 0.99);
   }
 
   private faceIndexGapMs(priority = false) {
     if (priority) {
       return this.configNumber(
         'FACE_ACTIVE_BACKGROUND_GAP_MS',
-        250,
+        50,
         0,
         5000,
       );
     }
-    return this.configNumber('FACE_BACKGROUND_GAP_MS', 750, 0, 30000);
+    return this.configNumber('FACE_BACKGROUND_GAP_MS', 150, 0, 30000);
   }
 
   private faceIndexImageUrl(image: IndexedImage) {
     const metadata = (image.metadata ?? {}) as Record<string, any>;
-    const originalObjectKey =
-      String(image.originalObjectKey ?? '').trim() ||
+    const originalObjectKey = String(image.originalObjectKey ?? '').trim() ||
       String(metadata.directUploadObjectKey ?? '').trim();
-
-    // Keep face-detection input quality equivalent to the previous 720px
-    // thumbnail even though the public UI thumbnail is now only 320px/on-demand.
-    // The permanent small AVIF is the face-analysis source, so this optimization
-    // changes storage/bandwidth only, not the detector/matcher behavior.
+    const useThumbnail = !['0', 'false', 'no', 'off'].includes(String(
+      this.configService.get<string>('FACE_INDEX_USE_THUMBNAIL') ?? 'false',
+    ).trim().toLowerCase());
+    // Use the existing full-frame, higher-resolution gallery derivative.
+    // Do not crop, replace or publish an unwatermarked copy of the original.
     if (originalObjectKey && this.imagorService.isEnabled()) {
-      const watermark =
-        (metadata.imagorWatermark ??
-          metadata.imgproxyWatermark) as ImagorWatermark | undefined;
-      const urls = this.imagorService.imageUrls(
-        originalObjectKey,
-        watermark,
-        {
-          width: Number(image.width) || undefined,
-          height: Number(image.height) || undefined,
-        },
-      );
-      if (urls?.responsive?.small) return urls.responsive.small;
+      const watermark = (metadata.imagorWatermark ?? metadata.imgproxyWatermark) as ImagorWatermark | undefined;
+      const urls = this.imagorService.imageUrls(originalObjectKey, watermark, {
+        width: Number(image.width) || undefined, height: Number(image.height) || undefined,
+      });
+      const source = useThumbnail ? urls?.responsive?.small : urls?.url;
+      if (source) return source;
     }
-
-    const raw = String(
-      this.configService.get<string>('FACE_INDEX_USE_THUMBNAIL') ?? 'true',
-    )
-      .trim()
-      .toLowerCase();
-    const useThumbnail = !['0', 'false', 'no', 'off'].includes(raw);
     return useThumbnail && image.thumbnailUrl ? image.thumbnailUrl : image.url;
   }
 
@@ -1980,6 +1789,10 @@ export class FaceSearchService implements OnModuleInit {
     this.logger.log(`Qdrant connected; collection ready: ${collection}`);
   }
 
+  private expectedImageModelName() {
+    return this.configService.get<string>('FACE_MODEL_EXPECTED_NAME')?.trim() || 'buffalo_s';
+  }
+
   private async checkImageModel() {
     const url = this.imageModelUrl();
     if (!url) {
@@ -2007,6 +1820,13 @@ export class FaceSearchService implements OnModuleInit {
       return;
     }
 
+    const health = await response.json().catch(() => null);
+    const expectedModel = this.expectedImageModelName();
+    if (!health?.ok || health.model !== expectedModel) {
+      this.ready = false;
+      this.logger.error(`Face model mismatch or unhealthy model; expected ${expectedModel}. Use the existing embedding model until a separate index has been rebuilt.`);
+      return;
+    }
     this.ready = Boolean(this.qdrant);
     if (this.ready) {
       this.logger.log(`External image model connected: ${url}; qdrant collection=${this.vectorCollection()}`);
@@ -2033,7 +1853,14 @@ export class FaceSearchService implements OnModuleInit {
   }
 
   private detectedFacesFromPayload(payload: any): DetectedFace[] {
-    const faces = Array.isArray(payload?.faces) ? payload.faces : [];
+    if (!Array.isArray(payload?.faces)) throw new Error('Invalid face model response');
+    // Older model deployments omit this response field, but must still pass
+    // the model-name check at /health. New deployments verify every response.
+    if (payload.model && payload.model !== this.expectedImageModelName()) {
+      this.ready = false;
+      throw new Error('Face embedding model changed; do not mix incompatible vectors');
+    }
+    const faces = payload.faces;
     return faces
       .map((face: any) => ({
         vector: Array.isArray(face.embedding) ? face.embedding.map(Number) : [],
@@ -2044,7 +1871,13 @@ export class FaceSearchService implements OnModuleInit {
           height: Number(face.boxPercent?.height ?? 0),
         },
       }))
-      .filter((face: DetectedFace) => face.vector.length === INSIGHT_VECTOR_SIZE);
+      .map((face: DetectedFace) => {
+        const vector = face.vector.length === INSIGHT_VECTOR_SIZE ? this.normalizeVector(face.vector) : undefined;
+        if (!vector || !Object.values(face.box).every(Number.isFinite) || face.box.width <= 0 || face.box.height <= 0) {
+          throw new Error('Invalid face embedding or box; retry the image instead of dropping faces');
+        }
+        return { ...face, vector };
+      });
   }
 
   private async extractFacesFromImageUrl(
@@ -2091,6 +1924,7 @@ export class FaceSearchService implements OnModuleInit {
       method: 'POST',
       headers: this.imageModelHeaders(),
       body: form,
+      signal: AbortSignal.timeout(this.configNumber('FACE_MODEL_SCAN_TIMEOUT_MS', 120000, 5000, 120000)),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
@@ -2263,7 +2097,7 @@ export class FaceSearchService implements OnModuleInit {
           }
 
           const conflict = this.groupsConflictInSameImage(small, candidate);
-          if (conflict && bestCandidateScore < this.conflictMergeSimilarity()) continue;
+          if (conflict) continue;
 
           scores.push({ target: candidate, score: bestCandidateScore });
         }
@@ -2294,9 +2128,9 @@ export class FaceSearchService implements OnModuleInit {
     const bestPairScore = this.bestGroupPairSimilarity(left, right);
     const conflict = this.groupsConflictInSameImage(left, right);
 
-    if (conflict && bestPairScore < this.conflictMergeSimilarity()) return false;
+    if (conflict) return false;
+    if (this.cosine(left.centroid, right.centroid) < minSimilarity) return false;
     if (bestPairScore >= minPairSimilarity) return true;
-    if (this.cosine(left.centroid, right.centroid) >= minSimilarity) return true;
 
     // Collect all cross-pair similarities to check both best-pair and average.
     const pairSimilarities: number[] = [];

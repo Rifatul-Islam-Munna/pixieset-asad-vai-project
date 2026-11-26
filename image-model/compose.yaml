@@ -4,7 +4,8 @@ services:
     container_name: insightface-vector-api
     restart: unless-stopped
     environment:
-      # Choose buffalo_s for a 2-core VPS. buffalo_l is slower and needs more RAM.
+      # Keep the current embedding model for existing galleries.
+      # Changing model weights requires a separate, rebuilt face index.
       MODEL_NAME: buffalo_s
       MODEL_ROOT: /models
 
@@ -17,8 +18,8 @@ services:
       # Still below normal process priority, but no longer intentionally sleeps
       # as much between detector passes. This speeds large queues without adding
       # another model copy in RAM.
-      PROCESS_NICE: "7"
-      SCAN_YIELD_MS: "5"
+      PROCESS_NICE: "5"
+      SCAN_YIELD_MS: "1"
       GROUP_SCAN: "true"
       MIRROR_SCAN: "true"
       TILE_SIZE: "896"
@@ -32,12 +33,12 @@ services:
       # Set a long random value. NestJS must send this in the x-api-key header.
       API_KEY: change-this-to-a-long-random-secret
 
-      # Keep CPU libraries from oversubscribing a 2-core VPS.
+      # Explicit ONNX thread budget; keep other CPU libraries single-threaded.
       OMP_NUM_THREADS: "1"
       OPENBLAS_NUM_THREADS: "1"
       MKL_NUM_THREADS: "1"
       NUMEXPR_NUM_THREADS: "1"
-      ORT_NUM_THREADS: "1"
+      ORT_NUM_THREADS: "3"
     volumes:
       # Persists downloaded model files across container restarts.
       - insightface_models:/models
@@ -51,10 +52,9 @@ services:
       timeout: 8s
       retries: 3
       start_period: 90s
-    mem_limit: 3g
-    # One model worker keeps RAM predictable. Give that worker enough CPU to
-    # finish each photo quickly while remaining well below a 3-core budget.
-    cpus: 1.5
+    mem_limit: 5g
+    # Hard CPU quota: even a larger model must stay within three CPU cores.
+    cpus: 3.0
 
 volumes:
   insightface_models:
