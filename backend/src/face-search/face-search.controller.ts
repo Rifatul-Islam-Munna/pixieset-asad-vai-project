@@ -36,6 +36,7 @@ export class FaceSearchController {
   }
 
   @Post(':collectionId')
+  @Header('Cache-Control', 'private, no-store')
   @UseInterceptors(FileInterceptor('file', {
     storage: memoryStorage(),
     limits: { fileSize: 1024 * 1024 * 40 },

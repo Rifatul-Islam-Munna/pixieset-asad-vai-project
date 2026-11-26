@@ -10,7 +10,7 @@ const basis = (first = 1, second = 0) => {
 const unitWithScore = (score: number) => basis(score, Math.sqrt(1 - score * score));
 const box = { x: 10, y: 10, width: 15, height: 15 };
 const hit = (imageId: string, score: number, collectionId = galleryId) => ({
-  id: imageId + '-face', score, payload: { collectionId, imageId },
+  id: imageId + '-face', score, vector: unitWithScore(score), payload: { collectionId, imageId, box },
 });
 
 function setup(settings: Record<string, string> = {}) {
@@ -47,18 +47,54 @@ describe('Face-search accuracy safeguards', () => {
   it('uses the selected face, includes its source photo, filters low scores and other galleries, and deduplicates full-frame results', async () => {
     const { service, qdrant, imageModel, facePersonModel } = setup();
     qdrant.retrieve.mockResolvedValue([{ id: 'chosen-face', vector: basis(), payload: { collectionId: galleryId, imageId: 'chosen-photo', box } }]);
-    qdrant.search.mockResolvedValue([hit('same-person', .83), hit('same-person', .77), hit('additional-match', .50), hit('borderline', .49), hit('wrong-person', .31), hit('other-gallery', .99, 'gallery-b')]);
+    qdrant.search.mockResolvedValue([hit('same-person', .83), hit('same-person', .77), hit('additional-match', .60), hit('borderline', .59), hit('wrong-person', .31), hit('other-gallery', .99, 'gallery-b')]);
 
     const result = await service.searchCollectionByFaceId(galleryId, 'chosen-face');
 
-    expect(result.images.map(image => [image._id, image.faceScore])).toEqual([['chosen-photo', 1], ['same-person', .83], ['additional-match', .50]]);
+    expect(result.images.map(image => [image._id, image.faceScore])).toEqual([['chosen-photo', 1], ['same-person', .83], ['additional-match', .60]]);
     expect(result.images[0]).toMatchObject({ url: 'https://example.test/full/chosen-photo.jpg', width: 2400, height: 1600 });
     expect(qdrant.retrieve).toHaveBeenCalledWith(expect.any(String), { ids: ['chosen-face'], with_vector: true, with_payload: true });
     expect(qdrant.search).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-      score_threshold: .50, params: { exact: true }, filter: { must: [{ key: 'collectionId', match: { value: galleryId } }] }, with_vector: false,
+      score_threshold: .60, params: { exact: true }, filter: { must: [{ key: 'collectionId', match: { value: galleryId } }] }, with_vector: true,
     }));
     expect(imageModel.find).toHaveBeenCalledWith({ collectionId: galleryId, _id: { $in: ['chosen-photo', 'same-person', 'additional-match'] } });
     expect(facePersonModel.find).not.toHaveBeenCalled();
+  });
+
+  it('rejects falsely high database scores and missing or malformed vectors', async () => {
+    const { service, qdrant } = setup();
+    qdrant.retrieve.mockResolvedValue([{ id: 'chosen-face', vector: basis(), payload: { collectionId: galleryId, imageId: 'chosen-photo', box } }]);
+    qdrant.search.mockResolvedValue([
+      hit('valid', .86),
+      { ...hit('false-high-score', .99), vector: unitWithScore(.2) },
+      { ...hit('wrong-dimension', .99), vector: [1, 0] },
+      { ...hit('not-finite', .99), vector: basis(Number.NaN) },
+      { ...hit('missing-vector', .99), vector: undefined },
+      { ...hit('missing-box', .99), payload: { collectionId: galleryId, imageId: 'missing-box' } },
+      { ...hit('verified-score', .95), vector: unitWithScore(.71) },
+    ]);
+    const result = await service.searchCollectionByFaceId(galleryId, 'chosen-face');
+    expect(result.images.map(image => [image._id, image.faceScore])).toEqual([
+      ['chosen-photo', 1], ['valid', .86], ['verified-score', .71],
+    ]);
+    expect(result.matching).toEqual({ policyVersion: 2, similarityThreshold: .60, metric: 'cosine', verifiedVectors: true, exact: true });
+  });
+
+  it('reports the configured threshold and applies it to independently computed scores', async () => {
+    const { internals, qdrant } = setup({ FACE_MATCH_SIMILARITY: '0.64' });
+    qdrant.search.mockResolvedValue([hit('below', .63), hit('above', .65), { ...hit('false-high', .99), vector: unitWithScore(.62) }]);
+    const result = await internals.searchByVectors(galleryId, [basis()], { _id: galleryId });
+    expect(result.images.map((image: any) => image._id)).toEqual(['above']);
+    expect(result.matching.similarityThreshold).toBe(.64);
+  });
+
+  it('accepts only the expected cosine vector collection schema', () => {
+    const { internals } = setup();
+    expect(internals.isCompatibleVectorSchema({ size: 512, distance: 'Cosine' })).toBe(true);
+    expect(internals.isCompatibleVectorSchema({ size: 512, distance: 'Euclid' })).toBe(false);
+    expect(internals.isCompatibleVectorSchema({ size: 128, distance: 'Cosine' })).toBe(false);
+    expect(internals.isCompatibleVectorSchema({ face: { size: 512, distance: 'Cosine' } })).toBe(false);
+    expect(internals.isCompatibleVectorSchema(null)).toBe(false);
   });
 
   it('uses authoritative point boxes for sidebar previews and rejects mismatched, deleted, or invalid representatives', async () => {
@@ -167,14 +203,15 @@ describe('Face-search accuracy safeguards', () => {
     expect(qdrant.search).not.toHaveBeenCalled();
   });
 
-  it('expands a full result window instead of silently cutting matching photos at 512', async () => {
+  it('paginates exact result vectors in bounded batches instead of cutting matches at 512', async () => {
     const { internals, qdrant } = setup();
     const hits = Array.from({ length: 513 }, (_, i) => hit('photo-' + i, .8));
-    qdrant.search.mockResolvedValueOnce(hits.slice(0, 512)).mockResolvedValueOnce(hits);
+    qdrant.search.mockResolvedValueOnce(hits.slice(0, 512)).mockResolvedValueOnce(hits.slice(512));
     const result = await internals.searchByVectors(galleryId, [basis()], { _id: galleryId });
     expect(result.count).toBe(513);
     expect(result.truncated).toBe(false);
-    expect(qdrant.search.mock.calls.map(call => call[1].limit)).toEqual([512, 2048]);
+    expect(qdrant.search.mock.calls.map(call => call[1].limit)).toEqual([512, 512]);
+    expect(qdrant.search.mock.calls[1][1].offset).toBe(512);
   });
 
   it('reports when the configured safety ceiling is reached', async () => {

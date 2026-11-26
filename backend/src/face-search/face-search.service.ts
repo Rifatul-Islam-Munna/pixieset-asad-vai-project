@@ -57,6 +57,7 @@ const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
 // were incorrectly marked complete during an image-model/Qdrant outage are retried.
 const FACE_INDEX_VERSION = 9;
 const MIN_SIDEBAR_PHOTOS = 2;
+const FACE_SEARCH_POLICY_VERSION = 2;
 const DEFAULT_FACE_REINDEX_COOLDOWN_HOURS = 24;
 
 /**
@@ -96,7 +97,7 @@ export class FaceSearchService implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log(
-      `Face search boot: external image model=${this.imageModelUrl() || 'not configured'}; qdrant collection=${this.vectorCollection()}; vectorSize=${this.vectorSize()}`,
+      `Face search boot: external image model=${this.imageModelUrl() || 'not configured'}; qdrant collection=${this.vectorCollection()}; vectorSize=${this.vectorSize()}; searchPolicy=${FACE_SEARCH_POLICY_VERSION}; similarityThreshold=${this.matchSimilarity()}`,
     );
     await this.refreshReadiness();
   }
@@ -1373,63 +1374,91 @@ export class FaceSearchService implements OnModuleInit {
     };
   }
 
+  private matchSimilarity() {
+    return this.faceThreshold('FACE_MATCH_SIMILARITY', 'FACE_MATCH_DISTANCE', 0.60);
+  }
+
   private async searchByVectors(
     collectionId: string, vectors: number[][], collection?: any, selectedImageId?: string,
   ) {
     if (!this.qdrant) throw new BadRequestException('Face search is not ready');
-    const minSimilarity = this.faceThreshold('FACE_MATCH_SIMILARITY', 'FACE_MATCH_DISTANCE', 0.50);
-    const queries = vectors.filter(vector => vector.length === INSIGHT_VECTOR_SIZE)
-      .map(vector => this.normalizeVector(vector))
-      .filter((vector): vector is number[] => Boolean(vector));
-    if (!queries.length) return { collectionId, count: 0, images: [], truncated: false };
-
-    const maxResults = Math.floor(this.configNumber('FACE_SEARCH_SCAN_LIMIT', 100000, 1, 100000));
+    const minSimilarity = this.matchSimilarity();
     const exact = !['false','0','off','no'].includes(String(
       this.configService.get<string>('FACE_SEARCH_EXACT') ?? 'true',
     ).trim().toLowerCase());
+    const matching = {
+      policyVersion: FACE_SEARCH_POLICY_VERSION,
+      similarityThreshold: minSimilarity,
+      metric: 'cosine' as const,
+      verifiedVectors: true,
+      exact,
+    };
+    const queries = vectors.filter(vector => vector.length === INSIGHT_VECTOR_SIZE)
+      .map(vector => this.normalizeVector(vector))
+      .filter((vector): vector is number[] => Boolean(vector));
+    if (!queries.length) return { collectionId, count: 0, images: [], truncated: false, matching };
+
+    const maxResults = Math.floor(this.configNumber('FACE_SEARCH_SCAN_LIMIT', 100000, 1, 100000));
     const similarityMap = new Map<string, number>();
     let truncated = false;
-    // The selected point is itself a confirmed match. Never substitute a cached
-    // group member or a different reference face.
+    // The selected point itself is a verified reference from this gallery.
     if (selectedImageId) similarityMap.set(String(selectedImageId), 1);
 
     for (const vector of queries) {
-      // Most searches return far fewer than a full gallery. Grow the native
-      // Qdrant result window only when needed, instead of loading every vector.
       let limit = Math.min(512, maxResults);
+      let offset = 0;
       while (true) {
         const results = await this.qdrant.search(this.vectorCollection(), {
           vector, limit, score_threshold: minSimilarity,
+          ...(exact && offset > 0 ? { offset } : {}),
           params: exact ? { exact: true } : { hnsw_ef: 128 },
-          with_payload: ['collectionId', 'imageId'], with_vector: false,
+          with_payload: ['collectionId', 'imageId', 'box'],
+          with_vector: true,
           filter: { must: [{ key: 'collectionId', match: { value: collectionId } }] },
         });
         for (const item of results) {
-          const payload = item.payload as FacePoint['payload'];
+          const point = item as FacePoint;
+          const payload = point.payload;
           const imageId = String(payload?.imageId ?? '');
-          const score = Number(item.score);
-          if (!imageId || payload?.collectionId !== collectionId ||
-              !Number.isFinite(score) || score < minSimilarity) continue;
-          similarityMap.set(imageId, Math.max(similarityMap.get(imageId) ?? 0, Math.min(1, score)));
+          // Native search is candidate retrieval, not the final acceptance check.
+          // Refuse malformed points and recompute the same metric using the actual vector.
+          if (!imageId || payload?.collectionId !== collectionId || !this.faceReference(point) ||
+              !Number.isFinite(item.score) || item.score < minSimilarity) continue;
+          const raw = this.pointVector(point);
+          const candidate = raw.length === INSIGHT_VECTOR_SIZE ? this.normalizeVector(raw) : undefined;
+          if (!candidate) continue;
+          const score = Number(Math.min(1, this.cosine(vector, candidate)).toFixed(6));
+          if (!Number.isFinite(score) || score < minSimilarity) continue;
+          similarityMap.set(imageId, Math.max(similarityMap.get(imageId) ?? 0, score));
         }
         if (results.length < limit) break;
-        if (limit >= maxResults) { truncated = true; break; }
-        limit = Math.min(maxResults, limit * 4);
+        if (exact) {
+          // Keep vector transfer bounded. Exact queries support stable offset
+          // pagination; do not send an unbounded 100,000-vector response.
+          offset += results.length;
+          if (offset >= maxResults) { truncated = true; break; }
+          limit = Math.min(512, maxResults - offset);
+        } else {
+          // Approximate rankings can shift between offset pages.
+          if (limit >= maxResults) { truncated = true; break; }
+          limit = Math.min(maxResults, limit * 4);
+        }
       }
     }
+
     const imageIds = [...similarityMap.keys()];
     const images = imageIds.length ? await this.imageModel
       .find({ _id: { $in: imageIds }, collectionId })
       .select('+originalObjectKey userId collectionId setId url thumbnailUrl blurDataUrl originalName filename mimetype mediaType width height watermarked order metadata')
       .lean() : [];
     const resolvedCollection = collection ?? await this.findCollection(collectionId);
-    return {
-      collectionId, count: images.length, truncated,
-      images: images.map(image => ({
-        ...this.publicFaceResultImage(image, resolvedCollection),
-        faceScore: similarityMap.get(image._id.toString()) ?? 0,
-      })).sort((left, right) => right.faceScore - left.faceScore),
-    };
+    const matchedImages = images.filter(image =>
+      image.mediaType !== 'video' && similarityMap.has(image._id.toString()),
+    ).map(image => ({
+      ...this.publicFaceResultImage(image, resolvedCollection),
+      faceScore: similarityMap.get(image._id.toString())!,
+    })).sort((left, right) => right.faceScore - left.faceScore);
+    return { collectionId, count: matchedImages.length, truncated, matching, images: matchedImages };
   }
 
   /**
@@ -1719,6 +1748,16 @@ export class FaceSearchService implements OnModuleInit {
 
     }
 
+    // Existing collections may have been created with different vector settings.
+    // Never interpret distances from another metric as cosine similarity.
+    const info = await this.qdrant.getCollection(collection).catch(() => null);
+    if (!this.isCompatibleVectorSchema(info?.config?.params?.vectors)) {
+      this.logger.error('Face index must use a single 512-dimensional Cosine vector. No data was changed; configure a compatible face index.');
+      this.qdrant = undefined;
+      this.ready = false;
+      return;
+    }
+
     // Keep payload filters fast even for an existing Qdrant collection. Older
     // deployments only indexed collectionId, which made personId-based clicks
     // degrade into payload scans on large galleries.
@@ -1735,6 +1774,12 @@ export class FaceSearchService implements OnModuleInit {
     );
 
     this.logger.log(`Qdrant connected; collection ready: ${collection}`);
+  }
+
+  private isCompatibleVectorSchema(schema: unknown): boolean {
+    if (!schema || typeof schema !== 'object') return false;
+    const vector = schema as { size?: unknown; distance?: unknown };
+    return vector.size === INSIGHT_VECTOR_SIZE && vector.distance === 'Cosine';
   }
 
   private expectedImageModelName() {
@@ -1945,7 +1990,10 @@ export class FaceSearchService implements OnModuleInit {
 
   private normalizeVector(vector: number[]) {
     let sum = 0;
-    for (const value of vector) sum += value * value;
+    for (const value of vector) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+      sum += value * value;
+    }
     const norm = Math.sqrt(sum);
     if (!Number.isFinite(norm) || norm <= 0) return undefined;
     return vector.map((value) => value / norm);

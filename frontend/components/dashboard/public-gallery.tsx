@@ -416,6 +416,7 @@ export function PublicGallery({
     faceListInFlightRef.current?.abort();
     faceListInFlightRef.current = null;
     setFaceResults(null);
+    setFaceMatchThreshold(null);
     setFaces([]);
     setFaceError("");
     setFaceBusy(false);
@@ -446,6 +447,7 @@ export function PublicGallery({
   const [faceBusy, setFaceBusy] = useState(false);
   const [faceError, setFaceError] = useState("");
   const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
+  const [faceMatchThreshold, setFaceMatchThreshold] = useState<number | null>(null);
   const faceSearchInFlightRef = useRef<AbortController | null>(null);
   const faceListInFlightRef = useRef<AbortController | null>(null);
   const [faceListLoading, setFaceListLoading] = useState(false);
@@ -861,13 +863,20 @@ export function PublicGallery({
     }
   }, [activeSetId, gallerySets, showSetTabs]);
 
+  // Automatic album tab changes must never discard a face-search result.
   useEffect(() => {
+    setSlideshowIndex(null);
+  }, [activeSetId]);
+  const clearFaceSearch = () => {
     faceSearchInFlightRef.current?.abort();
     faceSearchInFlightRef.current = null;
     setFaceBusy(false);
+    setFaceError("");
     setFaceResults(null);
+    setFaceMatchThreshold(null);
     setSlideshowIndex(null);
-  }, [activeSetId]);
+    setActiveImage(null);
+  };
   const apiBase = process.env.NEXT_PUBLIC_BASE_URL || "https://ai-photo-book-moment-backend.wrtsxa.easypanel.host";
   const loadMoreImages = async (setId = activeSetId) => {
     if (!collection || pageLoadingRef.current) return;
@@ -1238,6 +1247,14 @@ export function PublicGallery({
     if (faceSearchInFlightRef.current) return;
     const controller = new AbortController();
     faceSearchInFlightRef.current = controller;
+    // An empty result array is an active filter, not the unfiltered gallery.
+    // Never leave a previous person's results visible during a new request.
+    manualSetSelectionRef.current = true;
+    setFavoritesPanelOpen(false);
+    setFaceResults([]);
+    setFaceMatchThreshold(null);
+    setSlideshowIndex(null);
+    setActiveImage(null);
     setFaceBusy(true);
     setFaceError("");
     let refreshReference = false;
@@ -1250,9 +1267,23 @@ export function PublicGallery({
         refreshReference = fromSidebar && (response.status === 409 || /face not found|reference changed/i.test(String(payload?.message ?? "")));
         throw new Error(refreshReference ? "The face list changed. Select the face again after it refreshes." : payload?.message ?? "Face search failed.");
       }
-      if (!Array.isArray(payload?.data?.images)) throw new Error("Invalid face search response. Please retry.");
+      const data = payload?.data;
+      const matching = data?.matching;
+      const threshold = matching?.similarityThreshold;
+      if (matching?.policyVersion !== 2 || matching.metric !== "cosine" || matching.verifiedVectors !== true ||
+          typeof threshold !== "number" || !Number.isFinite(threshold) || threshold < 0.1 || threshold > 0.99) {
+        throw new Error("Face search is not using the updated verification policy. Please refresh after the backend is updated.");
+      }
+      if (!Array.isArray(data.images) || data.count !== data.images.length ||
+          (collection?._id && String(data.collectionId) !== String(collection._id)) ||
+          data.images.some((image: PublicImage) => !image || typeof image._id !== "string" || !image._id ||
+            typeof image.faceScore !== "number" || !Number.isFinite(image.faceScore) || image.faceScore < threshold || image.faceScore > 1) ||
+          new Set(data.images.map((image: PublicImage) => image._id)).size !== data.images.length) {
+        throw new Error("The face-search results could not be verified. Please retry.");
+      }
       setFavoritesPanelOpen(false);
-      setFaceResults(payload.data.images);
+      setFaceMatchThreshold(threshold);
+      setFaceResults(data.images);
       setSlideshowIndex(null);
       setActiveImage(null);
       if (payload.data.truncated) setFaceError("The search reached its configured result limit.");
@@ -1627,6 +1658,7 @@ export function PublicGallery({
                 )}
                 onClick={() => {
                   manualSetSelectionRef.current = true;
+                  clearFaceSearch();
                   setActiveSetId(set.id);
                 }}
                 type="button"
@@ -1638,7 +1670,7 @@ export function PublicGallery({
           <div className="public-gallery-actions -mx-1 flex min-w-0 flex-wrap items-center justify-start gap-1 px-1 pb-1 sm:gap-2 md:mx-0 md:flex-nowrap md:justify-end md:px-0 md:pb-0">
             {storeStatus && <span data-print-store-nav-host="true" />}
             <span data-public-store-cart-host="true" />
-            <button className={cn("inline-flex h-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-[#6337d8]", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} onClick={() => setFavoritesPanelOpen((value) => !value)} type="button" title="My Starred" aria-label="My Starred">
+            <button className={cn("inline-flex h-10 shrink-0 items-center justify-center border-l border-black/10 text-black/70 transition hover:text-[#6337d8]", navigationWithText ? "gap-2 px-3 text-xs font-semibold" : "w-10")} onClick={() => { clearFaceSearch(); setFavoritesPanelOpen((value) => !value); }} type="button" title="My Starred" aria-label="My Starred">
               <Star className={cn("size-5", favoritesPanelOpen && "fill-current text-amber-500")} />
               {navigationWithText && <span>Favorites</span>}
             </button>
@@ -1679,7 +1711,7 @@ export function PublicGallery({
               </>
             )}
             {faceResults && (
-              <button className="inline-flex h-10 shrink-0 items-center border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em]" onClick={() => { faceSearchInFlightRef.current?.abort(); faceSearchInFlightRef.current = null; setFaceBusy(false); setFaceError(""); setFaceResults(null); }} type="button">
+              <button className="inline-flex h-10 shrink-0 items-center border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em]" onClick={clearFaceSearch} type="button">
                 Show all
               </button>
             )}
@@ -1788,9 +1820,10 @@ export function PublicGallery({
         {faceError && !faceSheetOpen && !faceBusy && (
           <p role="alert" className="mx-4 mt-5 text-sm text-red-700 md:mx-8">{faceError}</p>
         )}
-        {faceResults && (
-          <p className="mx-4 mt-5 text-sm md:mx-8" style={{ color: accent }}>
-            {faceResults.length} matching photos found
+        {faceResults !== null && !favoritesPanelOpen && (
+          <p role="status" className="mx-4 mt-5 text-sm md:mx-8" style={{ color: accent }}>
+            {faceBusy ? "Finding matching photos…" : faceError && faceMatchThreshold === null ? "Face filter active — no verified results yet" : `Face filter active · ${faceResults.length} matching photos found`}
+            {ownerPreview && faceMatchThreshold !== null && <span className="ml-2 text-xs opacity-70">(Cosine threshold: {faceMatchThreshold.toFixed(2)})</span>}
           </p>
         )}
 
@@ -2116,7 +2149,7 @@ export function PublicGallery({
               </div>
               <button
                 className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white text-black/70 transition hover:bg-black hover:text-white"
-                onClick={() => { faceSearchInFlightRef.current?.abort(); faceSearchInFlightRef.current = null; setFaceBusy(false); setFaceSheetOpen(false); }}
+                onClick={() => { if (faceSearchInFlightRef.current) { faceSearchInFlightRef.current.abort(); faceSearchInFlightRef.current = null; setFaceBusy(false); setFaceError("Search cancelled. Select a face again or choose Show all."); } setFaceSheetOpen(false); }}
                 aria-label="Close face filter"
                 type="button"
               >
