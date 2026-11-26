@@ -87,7 +87,7 @@ FACE_PERSON_SIMILARITY=0.58
 FACE_GLOBAL_PERSON_SIMILARITY=0.62
 FACE_SIDEBAR_DUPLICATE_SIMILARITY=0.72
 FACE_SIDEBAR_CONFLICT_DUPLICATE_SIMILARITY=0.95
-FACE_MATCH_SIMILARITY=0.46
+FACE_MATCH_SIMILARITY=0.50
 FACE_MATCH_MARGIN=0.06
 FACE_SEARCH_EXACT=true
 FACE_SEARCH_SCAN_LIMIT=100000
@@ -96,6 +96,8 @@ FACE_BACKGROUND_GAP_MS=150
 FACE_ACTIVE_BACKGROUND_GAP_MS=50
 FACE_MODEL_SCAN_TIMEOUT_MS=120000
 ```
+
+The face selector only displays groups containing at least two distinct indexed photos. Single-photo groups remain indexed and can still be found by face search. Changing the display minimum or search similarity does not require reindexing.
 
 These are conservative starting thresholds, not measured accuracy guarantees. The search threshold is slightly lower than the grouping thresholds to retain more genuine matches without allowing loose identity-group merging. Higher values reduce false matches but can split groups or miss genuine matches. Validate with consented, representative gallery examples before deployment.
 

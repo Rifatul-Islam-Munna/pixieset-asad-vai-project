@@ -1213,7 +1213,8 @@ export function PublicGallery({
       setFaceIndexedImages(indexedImages);
       setFaceRetryingImages(Math.max(0, Number(payload?.data?.retryingImages ?? 0)));
       setFaceFailedImages(Math.max(0, Number(payload?.data?.failedImages ?? 0)));
-      setFaces(nextFaces);
+      // Keep the selector uncluttered even during a rolling backend deployment.
+      setFaces(nextFaces.filter(face => Number(face.photoCount) >= 2));
       setFacesIndexing(Boolean(payload?.data?.indexing) || !ready);
     } catch (error) {
       if (faceListInFlightRef.current !== controller) return;
@@ -2172,7 +2173,7 @@ export function PublicGallery({
                 <p className="mt-3 text-xs leading-5 text-[#777]">
                   {faces.length > 0
                     ? `${faces.length} ${faces.length === 1 ? "person" : "people"} found so far. You can use ${faces.length === 1 ? "this face" : "these faces"} now while the rest continue indexing.`
-                    : "Detected people will appear here immediately as photos finish indexing."}
+                    : "People will appear here once they are grouped in at least two photos."}
                 </p>
                 {faceRetryingImages > 0 && (
                   <p className="mt-1 text-xs leading-5 text-amber-700">
@@ -2186,7 +2187,7 @@ export function PublicGallery({
             )}
             {faceReady && !faceBusy && !faceListLoading && !faces.length && !facesIndexing && !faceError && (
               <p className="mt-8 text-sm leading-6 text-[#666]">
-                No faces were detected in this gallery yet.
+                No people grouped in at least two photos yet.
               </p>
             )}
             <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-5">

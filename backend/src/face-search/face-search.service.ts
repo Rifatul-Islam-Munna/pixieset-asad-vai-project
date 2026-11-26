@@ -56,6 +56,7 @@ const DEFAULT_INSIGHT_COLLECTION = 'album_faces_insightface';
 // v9 forces one slow background rebuild of older face rows so images that
 // were incorrectly marked complete during an image-model/Qdrant outage are retried.
 const FACE_INDEX_VERSION = 9;
+const MIN_SIDEBAR_PHOTOS = 2;
 const DEFAULT_FACE_REINDEX_COOLDOWN_HOURS = 24;
 
 /**
@@ -1096,17 +1097,21 @@ export class FaceSearchService implements OnModuleInit {
 
     const people = await this.facePersonModel.find({ collectionId })
       .sort({ imageCount: -1, faceCount: -1 })
-      .select('personKey representativeImageId representativeFaceId imageCount')
+      .select('personKey representativeImageId representativeFaceId imageCount imageIds')
       .maxTimeMS(3000).lean();
 
     let representatives = people.map(person => ({
       id: String(person.representativeFaceId ?? ''),
       personId: String(person.personKey ?? ''),
       imageId: String(person.representativeImageId ?? ''),
-      photoCount: Math.max(1, Number(person.imageCount || 0)),
-    }));
+      // Use unique photo membership rather than a potentially inflated scan count.
+      photoCount: person.imageIds?.length
+        ? new Set(person.imageIds.filter(Boolean).map(String)).size
+        : Math.max(0, Number(person.imageCount || 0)),
+    })).filter(person => person.photoCount >= MIN_SIDEBAR_PHOTOS)
+      .sort((a, b) => b.photoCount - a.photoCount);
     let points: FacePoint[] = [];
-    if (representatives.length) {
+    if (people.length) {
       // Verify representatives against the authoritative point payload. Old
       // person rows may refer to a different box or to a deleted face.
       const ids = [...new Set(representatives.map(person => person.id).filter(Boolean))];
@@ -1143,8 +1148,9 @@ export class FaceSearchService implements OnModuleInit {
       representatives = [...grouped.values()].map(({ point, imageIds }) => ({
         id: String(point.id), personId: String(point.payload!.personId),
         imageId: String(point.payload!.imageId), photoCount: imageIds.size,
-      })).sort((a, b) => b.photoCount - a.photoCount);
-      points = [...grouped.values()].map(group => group.point);
+      })).filter(person => person.photoCount >= MIN_SIDEBAR_PHOTOS)
+        .sort((a, b) => b.photoCount - a.photoCount);
+      points = representatives.map(person => grouped.get(person.personId)!.point);
     }
 
     const faces = await this.verifiedSidebarFaces(collection, representatives, points);
@@ -1177,6 +1183,7 @@ export class FaceSearchService implements OnModuleInit {
     const collectionId = collection._id.toString();
     const byId = new Map(points.map(point => [String(point.id), point]));
     const valid = representatives.flatMap(person => {
+      if (!Number.isFinite(person.photoCount) || person.photoCount < MIN_SIDEBAR_PHOTOS) return [];
       const point = byId.get(person.id);
       const payload = point?.payload;
       if (!point || !payload || payload.collectionId !== collectionId ||
@@ -1370,7 +1377,7 @@ export class FaceSearchService implements OnModuleInit {
     collectionId: string, vectors: number[][], collection?: any, selectedImageId?: string,
   ) {
     if (!this.qdrant) throw new BadRequestException('Face search is not ready');
-    const minSimilarity = this.faceThreshold('FACE_MATCH_SIMILARITY', 'FACE_MATCH_DISTANCE', 0.46);
+    const minSimilarity = this.faceThreshold('FACE_MATCH_SIMILARITY', 'FACE_MATCH_DISTANCE', 0.50);
     const queries = vectors.filter(vector => vector.length === INSIGHT_VECTOR_SIZE)
       .map(vector => this.normalizeVector(vector))
       .filter((vector): vector is number[] => Boolean(vector));
