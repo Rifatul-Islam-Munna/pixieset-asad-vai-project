@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -21,14 +22,16 @@ export class FaceSearchController {
   constructor(private readonly faceSearchService: FaceSearchService) {}
 
   @Get(':collectionId/faces')
+  @Header('Cache-Control', 'private, no-store')
   async faces(@Param('collectionId') collectionId: string) {
     const data = await this.faceSearchService.listCollectionFaces(collectionId);
     return { data };
   }
 
   @Get(':collectionId/faces/:faceId')
-  async face(@Param('collectionId') collectionId: string, @Param('faceId') faceId: string) {
-    const data = await this.faceSearchService.searchCollectionByFaceId(collectionId, faceId);
+  @Header('Cache-Control', 'private, no-store')
+  async face(@Param('collectionId') collectionId: string, @Param('faceId') faceId: string, @Query('reference') reference?: string) {
+    const data = await this.faceSearchService.searchCollectionByFaceId(collectionId, faceId, reference);
     return { data };
   }
 

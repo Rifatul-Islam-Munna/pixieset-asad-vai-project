@@ -46,7 +46,7 @@ function setup(settings: Record<string, string> = {}) {
 describe('Face-search accuracy safeguards', () => {
   it('uses the selected face, includes its source photo, filters low scores and other galleries, and deduplicates full-frame results', async () => {
     const { service, qdrant, imageModel, facePersonModel } = setup();
-    qdrant.retrieve.mockResolvedValue([{ id: 'chosen-face', vector: basis(), payload: { collectionId: galleryId, imageId: 'chosen-photo' } }]);
+    qdrant.retrieve.mockResolvedValue([{ id: 'chosen-face', vector: basis(), payload: { collectionId: galleryId, imageId: 'chosen-photo', box } }]);
     qdrant.search.mockResolvedValue([hit('same-person', .83), hit('same-person', .77), hit('additional-match', .48), hit('wrong-person', .31), hit('other-gallery', .99, 'gallery-b')]);
 
     const result = await service.searchCollectionByFaceId(galleryId, 'chosen-face');
@@ -59,6 +59,58 @@ describe('Face-search accuracy safeguards', () => {
     }));
     expect(imageModel.find).toHaveBeenCalledWith({ collectionId: galleryId, _id: { $in: ['chosen-photo', 'same-person', 'additional-match'] } });
     expect(facePersonModel.find).not.toHaveBeenCalled();
+  });
+
+  it('uses authoritative point boxes for sidebar previews and rejects mismatched, deleted, or invalid representatives', async () => {
+    const { internals } = setup();
+    const valid = { id: 'chosen-face', payload: { collectionId: galleryId, imageId: 'chosen-photo', personId: 'person-a', box, referenceVersion: 'new' } };
+    const representatives = [
+      { id: 'chosen-face', imageId: 'chosen-photo', personId: 'person-a', photoCount: 12 },
+      { id: 'wrong-face', imageId: 'chosen-photo', personId: 'person-a', photoCount: 5 },
+      { id: 'missing-face', imageId: 'gone-photo', personId: 'person-b', photoCount: 4 },
+      { id: 'invalid-face', imageId: 'chosen-photo', personId: 'person-c', photoCount: 3 },
+    ];
+    const faces = await internals.verifiedSidebarFaces({ _id: galleryId }, representatives, [
+      valid,
+      { id: 'wrong-face', payload: { ...valid.payload, personId: 'person-b' } },
+      { id: 'invalid-face', payload: { ...valid.payload, personId: 'person-c', box: { ...box, width: 0 } } },
+    ]);
+    expect(faces).toEqual([expect.objectContaining({
+      id: 'chosen-face', imageId: 'chosen-photo', box,
+      reference: internals.faceReference(valid),
+      imageUrl: 'https://example.test/full/chosen-photo.jpg',
+    })]);
+  });
+
+  it('rejects a previously displayed face reference after its point was replaced', async () => {
+    const { service, internals, qdrant } = setup();
+    const point = { id: 'chosen-face', vector: basis(), payload: { collectionId: galleryId, imageId: 'chosen-photo', box, referenceVersion: 'old' } };
+    const reference = internals.faceReference(point);
+    qdrant.retrieve.mockResolvedValue([{ ...point, payload: { ...point.payload, referenceVersion: 'new' } }]);
+    await expect(service.searchCollectionByFaceId(galleryId, point.id, reference)).rejects.toThrow('Face reference changed');
+    expect(qdrant.search).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale face reference whose box changed', async () => {
+    const { service, internals, qdrant } = setup();
+    const point = { id: 'chosen-face', vector: basis(), payload: { collectionId: galleryId, imageId: 'chosen-photo', box } };
+    const reference = internals.faceReference(point);
+    qdrant.retrieve.mockResolvedValue([{ ...point, payload: { ...point.payload, box: { ...box, x: 65 } } }]);
+    await expect(service.searchCollectionByFaceId(galleryId, point.id, reference)).rejects.toThrow('Face reference changed');
+    expect(qdrant.search).not.toHaveBeenCalled();
+  });
+
+  it('does not accept a reindex request when the required services are unavailable', async () => {
+    const { service, internals } = setup();
+    internals.collectionModel.findOne = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ _id: galleryId, userId: 'owner-a' }) }),
+    });
+    internals.collectionModel.findOneAndUpdate = jest.fn();
+    jest.spyOn(internals, 'ensureReady').mockResolvedValue(false);
+    const cleanup = jest.spyOn(internals, 'deleteCollectionFaces');
+    await expect(service.requestCollectionFaceReindex('owner-a', galleryId)).rejects.toThrow('Face search is not ready');
+    expect(internals.collectionModel.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(cleanup).not.toHaveBeenCalled();
   });
 
   it('rejects a face reference from another gallery', async () => {

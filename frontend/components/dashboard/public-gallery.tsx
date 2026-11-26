@@ -28,6 +28,7 @@ import {
   type ImageWatermark,
 } from "@/components/ui/image-watermark-overlay";
 import { usePublicGalleryFavorites } from "./public-gallery-favorites";
+import { PublicFaceOption } from "./public-face-option";
 
 type PublicImage = {
   _id: string;
@@ -63,6 +64,7 @@ type PublicImage = {
 
 type PublicFace = {
   id: string;
+  reference: string;
   label: string;
   imageId?: string;
   imageUrl?: string;
@@ -409,7 +411,21 @@ export function PublicGallery({
   useEffect(() => {
     manualSetSelectionRef.current = false;
     autoProbedEmptySetsRef.current = new Set();
-    faceResultCacheRef.current.clear();
+    faceSearchInFlightRef.current?.abort();
+    faceSearchInFlightRef.current = null;
+    faceListInFlightRef.current?.abort();
+    faceListInFlightRef.current = null;
+    setFaceResults(null);
+    setFaces([]);
+    setFaceError("");
+    setFaceBusy(false);
+    setFaceListLoading(false);
+    return () => {
+      faceSearchInFlightRef.current?.abort();
+      faceSearchInFlightRef.current = null;
+      faceListInFlightRef.current?.abort();
+      faceListInFlightRef.current = null;
+    };
   }, [collection?._id]);
   const [activeImage, setActiveImage] = useState<PublicImage | null>(null);
   const [enteredPin, setEnteredPin] = useState("");
@@ -430,8 +446,9 @@ export function PublicGallery({
   const [faceBusy, setFaceBusy] = useState(false);
   const [faceError, setFaceError] = useState("");
   const [faceResults, setFaceResults] = useState<PublicImage[] | null>(null);
-  const faceResultCacheRef = useRef<Map<string, PublicImage[]>>(new Map());
-  const faceListInFlightRef = useRef(false);
+  const faceSearchInFlightRef = useRef<AbortController | null>(null);
+  const faceListInFlightRef = useRef<AbortController | null>(null);
+  const [faceListLoading, setFaceListLoading] = useState(false);
   const [faces, setFaces] = useState<PublicFace[]>([]);
   const [facesIndexing, setFacesIndexing] = useState(false);
   const [faceReady, setFaceReady] = useState(true);
@@ -845,6 +862,9 @@ export function PublicGallery({
   }, [activeSetId, gallerySets, showSetTabs]);
 
   useEffect(() => {
+    faceSearchInFlightRef.current?.abort();
+    faceSearchInFlightRef.current = null;
+    setFaceBusy(false);
     setFaceResults(null);
     setSlideshowIndex(null);
   }, [activeSetId]);
@@ -1162,169 +1182,116 @@ export function PublicGallery({
   });
   const loadFaces = async (force = false, openSheet = true) => {
     if (openSheet) setFaceSheetOpen(true);
-    if (faceBusy || faceListInFlightRef.current) return;
-    const alreadyHaveFaces = faces.length > 0;
-
-    const storageKey = collection?._id
-      ? `gallerista:face-sidebar:v3:${collection._id}`
-      : "";
-    let restoredCachedFaces = false;
-
-    // Show the last successful sidebar snapshot immediately. The server remains
-    // the source of truth and refreshes silently underneath it. This makes
-    // reopening a large wedding gallery feel instant instead of showing a
-    // blocking spinner every time.
-    if (!force && !faces.length && storageKey) {
-      try {
-        const raw = window.sessionStorage.getItem(storageKey);
-        if (raw) {
-          const cached = JSON.parse(raw);
-          const age = Date.now() - Number(cached?.savedAt ?? 0);
-          if (
-            age >= 0 &&
-            age < 5 * 60_000 &&
-            Array.isArray(cached?.faces)
-          ) {
-            setFaces(cached.faces);
-            setFaceReady(cached.ready !== false);
-            setFacesIndexing(Boolean(cached.indexing));
-            setFaceMissingImages(Math.max(0, Number(cached.missingImages ?? 0)));
-            setFaceTotalImages(Math.max(0, Number(cached.totalImages ?? 0)));
-            setFaceIndexedImages(Math.max(0, Number(cached.indexedImages ?? 0)));
-            setFaceRetryingImages(Math.max(0, Number(cached.retryingImages ?? 0)));
-            setFaceFailedImages(Math.max(0, Number(cached.failedImages ?? 0)));
-            restoredCachedFaces = true;
-          }
-        }
-      } catch {
-        // Browser storage is only a speed hint; ignore unavailable/corrupt data.
-      }
-    }
-
-    const silentRefresh = force || restoredCachedFaces || alreadyHaveFaces;
-    if (!silentRefresh) setFaceBusy(true);
-    if (!silentRefresh) setFaceError("");
-
-    faceListInFlightRef.current = true;
-    const response = await fetch(
-      `${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces`,
-      {
-        cache: "no-store",
-        signal: AbortSignal.timeout(8000),
-      },
-    ).catch(() => null);
-    const payload = response ? await response.json().catch(() => null) : null;
-    faceListInFlightRef.current = false;
-
-    if (!silentRefresh) setFaceBusy(false);
-    if (!response?.ok) {
-      const message = payload?.message ?? "Face list failed.";
-      if (/face search is not ready/i.test(message)) {
-        setFaceReady(false);
-        setFacesIndexing(true);
-        if (!silentRefresh) setFaceError("");
-        return;
-      }
-      if (!silentRefresh) setFaceError(message);
-      return;
-    }
-
-    const ready = payload?.data?.ready !== false;
-    const missingImages = Math.max(0, Number(payload?.data?.missingImages ?? 0));
-    const totalImages = Math.max(0, Number(payload?.data?.totalImages ?? 0));
-    const indexedImages = Math.max(
-      0,
-      Number(payload?.data?.indexedImages ?? Math.max(0, totalImages - missingImages)),
-    );
-    const retryingImages = Math.max(0, Number(payload?.data?.retryingImages ?? 0));
-    const failedImages = Math.max(0, Number(payload?.data?.failedImages ?? 0));
-
-    const nextFaces = Array.isArray(payload?.data?.faces)
-      ? payload.data.faces
-      : [];
-    const indexing = Boolean(payload?.data?.indexing) || !ready;
-
-    setFaceReady(ready);
-    setFaceMissingImages(missingImages);
-    setFaceTotalImages(totalImages);
-    setFaceIndexedImages(indexedImages);
-    setFaceRetryingImages(retryingImages);
-    setFaceFailedImages(failedImages);
-    setFaces(nextFaces);
-    setFacesIndexing(indexing);
-
-    if (storageKey) {
-      try {
-        window.sessionStorage.setItem(
-          storageKey,
-          JSON.stringify({
-            savedAt: Date.now(),
-            ready,
-            indexing,
-            missingImages,
-            totalImages,
-            indexedImages,
-            retryingImages,
-            failedImages,
-            faces: nextFaces,
-          }),
-        );
-      } catch {
-        // Ignore storage quota/private-mode failures.
-      }
-    }
-  };
-  const filterBySavedFace = async (faceId: string) => {
-    const cached = faceResultCacheRef.current.get(faceId);
-    if (cached) {
-      setFaceResults(cached);
-      setFaceSheetOpen(false);
-      return;
-    }
-
-    setFaceBusy(true);
-    setFaceError("");
-    const response = await fetch(
-      `${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces/${encodeURIComponent(faceId)}`,
-      {
-        cache: "no-store",
-        signal: AbortSignal.timeout(8000),
-      },
-    ).catch(() => null);
-    const payload = response ? await response.json().catch(() => null) : null;
-    setFaceBusy(false);
-    if (!response?.ok) {
-      setFaceError(
-        payload?.message ??
-          "Face filter took too long. Please try this face again.",
+    if (faceSearchInFlightRef.current || faceListInFlightRef.current) return;
+    const controller = new AbortController();
+    faceListInFlightRef.current = controller;
+    setFaceListLoading(true);
+    if (!force) setFaceError("");
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(
+        `${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces`,
+        { cache: "no-store", signal: controller.signal },
       );
-      return;
+      const payload = await response.json().catch(() => null);
+      if (faceListInFlightRef.current !== controller) return;
+      if (!response.ok) throw new Error(payload?.message ?? "Could not load the face list.");
+      const ready = payload?.data?.ready !== false;
+      const missingImages = Math.max(0, Number(payload?.data?.missingImages ?? 0));
+      const totalImages = Math.max(0, Number(payload?.data?.totalImages ?? 0));
+      const indexedImages = Math.max(0, Number(payload?.data?.indexedImages ?? Math.max(0, totalImages - missingImages)));
+      const nextFaces: PublicFace[] = Array.isArray(payload?.data?.faces)
+        ? payload.data.faces.filter((face: PublicFace) =>
+            typeof face.id === "string" && typeof face.reference === "string" && Boolean(face.reference && face.imageUrl && face.box))
+        : [];
+      if (ready && payload?.data?.faces?.length && !nextFaces.length) {
+        throw new Error("The face list needs to be refreshed by the updated backend.");
+      }
+      setFaceReady(ready);
+      setFaceMissingImages(missingImages);
+      setFaceTotalImages(totalImages);
+      setFaceIndexedImages(indexedImages);
+      setFaceRetryingImages(Math.max(0, Number(payload?.data?.retryingImages ?? 0)));
+      setFaceFailedImages(Math.max(0, Number(payload?.data?.failedImages ?? 0)));
+      setFaces(nextFaces);
+      setFacesIndexing(Boolean(payload?.data?.indexing) || !ready);
+    } catch (error) {
+      if (faceListInFlightRef.current !== controller) return;
+      setFaces([]);
+      setFaceReady(false);
+      setFacesIndexing(true);
+      setFaceError(controller.signal.aborted ? "Face list took too long. Retrying..." : error instanceof Error ? error.message : "Could not load faces.");
+    } finally {
+      window.clearTimeout(timeout);
+      if (faceListInFlightRef.current === controller) {
+        faceListInFlightRef.current = null;
+        setFaceListLoading(false);
+      }
     }
-    const matchedImages = Array.isArray(payload?.data?.images)
-      ? payload.data.images
-      : [];
-    faceResultCacheRef.current.set(faceId, matchedImages);
-    setFaceResults(matchedImages);
-    setFaceSheetOpen(false);
   };
-  const searchByFace = async (file?: File) => {
-    if (!file) return;
+  const runFaceSearch = async (
+    request: (signal: AbortSignal) => Promise<Response>,
+    timeoutMs: number,
+    fromSidebar: boolean,
+  ) => {
+    if (faceSearchInFlightRef.current) return;
+    const controller = new AbortController();
+    faceSearchInFlightRef.current = controller;
     setFaceBusy(true);
     setFaceError("");
-    const uploadFile = await compressFaceSearchImage(file).catch(() => file);
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    const response = await fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}`, {
-      method: "POST",
-      body: formData,
-    }).catch(() => null);
-    const payload = response ? await response.json().catch(() => null) : null;
-    setFaceBusy(false);
-    if (!response?.ok) {
-      setFaceError(payload?.message ?? "Face search failed.");
-      return;
+    let refreshReference = false;
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await request(controller.signal);
+      const payload = await response.json().catch(() => null);
+      if (faceSearchInFlightRef.current !== controller) return;
+      if (!response.ok) {
+        refreshReference = fromSidebar && (response.status === 409 || /face not found|reference changed/i.test(String(payload?.message ?? "")));
+        throw new Error(refreshReference ? "The face list changed. Select the face again after it refreshes." : payload?.message ?? "Face search failed.");
+      }
+      if (!Array.isArray(payload?.data?.images)) throw new Error("Invalid face search response. Please retry.");
+      setFavoritesPanelOpen(false);
+      setFaceResults(payload.data.images);
+      setSlideshowIndex(null);
+      setActiveImage(null);
+      if (payload.data.truncated) setFaceError("The search reached its configured result limit.");
+      if (fromSidebar) setFaceSheetOpen(false);
+    } catch (error) {
+      if (faceSearchInFlightRef.current !== controller) return;
+      setFaceError(controller.signal.aborted ? "Face search took too long. Please try again." : error instanceof Error ? error.message : "Face search failed.");
+    } finally {
+      window.clearTimeout(timeout);
+      if (faceSearchInFlightRef.current === controller) {
+        faceSearchInFlightRef.current = null;
+        setFaceBusy(false);
+        if (refreshReference) {
+          setFaces([]);
+          void loadFaces(true, false);
+        }
+      }
     }
-    setFaceResults(payload?.data?.images ?? []);
+  };
+  const filterBySavedFace = (face: PublicFace) => {
+    if (!face.reference) return;
+    // Always ask the backend. The reference ensures the selected point still
+    // represents the face shown in the card, even during a gallery re-index.
+    return runFaceSearch(
+      (signal) => fetch(
+        `${apiBase}/public/face-search/${encodeURIComponent(galary)}/faces/${encodeURIComponent(face.id)}?reference=${encodeURIComponent(face.reference)}`,
+        { cache: "no-store", signal },
+      ), 30000, true,
+    );
+  };
+  const searchByFace = (file?: File) => {
+    if (!file) return;
+    return runFaceSearch(async (signal) => {
+      const uploadFile = await compressFaceSearchImage(file).catch(() => file);
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+      return fetch(`${apiBase}/public/face-search/${encodeURIComponent(galary)}`, {
+        method: "POST", body: formData, signal, cache: "no-store",
+      });
+    }, 150000, false);
   };
 
   useEffect(() => {
@@ -1711,7 +1678,7 @@ export function PublicGallery({
               </>
             )}
             {faceResults && (
-              <button className="inline-flex h-10 shrink-0 items-center border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em]" onClick={() => setFaceResults(null)} type="button">
+              <button className="inline-flex h-10 shrink-0 items-center border border-black/10 px-3 text-xs font-bold uppercase tracking-[0.12em]" onClick={() => { faceSearchInFlightRef.current?.abort(); faceSearchInFlightRef.current = null; setFaceBusy(false); setFaceError(""); setFaceResults(null); }} type="button">
                 Show all
               </button>
             )}
@@ -1816,6 +1783,9 @@ export function PublicGallery({
           <p className="mx-4 mt-2 text-sm font-semibold md:mx-8" style={{ color: accent }}>
             {favoriteImageIds.size} / {maxFavoriteCount} favorites used
           </p>
+        )}
+        {faceError && !faceSheetOpen && !faceBusy && (
+          <p role="alert" className="mx-4 mt-5 text-sm text-red-700 md:mx-8">{faceError}</p>
         )}
         {faceResults && (
           <p className="mx-4 mt-5 text-sm md:mx-8" style={{ color: accent }}>
@@ -2145,17 +2115,17 @@ export function PublicGallery({
               </div>
               <button
                 className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white text-black/70 transition hover:bg-black hover:text-white"
-                onClick={() => setFaceSheetOpen(false)}
+                onClick={() => { faceSearchInFlightRef.current?.abort(); faceSearchInFlightRef.current = null; setFaceBusy(false); setFaceSheetOpen(false); }}
                 aria-label="Close face filter"
                 type="button"
               >
                 <X className="size-4" />
               </button>
             </div>
-            {faceBusy && (
+            {(faceBusy || faceListLoading) && (
               <div className="mt-7 flex items-center gap-2 text-sm font-medium text-[#666]">
                 <Loader2 className="size-4 animate-spin" />
-                Loading faces...
+                {faceBusy ? "Finding matching photos..." : "Loading faces..."}
               </div>
             )}
             {faceError && !faceBusy && (
@@ -2214,30 +2184,22 @@ export function PublicGallery({
                 )}
               </div>
             )}
-            {faceReady && !faceBusy && !faces.length && !facesIndexing && !faceError && (
+            {faceReady && !faceBusy && !faceListLoading && !faces.length && !facesIndexing && !faceError && (
               <p className="mt-8 text-sm leading-6 text-[#666]">
                 No faces were detected in this gallery yet.
               </p>
             )}
             <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-5">
               {faces.map((face) => (
-                <button key={face.id} className="grid justify-items-center gap-2 text-center" onClick={() => void filterBySavedFace(face.id)}>
-                  <span className="block size-16 overflow-hidden rounded-full bg-[#eee] ring-2 ring-[#111]/10 sm:size-20">
-                    {face.imageUrl ? (
-                      <GalleryImage
-                        src={imageSrc(face.imageUrl)}
-                        alt={face.label}
-                        className="h-full w-full object-cover"
-                        style={face.box ? { objectPosition: `${face.box.x + face.box.width / 2}% ${face.box.y + face.box.height / 2}%` } : undefined}
-                      />
-                    ) : (
-                      <span className="flex h-full w-full items-center justify-center text-xs font-bold">Face</span>
-                    )}
-                  </span>
-                  <span className="text-xs font-bold">
-                    {face.photoCount} {face.photoCount === 1 ? "photo" : "photos"}
-                  </span>
-                </button>
+                <PublicFaceOption
+                  key={face.id + ":" + face.reference + ":" + face.imageUrl}
+                  src={imageSrc(face.imageUrl)}
+                  label={face.label}
+                  box={face.box}
+                  photoCount={face.photoCount}
+                  disabled={faceBusy || faceListLoading || !faceReady}
+                  onSelect={() => void filterBySavedFace(face)}
+                />
               ))}
             </div>
           </aside>
