@@ -1,7 +1,7 @@
-import { getPublicPlans } from "@/actions/billing";
+import { getPublicPlans, getPublicFreePlan } from "@/actions/billing";
 import { PlansPage } from "@/components/dashboard/plans-page";
 
 export default async function PricingRoute() {
-  const { plans, error } = await getPublicPlans();
-  return <PlansPage plans={plans} loadError={error} />;
+  const [{plans,error},freePlan] = await Promise.all([getPublicPlans(),getPublicFreePlan()]);
+  return <PlansPage plans={plans} loadError={error} freePlan={freePlan} />;
 }

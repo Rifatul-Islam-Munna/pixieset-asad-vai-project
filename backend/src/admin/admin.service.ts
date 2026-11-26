@@ -220,7 +220,9 @@ export class AdminService implements OnModuleInit {
 
   async createUser(dto: AdminCreateUserDto) {
     await this.ensureUnique(dto.phoneNumber);
-    const { planId, ...userDto } = dto;
+    const { planId, studioPlanId, ...userDto } = dto;
+    await this.validatePlanFamily(planId,'client-gallery');
+    await this.validatePlanFamily(studioPlanId,'studio-manager');
     const freePlan = await this.freePlanSettings.get();
     const user = await this.userModel.create({
       ...userDto,
@@ -240,6 +242,7 @@ export class AdminService implements OnModuleInit {
       planFeatures: { marketingEmails: freePlan.monthlyEmails > 0 },
     });
     if (planId) await this.assignPlanToUser(user._id.toString(), planId);
+    if (studioPlanId) await this.assignPlanToUser(user._id.toString(),studioPlanId);
     const { password, ...safeUser } = user.toObject();
     return (await this.userModel.findById(user._id).select('-password').lean()) ?? safeUser;
   }
@@ -248,6 +251,8 @@ export class AdminService implements OnModuleInit {
     const user = await this.userModel.findById(id);
     if (!user) throw new NotFoundException('User not found');
     if (dto.phoneNumber && dto.phoneNumber !== user.phoneNumber) await this.ensureUnique(dto.phoneNumber, id);
+    await this.validatePlanFamily(dto.planId,'client-gallery');
+    await this.validatePlanFamily(dto.studioPlanId,'studio-manager');
 
     if (dto.name !== undefined) user.name = dto.name;
     if (dto.phoneNumber !== undefined) user.phoneNumber = dto.phoneNumber;
@@ -257,11 +262,21 @@ export class AdminService implements OnModuleInit {
     if (dto.password) user.password = await bcrypt.hash(dto.password, 10);
 
     await user.save();
-    if (dto.planId !== undefined) {
+    if (dto.planId !== undefined && (dto.planId || '') !== (user.planId || '')) {
       if (dto.planId) await this.assignPlanToUser(id, dto.planId);
       else await this.clearUserPlan(id);
     }
+    if (dto.studioPlanId !== undefined && (dto.studioPlanId || '') !== (user.studioPlanId || '')) {
+      if(dto.studioPlanId) await this.assignPlanToUser(id,dto.studioPlanId);
+      else await this.userModel.updateOne({_id:id},{$set:{studioPlanName:'Free'},$unset:{studioPlanId:'',studioPlanActivatedAt:'',studioPlanExpiresAt:'',studioPlanBillingInterval:''}});
+    }
     return this.userModel.findById(id).select('-password').lean();
+  }
+
+  private async validatePlanFamily(planId:string|undefined,product:'client-gallery'|'studio-manager') {
+    if(!planId)return;
+    const plan=await this.planModel.findById(planId).lean();
+    if(!plan || (plan.productType??'client-gallery')!==product) throw new BadRequestException('Choose a valid '+product+' plan');
   }
 
   async deleteUser(id: string, currentAdminId: string) {
@@ -303,12 +318,19 @@ export class AdminService implements OnModuleInit {
   }
 
   async createPlan(dto: AdminCreatePlanDto) {
-    if (dto.recommended) await this.planModel.updateMany({}, { $set: { recommended: false } });
+    if (dto.recommended) await this.planModel.updateMany(dto.productType === 'studio-manager' ? {productType:'studio-manager'} : {productType:{$ne:'studio-manager'}}, { $set: { recommended: false } });
     if (dto.yearlyEnabled && Number(dto.priceYearly ?? 0) <= 0) {
       throw new BadRequestException('Yearly price must be greater than zero');
     }
     const plan = await this.planModel.create({
       name: dto.name.trim(),
+      productType: dto.productType ?? 'client-gallery',
+      studioProjectLimit: Number(dto.studioProjectLimit ?? 0),
+      studioContactLimit: Number(dto.studioContactLimit ?? 0),
+      studioProductLimit: Number(dto.studioProductLimit ?? 0),
+      studioQuestionnaireLimit: Number(dto.studioQuestionnaireLimit ?? 0),
+      studioQuoteLimit: Number(dto.studioQuoteLimit ?? 0),
+      studioMonthlyEmails: Number(dto.studioMonthlyEmails ?? 0),
       storageGb: Number(dto.storageGb ?? 0),
       galleryLimit: Number(dto.galleryLimit ?? 0),
       subdomainLimit: Number(dto.subdomainLimit ?? 1),
@@ -335,9 +357,16 @@ export class AdminService implements OnModuleInit {
   }
 
   async updatePlan(id: string, dto: AdminUpdatePlanDto) {
-    if (dto.recommended) await this.planModel.updateMany({ _id: { $ne: id } }, { $set: { recommended: false } });
     const plan = await this.planModel.findById(id);
     if (!plan) throw new NotFoundException('Plan not found');
+    if (dto.recommended) await this.planModel.updateMany({_id:{$ne:id}, ...(plan.productType === 'studio-manager' ? {productType:'studio-manager'} : {productType:{$ne:'studio-manager'}})}, {$set:{recommended:false}});
+    if (dto.productType && dto.productType !== (plan.productType ?? 'client-gallery')) throw new BadRequestException('Plan product cannot be changed');
+    if (dto.studioProjectLimit !== undefined) plan.studioProjectLimit = Number(dto.studioProjectLimit);
+    if (dto.studioContactLimit !== undefined) plan.studioContactLimit = Number(dto.studioContactLimit);
+    if (dto.studioProductLimit !== undefined) plan.studioProductLimit = Number(dto.studioProductLimit);
+    if (dto.studioQuestionnaireLimit !== undefined) plan.studioQuestionnaireLimit = Number(dto.studioQuestionnaireLimit);
+    if (dto.studioQuoteLimit !== undefined) plan.studioQuoteLimit = Number(dto.studioQuoteLimit);
+    if (dto.studioMonthlyEmails !== undefined) plan.studioMonthlyEmails = Number(dto.studioMonthlyEmails);
     const yearlyEnabled = dto.yearlyEnabled ?? plan.yearlyEnabled;
     const priceYearly = dto.priceYearly ?? plan.priceYearly;
     if (yearlyEnabled && Number(priceYearly ?? 0) <= 0) {
@@ -360,6 +389,10 @@ export class AdminService implements OnModuleInit {
     if (dto.active !== undefined) plan.active = dto.active;
     await plan.save();
 
+    if (plan.productType === 'studio-manager') {
+      await this.userModel.updateMany({studioPlanId: plan._id.toString()}, {$set:{studioPlanName:plan.name}});
+      return plan.toObject();
+    }
     // A plan is the source of truth. Existing subscribers/users assigned to this
     // plan must receive changes immediately without repurchase or relogin.
     await this.userModel.updateMany(
@@ -383,6 +416,7 @@ export class AdminService implements OnModuleInit {
   }
 
   async deletePlan(id: string) {
+    if (await this.userModel.exists({studioPlanId:id,$or:[{studioPlanExpiresAt:{$gt:new Date()}},{studioPlanExpiresAt:{$exists:false}},{studioPlanExpiresAt:null}]})) throw new BadRequestException('Deactivate this plan instead; it has active Studio Manager subscribers');
     const plan = await this.planModel.findByIdAndDelete(id).lean();
     if (!plan) throw new NotFoundException('Plan not found');
     return plan;
@@ -486,6 +520,8 @@ export class AdminService implements OnModuleInit {
     ]);
     if (!plan) throw new NotFoundException('Plan not found');
     const billingInterval: 'month' | 'year' = requestedInterval === 'year' ? 'year' : 'month';
+    const checkoutDestination=plan.productType==='studio-manager'?'/dashboard/studio-management/subscription':'/dashboard/client-gallery/storage';
+    const productName=plan.productType==='studio-manager'?'Studio Manager':'Client Gallery';
     if (billingInterval === 'year' && (!plan.yearlyEnabled || Number(plan.priceYearly ?? 0) <= 0)) {
       throw new BadRequestException('Yearly billing is not available for this plan');
     }
@@ -511,11 +547,11 @@ export class AdminService implements OnModuleInit {
       const result = await createPayPalOrder(paypalConfig, {
         amount,
         currency: 'EUR',
-        description: `${plan.name} - ${billingInterval === 'year' ? '1 year' : '1 month'} access`,
+        description: `${productName} — ${plan.name} - ${billingInterval === 'year' ? '1 year' : '1 month'} access`,
         customId: `plan:${userId}:${plan._id.toString()}:${billingInterval}`,
         invoiceId: `PLAN-${userId}-${plan._id.toString()}-${Date.now()}`,
-        returnUrl: successUrl || `${frontendUrl}/dashboard/client-gallery/storage?plan=success&provider=paypal`,
-        cancelUrl: cancelUrl || `${frontendUrl}/dashboard/client-gallery/storage?plan=cancel`,
+        returnUrl: successUrl || `${frontendUrl}${checkoutDestination}?plan=success&provider=paypal`,
+        cancelUrl: cancelUrl || `${frontendUrl}${checkoutDestination}?plan=cancel`,
       });
       return { checkoutUrl: result.approveUrl, paypalOrderId: result.order.id, paymentProvider: 'paypal' };
     }
@@ -531,14 +567,14 @@ export class AdminService implements OnModuleInit {
           currency: 'eur',
           unit_amount: Math.round(amount * 100),
           product_data: {
-            name: plan.name,
-            description: `${plan.storageGb} GB storage, ${plan.monthlyEmails} emails/month, ${billingInterval === 'year' ? '1 year' : '1 month'} access`,
+            name: `${productName} — ${plan.name}`,
+            description: plan.productType==='studio-manager'?`${plan.studioMonthlyEmails} emails/month, ${billingInterval === 'year' ? '1 year' : '1 month'} Studio Manager access`:`${plan.storageGb} GB storage, ${plan.monthlyEmails} emails/month, ${billingInterval === 'year' ? '1 year' : '1 month'} access`,
           },
         },
       }],
       customer_email: user?.email || undefined,
-      success_url: successUrl || `${process.env.FRONTEND_URL ?? 'https://gallerista.app'}/dashboard/client-gallery/storage?plan=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${process.env.FRONTEND_URL ?? 'https://gallerista.app'}/dashboard/client-gallery/storage?plan=cancel`,
+      success_url: successUrl || `${process.env.FRONTEND_URL ?? 'https://gallerista.app'}${checkoutDestination}?plan=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.FRONTEND_URL ?? 'https://gallerista.app'}${checkoutDestination}?plan=cancel`,
       metadata: {
         type: 'plan',
         userId,
@@ -655,7 +691,9 @@ export class AdminService implements OnModuleInit {
     if (paypalOrderId && await this.planPurchaseModel.exists({ paypalOrderId })) return plan;
     const expiresAt = new Date();
     expiresAt.setUTCDate(expiresAt.getUTCDate() + (billingInterval === 'year' ? 365 : 30));
-    await this.userModel.updateOne(
+    if (plan.productType === 'studio-manager') {
+      await this.userModel.updateOne({_id:userId}, {$set:{studioPlanId:plan._id.toString(),studioPlanName:plan.name,studioPlanActivatedAt:new Date(),studioPlanBillingInterval:billingInterval,...(source === 'checkout' ? {studioPlanExpiresAt:expiresAt}: {})}, ...(source !== 'checkout' ? {$unset:{studioPlanExpiresAt:''}} : {})});
+    } else await this.userModel.updateOne(
       { _id: userId },
       {
         $set: {
@@ -682,7 +720,7 @@ export class AdminService implements OnModuleInit {
     );
     const amount = billingInterval === 'year' ? Number(plan.priceYearly ?? 0) : Number(plan.priceMonthly ?? 0);
     const paymentProvider = paypalOrderId ? 'paypal' : stripeSessionId ? 'stripe' : source === 'free' ? 'free' : 'admin';
-    const purchase = { userId, planId: plan._id.toString(), planName: plan.name, amount, billingInterval, source, stripeSessionId, paypalOrderId, paymentProvider, status: source === 'checkout' ? 'paid' : 'active' } as const;
+    const purchase = { productType: plan.productType ?? 'client-gallery', ...(source === 'checkout' ? {expiresAt} : {}), userId, planId: plan._id.toString(), planName: plan.name, amount, billingInterval, source, stripeSessionId, paypalOrderId, paymentProvider, status: source === 'checkout' ? 'paid' : 'active' } as const;
     if (stripeSessionId) await this.planPurchaseModel.updateOne({ stripeSessionId }, { $setOnInsert: purchase }, { upsert: true });
     else if (paypalOrderId) await this.planPurchaseModel.updateOne({ paypalOrderId }, { $setOnInsert: purchase }, { upsert: true });
     else await this.planPurchaseModel.create(purchase);

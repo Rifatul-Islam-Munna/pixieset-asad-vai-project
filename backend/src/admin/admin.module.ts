@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { StudioSubscriptionModule } from '../studio/studio-subscription.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Collection, CollectionSchema } from 'src/collections/entities/collection.entity';
 import { CollectionImage, CollectionImageSchema } from 'src/collections/entities/collection-image.entity';
@@ -16,6 +17,7 @@ import { PlanPurchase, PlanPurchaseSchema } from './entities/plan-purchase.entit
 
 @Module({
   imports: [
+    StudioSubscriptionModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Collection.name, schema: CollectionSchema },

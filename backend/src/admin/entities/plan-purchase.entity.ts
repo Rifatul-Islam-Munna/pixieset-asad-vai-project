@@ -5,6 +5,8 @@ export type PlanPurchaseDocument = HydratedDocument<PlanPurchase>;
 
 @Schema({ timestamps: true })
 export class PlanPurchase {
+  @Prop({type:String,enum:['client-gallery','studio-manager'],default:'client-gallery'}) productType:'client-gallery'|'studio-manager';
+  @Prop() expiresAt?:Date;
   @Prop({ required: true, index: true }) userId: string;
   @Prop({ required: true }) planId: string;
   @Prop({ required: true }) planName: string;

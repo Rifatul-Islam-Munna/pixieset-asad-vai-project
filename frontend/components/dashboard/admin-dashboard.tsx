@@ -55,6 +55,7 @@ type UserForm = {
   role: AdminUser["role"];
   gender: string;
   planId: string;
+  studioPlanId: string;
 };
 
 type PlanForm = {
@@ -84,6 +85,7 @@ const emptyForm: UserForm = {
   role: "user",
   gender: "",
   planId: "",
+  studioPlanId: "",
 };
 
 const emptyPlanForm: PlanForm = {
@@ -176,6 +178,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
   const users = initialData.users;
   const collections = initialData.collections;
   const plans = initialData.plans ?? [];
+  const [planProduct,setPlanProduct]=useState<'client-gallery'|'studio-manager'>('client-gallery');
   const pageTitle = tab === "cms" ? "Homepage Editor" : tab === "terms" ? "Terms of Service" : tab === "privacy" ? "Privacy Policy" : tab === "overview" ? "Admin Dashboard" : tab === "stripe" ? "Payments" : tab.replace("-", " ").replace(/^./, (letter) => letter.toUpperCase());
 
   const filteredUsers = useMemo(() => {
@@ -198,11 +201,12 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
 
   const filteredPlans = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return plans;
-    return plans.filter((plan) =>
+    const productPlans=plans.filter(plan=>(plan.productType??'client-gallery')===planProduct);
+    if (!term) return productPlans;
+    return productPlans.filter((plan) =>
       [plan.name, String(plan.storageGb), String(plan.monthlyEmails)].some((value) => value.toLowerCase().includes(term)),
     );
-  }, [plans, query]);
+  }, [plans, query, planProduct]);
 
   const submitUser = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -300,6 +304,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
       role: user.role ?? "user",
       gender: user.gender ?? "",
       planId: user.planId ?? "",
+      studioPlanId: user.studioPlanId ?? "",
     });
   };
 
@@ -716,7 +721,7 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
               <UserTable users={filteredUsers} onView={viewUser} onEdit={editUser} onImpersonate={signInAsUser} onSendLogin={openLoginAccess} onDelete={removeUser} busy={pending} />
             </div>
           ) : tab === "plans" ? (
-            <PlanTable plans={filteredPlans} onEdit={editPlan} onDelete={removePlan} onOrderChange={updatePlanOrder} onReorder={reorderPlans} busy={pending} />
+            <div><div className="mt-6 flex flex-wrap gap-2 border-b border-[#e9e5ef]">{(['client-gallery','studio-manager'] as const).map(product=><button key={product} type="button" onClick={()=>setPlanProduct(product)} className={cn('border-b-2 px-4 py-3 text-sm font-semibold',planProduct===product?'border-[#6337d8] text-[#6337d8]':'border-transparent text-[#777]')}>{product==='client-gallery'?'Client Gallery':'Studio Manager'}</button>)}</div><PlanTable plans={filteredPlans} onEdit={editPlan} onDelete={removePlan} onOrderChange={updatePlanOrder} onReorder={reorderPlans} busy={pending} /></div>
           ) : tab === "free-plan" ? (
             <FreePlanSettingsPanel form={freePlanForm} setForm={setFreePlanForm} onSave={saveFreePlan} busy={pending} />
           ) : tab === "stripe" ? (
@@ -790,14 +795,15 @@ export function AdminDashboard({ initialData, initialTab }: { initialData: Admin
                 </select>
               </label>
               <label className="grid gap-2">
-                <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Plan</span>
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Client Gallery plan</span>
                 <select value={form.planId} onChange={(event) => setForm({ ...form, planId: event.target.value })} className="h-11 border px-3 text-sm outline-none">
                   <option value="">Free / No plan</option>
-                  {plans.map((plan) => (
+                  {plans.filter(plan=>plan.productType!=="studio-manager").map((plan) => (
                     <option key={plan._id} value={plan._id}>{plan.name}</option>
                   ))}
                 </select>
               </label>
+              <label className="grid gap-2"><span className="text-xs font-bold uppercase tracking-[.14em] text-[#777]">Studio Manager plan</span><select value={form.studioPlanId} onChange={e=>setForm({...form,studioPlanId:e.target.value})} className="h-11 border px-3 text-sm"><option value="">Free / No plan</option>{plans.filter(plan=>plan.productType==='studio-manager').map(plan=><option key={plan._id} value={plan._id}>{plan.name}</option>)}</select></label>
               <InputField label="Gender" value={form.gender} onChange={(value) => setForm({ ...form, gender: value })} />
             </div>
             <div className="mt-5 flex justify-end gap-2">
@@ -1104,7 +1110,7 @@ function UserTable({ users, onView, onEdit, onImpersonate, onSendLogin, onDelete
               </td>
               <td className="px-4 py-4">{user.phoneNumber}</td>
               <td className="px-4 py-4 capitalize">{user.role}</td>
-              <td className="px-4 py-4">{user.planName ?? "Free"}</td>
+              <td className="px-4 py-4"><p>Gallery: {user.planName ?? "Free"}</p><p className="mt-1 text-xs text-[#777]">Studio: {user.studioPlanExpiresAt&&new Date(user.studioPlanExpiresAt).getTime()<=Date.now()?"Free (expired)":user.studioPlanName??"Free"}</p></td>
               <td className="px-4 py-4">{user.collectionCount ?? 0}</td>
               <td className="px-4 py-4">
                 <div className="flex justify-end gap-2">
@@ -1335,10 +1341,11 @@ function FreePlanSettingsPanel({ form, setForm, onSave, busy }: {
       <CardHeader className="border-b">
         <CardTitle className="text-xl">Free user allowance</CardTitle>
         <CardDescription>
-          One global limit for every free account. Saving also updates existing free users.
+          Independent allowances for Client Gallery and Studio Manager. Changes apply to free accounts.
         </CardDescription>
       </CardHeader>
       <CardContent>
+        <h3 className="mb-4 text-lg font-semibold">Client Gallery</h3>
         <FieldGroup className="grid gap-4 md:grid-cols-3">
           <Field className="border bg-muted/30 p-4">
             <div className="flex items-center gap-3">
@@ -1389,6 +1396,12 @@ function FreePlanSettingsPanel({ form, setForm, onSave, busy }: {
             <FieldDescription>Email quota resets monthly. Use 0 to disable marketing email.</FieldDescription>
           </Field>
         </FieldGroup>
+      </CardContent>
+      <CardContent className="border-t pt-6">
+        <h3 className="mb-4 text-lg font-semibold">Studio Manager</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {([['studioContactLimit','Contacts',10],['studioProjectLimit','Projects',10],['studioProductLimit','Products / session types',3],['studioQuestionnaireLimit','Questionnaires',3],['studioQuoteLimit','Quotes',3],['studioMonthlyEmails','Emails per month',25]] as const).map(([key,label,fallback])=><label key={key} className="grid gap-2 text-sm font-medium">{label}<Input type="number" min={0} step={1} value={form[key] ?? fallback} onChange={e=>setForm({...form,[key]:Math.max(0,Math.floor(Number(e.target.value)))})}/><small className="font-normal text-muted-foreground">{key==='studioMonthlyEmails'?'0 disables email sending.':'0 means unlimited.'}</small></label>)}
+        </div>
       </CardContent>
       <CardFooter className="justify-between gap-4">
         <p className="text-sm text-muted-foreground">Paid plan limits stay unchanged.</p>
@@ -2212,12 +2225,12 @@ function PlanTable({ plans, onEdit, onDelete, onOrderChange, onReorder, busy }: 
                   <p className="font-bold">{plan.name}</p>
                   {plan.recommended && <span className="rounded-full bg-[#6337d8] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.12em] text-white">Recommended</span>}
                 </div>
-                <p className="mt-1 text-xs text-[#777]">Storage + monthly email allowance</p>
+                <p className="mt-1 text-xs text-[#777]">{plan.productType === "studio-manager" ? "Studio Manager" : "Client Gallery"}</p>
               </td>
-              <td className="px-4 py-4">{plan.storageGb} GB</td>
+              <td className="px-4 py-4">{plan.productType === "studio-manager" ? (plan.studioContactLimit || "Unlimited") + " contacts" : plan.storageGb + " GB"}</td>
               <td className="px-4 py-4">
-                <p>{plan.monthlyEmails} emails / month</p>
-                <p className="mt-1 text-xs text-[#777]">{Number(plan.videoMinutes ?? 0)} video min · {plan.videoQuality === "4k" ? "HD + 4K" : "HD"}</p>
+                <p>{plan.productType === "studio-manager" ? plan.studioMonthlyEmails ?? 0 : plan.monthlyEmails} emails / month</p>
+                {plan.productType !== "studio-manager" && <p className="mt-1 text-xs text-[#777]">{Number(plan.videoMinutes ?? 0)} video min · {plan.videoQuality === "4k" ? "HD + 4K" : "HD"}</p>}
               </td>
               <td className="px-4 py-4">
                 <p>€{Number(plan.priceMonthly ?? 0).toLocaleString()} / month</p>

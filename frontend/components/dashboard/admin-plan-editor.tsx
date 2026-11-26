@@ -11,6 +11,13 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type PlanEditorForm = {
+  productType: "client-gallery"|"studio-manager";
+  studioContactLimit: string;
+  studioProjectLimit: string;
+  studioProductLimit: string;
+  studioQuestionnaireLimit: string;
+  studioQuoteLimit: string;
+  studioMonthlyEmails: string;
   name: string;
   storageGb: string;
   galleryLimit: string;
@@ -72,6 +79,13 @@ const featureGroups = [
 function makeInitial(plan?: AdminPlan | null): PlanEditorForm {
   return {
     name: plan?.name ?? "",
+    productType: plan?.productType ?? "client-gallery",
+    studioContactLimit: String(plan?.studioContactLimit ?? 0),
+    studioProjectLimit: String(plan?.studioProjectLimit ?? 0),
+    studioProductLimit: String(plan?.studioProductLimit ?? 0),
+    studioQuestionnaireLimit: String(plan?.studioQuestionnaireLimit ?? 0),
+    studioQuoteLimit: String(plan?.studioQuoteLimit ?? 0),
+    studioMonthlyEmails: String(plan?.studioMonthlyEmails ?? 0),
     storageGb: String(plan?.storageGb ?? ""),
     galleryLimit: String(plan?.galleryLimit ?? ""),
     subdomainLimit: String(plan?.subdomainLimit ?? 1),
@@ -98,6 +112,13 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
     event.preventDefault();
     const payload = {
       name: form.name.trim(),
+      productType: form.productType,
+      studioContactLimit: Math.max(0, Math.floor(Number(form.studioContactLimit || 0))),
+      studioProjectLimit: Math.max(0, Math.floor(Number(form.studioProjectLimit || 0))),
+      studioProductLimit: Math.max(0, Math.floor(Number(form.studioProductLimit || 0))),
+      studioQuestionnaireLimit: Math.max(0, Math.floor(Number(form.studioQuestionnaireLimit || 0))),
+      studioQuoteLimit: Math.max(0, Math.floor(Number(form.studioQuoteLimit || 0))),
+      studioMonthlyEmails: Math.max(0, Math.floor(Number(form.studioMonthlyEmails || 0))),
       storageGb: Number(form.storageGb || 0),
       galleryLimit: Number(form.galleryLimit || 0),
       subdomainLimit: Number(form.subdomainLimit || 0),
@@ -153,8 +174,16 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
               <p className="mt-1 text-sm text-[#6d6d68]">Pricing and hard limits are enforced separately from feature checkboxes.</p>
             </div>
             <div className="grid gap-5 md:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold">Product<select disabled={Boolean(plan)} value={form.productType} onChange={e=>setForm({...form, productType:e.target.value as PlanEditorForm["productType"]})} className="h-12 border px-3"><option value="client-gallery">Client Gallery</option><option value="studio-manager">Studio Manager</option></select></label>
               <PlanField label="Plan name" value={form.name} onChange={(name) => setForm({ ...form, name })} required />
               <PlanField label="Monthly price EUR" value={form.priceMonthly} onChange={(priceMonthly) => setForm({ ...form, priceMonthly })} type="number" required />
+              {form.productType === "studio-manager" && <><PlanField label="Contacts" value={form.studioContactLimit} onChange={value=>setForm({...form,studioContactLimit:value})} type="number" required help="0 means unlimited." />
+<PlanField label="Projects" value={form.studioProjectLimit} onChange={value=>setForm({...form,studioProjectLimit:value})} type="number" required help="0 means unlimited." />
+<PlanField label="Products / session types" value={form.studioProductLimit} onChange={value=>setForm({...form,studioProductLimit:value})} type="number" required help="0 means unlimited." />
+<PlanField label="Questionnaires" value={form.studioQuestionnaireLimit} onChange={value=>setForm({...form,studioQuestionnaireLimit:value})} type="number" required help="0 means unlimited." />
+<PlanField label="Quotes" value={form.studioQuoteLimit} onChange={value=>setForm({...form,studioQuoteLimit:value})} type="number" required help="0 means unlimited." />
+<PlanField label="Studio emails / month" value={form.studioMonthlyEmails} onChange={value=>setForm({...form,studioMonthlyEmails:value})} type="number" required help="0 disables sending." /></>}
+              {form.productType === "client-gallery" && <>
               <PlanField label="Storage limit GB" value={form.storageGb} onChange={(storageGb) => setForm({ ...form, storageGb })} type="number" required help="Backend upload quota." />
               <PlanField label="Gallery limit" value={form.galleryLimit} onChange={(galleryLimit) => setForm({ ...form, galleryLimit })} type="number" required help="Use 0 for unlimited galleries." />
               <PlanField label="Subdomain limit" value={form.subdomainLimit} onChange={(subdomainLimit) => setForm({ ...form, subdomainLimit })} type="number" required help="Total public subdomains including the main subdomain. Use 0 for unlimited." />
@@ -168,6 +197,7 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
                   <option value="4k">HD + 4K</option>
                 </select>
               </label>
+              </>}
               <label className="flex min-h-12 items-center justify-between gap-4 border border-[#dcdcd7] px-4 text-sm">
                 <span><b>Yearly billing</b><small className="mt-0.5 block text-[#777]">Offer a yearly price.</small></span>
                 <input type="checkbox" checked={form.yearlyEnabled} onChange={(event) => setForm({ ...form, yearlyEnabled: event.target.checked })} className="size-5 accent-[#111]" />
@@ -176,7 +206,7 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
             </div>
           </section>
 
-          {featureGroups.map((group) => (
+          {form.productType === "client-gallery" && featureGroups.map((group) => (
             <section key={group.title} className="border border-[#e3e3df] bg-white p-5 sm:p-7">
               <div className="mb-5">
                 <h2 className="text-xl font-semibold">{group.title}</h2>
@@ -210,16 +240,18 @@ export function AdminPlanEditor({ plan }: { plan?: AdminPlan | null }) {
           <section className="border border-[#e3e3df] bg-white p-5">
             <h2 className="font-bold">Plan summary</h2>
             <div className="mt-5 grid gap-3 text-sm">
+              {form.productType === 'studio-manager' ? <>{([['Contacts',form.studioContactLimit],['Projects',form.studioProjectLimit],['Products / session types',form.studioProductLimit],['Questionnaires',form.studioQuestionnaireLimit],['Quotes',form.studioQuoteLimit],['Emails / month',form.studioMonthlyEmails]] as const).map(([label,value])=><Summary key={label} icon={<Check className="size-4"/>} label={label} value={label==='Emails / month'?value||'0':Number(value)===0?'Unlimited':value}/>)}</> : <>
               <Summary icon={<HardDrive className="size-4" />} label="Storage" value={`${form.storageGb || 0} GB`} />
               <Summary icon={<Images className="size-4" />} label="Galleries" value={Number(form.galleryLimit || 0) === 0 ? "Unlimited" : form.galleryLimit || "0"} />
               <Summary icon={<Globe2 className="size-4" />} label="Subdomains" value={Number(form.subdomainLimit || 0) === 0 ? "Unlimited" : form.subdomainLimit || "0"} />
               <Summary icon={<Check className="size-4" />} label="AI metadata" value={!form.features.aiImageMetadata ? "Not included" : Number(form.aiImageMetadataLimit || 0) === 0 ? "Unlimited / month" : `${form.aiImageMetadataLimit || 0} / month`} />
               <Summary icon={<Check className="size-4" />} label="Enabled capabilities" value={String(selectedCount)} />
+              </>}
             </div>
           </section>
-          <section className="border border-[#d9cef8] bg-[#f8f6ff] p-5">
+          {form.productType==='client-gallery' && <section className="border border-[#d9cef8] bg-[#f8f6ff] p-5">
             <div className="flex gap-3"><Info className="mt-0.5 size-5 shrink-0 text-[#6337d8]" /><div><p className="font-bold">How checkboxes work</p><p className="mt-1 text-sm leading-6 text-[#665f78]">Checked capabilities are copied to the user when this plan is assigned or purchased. Features with backend enforcement cannot be bypassed by calling the API directly.</p></div></div>
-          </section>
+          </section>}
           <label className="flex items-center justify-between border border-[#d9cef8] bg-white p-4 text-sm"><span><b>Recommended</b><small className="block text-[#777]">Highlight this plan.</small></span><input type="checkbox" className="size-5 accent-[#6337d8]" checked={form.recommended} onChange={(event) => setForm({ ...form, recommended: event.target.checked })} /></label>
           <label className="flex items-center justify-between border border-[#e3e3df] bg-white p-4 text-sm"><span><b>Active</b><small className="block text-[#777]">Available for use/purchase.</small></span><input type="checkbox" className="size-5 accent-[#111]" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /></label>
           <Button disabled={pending} className="h-12 w-full rounded-none bg-[#111] text-white">{pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}{plan ? "Save changes" : "Create plan"}</Button>

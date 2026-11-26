@@ -8,6 +8,9 @@ import { apiBaseUrl } from "@/lib/api-base-url";
 import { BackendRequestError, fetchBackendJson } from "@/lib/backend-request";
 
 export type AdminUser = {
+  studioPlanId?: string;
+  studioPlanName?: string;
+  studioPlanExpiresAt?: string;
   _id: string;
   name: string;
   email?: string;
@@ -70,6 +73,13 @@ export type AdminCollection = {
 };
 
 export type AdminPlan = {
+  productType?: 'client-gallery'|'studio-manager';
+  studioContactLimit?:number;
+  studioProjectLimit?:number;
+  studioProductLimit?:number;
+  studioQuestionnaireLimit?:number;
+  studioQuoteLimit?:number;
+  studioMonthlyEmails?:number;
   _id: string;
   name: string;
   storageGb: number;
@@ -139,6 +149,12 @@ export type AdminPayPalSetting = {
 };
 
 export type AdminFreePlanSetting = {
+  studioContactLimit?: number;
+  studioProjectLimit?: number;
+  studioProductLimit?: number;
+  studioQuestionnaireLimit?: number;
+  studioQuoteLimit?: number;
+  studioMonthlyEmails?: number;
   storageGb: number;
   subdomainLimit: number;
   monthlyEmails: number;
@@ -224,6 +240,7 @@ export async function createAdminUser(payload: {
   role: AdminUser["role"];
   gender?: string;
   planId?: string;
+  studioPlanId?: string;
 }) {
   const data = await adminRequest<AdminUser>("/admin/users", {
     method: "POST",

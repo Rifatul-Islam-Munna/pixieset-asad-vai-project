@@ -39,6 +39,11 @@ const productLinks = [
     text: "Installable photo apps for clients",
     href: "/dashboard/mobile-gallery",
   },
+  {
+    title: "Studio Manager",
+    text: "Manage projects, bookings and payments",
+    href: "/dashboard/studio-management/home",
+  },
 ];
 
 export function SiteNav({
@@ -243,9 +248,9 @@ export function SiteNav({
           asChild
           className="h-11 rounded-[7px] bg-gradient-to-r from-[#4f24bd] to-[#7936d2] px-6 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(95,53,200,.22)] hover:opacity-95"
         >
-          <Link href={dashboardHref ?? "/login"}>
+          <a href={dashboardHref ?? "/login"}>
             {dashboardHref ? "Dashboard" : nav.cta}
-          </Link>
+          </a>
         </Button>
       </div>
 
@@ -315,7 +320,9 @@ export function SiteNav({
                 </Link>
               ))}
             </div>
-            {!dashboardHref && (
+            {dashboardHref ? (
+              <a href={dashboardHref} onClick={() => setOpen(false)}>Dashboard</a>
+            ) : (
               <Link href="/login" onClick={() => setOpen(false)}>
                 {nav.login}
               </Link>

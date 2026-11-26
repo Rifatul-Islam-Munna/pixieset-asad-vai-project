@@ -10,6 +10,7 @@ import { normalizePaymentLinkSettings } from './studio-payment-link-settings';
 import {quotePrice,validateQuoteItems,validateQuestionnaireAnswers,validateQuestionnaireFields} from './studio-interactive-documents';
 import {validateStudioSignature} from './studio-signature';
 import {StudioPaymentLinksService} from './studio-payment-links.service';
+import { StudioSubscriptionService } from './studio-subscription.service';
 
 type Payload = Record<string, unknown>;
 const validStatuses: Partial<Record<StudioKind, string[]>> = {
@@ -94,6 +95,7 @@ export class StudioService {
     private readonly mail: MailService,
     private readonly config: ConfigService,
     @Optional() private readonly studioSites?:StudioPaymentLinksService,
+    private readonly subscriptions?: StudioSubscriptionService,
   ) {}
 
   kind(raw: string): StudioKind {
@@ -334,12 +336,14 @@ export class StudioService {
       throw new BadRequestException('Choose a client or enter an email address');
     if (kind === 'forms' && data.status === 'published')
       throw new BadRequestException('Create a draft before publishing');
-    const record = await this.model.create({
+    const quotaKey = kind === 'contacts' || kind === 'projects' ? kind : kind === 'documents' && data.type === 'quote' ? 'quotes' : kind === 'documents' && data.type === 'questionnaire' ? 'questionnaires' : null;
+    const createRecord = async () => this.model.create({
       userId, kind, status: defaults[kind] || 'active', ...data,
       ...(tokenKinds.includes(kind) ? { token: randomBytes(32).toString('hex') } : {}),
       ...(kind === 'invoices' ? { details: { ...(data.details as Payload || {}),
         number: 'INV-' + Date.now().toString(36).toUpperCase() + '-' + randomBytes(2).toString('hex').toUpperCase() } } : {}),
     });
+    const record = quotaKey && this.subscriptions ? await this.subscriptions.withRecordQuota(userId,quotaKey,createRecord) : await createRecord();
     return record.toObject();
   }
 
@@ -370,6 +374,7 @@ export class StudioService {
         (old.status === 'sent' || Object.keys(body).length !== 1 || !['read', 'unread', 'archived'].includes(String(body.status))))
       throw new BadRequestException('Inbox messages only allow read, unread or archive status updates');
     const data = await this.payload(userId, kind, body, old);
+    const quotaKey = kind === 'documents' && data.type !== old.type ? data.type === 'quote' ? 'quotes' : data.type === 'questionnaire' ? 'questionnaires' : null : null;
     if (kind === 'projects' && data.details) {
       // Use targeted nested writes so editing the project cannot erase a note or gallery
       // that was linked concurrently in another Studio Manager screen.
@@ -392,10 +397,10 @@ export class StudioService {
     if (kind === 'documents' && old.status === 'completed' &&
         (body.description !== undefined || body.details !== undefined))
       throw new BadRequestException('Signed contracts cannot be edited');
-    const next = await this.model.findOneAndUpdate(
+    const updateRecord = async () => this.model.findOneAndUpdate(
       { _id: old._id, userId, kind }, { $set: data }, { returnDocument: 'after', runValidators: true },
     ).lean();
-    return next;
+    return quotaKey && this.subscriptions ? this.subscriptions.withRecordQuota(userId,quotaKey,updateRecord) : updateRecord();
   }
 
   async remove(userId: string, rawKind: string, recordId: string) {
@@ -546,16 +551,21 @@ export class StudioService {
         sourceTitle: meta.sourceTitle || '', attemptedAt, smtpStatus: 'sending' },
     });
     let outcome: Awaited<ReturnType<MailService['send']>>;
+    let reservation: string | undefined;
     try {
+      reservation = await this.subscriptions?.reserveEmail(userId);
       outcome = await this.mail.send({ ...payload, to: recipient });
     } catch (error) {
+      if (reservation) await this.subscriptions?.releaseEmail(userId,reservation);
       const reason = error instanceof Error ? error.message : 'SMTP_SEND_FAILED';
       log.status = 'failed';
       log.details = { ...log.details, smtpStatus: 'failed', error: reason, failedAt: new Date().toISOString() };
       await log.save().catch(() => undefined);
+      if (error instanceof BadRequestException) throw error;
       throw new ServiceUnavailableException('SMTP could not send this email: ' + reason);
     }
     if (!outcome.sent) {
+      if (reservation) await this.subscriptions?.releaseEmail(userId,reservation);
       const reason = outcome.reason || 'SMTP_SEND_FAILED';
       log.status = 'failed';
       log.details = { ...log.details, smtpStatus: 'failed', error: reason, failedAt: new Date().toISOString() };
@@ -768,11 +778,16 @@ export class StudioService {
       if ((field as Payload)?.required && !clean(responses[key]))
         throw new BadRequestException('Answer required: ' + clean((field as Payload)?.label, 120));
     }
-    let contact = await this.model.findOne({ userId: form.userId, kind: 'contacts', email: senderEmail });
-    if (!contact) contact = await this.model.create({
+    const getContact = async () => {
+      const existing = await this.model.findOne({ userId: form.userId, kind: 'contacts', email: senderEmail });
+      if (existing) return existing;
+      await this.subscriptions?.assertRecord(form.userId,'contacts');
+      return this.model.create({
       userId: form.userId, kind: 'contacts', title: senderName, status: clean(form.details?.contactType, 15) || 'lead',
       email: senderEmail, type: 'form', details: { sourceFormId: String(form._id) },
-    });
+      });
+    };
+    const contact = this.subscriptions ? await this.subscriptions.withRecordLock(form.userId,getContact) : await getContact();
     await this.model.create({
       userId: form.userId, kind: 'messages', title: 'Form: ' + form.title, status: 'unread',
       email: senderEmail, contactId: String(contact._id),

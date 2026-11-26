@@ -1,4 +1,5 @@
 ﻿import { Module } from '@nestjs/common';
+import { StudioSubscriptionModule } from '../studio/studio-subscription.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from 'src/user/entities/user.entity';
 import { BookingCoworker, BookingCoworkerSchema } from './entities/booking-coworker.entity';
@@ -13,6 +14,7 @@ import { Homepage, HomepageSchema } from 'src/homepage/entities/homepage.entity'
 
 @Module({
   imports: [
+    StudioSubscriptionModule,
     MongooseModule.forFeature([
       { name: BookingSetting.name, schema: BookingSettingSchema },
       { name: BookingService.name, schema: BookingServiceSchema },

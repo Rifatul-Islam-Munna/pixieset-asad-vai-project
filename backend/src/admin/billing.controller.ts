@@ -1,11 +1,28 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Headers, Param, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthGuard, type ExpressRequest } from 'src/lib/auth.guard';
 import { AdminService } from './admin.service';
+import { StudioSubscriptionService } from '../studio/studio-subscription.service';
 
 @Controller('billing')
 export class BillingController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(private readonly adminService: AdminService, private readonly studioSubscriptions: StudioSubscriptionService) {}
+
+  @Get('dashboard-destination')
+  @UseGuards(AuthGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async dashboardDestination(@Req() req: ExpressRequest) {
+    return {data:await this.studioSubscriptions.dashboardDestination(req.user.id)};
+  }
+
+  @Get('studio-subscription')
+  @UseGuards(AuthGuard)
+  async studioSubscription(@Req() req: ExpressRequest) {
+    return {data:await this.studioSubscriptions.overview(req.user.id)};
+  }
+
+  @Get('public/free-plan')
+  async publicFreePlan() { return {data:await this.adminService.getFreePlanSettings()}; }
 
   @Get('plans')
   @UseGuards(AuthGuard)

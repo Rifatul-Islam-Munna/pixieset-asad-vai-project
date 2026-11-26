@@ -9,6 +9,7 @@ import {StudioRecord,StudioRecordDocument} from './studio-record.entity';
 import {normalizePaymentLinkSettings,paymentLinkAmounts} from './studio-payment-link-settings';
 import {StudioPaymentsService} from './studio-payments.service';
 import {studioPublicRootDomain} from './studio-public-domain';
+import {StudioSubscriptionService} from './studio-subscription.service';
 
 type Provider='stripe'|'paypal';
 const tokenPattern=/^[a-f0-9]{64}$/i;
@@ -28,6 +29,7 @@ export class StudioPaymentLinksService {
     @InjectModel(StudioRecord.name) private readonly records:Model<StudioRecordDocument>,
     @InjectModel(Homepage.name) private readonly homepages:Model<HomepageDocument>,
     private readonly payments:StudioPaymentsService,
+    private readonly subscriptions?:StudioSubscriptionService,
   ) {}
 
   async ownerSites(userId:string){
@@ -201,9 +203,11 @@ export class StudioPaymentLinksService {
     if(project)return {projectId:String(project._id)};
     const email=clean(transaction.email,200).toLowerCase();
     const fullName=[clean(info.firstName,100),clean(info.lastName,100)].filter(Boolean).join(' ');
+    const getContact=async()=>{
     let contact=await this.records.findOne({userId:link.userId,kind:'contacts',email}).lean();
     if(!contact){
       try{
+        await this.subscriptions?.assertRecord(link.userId,'contacts');
         contact=await this.records.create({
           userId:link.userId,kind:'contacts',title:fullName,email,status:'client',type:'client',
           details:{sourcePaymentId:paymentId,source:'studio-payment-link'},
@@ -213,23 +217,41 @@ export class StudioPaymentLinksService {
         if(!contact)throw error;
       }
     }
+    return contact;
+    };
+    const contact=this.subscriptions?await this.subscriptions.withRecordLock(link.userId,getContact):await getContact();
     const source={
       userId:link.userId,kind:'projects' as const,'details.sourcePaymentId':paymentId,
     };
     // The unique partial index on sourcePaymentId prevents two projects for one charge.
-    project=await this.records.findOneAndUpdate(source,{$setOnInsert:{
+    const createProject=async()=>{
+      const existing=await this.records.findOne(source).lean();
+      if(existing)return existing;
+      await this.subscriptions?.assertRecord(link.userId,'projects');
+      return this.records.findOneAndUpdate(source,{$setOnInsert:{
       userId:link.userId,kind:'projects',title:link.title+' — '+fullName,
       contactId:String(contact._id),type:clean(info.projectType,40)||'other',
       status:clean(info.projectStage,40)||'booked',currency:transaction.currency,
       email,description:clean(info.message,1000),
       details:{sourcePaymentId:paymentId,paymentLinkId:String(link._id),location:''},
     }},{upsert:true,returnDocument:'after'}).lean();
+    };
+    project=this.subscriptions?await this.subscriptions.withRecordLock(link.userId,createProject):await createProject();
     await this.records.updateOne(
       {_id:transaction._id,userId:link.userId,kind:'transactions',status:'paid'},
       {$set:{projectId:String(project!._id),contactId:String(contact._id),
         'details.projectId':String(project!._id)}},
     );
     return {projectId:String(project!._id)};
+  }
+
+  private async fulfillSafely(transaction:StudioRecord&{_id:Types.ObjectId},link:StudioRecord&{_id:Types.ObjectId}){
+    try{return await this.fulfill(transaction,link);}
+    catch(error){
+      // A successful payment must remain paid even if the studio has no remaining CRM quota.
+      await this.records.updateOne({_id:transaction._id,userId:link.userId,kind:'transactions',status:'paid'},{$set:{'details.projectCreationError':error instanceof Error?error.message:'CRM sync failed'}}).catch(()=>undefined);
+      return {projectId:null};
+    }
   }
 
   async verify(token:string,provider:Provider,referenceId:string){
@@ -294,7 +316,7 @@ export class StudioPaymentLinksService {
     if(transaction.status==='paid'){
       if(transaction.details?.paidReference!==paymentId)
         throw new BadRequestException('A different payment is already recorded');
-      return {paid:true,alreadyPaid:true,...await this.fulfill(transaction,link),
+      return {paid:true,alreadyPaid:true,...await this.fulfillSafely(transaction,link),
         confirmationMessage:clean(link.details?.confirmationMessage,1000)||'Thank you for your payment!'};
     }
     if(transaction.status!=='pending')throw new GoneException('Payment attempt is not payable');
@@ -305,11 +327,11 @@ export class StudioPaymentLinksService {
     if(!paid){
       const current=await this.records.findOne({_id:transaction._id,kind:'transactions'});
       if(current?.status==='paid'&&current.details?.paidReference===paymentId)
-        return {paid:true,alreadyPaid:true,...await this.fulfill(current,link),
+        return {paid:true,alreadyPaid:true,...await this.fulfillSafely(current,link),
           confirmationMessage:clean(link.details?.confirmationMessage,1000)||'Thank you for your payment!'};
       throw new GoneException('Payment state changed during verification');
     }
-    return {paid:true,alreadyPaid:false,...await this.fulfill(paid,link),
+    return {paid:true,alreadyPaid:false,...await this.fulfillSafely(paid,link),
       confirmationMessage:clean(link.details?.confirmationMessage,1000)||'Thank you for your payment!'};
   }
 }

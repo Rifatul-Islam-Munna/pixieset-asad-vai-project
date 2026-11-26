@@ -75,7 +75,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
   const params = await searchParams;
   const [posts, cms, user] = await Promise.all([getBlogs().catch(() => []), getHomeCms(), getUser()]);
   const t = cms.content.en;
-  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard/client-gallery") : undefined;
+  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard") : undefined;
   const query = String(params.q ?? "").trim().toLowerCase();
   const category = String(params.category ?? "All");
   const language = String(params.language ?? "All");

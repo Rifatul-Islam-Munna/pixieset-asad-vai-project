@@ -29,6 +29,10 @@ export class AdminCreateUserDto {
   @IsOptional()
   @IsString()
   planId?: string;
+
+  @IsOptional()
+  @IsString()
+  studioPlanId?: string;
 }
 
 export class AdminUpdateUserDto {
@@ -62,4 +66,8 @@ export class AdminUpdateUserDto {
   @IsOptional()
   @IsString()
   planId?: string;
+
+  @IsOptional()
+  @IsString()
+  studioPlanId?: string;
 }

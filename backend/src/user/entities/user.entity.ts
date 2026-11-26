@@ -11,6 +11,14 @@ export type UserDocument = HydratedDocument<User>;
 
 @Schema({ timestamps: true, autoIndex: true })
 export class User {
+  @Prop({type:Object,select:false}) studioQuotaLock?: {token:string;expiresAt:Date};
+  @Prop() studioPlanId?:string;
+  @Prop() studioPlanActivatedAt?:Date;
+  @Prop({default:'Free'}) studioPlanName:string;
+  @Prop() studioPlanExpiresAt?:Date;
+  @Prop({enum:['month','year']}) studioPlanBillingInterval?:'month'|'year';
+  @Prop({default:0}) studioMonthlyEmailsUsed:number;
+  @Prop() studioMonthlyUsageKey?:string;
   @Prop({ required: true, trim: true })
   name: string;
 

@@ -107,7 +107,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
   if (!post) notFound();
 
   const t = cms.content.en;
-  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard/client-gallery") : undefined;
+  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard") : undefined;
   const autoText = collectSeoText({
     title: post.title,
     excerpt: post.excerpt,

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { StudioSubscriptionModule } from './studio-subscription.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { StudioRecord, StudioRecordSchema } from './studio-record.entity';
@@ -22,6 +23,7 @@ import {StudioSiteDocumentsController} from './studio-site-documents.controller'
 
 @Module({
   imports: [
+    StudioSubscriptionModule,
     MongooseModule.forFeature([
       { name: StudioRecord.name, schema: StudioRecordSchema },
       { name: StoreSetting.name, schema: StoreSettingSchema },

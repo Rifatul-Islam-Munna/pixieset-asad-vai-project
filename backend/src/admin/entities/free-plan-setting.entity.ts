@@ -5,6 +5,12 @@ export type FreePlanSettingDocument = HydratedDocument<FreePlanSetting>;
 
 @Schema({ timestamps: true })
 export class FreePlanSetting {
+  @Prop({default:10,min:0}) studioContactLimit:number;
+  @Prop({default:10,min:0}) studioProjectLimit:number;
+  @Prop({default:3,min:0}) studioProductLimit:number;
+  @Prop({default:3,min:0}) studioQuestionnaireLimit:number;
+  @Prop({default:3,min:0}) studioQuoteLimit:number;
+  @Prop({default:25,min:0}) studioMonthlyEmails:number;
   @Prop({ required: true, unique: true, default: 'global' })
   key: string;
 

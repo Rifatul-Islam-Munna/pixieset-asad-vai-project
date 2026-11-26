@@ -1,6 +1,13 @@
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class AdminCreatePlanDto {
+  @IsOptional() @IsIn(['client-gallery','studio-manager']) productType?:'client-gallery'|'studio-manager';
+  @IsOptional() @IsInt() @Min(0) studioContactLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioProjectLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioProductLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioQuestionnaireLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioQuoteLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioMonthlyEmails?:number;
   @IsString()
   @MaxLength(100)
   name: string;
@@ -69,6 +76,13 @@ export class AdminCreatePlanDto {
 }
 
 export class AdminUpdatePlanDto {
+  @IsOptional() @IsIn(['client-gallery','studio-manager']) productType?:'client-gallery'|'studio-manager';
+  @IsOptional() @IsInt() @Min(0) studioContactLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioProjectLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioProductLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioQuestionnaireLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioQuoteLimit?:number;
+  @IsOptional() @IsInt() @Min(0) studioMonthlyEmails?:number;
   @IsOptional()
   @IsString()
   @MaxLength(100)

@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { apiBaseUrl } from "@/lib/api-base-url";
 import { BackendRequestError, fetchBackendJson } from "@/lib/backend-request";
-import type { AdminPlan } from "./admin";
+import type { AdminPlan, AdminFreePlanSetting } from "./admin";
 
 const baseUrl = apiBaseUrl();
 
@@ -20,6 +20,10 @@ async function requestOrigin() {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "https://gallerista.app";
 }
 export type BillingUser = {
+  studioPlanId?: string;
+  studioPlanName?: string;
+  studioPlanExpiresAt?: string;
+  studioPlanBillingInterval?: "month"|"year";
   _id: string;
   name?: string;
   avatar?: string;
@@ -36,7 +40,7 @@ export type BillingUser = {
   planExpiresAt?: string;
 };
 
-export type PlanPurchase = { _id: string; planName: string; amount: number; billingInterval?: "month" | "year"; source: "admin" | "checkout" | "free"; status: "active" | "paid"; paymentProvider?: "stripe" | "paypal" | "admin" | "free"; createdAt: string };
+export type PlanPurchase = { productType?: "client-gallery"|"studio-manager"; expiresAt?: string; _id: string; planName: string; amount: number; billingInterval?: "month" | "year"; source: "admin" | "checkout" | "free"; status: "active" | "paid"; paymentProvider?: "stripe" | "paypal" | "admin" | "free"; createdAt: string };
 export type BillingPaymentMethods = { stripe: boolean; paypal: boolean };
 
 function normalizePlans(value: unknown): AdminPlan[] {
@@ -44,6 +48,16 @@ function normalizePlans(value: unknown): AdminPlan[] {
   return value.map((plan: Partial<AdminPlan> & { _id?: string }, index) => ({
     _id: String(plan?._id ?? index),
     name: String(plan?.name ?? "Untitled plan"),
+    productType: plan?.productType ?? "client-gallery",
+    studioContactLimit: Number(plan?.studioContactLimit ?? 0),
+    studioProjectLimit: Number(plan?.studioProjectLimit ?? 0),
+    studioProductLimit: Number(plan?.studioProductLimit ?? 0),
+    studioQuestionnaireLimit: Number(plan?.studioQuestionnaireLimit ?? 0),
+    studioQuoteLimit: Number(plan?.studioQuoteLimit ?? 0),
+    studioMonthlyEmails: Number(plan?.studioMonthlyEmails ?? 0),
+    subdomainLimit: Number(plan?.subdomainLimit ?? 1),
+    videoMinutes: Number(plan?.videoMinutes ?? 0),
+    videoQuality: plan?.videoQuality ?? "hd",
     storageGb: Number(plan?.storageGb ?? 0),
     galleryLimit: Number(plan?.galleryLimit ?? 0),
     aiImageMetadataLimit: Number(plan?.aiImageMetadataLimit ?? 0),
@@ -80,11 +94,27 @@ export async function getBillingOverview() {
     authedRequest<BillingUser>("/user/get-my-profile"),
     getPublicPaymentMethods(),
   ]);
-  return { plans, user, paymentMethods };
+  return { plans: plans.filter(plan => plan.productType !== "studio-manager"), user, paymentMethods };
 }
 
-export async function getPurchaseHistory() {
-  return authedRequest<PlanPurchase[]>("/billing/purchases");
+export type StudioQuota = "contacts" | "products" | "questionnaires" | "quotes" | "projects" | "emails";
+export type StudioSubscriptionData = {planId: string | null; planName:string; expiresAt:string|null; previousExpiresAt:string|null; activatedAt:string|null; billingInterval:"month"|"year"|null; status:"active"|"free"|"expired"; limits:Record<StudioQuota,number>; usage:Record<StudioQuota,number>; gallery:{planName:string; expiresAt:string|null; planId:string|null}};
+
+export async function getStudioSubscription() {
+  return authedRequest<StudioSubscriptionData>("/billing/studio-subscription");
+}
+
+export async function getPublicFreePlan(): Promise<AdminFreePlanSetting | null> {
+  try {
+    const response = await fetch(`${baseUrl}/billing/public/free-plan`, {cache:"no-store"});
+    if (!response.ok) return null;
+    return (await response.json()).data ?? null;
+  } catch { return null; }
+}
+
+export async function getPurchaseHistory(productType?: "client-gallery"|"studio-manager") {
+  const purchases=await authedRequest<PlanPurchase[]>("/billing/purchases");
+  return productType?purchases.filter(p=>(p.productType??"client-gallery")===productType):purchases;
 }
 
 export async function getPublicPlans() {
@@ -117,16 +147,17 @@ export async function getPublicPaymentMethods(): Promise<BillingPaymentMethods> 
   }
 }
 
-export async function checkoutPlan(planId: string, billingInterval: "month" | "year" = "month", paymentProvider?: "stripe" | "paypal") {
+export async function checkoutPlan(planId: string, billingInterval: "month" | "year" = "month", paymentProvider?: "stripe" | "paypal", productType: "client-gallery" | "studio-manager" = "client-gallery") {
   const origin = await requestOrigin();
+  const destination = productType === "studio-manager" ? "/dashboard/studio-management/subscription" : "/dashboard/client-gallery/storage";
   const successUrl = paymentProvider === "paypal"
-    ? `${origin}/dashboard/client-gallery/storage?plan=success&provider=paypal`
-    : `${origin}/dashboard/client-gallery/storage?plan=success&session_id={CHECKOUT_SESSION_ID}`;
+    ? `${origin}${destination}?plan=success&provider=paypal`
+    : `${origin}${destination}?plan=success&session_id={CHECKOUT_SESSION_ID}`;
   const data = await authedRequest<{ checkoutUrl?: string | null; activated?: boolean; plan?: AdminPlan; paymentProvider?: "stripe" | "paypal"; paypalOrderId?: string }>(`/billing/plans/${planId}/checkout`, {
     method: "POST",
     body: JSON.stringify({
       successUrl,
-      cancelUrl: `${origin}/dashboard/client-gallery/storage?plan=cancel`,
+      cancelUrl: `${origin}${destination}?plan=cancel`,
       billingInterval,
       paymentProvider,
     }),

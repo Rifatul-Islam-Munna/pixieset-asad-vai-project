@@ -1,311 +1,112 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Loader2, Search } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, Check, Images, Loader2, Search } from "lucide-react";
 import { checkoutPlan, getPublicPaymentMethods, type BillingPaymentMethods } from "@/actions/billing";
-import type { AdminPlan } from "@/actions/admin";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import type { AdminPlan, AdminFreePlanSetting } from "@/actions/admin";
 import { cn } from "@/lib/utils";
 
-const featureLabels: Record<string, string> = {
-  aiImageMetadata: "AI Image Title & Description",
-  pinSet: "PIN set",
-  downloadLimit: "Download limit",
-  store: "Store",
-  marketingEmails: "Marketing email",
-};
-
-const formatMoney = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function safePlan(plan: Partial<AdminPlan> | null | undefined, index: number): AdminPlan {
-  return {
-    _id: String(plan?._id ?? index),
-    name: String(plan?.name ?? "Untitled plan"),
-    storageGb: Number(plan?.storageGb ?? 0),
-    aiImageMetadataLimit: Number(plan?.aiImageMetadataLimit ?? 0),
-    monthlyEmails: Number(plan?.monthlyEmails ?? 0),
-    videoMinutes: Number(plan?.videoMinutes ?? 0),
-    videoQuality: plan?.videoQuality === "4k" ? "4k" : "hd",
-    priceMonthly: Number(plan?.priceMonthly ?? 0),
-    yearlyEnabled: Boolean(plan?.yearlyEnabled),
-    priceYearly: Number(plan?.priceYearly ?? 0),
-    features: plan?.features ?? {},
-    recommended: Boolean(plan?.recommended),
-    sortOrder: Number(plan?.sortOrder ?? index),
-    active: plan?.active ?? true,
-    createdAt: plan?.createdAt,
-  };
+type Product = "client-gallery" | "studio-manager";
+type ComparisonRow = {label:string;value:(plan:AdminPlan)=>string|boolean};
+const formatMoney=(n:number)=>n.toLocaleString(undefined,{maximumFractionDigits:2});
+const limit=(n?:number)=>Number(n??0)===0?"Unlimited":Number(n).toLocaleString();
+const studioRows:ComparisonRow[]=[
+  {label:"Contacts",value:p=>limit(p.studioContactLimit)},
+  {label:"Projects",value:p=>limit(p.studioProjectLimit)},
+  {label:"Products / session types",value:p=>limit(p.studioProductLimit)},
+  {label:"Questionnaires",value:p=>limit(p.studioQuestionnaireLimit)},
+  {label:"Quotes",value:p=>limit(p.studioQuoteLimit)},
+  {label:"Emails per month",value:p=>Number(p.studioMonthlyEmails??0).toLocaleString()},
+];
+const galleryRows:ComparisonRow[]=[
+  {label:"Photo storage",value:p=>formatMoney(p.storageGb)+" GB"},
+  {label:"Galleries",value:p=>limit(p.galleryLimit)},
+  {label:"Monthly emails",value:p=>Number(p.monthlyEmails??0).toLocaleString()},
+  {label:"AI metadata images",value:p=>p.features?.aiImageMetadata?limit(p.aiImageMetadataLimit)+" / month":"Not included"},
+  {label:"Video uploads",value:p=>Number(p.videoMinutes??0)>0?formatMoney(p.videoMinutes??0)+" min · "+(p.videoQuality==="4k"?"4K":"HD"):"Not included"},
+  {label:"PIN set",value:p=>Boolean(p.features?.pinSet)},
+  {label:"Download limit",value:p=>Boolean(p.features?.downloadLimit)},
+  {label:"Store",value:p=>Boolean(p.features?.store)},
+  {label:"Marketing email",value:p=>Boolean(p.features?.marketingEmails)},
+];
+const products=[{key:"client-gallery",label:"Client Gallery",icon:Images},{key:"studio-manager",label:"Studio Manager",icon:BriefcaseBusiness}] as const;
+function freeStudio(free:AdminFreePlanSetting):AdminPlan{
+  return {_id:"studio-free",name:"Free",productType:"studio-manager",storageGb:0,monthlyEmails:0,priceMonthly:0,active:true,sortOrder:-1,studioContactLimit:free.studioContactLimit,studioProjectLimit:free.studioProjectLimit,studioProductLimit:free.studioProductLimit,studioQuestionnaireLimit:free.studioQuestionnaireLimit,studioQuoteLimit:free.studioQuoteLimit,studioMonthlyEmails:free.studioMonthlyEmails};
 }
 
-export function PlansPage({ plans, loadError = "" }: { plans: AdminPlan[]; loadError?: string }) {
-  const [query, setQuery] = useState("");
-  const [pendingId, setPendingId] = useState("");
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState("");
-  const [billingInterval, setBillingInterval] = useState<"month" | "year">("month");
-  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "paypal">("stripe");
-  const [paymentMethods, setPaymentMethods] = useState<BillingPaymentMethods>({ stripe: false, paypal: false });
-
-  useEffect(() => {
-    void getPublicPaymentMethods().then((methods) => {
-      setPaymentMethods(methods);
-      if (methods.paypal && !methods.stripe) setPaymentProvider("paypal");
-      else if (methods.stripe) setPaymentProvider("stripe");
-    });
-  }, []);
-
-  const safePlans = useMemo(() => {
-    const normalized = Array.isArray(plans) ? plans.map((plan, index) => safePlan(plan, index)) : [];
-    return normalized.sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
-  }, [plans]);
-
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return safePlans;
-    return safePlans.filter((plan) =>
-      [plan.name, String(plan.storageGb), String(plan.monthlyEmails), String(plan.priceMonthly), String(plan.priceYearly)]
-        .some((item) => item.toLowerCase().includes(term)),
-    );
-  }, [safePlans, query]);
-
-  const recommendedId = useMemo(() => {
-    const selected = filtered.find((plan) => plan.recommended);
-    return selected?._id ?? "";
-  }, [filtered]);
-
-  const buy = (planId: string) => {
-    setPendingId(planId);
-    setError("");
-    startTransition(async () => {
-      try {
-        const result = await checkoutPlan(planId, billingInterval, paymentProvider);
-        if (result.checkoutUrl) window.location.href = result.checkoutUrl;
-        else if (result.activated) window.location.href = "/dashboard/client-gallery/storage";
-        else setError("Checkout URL missing");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Checkout failed");
-      }
+export function PlansPage({plans,freePlan,loadError=""}:{plans:AdminPlan[];freePlan?:AdminFreePlanSetting|null;loadError?:string}){
+  const [product,setProduct]=useState<Product>("client-gallery");
+  const [interval,setInterval]=useState<"month"|"year">("month");
+  const [query,setQuery]=useState("");
+  const [provider,setProvider]=useState<"stripe"|"paypal">("stripe");
+  const [methods,setMethods]=useState<BillingPaymentMethods>({stripe:false,paypal:false});
+  const [pending,startTransition]=useTransition();
+  const [pendingId,setPendingId]=useState("");
+  const [error,setError]=useState("");
+  useEffect(()=>{
+    if(new URLSearchParams(window.location.search).get("product")==="studio-manager"){
+      // Read the initial tab from the URL without requiring a server-side searchParams boundary.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setProduct("studio-manager");
+    }
+    void getPublicPaymentMethods().then(m=>{setMethods(m);if(m.paypal&&!m.stripe)setProvider("paypal");});
+  },[]);
+  const filtered=useMemo(()=>{
+    const selected=plans.filter(p=>p.active&&(p.productType??"client-gallery")===product);
+    if(product==="studio-manager"&&freePlan)selected.push(freeStudio(freePlan));
+    if(product==="client-gallery"&&freePlan&&!selected.some(p=>Number(p.priceMonthly??0)===0))selected.push({_id:'gallery-free',name:'Free',productType:'client-gallery',storageGb:freePlan.storageGb,galleryLimit:10,subdomainLimit:freePlan.subdomainLimit,monthlyEmails:freePlan.monthlyEmails,priceMonthly:0,active:true,sortOrder:-1,features:{marketingEmails:freePlan.monthlyEmails>0}});
+    return selected.filter(p=>p.name.toLowerCase().includes(query.trim().toLowerCase())).sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
+  },[plans,freePlan,product,query]);
+  const rows=product==="studio-manager"?studioRows:galleryRows;
+  const isFree=(p:AdminPlan)=>Number(p.priceMonthly??0)===0&&!p.yearlyEnabled;
+  const available=(p:AdminPlan)=>isFree(p)||interval==="month"||Boolean(p.yearlyEnabled&&Number(p.priceYearly??0)>0);
+  const price=(p:AdminPlan)=>isFree(p)?0:interval==="year"?Number(p.priceYearly??0)/12:Number(p.priceMonthly??0);
+  const buy=(plan:AdminPlan)=>{
+    setPendingId(plan._id);setError("");
+    if(plan._id==="studio-free"||plan._id==="gallery-free"){window.location.href=plan._id==='studio-free'?'/dashboard/studio-management/subscription':'/dashboard/client-gallery/storage';return;}
+    startTransition(async()=>{
+      try{
+        const result=await checkoutPlan(plan._id,isFree(plan)?"month":interval,provider,product);
+        if(result.checkoutUrl)window.location.href=result.checkoutUrl;
+        else if(result.activated)window.location.href=product==="studio-manager"?"/dashboard/studio-management/subscription":"/dashboard/client-gallery/storage";
+        else setError("Checkout URL missing.");
+      }catch(err){setError(err instanceof Error?err.message:"Checkout failed.");}
     });
   };
-
-  return (
-    <main className="min-h-screen bg-white px-5 py-7 text-[#1d1d1d] md:px-10">
-      <div className="mx-auto max-w-[1500px]">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-[#555]">
-          <ArrowLeft className="size-4" />
-          Back
-        </Link>
-
-        <header className="mt-10 flex flex-wrap items-end justify-between gap-5 border-b pb-7">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#6337d8]">Pricing</p>
-            <h1 className="mt-3 text-4xl font-medium">Choose your plan</h1>
-          </div>
-          <div className="flex h-11 w-full max-w-[360px] items-center rounded-[8px] border border-[#ded9ea] bg-white px-3 shadow-sm focus-within:border-[#6337d8] focus-within:ring-2 focus-within:ring-[#6337d8]/10">
-            <Search className="mr-2 size-4 text-[#777]" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plans" className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0" />
-          </div>
-        </header>
-
-        <div className="mt-6 flex justify-center">
-          <div className="inline-flex rounded-[8px] border border-[#ded9ea] bg-white p-1 shadow-sm" aria-label="Billing frequency">
-            <button type="button" onClick={() => setBillingInterval("month")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "month" ? "rounded-[6px] bg-[#6337d8] text-white" : "rounded-[6px] text-[#555] hover:bg-[#f5f1ff]")}>Monthly</button>
-            <button type="button" onClick={() => setBillingInterval("year")} className={cn("h-10 px-5 text-sm font-bold", billingInterval === "year" ? "rounded-[6px] bg-[#6337d8] text-white" : "rounded-[6px] text-[#555] hover:bg-[#f5f1ff]")}>Yearly</button>
-          </div>
-        </div>
-        {(paymentMethods.stripe || paymentMethods.paypal) && (
-          <div className="mt-4 flex flex-col items-center">
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-[#777]">Payment method</p>
-            <div className="inline-flex rounded-[8px] border border-[#ded9ea] bg-white p-1 shadow-sm">
-              {paymentMethods.stripe && <button type="button" onClick={() => setPaymentProvider("stripe")} className={cn("h-10 rounded-[6px] px-5 text-sm font-bold", paymentProvider === "stripe" ? "bg-[#635bff] text-white" : "text-[#555]")}>Stripe</button>}
-              {paymentMethods.paypal && <button type="button" onClick={() => setPaymentProvider("paypal")} className={cn("h-10 rounded-[6px] px-5 text-sm font-bold", paymentProvider === "paypal" ? "bg-[#003087] text-white" : "text-[#555]")}>PayPal</button>}
-            </div>
-          </div>
-        )}
-
-        {(loadError || error) && (
-          <p className="mt-5 border-l-2 border-red-500 pl-3 text-sm font-semibold text-red-600">
-            {error || `Could not load plans from /billing/public/plans: ${loadError}`}
-          </p>
-        )}
-
-        {!filtered.length ? (
-          <div className="mt-8 border bg-white p-8 text-sm font-semibold text-[#777]">No plans found.</div>
-        ) : (
-          <>
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 md:hidden">
-            {filtered.map((plan) => {
-              const recommended = plan._id === recommendedId;
-              const yearlyAvailable = Boolean(plan.yearlyEnabled) && Number(plan.priceYearly ?? 0) > 0;
-              const price = billingInterval === "year" ? yearlyAvailable ? Number(plan.priceYearly ?? 0) / 12 : 0 : Number(plan.priceMonthly ?? 0);
-              return (
-                <article key={plan._id} className={cn("rounded-[12px] border border-[#e8e3ef] p-5 shadow-[0_10px_30px_rgba(39,25,85,.05)]", recommended ? "bg-[#f3efff] ring-1 ring-[#6337d8]/20" : "bg-white")}>
-                  <div className="h-5 text-xs font-bold uppercase tracking-[0.18em] text-[#6337d8]">
-                    {recommended ? "Recommended" : ""}
-                  </div>
-                  <div className="mt-3 flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="text-2xl font-medium">{plan.name}</h2>
-                      <p className="mt-4 flex items-end gap-1">
-                        <span className="text-5xl font-medium">€{formatMoney(price)}</span>
-                        <span className="pb-2 text-sm">/mo</span>
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-gradient-to-r from-[#5527c9] to-[#7436db] px-3 py-1 text-xs font-bold text-white">
-                      {Number(plan.storageGb ?? 0).toLocaleString()} GB
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs font-semibold text-[#777]">
-                    {billingInterval === "year" ? yearlyAvailable ? `€${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : "Billed monthly"}
-                  </p>
-                  <div className="mt-6 grid gap-3 border-t pt-5 text-sm">
-                    <div className="flex justify-between gap-4"><span>Photo storage</span><b>{Number(plan.storageGb ?? 0).toLocaleString()} GB</b></div>
-                    <div className="flex justify-between gap-4"><span>Monthly emails</span><b>{Number(plan.monthlyEmails ?? 0).toLocaleString()}</b></div>
-                    <div className="flex justify-between gap-4">
-                      <span>AI metadata images</span>
-                      <b>{!plan.features?.aiImageMetadata ? "Not included" : Number(plan.aiImageMetadataLimit ?? 0) === 0 ? "Unlimited / month" : `${Number(plan.aiImageMetadataLimit).toLocaleString()} / month`}</b>
-                    </div>
-                    <div className="flex justify-between gap-4"><span>Video uploads</span><b>{Number(plan.videoMinutes ?? 0).toLocaleString()} min · {plan.videoQuality === "4k" ? "4K" : "HD"}</b></div>
-                  </div>
-                  <div className="mt-5 grid gap-3 border-t pt-5">
-                    {Object.entries(featureLabels).map(([key, label]) => (
-                      <p key={key} className={cn("flex items-center justify-between gap-4 text-sm", plan.features?.[key] ? "text-[#222]" : "text-[#999]")}>
-                        <span>{label}</span>
-                        {plan.features?.[key] ? <Check className="size-5 text-[#6337d8]" /> : <span className="text-[#c9c9c9]">-</span>}
-                      </p>
-                    ))}
-                  </div>
-                  <Button className="mt-6 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-sm font-bold text-white shadow-[0_10px_24px_rgba(99,55,216,.18)] hover:opacity-95" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
-                    {pending && pendingId === plan._id ? <Loader2 className="size-4 animate-spin" /> : price > 0 ? "Start Plan" : "Start Free"}
-                  </Button>
-                </article>
-              );
-            })}
-          </div>
-
-          <div className="mt-8 hidden overflow-x-auto md:block">
-            <div
-              className="grid min-w-[1100px] border-l border-t"
-              style={{ gridTemplateColumns: `210px repeat(${filtered.length}, minmax(170px, 1fr))` }}
-            >
-              <div className="border-b border-r bg-white" />
-              {filtered.map((plan) => {
-                const recommended = plan._id === recommendedId;
-                const yearlyAvailable = Boolean(plan.yearlyEnabled) && Number(plan.priceYearly ?? 0) > 0;
-                const price = billingInterval === "year" ? yearlyAvailable ? Number(plan.priceYearly ?? 0) / 12 : 0 : Number(plan.priceMonthly ?? 0);
-                return (
-                  <div key={plan._id} className={cn("border-b border-r p-5", recommended ? "bg-[#f3efff] ring-1 ring-inset ring-[#6337d8]/15" : "bg-white")}>
-                    <div className="h-6 text-xs font-bold uppercase tracking-[0.18em] text-[#6337d8]">
-                      {recommended ? "Recommended" : ""}
-                    </div>
-                    <h2 className="mt-3 text-xl font-medium">{plan.name}</h2>
-                    <p className="mt-5 flex items-end gap-1">
-                      <span className="text-5xl font-medium tracking-normal">€{formatMoney(price)}</span>
-                      <span className="pb-2 text-sm">/mo</span>
-                    </p>
-                    <p className="mt-6 min-h-5 text-xs font-semibold text-[#aaa]">
-                      {billingInterval === "year" ? yearlyAvailable ? `€${Number(plan.priceYearly).toLocaleString()} billed yearly` : "Yearly billing unavailable" : price > 0 ? "Billed monthly" : "Billed Never"}
-                    </p>
-                    <Button className="mt-9 h-11 w-full rounded-[7px] bg-gradient-to-r from-[#5527c9] to-[#7436db] text-sm font-bold text-white shadow-[0_10px_24px_rgba(99,55,216,.18)] hover:opacity-95" disabled={pending || (billingInterval === "year" && !yearlyAvailable)} onClick={() => buy(plan._id)}>
-                      {pending && pendingId === plan._id ? <Loader2 className="size-4 animate-spin" /> : price > 0 ? "Start Plan" : "Start Free"}
-                    </Button>
-                  </div>
-                );
-              })}
-
-              <SectionCell title="Client Gallery" />
-              {filtered.map((plan) => <BlankCell key={`${plan._id}-section`} recommended={plan._id === recommendedId} />)}
-
-              <LabelCell label="Photo storage" />
-              {filtered.map((plan) => (
-                <ValueCell key={`${plan._id}-storage`} recommended={plan._id === recommendedId} primary={`${Number(plan.storageGb ?? 0).toLocaleString()} GB`} secondary={`${Math.max(1, Number(plan.storageGb ?? 0) * 1000).toLocaleString()}+ photos`} />
-              ))}
-
-              <LabelCell label="Monthly emails" />
-              {filtered.map((plan) => (
-                <ValueCell key={`${plan._id}-emails`} recommended={plan._id === recommendedId} primary={`${Number(plan.monthlyEmails ?? 0).toLocaleString()}`} secondary="emails / month" />
-              ))}
-
-              <LabelCell label="AI metadata images" />
-              {filtered.map((plan) => (
-                <ValueCell
-                  key={`${plan._id}-ai-metadata`}
-                  recommended={plan._id === recommendedId}
-                  primary={!plan.features?.aiImageMetadata ? "Not included" : Number(plan.aiImageMetadataLimit ?? 0) === 0 ? "Unlimited" : Number(plan.aiImageMetadataLimit).toLocaleString()}
-                  secondary={plan.features?.aiImageMetadata ? "AI titles + descriptions / month" : "AI metadata disabled"}
-                />
-              ))}
-
-              <LabelCell label="Video uploads" />
-              {filtered.map((plan) => (
-                <ValueCell key={`${plan._id}-video`} recommended={plan._id === recommendedId} primary={`${Number(plan.videoMinutes ?? 0).toLocaleString()} min`} secondary={plan.videoQuality === "4k" ? "HD + 4K" : "HD only"} />
-              ))}
-
-              {Object.entries(featureLabels).map(([key, label]) => (
-                <Row key={key} plans={filtered} recommendedId={recommendedId} label={label} featureKey={key} />
-              ))}
-            </div>
-          </div>
-          </>
-        )}
+  const renderValue=(value:string|boolean)=>typeof value==="boolean"?(value?<Check className="mx-auto size-4 text-[#6337d8]" aria-label="Included"/>:<span className="text-[#aaa]">—</span>):value;
+  const planHeader=(p:AdminPlan)=><>
+    <div className="h-5 text-xs font-semibold uppercase tracking-[.12em] text-[#6337d8]">{p.recommended?"Recommended":""}</div>
+    <h2 className="mt-3 text-xl font-medium">{p.name}</h2>
+    <p className="mt-5 flex items-baseline gap-1">{available(p)?<><span className="text-4xl font-semibold tracking-tight">€{formatMoney(price(p))}</span><span className="text-sm text-[#777]">/mo</span></>:<span className="text-sm font-medium">Not available yearly</span>}</p>
+    <p className="mt-3 min-h-8 text-xs text-[#777]">{isFree(p)?"No payment required":interval==="year"&&available(p)?"€"+formatMoney(p.priceYearly??0)+" for 365 days":interval==="month"?"30-day access":"Choose monthly billing"}</p>
+    <button type="button" disabled={pending||!available(p)||(!isFree(p)&&!methods.stripe&&!methods.paypal)} onClick={()=>buy(p)} className="mt-6 flex h-11 w-full items-center justify-center gap-2 bg-[#6337d8] px-3 text-sm font-semibold text-white transition hover:bg-[#532ac2] disabled:cursor-not-allowed disabled:opacity-50">{pending&&pendingId===p._id?<Loader2 className="size-4 animate-spin"/>:isFree(p)?"Start Free":"Choose Plan"}</button>
+  </>;
+  return <main className="min-h-screen bg-white px-4 py-8 text-[#222] sm:px-8">
+    <div className="mx-auto max-w-[1500px]">
+      <Link href="/" className="inline-flex items-center gap-2 text-sm text-[#666] hover:text-black"><ArrowLeft className="size-4"/> Back</Link>
+      <header className="py-8 text-center"><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Choose your plan</h1><p className="mt-3 text-sm text-[#777]">Choose Client Gallery, Studio Manager, or both. Each product has its own plan.</p></header>
+      <div role="tablist" aria-label="Products" className="mx-auto flex w-fit max-w-full border-b border-[#e9e6ed]">
+        {products.map(({key,label,icon:Icon})=><button role="tab" aria-selected={product===key} key={key} onClick={()=>{setProduct(key);setQuery("");setError("");}} className={cn("flex items-center gap-2 border-b-2 px-5 py-4 text-sm font-semibold transition sm:px-10 sm:text-base",product===key?"border-[#6337d8] text-[#222]":"border-transparent text-[#85818b] hover:text-[#6337d8]")}><span className={cn("grid size-8 shrink-0 place-items-center rounded-full",key==="client-gallery"?"bg-[#e2f5f4] text-[#008b88]":"bg-[#e3f6e8] text-[#159547]")}><Icon className="size-4"/></span>{label}</button>)}
       </div>
-    </main>
-  );
-}
-
-function Row({ plans, recommendedId, label, featureKey }: {
-  plans: AdminPlan[];
-  recommendedId: string;
-  label: string;
-  featureKey: string;
-}) {
-  return (
-    <>
-      <LabelCell label={label} />
-      {plans.map((plan) => (
-        <CheckCell key={`${plan._id}-${featureKey}`} active={Boolean(plan.features?.[featureKey])} recommended={plan._id === recommendedId} />
-      ))}
-    </>
-  );
-}
-
-function SectionCell({ title }: { title: string }) {
-  return (
-    <div className="flex h-20 items-center gap-3 border-b border-r bg-white px-5 text-lg font-semibold">
-      <span className="size-8 rounded-full bg-gradient-to-br from-[#5527c9] to-[#8a5cf0] shadow-[0_6px_16px_rgba(99,55,216,.22)]" />
-      {title}
+      <div className="my-7 flex flex-wrap items-center justify-between gap-4">
+        <div className="inline-flex border border-[#e5e0ed] p-1">{(["month","year"] as const).map(value=><button key={value} onClick={()=>setInterval(value)} className={cn("px-5 py-2 text-sm font-medium",interval===value?"bg-[#6337d8] text-white":"text-[#666] hover:bg-[#f7f5fa]")}>{value==="month"?"Monthly":"Yearly"}</button>)}</div>
+        <div className="flex flex-wrap items-center gap-3">
+          {(methods.stripe||methods.paypal)&&<select aria-label="Payment method" value={provider} onChange={e=>setProvider(e.target.value as "stripe"|"paypal")} className="h-10 border border-[#e5e0ed] px-3 text-sm">{methods.stripe&&<option value="stripe">Stripe</option>}{methods.paypal&&<option value="paypal">PayPal</option>}</select>}
+          <label className="flex h-10 items-center gap-2 border border-[#e5e0ed] px-3"><Search className="size-4 text-[#888]"/><input aria-label="Search plans" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search plans" className="w-32 bg-transparent text-sm outline-none"/></label>
+        </div>
+      </div>
+      {(loadError||error)&&<p role="alert" className="mb-5 border-l-2 border-red-500 bg-red-50 p-3 text-sm text-red-700">{error||loadError}</p>}
+      {filtered.length===0?<div className="border p-8 text-center text-sm text-[#777]">No plans are currently available for this product.</div>:<>
+        <div className="grid gap-4 md:hidden">{filtered.map(p=><article key={p._id} className={cn("border p-5",p.recommended?"border-[#d9cffa] bg-[#faf8ff]":"border-[#e9e6ed]")}>{planHeader(p)}<dl className="mt-5 divide-y border-t">{rows.map(row=><div key={row.label} className="flex items-center justify-between gap-4 py-3 text-sm"><dt className="text-[#666]">{row.label}</dt><dd className="font-medium">{renderValue(row.value(p))}</dd></div>)}</dl></article>)}</div>
+        <div className="hidden overflow-x-auto md:block"><div className="grid border-l border-t border-[#e9e6ed]" style={{gridTemplateColumns:"200px repeat("+filtered.length+",minmax(185px,1fr))",minWidth:200+filtered.length*185}}>
+          <div className="border-b border-r border-[#e9e6ed]"/>
+          {filtered.map(p=><article key={p._id} className={cn("border-b border-r border-[#e9e6ed] p-5",p.recommended&&"bg-[#f7f3ff]")}>{planHeader(p)}</article>)}
+          <div className="flex min-h-16 items-center border-b border-r border-[#e9e6ed] p-4 font-semibold">{product==="studio-manager"?"Studio Manager":"Client Gallery"}</div>
+          {filtered.map(p=><div key={p._id} className={cn("border-b border-r border-[#e9e6ed]",p.recommended&&"bg-[#f7f3ff]")}/>)}
+          {rows.flatMap(row=>[<div key={row.label} className="flex min-h-16 items-center border-b border-r border-[#e9e6ed] px-4 text-sm">{row.label}</div>,...filtered.map(p=><div key={row.label+p._id} className={cn("flex min-h-16 items-center justify-center border-b border-r border-[#e9e6ed] px-3 text-center text-sm font-medium",p.recommended&&"bg-[#f7f3ff]")}>{renderValue(row.value(p))}</div>)])}
+        </div></div>
+      </>}
     </div>
-  );
+  </main>;
 }
-
-function LabelCell({ label }: { label: string }) {
-  return <div className="flex min-h-20 items-center border-b border-r bg-white px-5 text-sm font-medium">{label}</div>;
-}
-
-function BlankCell({ recommended }: { recommended: boolean }) {
-  return <div className={cn("border-b border-r", recommended ? "bg-[#f3efff]" : "bg-white")} />;
-}
-
-function ValueCell({ primary, secondary, recommended }: {
-  primary: string;
-  secondary: string;
-  recommended: boolean;
-}) {
-  return (
-    <div className={cn("flex min-h-20 flex-col items-center justify-center border-b border-r px-4 text-center", recommended ? "bg-[#f3efff]" : "bg-white")}>
-      <b className="text-sm">{primary}</b>
-      <span className="mt-1 text-sm text-[#555]">{secondary}</span>
-    </div>
-  );
-}
-
-function CheckCell({ active, recommended }: { active: boolean; recommended: boolean }) {
-  return (
-    <div className={cn("flex min-h-20 items-center justify-center border-b border-r px-4", recommended ? "bg-[#f3efff]" : "bg-white")}>
-      {active ? <Check className="size-5 text-[#6337d8]" /> : <span className="text-lg text-[#c9c9c9]">-</span>}
-    </div>
-  );
-}
-

@@ -20,6 +20,7 @@ import {
   type StudioList,
 } from "@/actions/studio";
 import { StudioEditor } from "./studio-editors";
+import { StudioSubscription } from "./studio-subscription";
 import { StudioBookingsPage } from "./studio-bookings";
 import { StudioFormDesigner } from "./studio-form-designer";
 import { StudioInvoiceDesigner } from "./studio-invoice-designer";
@@ -49,7 +50,6 @@ const nav: StudioNavItem[] = [
     { label: "Contacts", page: "contacts", icon: Users },
     { label: "Contact Forms", page: "contact-forms", icon: FilePenLine },
   ] },
-  { label: "Inbox", page: "inbox", icon: Inbox },
   { label: "Payments", page: "invoices", icon: CircleDollarSign, children: [
     { label: "Invoices", page: "invoices", icon: FileText },
     { label: "Payment Links", page: "payment-links", icon: WalletCards },
@@ -61,7 +61,6 @@ const nav: StudioNavItem[] = [
     { label: "Sessions", page: "sessions", icon: FileCheck2 },
     { label: "Calendar", page: "calendar", icon: CalendarDays },
     { label: "Booking Site", page: "booking-site", icon: LayoutGrid },
-    { label: "Discounts", page: "discounts", icon: Tag },
   ] },
   { label: "Documents", page: "contracts", icon: FileText, children: [
     { label: "Contracts", page: "contracts", icon: FilePenLine },
@@ -69,6 +68,7 @@ const nav: StudioNavItem[] = [
     { label: "Quotes", page: "quotes", icon: FilePlus2 },
   ] },
   { label: "Templates", page: "templates", icon: SquareStack },
+  { label: "Subscription", page: "subscription", icon: CreditCard },
   { label: "Settings", page: "settings", icon: Settings },
 ];
 const productSwitcherItems: {key:string;title:string;description:string;href:string;icon:LucideIcon}[] = [
@@ -156,7 +156,7 @@ const titleForPage:Record<string,string> = {
   "inbox":"Inbox","invoices":"Invoices","payment-links":"Payment Links","transactions":"Transactions",
   "reports":"Reports","session-types":"Session Types","sessions":"Sessions","calendar":"Calendar",
   "booking-site":"Booking Site","discounts":"Discounts","contracts":"Contracts",
-  "questionnaires":"Questionnaires","quotes":"Quotes","templates":"Templates","settings":"Settings",
+  "questionnaires":"Questionnaires","quotes":"Quotes","templates":"Templates","settings":"Settings","subscription":"Subscription",
 };
 
 export function StudioManager({ page: requestedPage = "home", projectId, sessionTypeId }: { page?: string; projectId?: string; sessionTypeId?: string }) {
@@ -267,7 +267,7 @@ export function StudioManager({ page: requestedPage = "home", projectId, session
   const send=async(item:StudioRecord)=>{
     try{
       const result=item.kind==="invoices"?await studioSendInvoice(item._id):await studioSendContract(item._id);
-      notify(result.emailSent?"SMTP accepted the email. Check Inbox for its send log.":"Record ready");
+      notify(result.emailSent?"Email sent successfully.":"Record ready");
       await refresh();
     }catch(e){toast.error(e instanceof Error?e.message:"Could not send email");}
   };
@@ -369,7 +369,8 @@ export function StudioManager({ page: requestedPage = "home", projectId, session
         <div className={"mx-auto px-5 sm:px-8 "+(page==="projects"&&!projectId&&projectView!=="board"?"w-full max-w-none lg:px-8":"max-w-[1580px] lg:px-12")+" "+(projectId?"py-7 lg:py-8":"py-8 lg:py-10")}>
           {loading && <div className="mb-5 inline-flex items-center gap-2 text-xs text-[#888]"><Loader2 className="size-3 animate-spin"/> Updating Studio Manager…</div>}
           {error&&<div role="alert" className="mb-6 flex items-start justify-between gap-4 bg-red-50 px-5 py-4 text-sm text-red-700"><span>{error}</span><button onClick={()=>void refresh()} className="font-semibold underline">Retry</button></div>}
-          {page==="home"&&<HomePage overview={overview} bookings={bookings} records={records} financial={financialReport}/>}
+          {page==="subscription"&&<StudioSubscription/>}
+           {page==="home"&&<HomePage overview={overview} bookings={bookings} records={records} financial={financialReport}/>}
           {page==="reports"&&<ReportsPage financial={financialReport}/>}
           {["session-types","sessions","calendar","booking-site"].includes(page)&&
             <StudioBookingsPage page={page} data={bookings} refresh={refresh} notify={notify} sessionTypeId={sessionTypeId}/>}

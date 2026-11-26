@@ -1376,7 +1376,7 @@ function AccountPanel() {
   }, [query.data]);
 
   useEffect(() => {
-    getPurchaseHistory()
+    getPurchaseHistory("client-gallery")
       .then(setPurchases)
       .catch(() => setPurchases([]));
   }, []);

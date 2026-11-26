@@ -5,6 +5,13 @@ export type PlanDocument = HydratedDocument<Plan>;
 
 @Schema({ timestamps: true, autoIndex: true })
 export class Plan {
+  @Prop({type:String,enum:['client-gallery','studio-manager'],default:'client-gallery',index:true}) productType: 'client-gallery' | 'studio-manager';
+  @Prop({default:0,min:0}) studioContactLimit:number;
+  @Prop({default:0,min:0}) studioProjectLimit:number;
+  @Prop({default:0,min:0}) studioProductLimit:number;
+  @Prop({default:0,min:0}) studioQuestionnaireLimit:number;
+  @Prop({default:0,min:0}) studioQuoteLimit:number;
+  @Prop({default:0,min:0}) studioMonthlyEmails:number;
   @Prop({ required: true, trim: true })
   name: string;
 

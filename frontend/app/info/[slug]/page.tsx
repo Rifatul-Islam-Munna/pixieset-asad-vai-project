@@ -125,7 +125,7 @@ export default async function DynamicInfoPage({ params }: { params: Promise<{ sl
   if (!page) notFound();
 
   const t = cms.content.en;
-  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard/client-gallery") : undefined;
+  const dashboardHref = user ? (user.role === "admin" ? "/admin" : "/dashboard") : undefined;
   const columns = page.legacyGridEnabled === false
     ? []
     : (page.columns ?? []).slice(0, Math.max(3, Math.min(8, page.columnCount || 3)));

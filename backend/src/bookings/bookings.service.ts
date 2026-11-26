@@ -12,6 +12,7 @@ import { BookingBusinessHour, BookingSetting, BookingSettingDocument } from './e
 import { BookingShareLink, BookingShareLinkDocument } from './entities/booking-share-link.entity';
 import { StudioRecord, StudioRecordDocument } from '../studio/studio-record.entity';
 import { Homepage, HomepageDocument } from 'src/homepage/entities/homepage.entity';
+import { StudioSubscriptionService } from '../studio/studio-subscription.service';
 
 @Injectable()
 export class BookingsService {
@@ -27,6 +28,7 @@ export class BookingsService {
     private readonly configService: ConfigService,
     @InjectModel(StudioRecord.name) private readonly studioRecordModel: Model<StudioRecordDocument>,
     @InjectModel(Homepage.name) private readonly homepageModel: Model<HomepageDocument>,
+    private readonly subscriptions?:StudioSubscriptionService,
   ) {}
 
   async overview(userId: string, from?: string, to?: string) {
@@ -89,8 +91,11 @@ export class BookingsService {
       details: { channel: 'smtp', sourceKind: meta.sourceKind, sourceId: meta.sourceId || '',
         sourceTitle: meta.sourceTitle || '', attemptedAt, smtpStatus: 'sending' },
     });
+    let reservation:string|undefined;
     try {
+      reservation=await this.subscriptions?.reserveEmail(userId);
       const result = await this.mailService.send(payload);
+      if (!result.sent && reservation) { await this.subscriptions?.releaseEmail(userId,reservation); reservation=undefined; }
       log.status = result.sent ? 'sent' : 'failed';
       log.details = { ...log.details, smtpStatus: result.sent ? 'accepted' : 'failed',
         acceptedBySmtp: Boolean(result.sent), messageId: result.messageId || '',
@@ -98,12 +103,13 @@ export class BookingsService {
       await log.save().catch((error) => this.logger.error('Could not update Studio email log ' + String(log._id) + ': ' + (error instanceof Error ? error.message : String(error))));
       return result;
     } catch (error) {
+      if (reservation) await this.subscriptions?.releaseEmail(userId,reservation);
       const reason = error instanceof Error ? error.message : 'SMTP_SEND_FAILED';
       log.status = 'failed';
       log.details = { ...log.details, smtpStatus: 'failed', error: reason, failedAt: new Date().toISOString() };
       await log.save().catch(() => undefined);
       this.logger.error('Studio email failed for ' + payload.to + ': ' + reason);
-      return { sent: false, reason: 'SMTP_SEND_FAILED' as const };
+      return { sent: false, reason: error instanceof BadRequestException ? reason : 'SMTP_SEND_FAILED', messageId: '' };
     }
   }
 
@@ -223,7 +229,9 @@ export class BookingsService {
   async createService(userId: string, body: Record<string, unknown>) {
     const data = this.servicePayload(body);
     if (!data.name) throw new BadRequestException('Booking type name is required');
-    return (await this.serviceModel.create({ userId, ...data })).toObject();
+    const createService = async()=>this.serviceModel.create({userId,...data});
+    const created = this.subscriptions ? await this.subscriptions.withRecordQuota(userId,'products',createService) : await createService();
+    return created.toObject();
   }
 
   async updateService(userId: string, id: string, body: Record<string, unknown>) {
@@ -506,7 +514,9 @@ export class BookingsService {
     userId: string, event: BookingEventDocument, service: BookingServiceDocument | any,
     clientName: string, clientEmail: string, status: string,
   ) {
-    const contact = await this.studioRecordModel.findOneAndUpdate(
+    const getContact=async()=>{
+      if (this.subscriptions && !(await this.studioRecordModel.exists({userId,kind:'contacts',email:clientEmail}))) await this.subscriptions.assertRecord(userId,'contacts');
+      return this.studioRecordModel.findOneAndUpdate(
       { userId, kind: 'contacts', email: clientEmail },
       { $setOnInsert: {
         userId, kind: 'contacts', title: clientName,
@@ -515,20 +525,23 @@ export class BookingsService {
         details: { source: 'public-booking', firstBookingEventId: String(event._id) },
       } },
       { upsert: true, setDefaultsOnInsert: true, returnDocument: 'after' },
-    ).lean();
+      ).lean();
+    };
+    const contact = this.subscriptions ? await this.subscriptions.withRecordLock(userId,getContact) : await getContact();
     if (!contact) throw new Error('Booking contact could not be found');
     if (status === 'confirmed' && contact.status === 'lead')
       await this.studioRecordModel.updateOne({ _id: contact._id, userId, kind: 'contacts', status: 'lead' },
         { $set: { status: 'client' } });
     let projectId = '';
     if (service.createProjectOnBooking !== false) {
-      const project = await this.studioRecordModel.create({
+      const createProject=async()=>this.studioRecordModel.create({
         userId, kind: 'projects', title: service.name + ' — ' + clientName,
         status: status === 'confirmed' ? 'booked' : (service.projectStage || 'inquiry'),
         type: service.projectType || 'portrait', contactId: String(contact._id), date: event.startAt,
         description: 'Created from an online studio booking.',
         details: { source: 'public-booking', bookingEventId: String(event._id), serviceId: String(service._id) },
       });
+      const project = this.subscriptions ? await this.subscriptions.withRecordQuota(userId,'projects',createProject) : await createProject();
       projectId = String(project._id);
     }
     const eventLink: Record<string, string> = { contactId: String(contact._id) };
