@@ -121,9 +121,10 @@ func main() {
 	}
 	cfg, err := loadConfig()
 	if err != nil {
-		workerLogf("imagor cache worker disabled: %v", err)
+		workerErrorf("imagor cache worker disabled: %v", err)
 		return
 	}
+	log.Printf("imagor cache worker starting: primaryBackend=%s secondaryBackendConfigured=%t localImagor=%s sourceBucket=%s resultBucket=%s concurrency=%d", cfg.backendURL, cfg.secondaryBackendURL != "", cfg.imagorLocalURL, env("S3_LOADER_BUCKET", "<missing>"), cfg.resultBucket, cfg.concurrency)
 	waitForImagor(cfg)
 
 	workerLogf(
@@ -167,6 +168,7 @@ func main() {
 
 func waitForImagor(cfg config) {
 	healthURL := strings.TrimRight(cfg.imagorLocalURL, "/") + "/healthcheck"
+	log.Printf("imagor cache worker waiting for local healthcheck: %s", healthURL)
 	tracef(cfg, "waiting for Imagor healthcheck: url=%s", healthURL)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -177,6 +179,7 @@ func waitForImagor(cfg config) {
 				_, _ = io.Copy(io.Discard, resp.Body)
 				_ = resp.Body.Close()
 				if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+					log.Printf("imagor cache worker local healthcheck ready: status=%d", resp.StatusCode)
 					tracef(cfg, "Imagor healthcheck ready: status=%d", resp.StatusCode)
 					cancel()
 					return
@@ -268,7 +271,7 @@ func processWarm(cfg config) bool {
 		Data *warmJob `json:"data"`
 	}
 	if err := postJSON(cfg, "/internal/imagor-cache/claim", map[string]any{}, &response); err != nil {
-		workerLogf("cache claim failed: %v", err)
+		workerErrorf("cache claim failed: %v", err)
 		return false
 	}
 	if response.Data == nil {
@@ -323,7 +326,7 @@ func processWarm(cfg config) bool {
 	endpoint := "/internal/imagor-cache/complete/" + url.PathEscape(job.ImageID)
 	tracef(cfg, "sending completion callback: image=%s", job.ImageID)
 	if err := postJSON(cfg, endpoint, payload, &completed); err != nil {
-		workerLogf("cache completion callback failed for %s: %v", job.ImageID, err)
+		workerErrorf("cache completion callback failed for %s: %v", job.ImageID, err)
 		return true
 	}
 
@@ -333,7 +336,7 @@ func processWarm(cfg config) bool {
 	}
 	if len(completed.Data.ObsoleteKeys) > 0 {
 		if err := deleteResultObjects(cfg, completed.Data.ObsoleteKeys, completed.Data.ObsoleteURLs); err != nil {
-			workerLogf("obsolete result-cache cleanup failed: %v", err)
+			workerErrorf("obsolete result-cache cleanup failed: %v", err)
 		}
 	}
 	workerLogf(
@@ -355,9 +358,9 @@ func failWarm(cfg config, job *warmJob, cause error) {
 	endpoint := "/internal/imagor-cache/complete/" + url.PathEscape(job.ImageID)
 	var ignored any
 	if err := postJSON(cfg, endpoint, payload, &ignored); err != nil {
-		workerLogf("cache failure callback failed for %s: %v", job.ImageID, err)
+		workerErrorf("cache failure callback failed for %s: %v", job.ImageID, err)
 	}
-	workerLogf("imagor result cache warm failed: image=%s error=%v", job.ImageID, cause)
+	workerErrorf("imagor result cache warm failed: image=%s backend=%s error=%v", job.ImageID, cfg.backendURL, cause)
 }
 
 func processDelete(cfg config) bool {
@@ -365,7 +368,7 @@ func processDelete(cfg config) bool {
 		Data *deleteJob `json:"data"`
 	}
 	if err := postJSON(cfg, "/internal/imagor-cache/delete/claim", map[string]any{}, &response); err != nil {
-		workerLogf("cache delete claim failed: %v", err)
+		workerErrorf("cache delete claim failed: %v", err)
 		return false
 	}
 	if response.Data == nil {
@@ -382,7 +385,7 @@ func processDelete(cfg config) bool {
 	for _, rawURL := range job.TransformURLs {
 		key, keyErr := resultStorageKey(cfg, rawURL)
 		if keyErr != nil {
-			workerLogf("cache transform delete key failed for %s: %v", job.ImageID, keyErr)
+			workerErrorf("cache transform delete key failed for %s: %v", job.ImageID, keyErr)
 			continue
 		}
 		keys = append(keys, key)
@@ -405,10 +408,10 @@ func processDelete(cfg config) bool {
 	endpoint := "/internal/imagor-cache/delete/complete/" + url.PathEscape(job.JobID)
 	var ignored any
 	if callbackErr := postJSON(cfg, endpoint, payload, &ignored); callbackErr != nil {
-		workerLogf("cache delete callback failed for %s: %v", job.JobID, callbackErr)
+		workerErrorf("cache delete callback failed for %s: %v", job.JobID, callbackErr)
 	}
 	if err != nil {
-		workerLogf("imagor result cache delete failed: job=%s error=%v", job.JobID, err)
+		workerErrorf("imagor result cache delete failed: job=%s error=%v", job.JobID, err)
 	} else {
 		workerLogf("imagor result cache deleted: job=%s image=%s", job.JobID, job.ImageID)
 	}
@@ -443,6 +446,11 @@ func warmAndVerify(cfg config, rawURL string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		_ = resp.Body.Close()
+		return "", "", fmt.Errorf("imagor returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+	}
 	responseBytes, copyErr := io.Copy(io.Discard, resp.Body)
 	closeErr := resp.Body.Close()
 	tracef(
@@ -454,9 +462,6 @@ func warmAndVerify(cfg config, rawURL string) (string, string, error) {
 		time.Since(requestStarted).Round(time.Millisecond),
 		key,
 	)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("imagor returned HTTP %d", resp.StatusCode)
-	}
 	if copyErr != nil {
 		return "", "", copyErr
 	}
@@ -587,11 +592,12 @@ func s3Request(cfg config, method, key string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil
 	}
-	return fmt.Errorf("R2 %s %s returned HTTP %d", method, key, resp.StatusCode)
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return fmt.Errorf("R2 %s bucket=%s key=%s returned HTTP %d: %s", method, cfg.resultBucket, key, resp.StatusCode, strings.TrimSpace(string(data)))
 }
 
 func purgeCloudflare(cfg config, publicURLs []string) error {
@@ -661,7 +667,7 @@ func postJSON(cfg config, endpoint string, payload any, out any) error {
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("backend %s%s request failed: %w", cfg.backendURL, endpoint, err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
@@ -669,7 +675,7 @@ func postJSON(cfg config, endpoint string, payload any, out any) error {
 		return err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("backend returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return fmt.Errorf("backend %s%s returned HTTP %d: %s", cfg.backendURL, endpoint, resp.StatusCode, strings.TrimSpace(string(data)))
 	}
 	if out == nil || len(data) == 0 {
 		return nil
@@ -754,6 +760,11 @@ func workerLogf(format string, args ...any) {
 		return
 	}
 	log.Printf(format, args...)
+}
+
+// Cache failures are always visible, even when verbose worker logging is off.
+func workerErrorf(format string, args ...any) {
+	log.Printf("imagor cache error: "+format, args...)
 }
 
 func tracef(cfg config, format string, args ...any) {
