@@ -651,7 +651,13 @@ func postJSON(cfg config, endpoint string, payload any, out any) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// AirPix may normalize a JPEG during claim. Leave Gallerista and all
+	// other requests on their existing timeout.
+	timeout := 20 * time.Second
+	if cfg.secondaryBackendURL != "" && cfg.backendURL == cfg.secondaryBackendURL && endpoint == "/internal/imagor-cache/claim" {
+		timeout = 90 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(
 		ctx,
@@ -664,7 +670,7 @@ func postJSON(cfg config, endpoint string, payload any, out any) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-imagor-worker-secret", cfg.secret)
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("backend %s%s request failed: %w", cfg.backendURL, endpoint, err)
